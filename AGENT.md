@@ -28,8 +28,8 @@ Run these gates before committing:
 ```sh
 cargo fmt
 cargo clippy -- -D warnings
-cargo clippy --all-features --all-targets -- -D warnings
-cargo test --all-features
+cargo clippy --all-targets --features python -- -D warnings
+cargo test --features python
 cargo llvm-cov --no-default-features --fail-under-lines 100
 uv run --frozen --no-sync ruff check .
 uv run --frozen --no-sync ruff format --check .

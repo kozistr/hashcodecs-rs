@@ -16,13 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rust:
-    name: Rust / ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  rust_quality:
+    name: Rust / Quality
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
@@ -41,21 +37,30 @@ jobs:
       - name: Lint all Rust targets
         run: cargo clippy --all-targets --features python -- -D warnings
 
-      - name: Test Rust library
-        run: cargo test
-
-      - name: Test Rust Python feature
-        run: cargo test --features python
-
       - name: Install Rust coverage tool
-        if: matrix.os == 'ubuntu-latest'
         uses: taiki-e/install-action@v2.85.10
         with:
           tool: cargo-llvm-cov
 
       - name: Check Rust line coverage
-        if: matrix.os == 'ubuntu-latest'
         run: cargo llvm-cov --no-default-features --fail-under-lines 100
+
+  rust_test:
+    name: Rust / Test / ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test Rust Python feature
+        run: cargo test --features python
 
   python_quality:
     name: Python / Quality
@@ -80,13 +85,12 @@ jobs:
       - name: Check Python formatting
         run: uv run --frozen --no-sync ruff format --check .
 
-  python_test:
-    name: Python / ${{ matrix.os }} / ${{ matrix.python-version }}
+  python_wheel:
+    name: Python / Build / ${{ matrix.os }}
     strategy:
       fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.12", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -98,6 +102,36 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v9.0.0
         with:
+          python-version: "3.10"
+          enable-cache: true
+          prune-cache: false
+
+      - name: Build Python wheel
+        run: uv build --wheel --out-dir dist
+
+      - name: Upload Python wheel
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: python-wheel-${{ matrix.os }}
+          path: dist/*.whl
+          retention-days: 1
+
+  python_test:
+    name: Python / Test / ${{ matrix.os }} / ${{ matrix.python-version }}
+    needs: python_wheel
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.12", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           prune-cache: false
@@ -105,34 +139,14 @@ jobs:
       - name: Install Python development dependencies
         run: uv sync --all-groups --no-install-project --frozen
 
-      - name: Build Python wheel
-        shell: pwsh
-        run: |
-          $log = New-TemporaryFile
-          uv build --wheel --out-dir dist 2>&1 | Tee-Object -FilePath $log
-          $exitCode = $LASTEXITCODE
-          if ($exitCode -ne 0) {
-            $message = (Get-Content $log | Select-Object -Last 30) -join "`n"
-            $message = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
-            Write-Output "::error title=Python wheel build failed::$message"
-            exit $exitCode
-          }
+      - name: Download Python wheel
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: python-wheel-${{ matrix.os }}
+          path: dist
 
       - name: Install Python wheel
         run: uv pip install --python .venv --reinstall --no-index --find-links dist hashcodecs
 
       - name: Test Python API and coverage
         run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
-
-  ci_summary:
-    name: CI Summary
-    if: always()
-    needs: [rust, python_quality, python_test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check required jobs
-        if: needs.rust.result != 'success' || needs.python_quality.result != 'success' || needs.python_test.result != 'success'
-        run: exit 1
-
-      - name: Report success
-        run: echo "Rust and Python checks passed"

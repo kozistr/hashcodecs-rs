@@ -48,21 +48,6 @@ Build an installable wheel and source distribution with:
 uv build
 ```
 
-Run the Rust comparison benchmarks with:
-
-```sh
-cargo bench --bench base64
-cargo bench --bench murmur3
-```
-
-Run the Python Base64 comparison with:
-
-```sh
-uv run --no-project python benchmarks/python_base64.py
-```
-
-Results are recorded below.
-
 # Benchmark
 
 Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
@@ -104,8 +89,6 @@ uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 |  | 512 MiB | encode | **8.97 GiB/s** | 3.09 GiB/s | 8.92 GiB/s |
 |  | 512 MiB | decode | **9.32 GiB/s** | 3.00 GiB/s | 9.20 GiB/s |
 
-These measurements include output allocation and use the same public APIs available to callers.
-
 ## MurmurHash3: Rust
 
 | Variant | Input | hashcodecs | `murmur3` | `murmurs` | `fastmurmur3` | `mm3h` |
@@ -138,8 +121,6 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 |  | 1 MiB | decode | **3.91 GiB/s** | 0.57 GiB/s | 1.55 GiB/s |
 |  | 512 MiB | encode | **2.93 GiB/s** | 0.36 GiB/s | 0.91 GiB/s |
 |  | 512 MiB | decode | **3.33 GiB/s** | 0.63 GiB/s | 1.53 GiB/s |
-
-All Python values come from the same rebuilt wheel and pinned full-comparison run.
 
 ## SIMD References
 

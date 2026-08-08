@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v7.0.1
 
       - name: Set up Rust
+        if: runner.os != 'Linux'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build wheels
@@ -46,9 +47,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0

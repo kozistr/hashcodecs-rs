@@ -80,6 +80,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          cache-dependency-glob: uv.lock
           prune-cache: false
 
       - name: Install Python development dependencies
@@ -115,6 +116,7 @@ jobs:
         with:
           python-version: "3.10"
           enable-cache: true
+          cache-dependency-glob: uv.lock
           prune-cache: false
 
       - name: Build Python wheel
@@ -145,6 +147,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          cache-dependency-glob: uv.lock
           prune-cache: false
 
       - name: Install Python development dependencies

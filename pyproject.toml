@@ -32,6 +32,7 @@ packages = ["python/hashcodecs"]
 include = [
     "/Cargo.lock",
     "/Cargo.toml",
+    "/build.rs",
     "/hatch_build.py",
     "/LICENSE*",
     "/README.md",

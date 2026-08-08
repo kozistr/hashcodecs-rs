@@ -20,8 +20,7 @@ fn backend_supported(backend: Backend) -> bool {
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
-        let _ = backend;
-        false
+        backend == Backend::Scalar
     }
 }
 

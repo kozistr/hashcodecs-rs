@@ -35,6 +35,7 @@ class CustomBuildHook(BuildHookInterface[Any]):
 
         extension = root / "target" / "release" / self._library_name()
         build_data["force_include"] = {str(extension): f"hashcodecs/_hashcodecs{self._extension_suffix()}"}
+        build_data["pure_python"] = False
         build_data["tag"] = self._wheel_tag()
 
     @staticmethod

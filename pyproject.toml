@@ -56,6 +56,9 @@ test-command = "python -c \"import hashcodecs; assert hashcodecs.b64decode(hashc
 before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
 environment = { PATH = "$HOME/.cargo/bin:$PATH" }
 
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+
 [tool.ruff]
 line-length = 119
 target-version = "py312"

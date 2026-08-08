@@ -6,8 +6,8 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const LARGE_SIZE: usize = 512 * 1024 * 1024;
-const SIZES: [usize; 3] = [4 * 1024, 1024 * 1024, LARGE_SIZE];
+const SIZES: [usize; 3] = [4 * 1024, 1024 * 1024, 32 * 1024 * 1024];
+const SAMPLE_SIZE: usize = 50;
 
 fn data(size: usize) -> Vec<u8> {
     (0..size)
@@ -52,7 +52,7 @@ fn x86_32(c: &mut Criterion) {
         );
         assert_eq!(murmurs::murmur3_x86_32(&input, 42), expected);
         assert_eq!(mm3h::murmurhash3_32_with_seed(&input, 42), expected);
-        group.sample_size(if size == LARGE_SIZE { 10 } else { 30 });
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3_x86_32(input, 42)
@@ -80,7 +80,7 @@ fn x86_128(c: &mut Criterion) {
             x86_128_as_u128(expected)
         );
         assert_eq!(murmurs::murmur3_x86_128(&input, 42), expected);
-        group.sample_size(if size == LARGE_SIZE { 10 } else { 30 });
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3_x86_128(input, 42)
@@ -108,7 +108,7 @@ fn x64_128(c: &mut Criterion) {
         assert_eq!(murmurs::murmur3_x64_128(&input, 42), expected);
         assert_eq!(fastmurmur3::murmur3_x64_128(&input, 42), expected_u128);
         assert_eq!(mm3h::murmurhash3_128_with_seed(&input, 42), expected_u128);
-        group.sample_size(if size == LARGE_SIZE { 10 } else { 30 });
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3_x64_128(input, 42)

@@ -17,6 +17,12 @@
 - The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
 - Large Python calls release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
 
+## Install
+
+```
+pip3 install hashcodecs
+```
+
 ## Usage
 
 ### Rust
@@ -76,32 +82,32 @@ uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 
 | Alphabet | Input | Operation | hashcodecs | `base64` | `base64-turbo` |
 | --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | **18.11 GiB/s** | 5.40 GiB/s | 17.01 GiB/s |
-|  | 4 KiB | decode | **16.18 GiB/s** | 4.05 GiB/s | 15.83 GiB/s |
-|  | 1 MiB | encode | **19.25 GiB/s** | 4.83 GiB/s | 18.28 GiB/s |
-|  | 1 MiB | decode | **18.28 GiB/s** | 3.81 GiB/s | 16.78 GiB/s |
-|  | 512 MiB | encode | **8.90 GiB/s** | 3.10 GiB/s | 8.88 GiB/s |
-|  | 512 MiB | decode | **9.32 GiB/s** | 3.03 GiB/s | 9.12 GiB/s |
-| URL-safe | 4 KiB | encode | **17.77 GiB/s** | 5.42 GiB/s | 17.02 GiB/s |
-|  | 4 KiB | decode | 14.39 GiB/s | 4.04 GiB/s | **15.72 GiB/s** |
-|  | 1 MiB | encode | **19.27 GiB/s** | 4.83 GiB/s | 18.30 GiB/s |
-|  | 1 MiB | decode | 16.15 GiB/s | 3.81 GiB/s | **16.97 GiB/s** |
-|  | 512 MiB | encode | **8.97 GiB/s** | 3.09 GiB/s | 8.92 GiB/s |
-|  | 512 MiB | decode | **9.32 GiB/s** | 3.00 GiB/s | 9.20 GiB/s |
+| Standard | 4 KiB | encode | **18.20 GiB/s** | 5.41 GiB/s | 17.06 GiB/s |
+|  | 4 KiB | decode | **16.66 GiB/s** | 4.10 GiB/s | 15.78 GiB/s |
+|  | 1 MiB | encode | **19.28 GiB/s** | 4.78 GiB/s | 18.29 GiB/s |
+|  | 1 MiB | decode | **18.31 GiB/s** | 3.82 GiB/s | 16.82 GiB/s |
+|  | 32 MiB | encode | **10.60 GiB/s** | 3.05 GiB/s | 8.91 GiB/s |
+|  | 32 MiB | decode | **10.17 GiB/s** | 3.12 GiB/s | 9.87 GiB/s |
+| URL-safe | 4 KiB | encode | **17.73 GiB/s** | 5.33 GiB/s | 16.35 GiB/s |
+|  | 4 KiB | decode | 14.82 GiB/s | 4.11 GiB/s | **15.82 GiB/s** |
+|  | 1 MiB | encode | **18.99 GiB/s** | 4.75 GiB/s | 17.70 GiB/s |
+|  | 1 MiB | decode | 16.29 GiB/s | 3.82 GiB/s | **16.97 GiB/s** |
+|  | 32 MiB | encode | **9.61 GiB/s** | 2.84 GiB/s | 8.92 GiB/s |
+|  | 32 MiB | decode | **10.00 GiB/s** | 3.13 GiB/s | 9.92 GiB/s |
 
 ## MurmurHash3: Rust
 
 | Variant | Input | hashcodecs | `murmur3` | `murmurs` | `fastmurmur3` | `mm3h` |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| x86 32-bit | 4 KiB | 3.75 GiB/s | 2.42 GiB/s | 3.81 GiB/s | n/a | **4.02 GiB/s** |
-|  | 1 MiB | 3.81 GiB/s | 2.44 GiB/s | 3.79 GiB/s | n/a | **3.98 GiB/s** |
-|  | 512 MiB | 3.58 GiB/s | 2.42 GiB/s | 3.58 GiB/s | n/a | **3.73 GiB/s** |
+| x86 32-bit | 4 KiB | 3.84 GiB/s | 2.43 GiB/s | 3.82 GiB/s | n/a | **4.03 GiB/s** |
+|  | 1 MiB | 3.80 GiB/s | 2.43 GiB/s | 3.79 GiB/s | n/a | **3.98 GiB/s** |
+|  | 32 MiB | 3.68 GiB/s | 2.42 GiB/s | 3.70 GiB/s | n/a | **3.83 GiB/s** |
 | x86 128-bit | 4 KiB | **8.18 GiB/s** | 4.66 GiB/s | 8.08 GiB/s | n/a | n/a |
-|  | 1 MiB | **8.26 GiB/s** | 4.71 GiB/s | 8.19 GiB/s | n/a | n/a |
-|  | 512 MiB | **5.61 GiB/s** | 4.44 GiB/s | 5.33 GiB/s | n/a | n/a |
-| x64 128-bit | 4 KiB | 8.96 GiB/s | 6.38 GiB/s | 8.85 GiB/s | **9.40 GiB/s** | 8.87 GiB/s |
-|  | 1 MiB | 8.95 GiB/s | 6.44 GiB/s | 8.87 GiB/s | **9.39 GiB/s** | 8.89 GiB/s |
-|  | 512 MiB | 5.98 GiB/s | 5.56 GiB/s | 5.66 GiB/s | **6.56 GiB/s** | 5.73 GiB/s |
+|  | 1 MiB | **8.23 GiB/s** | 4.68 GiB/s | 8.18 GiB/s | n/a | n/a |
+|  | 32 MiB | **5.94 GiB/s** | 4.51 GiB/s | 5.90 GiB/s | n/a | n/a |
+| x64 128-bit | 4 KiB | 8.99 GiB/s | 6.36 GiB/s | 8.88 GiB/s | **9.40 GiB/s** | 9.01 GiB/s |
+|  | 1 MiB | 8.97 GiB/s | 6.46 GiB/s | 8.90 GiB/s | **9.41 GiB/s** | 9.00 GiB/s |
+|  | 32 MiB | 6.55 GiB/s | 5.87 GiB/s | 6.42 GiB/s | **6.96 GiB/s** | 6.36 GiB/s |
 
 ## Base64: Python
 
@@ -109,18 +115,18 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 | Alphabet | Input | Operation | hashcodecs | CPython `base64` | `pybase64` |
 | --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | 13.73 GiB/s | 0.49 GiB/s | **14.09 GiB/s** |
-|  | 4 KiB | decode | **12.04 GiB/s** | 1.14 GiB/s | 8.50 GiB/s |
-|  | 1 MiB | encode | **3.66 GiB/s** | 0.47 GiB/s | 3.32 GiB/s |
-|  | 1 MiB | decode | 4.09 GiB/s | 0.89 GiB/s | **4.13 GiB/s** |
-|  | 512 MiB | encode | 2.86 GiB/s | 0.44 GiB/s | **3.04 GiB/s** |
-|  | 512 MiB | decode | 3.41 GiB/s | 0.94 GiB/s | **3.74 GiB/s** |
-| URL-safe | 4 KiB | encode | **13.60 GiB/s** | 0.41 GiB/s | 1.19 GiB/s |
-|  | 4 KiB | decode | **9.00 GiB/s** | 0.76 GiB/s | 1.56 GiB/s |
-|  | 1 MiB | encode | **3.61 GiB/s** | 0.36 GiB/s | 0.96 GiB/s |
-|  | 1 MiB | decode | **3.91 GiB/s** | 0.57 GiB/s | 1.55 GiB/s |
-|  | 512 MiB | encode | **2.93 GiB/s** | 0.36 GiB/s | 0.91 GiB/s |
-|  | 512 MiB | decode | **3.33 GiB/s** | 0.63 GiB/s | 1.53 GiB/s |
+| Standard | 4 KiB | encode | 13.76 GiB/s | 0.49 GiB/s | **14.10 GiB/s** |
+|  | 4 KiB | decode | **12.10 GiB/s** | 1.13 GiB/s | 8.44 GiB/s |
+|  | 1 MiB | encode | **3.87 GiB/s** | 0.45 GiB/s | 3.59 GiB/s |
+|  | 1 MiB | decode | 4.56 GiB/s | 0.90 GiB/s | **4.61 GiB/s** |
+|  | 32 MiB | encode | **3.67 GiB/s** | 0.47 GiB/s | 3.66 GiB/s |
+|  | 32 MiB | decode | 4.53 GiB/s | 0.89 GiB/s | **4.62 GiB/s** |
+| URL-safe | 4 KiB | encode | **13.35 GiB/s** | 0.41 GiB/s | 1.19 GiB/s |
+|  | 4 KiB | decode | **8.97 GiB/s** | 0.73 GiB/s | 1.52 GiB/s |
+|  | 1 MiB | encode | **3.74 GiB/s** | 0.36 GiB/s | 0.99 GiB/s |
+|  | 1 MiB | decode | **4.37 GiB/s** | 0.57 GiB/s | 1.60 GiB/s |
+|  | 32 MiB | encode | **3.92 GiB/s** | 0.36 GiB/s | 0.98 GiB/s |
+|  | 32 MiB | decode | **4.27 GiB/s** | 0.58 GiB/s | 1.68 GiB/s |
 
 ## SIMD References
 

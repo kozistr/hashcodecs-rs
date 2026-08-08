@@ -6,8 +6,8 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const LARGE_SIZE: usize = 512 * 1024 * 1024;
-const SIZES: [usize; 3] = [4 * 1024, 1024 * 1024, LARGE_SIZE];
+const SIZES: [usize; 3] = [4 * 1024, 1024 * 1024, 32 * 1024 * 1024];
+const SAMPLE_SIZE: usize = 50;
 
 fn data(size: usize) -> Vec<u8> {
     (0..size)
@@ -21,10 +21,6 @@ macro_rules! benchmark {
             bench.iter(|| black_box(($function)(black_box(input))));
         });
     };
-}
-
-fn sample_size(size: usize) -> usize {
-    if size == LARGE_SIZE { 10 } else { 30 }
 }
 
 fn base64(c: &mut Criterion) {
@@ -46,7 +42,7 @@ fn standard_encode(c: &mut Criterion) {
         );
         assert_eq!(base64_turbo::STANDARD.encode(&input), expected);
 
-        group.sample_size(sample_size(size));
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", hashcodecs::b64encode);
         benchmark!(group, size, &input, "base64", |input: &[u8]| {
@@ -70,7 +66,7 @@ fn urlsafe_encode(c: &mut Criterion) {
         );
         assert_eq!(base64_turbo::URL_SAFE.encode(&input), expected);
 
-        group.sample_size(sample_size(size));
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(
             group,
@@ -102,7 +98,7 @@ fn standard_decode(c: &mut Criterion) {
         );
         assert_eq!(base64_turbo::STANDARD.decode(&input).unwrap(), expected);
 
-        group.sample_size(sample_size(size));
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(
             group,
@@ -140,7 +136,7 @@ fn urlsafe_decode(c: &mut Criterion) {
         );
         assert_eq!(base64_turbo::URL_SAFE.decode(&input).unwrap(), expected);
 
-        group.sample_size(sample_size(size));
+        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(
             group,

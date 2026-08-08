@@ -15,8 +15,8 @@ from time import perf_counter
 import hashcodecs.base64 as hashcodecs_base64
 import pybase64
 
-SIZES = (4 * 1024, 1024 * 1024, 512 * 1024 * 1024)
-SAMPLES = 9
+SIZES = (4 * 1024, 1024 * 1024, 32 * 1024 * 1024)
+SAMPLES = 15
 MINIMUM_SAMPLE_SECONDS = 0.2
 
 

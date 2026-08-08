@@ -28,6 +28,9 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2.9.1
+
       - name: Check Rust formatting
         run: cargo fmt --check
 
@@ -58,6 +61,9 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2.9.1
 
       - name: Test Rust Python feature
         run: cargo test --features python
@@ -98,6 +104,11 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2.9.1
+        with:
+          shared-key: python-wheel
 
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v9.0.0

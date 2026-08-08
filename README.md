@@ -10,7 +10,7 @@
 
 ## Design
 
-- Base64 is implemented in this crate with runtime AVX2 and SSSE3 dispatch. One portable wheel supports Intel and AMD CPUs, selecting SIMD where the OS and CPU allow it and a scalar fallback otherwise.
+- Base64 is implemented in this crate with runtime AVX2, SSE4.2, SSE4.1, and SSSE3 dispatch. One portable wheel supports Intel and AMD CPUs, selecting the best available SIMD backend and falling back to scalar code otherwise.
 - Rust callers can reuse their own output buffers through the `*_into` APIs. Every backend writes exactly the documented prefix; it never depends on spare capacity after the destination slice.
 - Rust-owned results use the `mimalloc` global allocator.
 - MurmurHash3 uses direct little-endian block loads and tight scalar loops. Its state transitions are loop-carried, so the scalar implementation is faster than forcing wide-vector instructions for these hashes.
@@ -82,32 +82,32 @@ uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 
 | Alphabet | Input | Operation | hashcodecs | `base64` | `base64-turbo` |
 | --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | **18.20 GiB/s** | 5.41 GiB/s | 17.06 GiB/s |
-|  | 4 KiB | decode | **16.66 GiB/s** | 4.10 GiB/s | 15.78 GiB/s |
-|  | 1 MiB | encode | **19.28 GiB/s** | 4.78 GiB/s | 18.29 GiB/s |
-|  | 1 MiB | decode | **18.31 GiB/s** | 3.82 GiB/s | 16.82 GiB/s |
-|  | 32 MiB | encode | **10.60 GiB/s** | 3.05 GiB/s | 8.91 GiB/s |
-|  | 32 MiB | decode | **10.17 GiB/s** | 3.12 GiB/s | 9.87 GiB/s |
-| URL-safe | 4 KiB | encode | **17.73 GiB/s** | 5.33 GiB/s | 16.35 GiB/s |
-|  | 4 KiB | decode | 14.82 GiB/s | 4.11 GiB/s | **15.82 GiB/s** |
-|  | 1 MiB | encode | **18.99 GiB/s** | 4.75 GiB/s | 17.70 GiB/s |
-|  | 1 MiB | decode | 16.29 GiB/s | 3.82 GiB/s | **16.97 GiB/s** |
-|  | 32 MiB | encode | **9.61 GiB/s** | 2.84 GiB/s | 8.92 GiB/s |
-|  | 32 MiB | decode | **10.00 GiB/s** | 3.13 GiB/s | 9.92 GiB/s |
+| Standard | 4 KiB | encode | **18.17 GiB/s** | 5.40 GiB/s | 16.97 GiB/s |
+|  | 4 KiB | decode | **16.26 GiB/s** | 4.05 GiB/s | 15.76 GiB/s |
+|  | 1 MiB | encode | **19.29 GiB/s** | 4.79 GiB/s | 18.28 GiB/s |
+|  | 1 MiB | decode | **18.41 GiB/s** | 3.79 GiB/s | 16.93 GiB/s |
+|  | 32 MiB | encode | **10.29 GiB/s** | 3.08 GiB/s | 10.24 GiB/s |
+|  | 32 MiB | decode | **10.12 GiB/s** | 3.12 GiB/s | 9.83 GiB/s |
+| URL-safe | 4 KiB | encode | **18.19 GiB/s** | 5.39 GiB/s | 16.98 GiB/s |
+|  | 4 KiB | decode | 14.28 GiB/s | 4.02 GiB/s | **15.77 GiB/s** |
+|  | 1 MiB | encode | **19.27 GiB/s** | 4.82 GiB/s | 18.32 GiB/s |
+|  | 1 MiB | decode | 16.28 GiB/s | 3.83 GiB/s | **16.99 GiB/s** |
+|  | 32 MiB | encode | 10.35 GiB/s | 3.11 GiB/s | **10.45 GiB/s** |
+|  | 32 MiB | decode | 9.83 GiB/s | 3.17 GiB/s | **9.85 GiB/s** |
 
 ## MurmurHash3: Rust
 
 | Variant | Input | hashcodecs | `murmur3` | `murmurs` | `fastmurmur3` | `mm3h` |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| x86 32-bit | 4 KiB | 3.84 GiB/s | 2.43 GiB/s | 3.82 GiB/s | n/a | **4.03 GiB/s** |
+| x86 32-bit | 4 KiB | 3.83 GiB/s | 2.43 GiB/s | 3.82 GiB/s | n/a | **4.02 GiB/s** |
 |  | 1 MiB | 3.80 GiB/s | 2.43 GiB/s | 3.79 GiB/s | n/a | **3.98 GiB/s** |
-|  | 32 MiB | 3.68 GiB/s | 2.42 GiB/s | 3.70 GiB/s | n/a | **3.83 GiB/s** |
-| x86 128-bit | 4 KiB | **8.18 GiB/s** | 4.66 GiB/s | 8.08 GiB/s | n/a | n/a |
-|  | 1 MiB | **8.23 GiB/s** | 4.68 GiB/s | 8.18 GiB/s | n/a | n/a |
-|  | 32 MiB | **5.94 GiB/s** | 4.51 GiB/s | 5.90 GiB/s | n/a | n/a |
-| x64 128-bit | 4 KiB | 8.99 GiB/s | 6.36 GiB/s | 8.88 GiB/s | **9.40 GiB/s** | 9.01 GiB/s |
-|  | 1 MiB | 8.97 GiB/s | 6.46 GiB/s | 8.90 GiB/s | **9.41 GiB/s** | 9.00 GiB/s |
-|  | 32 MiB | 6.55 GiB/s | 5.87 GiB/s | 6.42 GiB/s | **6.96 GiB/s** | 6.36 GiB/s |
+|  | 32 MiB | 3.65 GiB/s | 2.42 GiB/s | 3.65 GiB/s | n/a | **3.83 GiB/s** |
+| x86 128-bit | 4 KiB | **8.19 GiB/s** | 4.66 GiB/s | 8.09 GiB/s | n/a | n/a |
+|  | 1 MiB | **8.26 GiB/s** | 4.71 GiB/s | 8.21 GiB/s | n/a | n/a |
+|  | 32 MiB | **5.97 GiB/s** | 4.54 GiB/s | 5.93 GiB/s | n/a | n/a |
+| x64 128-bit | 4 KiB | **9.43 GiB/s** | 6.38 GiB/s | 8.85 GiB/s | 9.39 GiB/s | 8.92 GiB/s |
+|  | 1 MiB | **9.49 GiB/s** | 6.46 GiB/s | 8.89 GiB/s | 9.40 GiB/s | 8.86 GiB/s |
+|  | 32 MiB | **6.99 GiB/s** | 5.81 GiB/s | 6.35 GiB/s | 6.90 GiB/s | 6.33 GiB/s |
 
 ## Base64: Python
 
@@ -115,19 +115,19 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 | Alphabet | Input | Operation | hashcodecs | CPython `base64` | `pybase64` |
 | --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | 13.76 GiB/s | 0.49 GiB/s | **14.10 GiB/s** |
-|  | 4 KiB | decode | **12.10 GiB/s** | 1.13 GiB/s | 8.44 GiB/s |
-|  | 1 MiB | encode | **3.87 GiB/s** | 0.45 GiB/s | 3.59 GiB/s |
-|  | 1 MiB | decode | 4.56 GiB/s | 0.90 GiB/s | **4.61 GiB/s** |
-|  | 32 MiB | encode | **3.67 GiB/s** | 0.47 GiB/s | 3.66 GiB/s |
-|  | 32 MiB | decode | 4.53 GiB/s | 0.89 GiB/s | **4.62 GiB/s** |
-| URL-safe | 4 KiB | encode | **13.35 GiB/s** | 0.41 GiB/s | 1.19 GiB/s |
-|  | 4 KiB | decode | **8.97 GiB/s** | 0.73 GiB/s | 1.52 GiB/s |
-|  | 1 MiB | encode | **3.74 GiB/s** | 0.36 GiB/s | 0.99 GiB/s |
-|  | 1 MiB | decode | **4.37 GiB/s** | 0.57 GiB/s | 1.60 GiB/s |
-|  | 32 MiB | encode | **3.92 GiB/s** | 0.36 GiB/s | 0.98 GiB/s |
-|  | 32 MiB | decode | **4.27 GiB/s** | 0.58 GiB/s | 1.68 GiB/s |
+| Standard | 4 KiB | encode | 13.74 GiB/s | 0.49 GiB/s | **14.05 GiB/s** |
+|  | 4 KiB | decode | **11.95 GiB/s** | 1.15 GiB/s | 8.47 GiB/s |
+|  | 1 MiB | encode | **3.70 GiB/s** | 0.47 GiB/s | 3.40 GiB/s |
+|  | 1 MiB | decode | **4.29 GiB/s** | 0.89 GiB/s | 4.24 GiB/s |
+|  | 32 MiB | encode | **3.81 GiB/s** | 0.47 GiB/s | 3.61 GiB/s |
+|  | 32 MiB | decode | **4.58 GiB/s** | 0.91 GiB/s | **4.58 GiB/s** |
+| URL-safe | 4 KiB | encode | **13.54 GiB/s** | 0.41 GiB/s | 1.19 GiB/s |
+|  | 4 KiB | decode | **8.89 GiB/s** | 0.73 GiB/s | 1.56 GiB/s |
+|  | 1 MiB | encode | **3.70 GiB/s** | 0.36 GiB/s | 0.97 GiB/s |
+|  | 1 MiB | decode | **4.07 GiB/s** | 0.57 GiB/s | 1.56 GiB/s |
+|  | 32 MiB | encode | **3.88 GiB/s** | 0.37 GiB/s | 0.99 GiB/s |
+|  | 32 MiB | decode | **4.30 GiB/s** | 0.58 GiB/s | 1.67 GiB/s |
 
 ## SIMD References
 
-The AVX2 block structure uses the 24-byte encode and 32-byte decode arrangement described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605). [Base64 Turbo](https://github.com/hacer-bark/base64-turbo) is included as a Rust comparator and is a useful direction for a future AVX-512 backend. This crate currently retains its Rust 1.85 MSRV, so its production runtime dispatch remains AVX2, SSSE3, and scalar.
+The AVX2 block structure uses the 24-byte encode and 32-byte decode arrangement described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605). [Base64 Turbo](https://github.com/hacer-bark/base64-turbo) is included as a Rust comparator and is a useful direction for a future AVX-512 backend. This crate currently retains its Rust 1.85 MSRV, so its production runtime dispatch uses AVX2, SSE4.2, SSE4.1, SSSE3, and scalar backends.

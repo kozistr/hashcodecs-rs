@@ -1,6 +1,6 @@
 //! Fast binary codecs with portable APIs and runtime SIMD dispatch.
 //!
-//! Base64 dispatches between in-crate AVX2, SSSE3, and scalar kernels at runtime.
+//! Base64 dispatches between in-crate AVX2, SSE4.2, SSE4.1, SSSE3, and scalar kernels at runtime.
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

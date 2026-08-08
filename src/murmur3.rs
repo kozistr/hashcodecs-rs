@@ -23,6 +23,12 @@ fn fmix64(mut hash: u64) -> u64 {
 }
 
 #[inline(always)]
+fn read_u16_le(input: &[u8], offset: usize) -> u16 {
+    debug_assert!(offset + 2 <= input.len());
+    unsafe { u16::from_le((input.as_ptr().add(offset).cast::<u16>()).read_unaligned()) }
+}
+
+#[inline(always)]
 fn read_u32_le(input: &[u8], offset: usize) -> u32 {
     debug_assert!(offset + 4 <= input.len());
     // Bounds are checked by the caller. Unaligned reads avoid a temporary
@@ -38,25 +44,26 @@ fn read_u64_le(input: &[u8], offset: usize) -> u64 {
 }
 
 #[inline(always)]
-fn mix_x64_128_block(mut hash1: u64, mut hash2: u64, value1: u64, value2: u64) -> (u64, u64) {
-    const C1: u64 = 0x87c3_7b91_1142_53d5;
-    const C2: u64 = 0x4cf5_ad43_2745_937f;
-
-    let block1 = value1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
-    let block2 = value2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
-    hash1 ^= block1;
-    hash1 = hash1
-        .rotate_left(27)
-        .wrapping_add(hash2)
-        .wrapping_mul(5)
-        .wrapping_add(0x52dc_e729);
-    hash2 ^= block2;
-    hash2 = hash2
-        .rotate_left(31)
-        .wrapping_add(hash1)
-        .wrapping_mul(5)
-        .wrapping_add(0x3849_5ab5);
-    (hash1, hash2)
+fn read_partial_u64_le(input: &[u8]) -> u64 {
+    debug_assert!(input.len() <= 8);
+    match input.len() {
+        0 => 0,
+        1 => input[0] as u64,
+        2 => read_u16_le(input, 0) as u64,
+        3 => read_u16_le(input, 0) as u64 | ((input[2] as u64) << 16),
+        4 => read_u32_le(input, 0) as u64,
+        5 => read_u32_le(input, 0) as u64 | ((input[4] as u64) << 32),
+        6 => read_u32_le(input, 0) as u64 | ((read_u16_le(input, 4) as u64) << 32),
+        7 => {
+            read_u32_le(input, 0) as u64
+                | ((read_u16_le(input, 4) as u64) << 32)
+                | ((input[6] as u64) << 48)
+        }
+        _ => {
+            debug_assert_eq!(input.len(), 8);
+            read_u64_le(input, 0)
+        }
+    }
 }
 
 /// Computes the canonical MurmurHash3 x86 32-bit hash.
@@ -140,31 +147,46 @@ pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
 /// Computes the canonical MurmurHash3 x64 128-bit hash as two `u64` words.
 #[inline(always)]
 pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
+    let hash = murmur3_x64_128_inner(key, seed as u64);
+    [hash as u64, (hash >> 64) as u64]
+}
+
+#[inline(never)]
+fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> u128 {
     const C1: u64 = 0x87c3_7b91_1142_53d5;
     const C2: u64 = 0x4cf5_ad43_2745_937f;
 
-    let mut hash1 = seed as u64;
+    let mut hash1 = seed;
     let mut hash2 = hash1;
     let block_end = key.len() & !15;
-    for block in key[..block_end].chunks_exact(16) {
-        (hash1, hash2) =
-            mix_x64_128_block(hash1, hash2, read_u64_le(block, 0), read_u64_le(block, 8));
+    for block in key[..block_end].chunks(16) {
+        // Byte-array loads have alignment one and let LLVM schedule both
+        // independent words before either dependent hash chain advances.
+        let value1 = u64::from_le_bytes(unsafe { block.as_ptr().cast::<[u8; 8]>().read() });
+        let value2 = u64::from_le_bytes(unsafe { block.as_ptr().add(8).cast::<[u8; 8]>().read() });
+        let block1 = value1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
+        let block2 = value2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
+        hash1 ^= block1;
+        hash1 = hash1
+            .rotate_left(27)
+            .wrapping_add(hash2)
+            .wrapping_mul(5)
+            .wrapping_add(0x52dc_e729);
+        hash2 ^= block2;
+        hash2 = hash2
+            .rotate_left(31)
+            .wrapping_add(hash1)
+            .wrapping_mul(5)
+            .wrapping_add(0x3849_5ab5);
     }
 
     let tail = &key[block_end..];
-    let mut block1 = 0u64;
-    let mut block2 = 0u64;
-    for (index, byte) in tail.iter().copied().enumerate() {
-        if index < 8 {
-            block1 |= (byte as u64) << (index * 8);
-        } else {
-            block2 |= (byte as u64) << ((index - 8) * 8);
-        }
-    }
     if tail.len() > 8 {
+        let block2 = read_partial_u64_le(&tail[8..]);
         hash2 ^= block2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
     }
     if !tail.is_empty() {
+        let block1 = read_partial_u64_le(&tail[..tail.len().min(8)]);
         hash1 ^= block1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
     }
 
@@ -177,7 +199,7 @@ pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
     hash2 = fmix64(hash2);
     hash1 = hash1.wrapping_add(hash2);
     hash2 = hash2.wrapping_add(hash1);
-    [hash1, hash2]
+    (hash1 as u128) | ((hash2 as u128) << 64)
 }
 
 #[inline]
@@ -279,6 +301,7 @@ mod tests {
 
     #[test]
     fn known_answer_vectors() {
+        assert_eq!(read_partial_u64_le(&[]), 0);
         assert_eq!(murmur3_x86_32(b"hello", 0), 0x248b_fa47);
         assert_eq!(murmur3_x86_32(&[1, 2, 3], 0), 2_161_234_436);
         assert_eq!(

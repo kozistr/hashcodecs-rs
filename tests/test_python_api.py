@@ -28,7 +28,10 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.b64encode(memoryview(b"abc")) == b"YWJj"
     assert base64.b64decode(b"Y W\nJj", validate=False) == b"abc"
     assert base64.b64decode(b"YWJj====", validate=False) == b"abc"
-    assert base64.b64decode(b"AA==anything after padding") == b"\x00"
+    trailing_data = b"AA==anything after padding"
+    assert _outcome(base64.b64decode, trailing_data, None, False) == _outcome(
+        stdlib_base64.b64decode, trailing_data, None, False
+    )
     assert base64.b64decode(b"AA=\n=") == b"\x00"
     assert base64.b64decode(b"++8=", b"-_", validate=True) == b"\xfb\xef"
     assert base64.b64decode(b"//8=", b"-_", validate=True) == b"\xff\xff"

@@ -3,10 +3,9 @@ use core::slice;
 use pyo3::exceptions::{PyAssertionError, PyBufferError, PyMemoryError, PyTypeError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyList, PyModule, PyString, PyTuple, PyType};
+use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyString, PyTuple, PyType};
 
 use crate::{
-    b64decode as decode_standard,
     base64::{
         DecodeAlphabet, decode_layout, decode_to_slice_with_layout_and_alphabet, encode_to_slice,
         encoded_len,
@@ -228,38 +227,39 @@ fn decode_strict_with_altchars<'py>(
     }
 }
 
-fn decode_lenient(py: Python<'_>, input: &[u8], altchars: Option<[u8; 2]>) -> PyResult<Vec<u8>> {
-    let mut normalized = Vec::with_capacity(input.len());
-    let mut pending_padding = false;
-    for &byte in input {
-        let byte = match altchars {
-            Some([_, slash]) if byte == slash => b'/',
-            Some([plus, _]) if byte == plus => b'+',
-            _ => byte,
-        };
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/') {
-            pending_padding = false;
-            normalized.push(byte);
-        } else if byte == b'=' {
-            match normalized.len() % 4 {
-                2 if pending_padding => {
-                    normalized.extend_from_slice(b"==");
-                    pending_padding = false;
-                    break;
-                }
-                2 => pending_padding = true,
-                3 => {
-                    normalized.push(b'=');
-                    break;
-                }
-                _ => pending_padding = false,
-            }
+fn decode_with_binascii<'py>(
+    py: Python<'py>,
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+    strict_mode: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let translated = altchars.map(|altchars| translate_altchars(input, altchars));
+    let input = translated.as_deref().unwrap_or(input);
+    let decode = py.import("binascii")?.getattr("a2b_base64")?;
+    let data = PyBytes::new(py, input);
+    let output = if py.version_info() < (3, 11) {
+        if strict_mode && !strict_base64_310(input) {
+            return Err(decoding_error(py, "Non-base64 digit found"));
         }
-    }
-    if pending_padding {
-        normalized.push(b'=');
-    }
-    decode_standard(&normalized).map_err(|_| decoding_error(py, "Incorrect padding"))
+        decode.call1((data,))?
+    } else {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("strict_mode", strict_mode)?;
+        decode.call((data,), Some(&kwargs))?
+    };
+    output.cast_into::<PyBytes>().map_err(Into::into)
+}
+
+fn strict_base64_310(input: &[u8]) -> bool {
+    let padding = input
+        .iter()
+        .position(|&byte| byte == b'=')
+        .unwrap_or(input.len());
+    input[..padding]
+        .iter()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/'))
+        && input[padding..].len() <= 2
+        && input[padding..].iter().all(|&byte| byte == b'=')
 }
 
 #[pyfunction(signature = (s, altchars=None))]
@@ -282,7 +282,11 @@ fn b64decode<'py>(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     if validate {
-        return decode_strict_with_altchars(py, input.as_bytes(), altchars);
+        return match decode_strict_with_altchars(py, input.as_bytes(), altchars) {
+            Ok(output) => Ok(output),
+            Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
+            Err(_) => decode_with_binascii(py, input.as_bytes(), altchars, true),
+        };
     }
 
     let direct = match altchars {
@@ -295,8 +299,7 @@ fn b64decode<'py>(
             return Ok(output);
         }
     }
-    let output = decode_lenient(py, input.as_bytes(), altchars)?;
-    Ok(PyBytes::new(py, &output))
+    decode_with_binascii(py, input.as_bytes(), altchars, false)
 }
 
 #[pyfunction(signature = (s, seed=0))]

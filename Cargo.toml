@@ -6,6 +6,7 @@ rust-version = "1.85"
 description = "SIMD-accelerated Base64 codecs and fast MurmurHash3 implementations"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kozistr/hashcodecs-rs"
+publish = false
 keywords = ["base64", "simd", "murmur3", "python"]
 categories = ["encoding", "algorithms"]
 readme = "README.md"

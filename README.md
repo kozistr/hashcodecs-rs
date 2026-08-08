@@ -1,5 +1,11 @@
 # hashcodecs
 
+[![CI](https://img.shields.io/github/actions/workflow/status/kozistr/hashcodecs-rs/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/kozistr/hashcodecs-rs/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/hashcodecs?style=for-the-badge&logo=pypi)](https://pypi.org/project/hashcodecs/)
+[![Python](https://img.shields.io/pypi/pyversions/hashcodecs?style=for-the-badge&logo=python)](https://pypi.org/project/hashcodecs/)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-brightgreen?style=for-the-badge)](https://github.com/kozistr/hashcodecs-rs#license)
+[![Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=downloads)](https://pypi.org/project/hashcodecs/)
+
 `hashcodecs` provides runtime-dispatched SIMD Base64 codecs and fast, reference-compatible MurmurHash3 functions for Rust and Python.
 
 ## Design
@@ -59,13 +65,9 @@ Results are recorded below.
 
 # Benchmark
 
-Measurements were taken on Windows 10 x64 with an Intel Core Ultra 7 265K. Throughput is the original binary input size per second, including allocation of the returned value. Higher is better.
+Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
 
-Each benchmark harness invokes one operation at a time, and no tested implementation is configured to use worker threads. This is a single-thread throughput comparison, not an aggregate multi-core result.
-
-All columns were refreshed on 2026-08-09 after a clean build with the process pinned to one logical CPU. The Rust comparison binary uses the project's global `mimalloc` allocator for every implementation linked into that binary.
-
-Rust uses 30 Criterion samples for 4 KiB and 1 MiB inputs and 10 samples for 512 MiB. Python reports the median of nine timed samples. Rust comparators are checked against `hashcodecs` before their timings are collected. Each language section includes its native baseline: CPython `base64` for Python and the Rust `base64` crate for Rust.
+Conditions: clean builds, one pinned logical CPU, single-threaded execution, and output allocation included. Higher is better.
 
 ## Run Locally
 
@@ -84,8 +86,6 @@ cargo bench --bench base64 -- hashcodecs
 cargo bench --bench murmur3 -- hashcodecs
 uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 ```
-
-CI intentionally does not run benchmarks. It only lints, tests, builds, and publishes release artifacts.
 
 ## Base64: Rust
 
@@ -119,8 +119,6 @@ These measurements include output allocation and use the same public APIs availa
 | x64 128-bit | 4 KiB | 8.96 GiB/s | 6.38 GiB/s | 8.85 GiB/s | **9.40 GiB/s** | 8.87 GiB/s |
 |  | 1 MiB | 8.95 GiB/s | 6.44 GiB/s | 8.87 GiB/s | **9.39 GiB/s** | 8.89 GiB/s |
 |  | 512 MiB | 5.98 GiB/s | 5.56 GiB/s | 5.66 GiB/s | **6.56 GiB/s** | 5.73 GiB/s |
-
-All MurmurHash3 values come from the same clean, pinned comparison run.
 
 ## Base64: Python
 

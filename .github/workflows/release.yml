@@ -117,4 +117,5 @@ jobs:
       - name: Create release, changelog, and assets
         run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag --title "hashcodecs $GITHUB_REF_NAME"
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}

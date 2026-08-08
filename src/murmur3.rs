@@ -69,6 +69,20 @@ fn read_partial_u64_le(input: &[u8]) -> u64 {
 /// Computes the canonical MurmurHash3 x86 32-bit hash.
 #[inline]
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
+    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        if std::is_x86_feature_detected!("avx2") {
+            return unsafe { x86::murmur3_x86_32_avx2(key, seed) };
+        }
+        if std::is_x86_feature_detected!("sse4.1") {
+            return unsafe { x86::murmur3_x86_32_sse41(key, seed) };
+        }
+    }
+    murmur3_x86_32_scalar(key, seed)
+}
+
+#[inline]
+fn murmur3_x86_32_scalar(key: &[u8], seed: u32) -> u32 {
     const C1: u32 = 0xcc9e_2d51;
     const C2: u32 = 0x1b87_3593;
 
@@ -80,14 +94,25 @@ pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
             .wrapping_mul(C1)
             .rotate_left(15)
             .wrapping_mul(C2);
-        hash ^= block;
-        hash = hash
-            .rotate_left(13)
-            .wrapping_mul(5)
-            .wrapping_add(0xe654_6b64);
+        hash = mix_x86_32_hash(hash, block);
         offset += 4;
     }
 
+    finish_x86_32(key, hash, offset)
+}
+
+#[inline(always)]
+fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
+    hash ^= block;
+    hash.rotate_left(13)
+        .wrapping_mul(5)
+        .wrapping_add(0xe654_6b64)
+}
+
+#[inline(always)]
+fn finish_x86_32(key: &[u8], mut hash: u32, offset: usize) -> u32 {
+    const C1: u32 = 0xcc9e_2d51;
+    const C2: u32 = 0x1b87_3593;
     let tail_len = key.len() & 3;
     let mut tail = 0u32;
     if tail_len == 3 {
@@ -286,6 +311,9 @@ fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     hashes
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod x86;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,11 +362,49 @@ mod tests {
                 .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
                 .collect();
             for seed in seeds {
+                let expected_x86_32 = murmur3::murmur3_32(&mut Cursor::new(&input), seed).unwrap();
                 assert_eq!(
                     murmur3_x86_32(&input, seed),
-                    murmur3::murmur3_32(&mut Cursor::new(&input), seed).unwrap(),
+                    expected_x86_32,
                     "x86_32 length={length} seed={seed}"
                 );
+                assert_eq!(
+                    murmur3_x86_32_scalar(&input, seed),
+                    expected_x86_32,
+                    "scalar x86_32 length={length} seed={seed}"
+                );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                unsafe {
+                    #[cfg(coverage)]
+                    {
+                        assert_eq!(
+                            x86::murmur3_x86_32_sse41(&input, seed),
+                            expected_x86_32,
+                            "SSE4.1 x86_32 length={length} seed={seed}"
+                        );
+                        assert_eq!(
+                            x86::murmur3_x86_32_avx2(&input, seed),
+                            expected_x86_32,
+                            "AVX2 x86_32 length={length} seed={seed}"
+                        );
+                    }
+                    #[cfg(not(coverage))]
+                    if std::is_x86_feature_detected!("sse4.1") {
+                        assert_eq!(
+                            x86::murmur3_x86_32_sse41(&input, seed),
+                            expected_x86_32,
+                            "SSE4.1 x86_32 length={length} seed={seed}"
+                        );
+                    }
+                    #[cfg(not(coverage))]
+                    if std::is_x86_feature_detected!("avx2") {
+                        assert_eq!(
+                            x86::murmur3_x86_32_avx2(&input, seed),
+                            expected_x86_32,
+                            "AVX2 x86_32 length={length} seed={seed}"
+                        );
+                    }
+                }
 
                 let x86 = x86_words_as_u128(murmur3_x86_128(&input, seed));
                 assert_eq!(

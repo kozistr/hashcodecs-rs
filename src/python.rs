@@ -294,10 +294,10 @@ fn b64decode<'py>(
         Some([b'-', b'_']) => Some(DecodeAlphabet::Mixed),
         Some(_) => None,
     };
-    if let Some(alphabet) = direct {
-        if let Ok(output) = decode_strict(py, input.as_bytes(), alphabet) {
-            return Ok(output);
-        }
+    if let Some(alphabet) = direct
+        && let Ok(output) = decode_strict(py, input.as_bytes(), alphabet)
+    {
+        return Ok(output);
     }
     decode_with_binascii(py, input.as_bytes(), altchars, false)
 }

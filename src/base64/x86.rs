@@ -4,6 +4,8 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::Base64Error;
+#[cfg(not(coverage))]
+use super::{MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
 
 pub(super) struct StandardDecoder;
 pub(super) struct UrlSafeDecoder;
@@ -12,6 +14,8 @@ pub(super) struct ExactStore;
 pub(super) struct PaddedStore;
 
 pub(super) trait Decoder {
+    #[cfg(not(coverage))]
+    fn decode_table() -> &'static [u8; 256];
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i);
     unsafe fn decode_16(input: *const u8) -> Option<__m128i>;
     unsafe fn decode_indices_16_sse41(input: *const u8) -> (__m128i, __m128i);
@@ -47,6 +51,12 @@ impl Store for PaddedStore {
 }
 
 impl Decoder for StandardDecoder {
+    #[cfg(not(coverage))]
+    #[inline(always)]
+    fn decode_table() -> &'static [u8; 256] {
+        &STANDARD_DECODE
+    }
+
     #[inline(always)]
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_standard(input) }
@@ -64,6 +74,12 @@ impl Decoder for StandardDecoder {
 }
 
 impl Decoder for UrlSafeDecoder {
+    #[cfg(not(coverage))]
+    #[inline(always)]
+    fn decode_table() -> &'static [u8; 256] {
+        &URLSAFE_DECODE
+    }
+
     #[inline(always)]
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_urlsafe(input) }
@@ -81,6 +97,12 @@ impl Decoder for UrlSafeDecoder {
 }
 
 impl Decoder for MixedDecoder {
+    #[cfg(not(coverage))]
+    #[inline(always)]
+    fn decode_table() -> &'static [u8; 256] {
+        &MIXED_DECODE
+    }
+
     #[inline(always)]
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_mixed(input) }

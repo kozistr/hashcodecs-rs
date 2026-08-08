@@ -1,0 +1,184 @@
+#[cfg(target_arch = "x86")]
+use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+
+use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET, x86};
+
+const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
+
+pub(super) const ENCODE_SHUFFLE: [u8; 64] = encode_shuffle();
+pub(super) const PACK_SHUFFLE: [u8; 64] = pack_shuffle();
+pub(super) const COMPACT_SHUFFLE: [u8; 64] = compact_shuffle();
+pub(super) const MULTISHIFT_SHIFTS: [u8; 8] = [10, 4, 22, 16, 42, 36, 54, 48];
+
+const fn encode_shuffle() -> [u8; 64] {
+    let mut shuffle = [0; 64];
+    let mut group = 0;
+    while group < 16 {
+        let input = group * 3;
+        let output = group * 4;
+        shuffle[output] = (input + 1) as u8;
+        shuffle[output + 1] = input as u8;
+        shuffle[output + 2] = (input + 2) as u8;
+        shuffle[output + 3] = (input + 1) as u8;
+        group += 1;
+    }
+    shuffle
+}
+
+const fn pack_shuffle() -> [u8; 64] {
+    let mut shuffle = [0; 64];
+    let mut lane = 0;
+    while lane < 4 {
+        let base = lane * 16;
+        let mut group = 0;
+        while group < 4 {
+            shuffle[base + group * 3] = (group * 4 + 2) as u8;
+            shuffle[base + group * 3 + 1] = (group * 4 + 1) as u8;
+            shuffle[base + group * 3 + 2] = (group * 4) as u8;
+            group += 1;
+        }
+        shuffle[base + 12] = 0x80;
+        shuffle[base + 13] = 0x80;
+        shuffle[base + 14] = 0x80;
+        shuffle[base + 15] = 0x80;
+        lane += 1;
+    }
+    shuffle
+}
+
+const fn compact_shuffle() -> [u8; 64] {
+    let mut shuffle = [0; 64];
+    let mut lane = 0;
+    while lane < 4 {
+        let mut byte = 0;
+        while byte < 12 {
+            shuffle[lane * 12 + byte] = (lane * 16 + byte) as u8;
+            byte += 1;
+        }
+        lane += 1;
+    }
+    shuffle
+}
+
+#[target_feature(enable = "avx512vbmi")]
+pub(super) unsafe fn encode_avx512<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+    let alphabet = if URLSAFE {
+        URLSAFE_ALPHABET
+    } else {
+        STANDARD_ALPHABET
+    };
+    let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
+    let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
+    let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
+
+    let mut source = 0;
+    let mut destination = 0;
+    while source + 192 <= input.len() {
+        unsafe {
+            encode_48(
+                input.as_ptr().add(source),
+                output.add(destination),
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        unsafe {
+            encode_48(
+                input.as_ptr().add(source + 48),
+                output.add(destination + 64),
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        unsafe {
+            encode_48(
+                input.as_ptr().add(source + 96),
+                output.add(destination + 128),
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        unsafe {
+            encode_48(
+                input.as_ptr().add(source + 144),
+                output.add(destination + 192),
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        source += 192;
+        destination += 256;
+    }
+    while source + 48 <= input.len() {
+        unsafe {
+            encode_48(
+                input.as_ptr().add(source),
+                output.add(destination),
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        source += 48;
+        destination += 64;
+    }
+
+    source + unsafe { x86::encode_avx2::<URLSAFE>(&input[source..], output.add(destination)) }
+}
+
+#[target_feature(enable = "avx512vbmi")]
+#[inline]
+unsafe fn encode_48(
+    input: *const u8,
+    output: *mut u8,
+    shuffle: __m512i,
+    shifts: __m512i,
+    table: __m512i,
+) {
+    let input = unsafe { _mm512_maskz_loadu_epi8(INPUT_MASK_48, input.cast()) };
+    let shuffled = _mm512_permutexvar_epi8(shuffle, input);
+    let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
+    unsafe { _mm512_storeu_si512(output.cast(), _mm512_permutexvar_epi8(indices, table)) };
+}
+
+#[target_feature(enable = "avx512vbmi")]
+pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
+    input: &[u8],
+    output: *mut u8,
+) -> Result<(usize, usize), Base64Error> {
+    let table = A::decode_table();
+    let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
+    let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
+    let pack_shuffle = unsafe { _mm512_loadu_si512(PACK_SHUFFLE.as_ptr().cast()) };
+    let compact_shuffle = unsafe { _mm512_loadu_si512(COMPACT_SHUFFLE.as_ptr().cast()) };
+
+    let mut source = 0;
+    let mut destination = 0;
+    while source + 64 <= input.len() {
+        let ascii = unsafe { _mm512_loadu_si512(input.as_ptr().add(source).cast()) };
+        let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
+        let invalid = _mm512_cmpgt_epu8_mask(indices, _mm512_set1_epi8(63))
+            | _mm512_cmpgt_epu8_mask(ascii, _mm512_set1_epi8(0x7f));
+        if invalid != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+
+        let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
+        let packed = _mm512_madd_epi16(merged, _mm512_set1_epi32(0x0001_1000));
+        let packed = _mm512_shuffle_epi8(packed, pack_shuffle);
+        let packed = _mm512_permutexvar_epi8(compact_shuffle, packed);
+        unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), INPUT_MASK_48, packed) };
+        source += 64;
+        destination += 48;
+    }
+
+    let (tail_source, tail_destination) =
+        unsafe { x86::decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
+    Ok((source + tail_source, destination + tail_destination))
+}

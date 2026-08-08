@@ -10,10 +10,10 @@
 
 ## Design
 
-- Base64 is implemented in this crate with runtime AVX2, SSE4.2, SSE4.1, and SSSE3 dispatch. One portable wheel supports Intel and AMD CPUs, selecting the best available SIMD backend and falling back to scalar code otherwise.
+- Base64 is implemented in this crate with runtime AVX-512 VBMI, AVX2, SSE4.2, SSE4.1, SSSE3, and AArch64 NEON dispatch. Portable wheels select the best available SIMD backend and fall back to scalar code otherwise.
 - Rust callers can reuse their own output buffers through the `*_into` APIs. Every backend writes exactly the documented prefix; it never depends on spare capacity after the destination slice.
 - Rust-owned results use the `mimalloc` global allocator.
-- MurmurHash3 uses direct little-endian block loads and tight scalar loops. Its state transitions are loop-carried, so the scalar implementation is faster than forcing wide-vector instructions for these hashes.
+- MurmurHash3 x86 32-bit runtime-dispatches to AVX2 or SSE4.1 to premix independent input words, then preserves the algorithm's ordered scalar state transition. The x86 128-bit and x64 128-bit variants use optimized scalar loops, and every variant has a portable scalar fallback.
 - The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
 - Large Python calls release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
 
@@ -99,15 +99,15 @@ uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 
 | Variant | Input | hashcodecs | `murmur3` | `murmurs` | `fastmurmur3` | `mm3h` |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| x86 32-bit | 4 KiB | 3.83 GiB/s | 2.43 GiB/s | 3.82 GiB/s | n/a | **4.02 GiB/s** |
-|  | 1 MiB | 3.80 GiB/s | 2.43 GiB/s | 3.79 GiB/s | n/a | **3.98 GiB/s** |
-|  | 32 MiB | 3.65 GiB/s | 2.42 GiB/s | 3.65 GiB/s | n/a | **3.83 GiB/s** |
-| x86 128-bit | 4 KiB | **8.19 GiB/s** | 4.66 GiB/s | 8.09 GiB/s | n/a | n/a |
-|  | 1 MiB | **8.26 GiB/s** | 4.71 GiB/s | 8.21 GiB/s | n/a | n/a |
-|  | 32 MiB | **5.97 GiB/s** | 4.54 GiB/s | 5.93 GiB/s | n/a | n/a |
-| x64 128-bit | 4 KiB | **9.43 GiB/s** | 6.38 GiB/s | 8.85 GiB/s | 9.39 GiB/s | 8.92 GiB/s |
-|  | 1 MiB | **9.49 GiB/s** | 6.46 GiB/s | 8.89 GiB/s | 9.40 GiB/s | 8.86 GiB/s |
-|  | 32 MiB | **6.99 GiB/s** | 5.81 GiB/s | 6.35 GiB/s | 6.90 GiB/s | 6.33 GiB/s |
+| x86 32-bit | 4 KiB | **4.03 GiB/s** | 2.43 GiB/s | 3.81 GiB/s | n/a | 4.00 GiB/s |
+|  | 1 MiB | **3.99 GiB/s** | 2.44 GiB/s | 3.79 GiB/s | n/a | 3.98 GiB/s |
+|  | 32 MiB | **3.99 GiB/s** | 2.41 GiB/s | 3.71 GiB/s | n/a | 3.81 GiB/s |
+| x86 128-bit | 4 KiB | **8.14 GiB/s** | 4.66 GiB/s | 8.09 GiB/s | n/a | n/a |
+|  | 1 MiB | **8.25 GiB/s** | 4.72 GiB/s | 8.21 GiB/s | n/a | n/a |
+|  | 32 MiB | **5.97 GiB/s** | 4.55 GiB/s | 5.83 GiB/s | n/a | n/a |
+| x64 128-bit | 4 KiB | **9.45 GiB/s** | 6.39 GiB/s | 8.87 GiB/s | 9.39 GiB/s | 9.00 GiB/s |
+|  | 1 MiB | **9.49 GiB/s** | 6.45 GiB/s | 8.87 GiB/s | 9.38 GiB/s | 8.98 GiB/s |
+|  | 32 MiB | **6.95 GiB/s** | 5.82 GiB/s | 6.37 GiB/s | 6.89 GiB/s | 6.40 GiB/s |
 
 ## Base64: Python
 
@@ -130,4 +130,4 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 ## SIMD References
 
-The AVX2 block structure uses the 24-byte encode and 32-byte decode arrangement described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605). [Base64 Turbo](https://github.com/hacer-bark/base64-turbo) is included as a Rust comparator and is a useful direction for a future AVX-512 backend. This crate currently retains its Rust 1.85 MSRV, so its production runtime dispatch uses AVX2, SSE4.2, SSE4.1, SSSE3, and scalar backends.
+The AVX2 block structure uses the 24-byte encode and 32-byte decode arrangement described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605). The AVX-512 VBMI path processes 48-byte encode and 64-byte decode blocks with cross-lane byte permutations, while AArch64 uses 48-byte NEON encoding and 64-byte NEON decoding blocks. The Rust 1.89 MSRV is the first stable release that exposes the required AVX-512 intrinsics.

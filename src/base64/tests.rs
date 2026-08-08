@@ -6,6 +6,7 @@ fn backend_supported(backend: Backend) -> bool {
     {
         match backend {
             Backend::Scalar => true,
+            Backend::Neon => false,
             Backend::Ssse3 => std::is_x86_feature_detected!("ssse3"),
             Backend::Sse41 => {
                 std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
@@ -16,9 +17,18 @@ fn backend_supported(backend: Backend) -> bool {
                     && std::is_x86_feature_detected!("sse4.2")
             }
             Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
+            Backend::Avx512 => std::is_x86_feature_detected!("avx512vbmi"),
         }
     }
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(target_arch = "aarch64")]
+    {
+        match backend {
+            Backend::Scalar => true,
+            Backend::Neon => std::arch::is_aarch64_feature_detected!("neon"),
+            _ => false,
+        }
+    }
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     {
         backend == Backend::Scalar
     }
@@ -89,12 +99,36 @@ fn matches_the_standard_engine_for_all_short_lengths() {
 
 #[test]
 fn backend_selection_and_kernels_match_scalar_output() {
-    assert_eq!(select_backend(false, false, false, false), Backend::Scalar);
-    assert_eq!(select_backend(false, false, false, true), Backend::Ssse3);
-    assert_eq!(select_backend(false, false, true, true), Backend::Sse41);
-    assert_eq!(select_backend(false, true, true, true), Backend::Sse42);
-    assert_eq!(select_backend(false, true, false, true), Backend::Ssse3);
-    assert_eq!(select_backend(true, false, false, false), Backend::Avx2);
+    assert_eq!(
+        select_x86_backend(false, false, false, false, false),
+        Backend::Scalar
+    );
+    assert_eq!(
+        select_x86_backend(false, false, false, false, true),
+        Backend::Ssse3
+    );
+    assert_eq!(
+        select_x86_backend(false, false, false, true, true),
+        Backend::Sse41
+    );
+    assert_eq!(
+        select_x86_backend(false, false, true, true, true),
+        Backend::Sse42
+    );
+    assert_eq!(
+        select_x86_backend(false, false, true, false, true),
+        Backend::Ssse3
+    );
+    assert_eq!(
+        select_x86_backend(false, true, false, false, false),
+        Backend::Avx2
+    );
+    assert_eq!(
+        select_x86_backend(true, false, false, false, false),
+        Backend::Avx512
+    );
+    assert_eq!(select_aarch64_backend(false), Backend::Scalar);
+    assert_eq!(select_aarch64_backend(true), Backend::Neon);
     assert!(backend_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),
@@ -121,6 +155,22 @@ fn backend_selection_and_kernels_match_scalar_output() {
         .unwrap(),
         (0, 0)
     );
+    #[cfg(coverage)]
+    {
+        assert_eq!(
+            encode_with_backend(&input, &mut scalar, Backend::Avx512, false),
+            0
+        );
+        assert_eq!(
+            decode_with_backend(
+                expected.as_bytes(),
+                &mut scalar_decoded,
+                Backend::Avx512,
+                DecodeAlphabet::Standard,
+            ),
+            Ok((0, 0))
+        );
+    }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     unsafe {
         assert_eq!(
@@ -144,10 +194,12 @@ fn backend_selection_and_kernels_match_scalar_output() {
     let mixed = b"-///".repeat(32);
     let mixed_expected = [0xfb, 0xff, 0xff].repeat(32);
     for backend in [
+        Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,
         Backend::Sse42,
         Backend::Avx2,
+        Backend::Avx512,
     ]
     .into_iter()
     .filter(|backend| backend_supported(*backend))
@@ -242,10 +294,12 @@ fn backend_selection_and_kernels_match_scalar_output() {
 #[test]
 fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     for backend in [
+        Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,
         Backend::Sse42,
         Backend::Avx2,
+        Backend::Avx512,
     ]
     .into_iter()
     .filter(|backend| backend_supported(*backend))
@@ -289,6 +343,60 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
             }
         }
     }
+}
+
+#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+#[test]
+fn avx512_control_vectors_describe_the_base64_transforms() {
+    let input: Vec<u8> = (0..48)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect();
+    let mut shuffled = [0_u8; 64];
+    for (destination, &source) in x86_avx512::ENCODE_SHUFFLE.iter().enumerate() {
+        shuffled[destination] = input[source as usize];
+    }
+
+    let mut indices = [0_u8; 64];
+    for lane in 0..8 {
+        let lane_start = lane * 8;
+        let word = u64::from_le_bytes(shuffled[lane_start..lane_start + 8].try_into().unwrap());
+        for byte in 0..8 {
+            let shift = x86_avx512::MULTISHIFT_SHIFTS[byte];
+            indices[lane_start + byte] = ((word >> shift) & 0x3f) as u8;
+        }
+    }
+
+    let mut expected = [0_u8; 64];
+    for group in 0..16 {
+        let source = group * 3;
+        let destination = group * 4;
+        let first = input[source];
+        let second = input[source + 1];
+        let third = input[source + 2];
+        expected[destination] = first >> 2;
+        expected[destination + 1] = ((first & 0x03) << 4) | (second >> 4);
+        expected[destination + 2] = ((second & 0x0f) << 2) | (third >> 6);
+        expected[destination + 3] = third & 0x3f;
+    }
+    assert_eq!(indices, expected);
+
+    let mut lane_packed = [0_u8; 64];
+    for lane in 0..4 {
+        for byte in 0..12 {
+            lane_packed[lane * 16 + byte] = (lane * 12 + byte) as u8;
+        }
+        assert_eq!(
+            &x86_avx512::PACK_SHUFFLE[lane * 16..lane * 16 + 16],
+            &[
+                2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, 0x80, 0x80, 0x80, 0x80
+            ]
+        );
+    }
+    let compacted: Vec<u8> = x86_avx512::COMPACT_SHUFFLE[..48]
+        .iter()
+        .map(|&index| lane_packed[index as usize])
+        .collect();
+    assert_eq!(compacted, (0..48).collect::<Vec<u8>>());
 }
 
 #[test]

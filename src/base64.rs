@@ -82,14 +82,13 @@ impl std::error::Error for Base64Error {}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Backend {
     Scalar,
-    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg_attr(not(any(test, target_arch = "aarch64")), allow(dead_code))]
+    Neon,
     Ssse3,
-    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     Sse41,
-    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     Sse42,
-    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     Avx2,
+    Avx512,
 }
 
 #[derive(Clone, Copy)]
@@ -117,7 +116,7 @@ pub fn b64encode_urlsafe(input: &[u8]) -> String {
 /// Returns the padded Base64 length, or `None` if the arithmetic overflows.
 #[inline]
 pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
-    let groups = input_len / 3 + if input_len % 3 == 0 { 0 } else { 1 };
+    let groups = input_len / 3 + if input_len.is_multiple_of(3) { 0 } else { 1 };
     groups.checked_mul(4)
 }
 
@@ -415,14 +414,19 @@ fn selected_backend() -> Backend {
 fn detect_backend() -> Backend {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        select_backend(
+        select_x86_backend(
+            std::is_x86_feature_detected!("avx512vbmi"),
             std::is_x86_feature_detected!("avx2"),
             std::is_x86_feature_detected!("sse4.2"),
             std::is_x86_feature_detected!("sse4.1"),
             std::is_x86_feature_detected!("ssse3"),
         )
     }
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(target_arch = "aarch64")]
+    {
+        select_aarch64_backend(std::arch::is_aarch64_feature_detected!("neon"))
+    }
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     {
         Backend::Scalar
     }
@@ -430,8 +434,10 @@ fn detect_backend() -> Backend {
 
 #[inline]
 #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
-fn select_backend(avx2: bool, sse42: bool, sse41: bool, ssse3: bool) -> Backend {
-    if avx2 {
+fn select_x86_backend(avx512: bool, avx2: bool, sse42: bool, sse41: bool, ssse3: bool) -> Backend {
+    if avx512 {
+        Backend::Avx512
+    } else if avx2 {
         Backend::Avx2
     } else if sse42 && sse41 && ssse3 {
         Backend::Sse42
@@ -442,6 +448,12 @@ fn select_backend(avx2: bool, sse42: bool, sse41: bool, ssse3: bool) -> Backend 
     } else {
         Backend::Scalar
     }
+}
+
+#[inline]
+#[cfg(any(test, target_arch = "aarch64"))]
+fn select_aarch64_backend(neon: bool) -> Backend {
+    if neon { Backend::Neon } else { Backend::Scalar }
 }
 
 #[inline]
@@ -458,11 +470,37 @@ unsafe fn encode_with_backend_ptr(
     backend: Backend,
     urlsafe: bool,
 ) -> usize {
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     let _ = (input, output, backend, urlsafe);
+    #[cfg(target_arch = "aarch64")]
+    if backend == Backend::Neon {
+        return std::arch::is_aarch64_feature_detected!("neon")
+            .then(|| unsafe {
+                if urlsafe {
+                    aarch64::encode_neon::<true>(input, output)
+                } else {
+                    aarch64::encode_neon::<false>(input, output)
+                }
+            })
+            .unwrap_or(0);
+    }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         match backend {
+            Backend::Avx512 => {
+                #[cfg(not(coverage))]
+                return std::is_x86_feature_detected!("avx512vbmi")
+                    .then(|| unsafe {
+                        if urlsafe {
+                            x86_avx512::encode_avx512::<true>(input, output)
+                        } else {
+                            x86_avx512::encode_avx512::<false>(input, output)
+                        }
+                    })
+                    .unwrap_or(0);
+                #[cfg(coverage)]
+                return 0;
+            }
             Backend::Avx2 => {
                 return std::is_x86_feature_detected!("avx2")
                     .then(|| unsafe {
@@ -496,7 +534,7 @@ unsafe fn encode_with_backend_ptr(
                     })
                     .unwrap_or(0);
             }
-            Backend::Scalar => {}
+            Backend::Scalar | Backend::Neon => {}
         }
     }
     0
@@ -522,11 +560,65 @@ unsafe fn decode_with_backend_ptr(
     alphabet: DecodeAlphabet,
     padded_stores: bool,
 ) -> Result<(usize, usize), Base64Error> {
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     let _ = (input, output, backend, alphabet, padded_stores);
+    #[cfg(target_arch = "aarch64")]
+    if backend == Backend::Neon {
+        let _ = padded_stores;
+        return std::arch::is_aarch64_feature_detected!("neon")
+            .then(|| unsafe {
+                match alphabet {
+                    DecodeAlphabet::Standard => aarch64::decode_neon::<false, false>(input, output),
+                    DecodeAlphabet::UrlSafe => aarch64::decode_neon::<true, false>(input, output),
+                    DecodeAlphabet::Mixed => aarch64::decode_neon::<false, true>(input, output),
+                }
+            })
+            .unwrap_or(Ok((0, 0)));
+    }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         match backend {
+            Backend::Avx512 => {
+                #[cfg(not(coverage))]
+                return std::is_x86_feature_detected!("avx512vbmi")
+                    .then(|| unsafe {
+                        match alphabet {
+                            DecodeAlphabet::Standard => {
+                                if padded_stores {
+                                    x86_avx512::decode_avx512::<
+                                        x86::StandardDecoder,
+                                        x86::PaddedStore,
+                                    >(input, output)
+                                } else {
+                                    x86_avx512::decode_avx512::<
+                                        x86::StandardDecoder,
+                                        x86::ExactStore,
+                                    >(input, output)
+                                }
+                            }
+                            DecodeAlphabet::UrlSafe => {
+                                if padded_stores {
+                                    x86_avx512::decode_avx512::<
+                                        x86::UrlSafeDecoder,
+                                        x86::PaddedStore,
+                                    >(input, output)
+                                } else {
+                                    x86_avx512::decode_avx512::<
+                                        x86::UrlSafeDecoder,
+                                        x86::ExactStore,
+                                    >(input, output)
+                                }
+                            }
+                            DecodeAlphabet::Mixed => x86_avx512::decode_avx512::<
+                                x86::MixedDecoder,
+                                x86::ExactStore,
+                            >(input, output),
+                        }
+                    })
+                    .unwrap_or(Ok((0, 0)));
+                #[cfg(coverage)]
+                return Ok((0, 0));
+            }
             Backend::Avx2 => {
                 return std::is_x86_feature_detected!("avx2")
                     .then(|| unsafe {
@@ -610,7 +702,7 @@ unsafe fn decode_with_backend_ptr(
                     })
                     .unwrap_or(Ok((0, 0)));
             }
-            Backend::Scalar => {}
+            Backend::Scalar | Backend::Neon => {}
         }
     }
     Ok((0, 0))
@@ -835,8 +927,14 @@ fn decode_value(byte: u8, table: &[u8; 256]) -> Option<u8> {
     (value != INVALID_VALUE).then_some(value)
 }
 
+#[cfg(target_arch = "aarch64")]
+mod aarch64;
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
+
+#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+mod x86_avx512;
 
 #[cfg(test)]
 mod tests;

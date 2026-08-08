@@ -7,7 +7,7 @@
 ## Implementation
 
 - Keep the codec and hash implementations in this repository. Do not replace production code with third-party codec crates.
-- Preserve runtime CPU dispatch: AVX2, SSE4.2, SSE4.1, SSSE3, then the scalar fallback on x86/x86_64.
+- Preserve runtime CPU dispatch: AVX-512 VBMI, AVX2, SSE4.2, SSE4.1, SSSE3, then scalar on x86/x86_64; NEON then scalar on AArch64.
 - Keep behavior portable across Intel and AMD CPUs and hosts without SIMD support.
 - Use `mimalloc` as the project's global allocator.
 - Keep benchmark competitors in development dependencies only.

@@ -106,7 +106,17 @@ jobs:
         run: uv sync --all-groups --no-install-project --frozen
 
       - name: Build Python wheel
-        run: uv build --wheel --out-dir dist
+        shell: pwsh
+        run: |
+          $log = New-TemporaryFile
+          uv build --wheel --out-dir dist 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $message = (Get-Content $log | Select-Object -Last 30) -join "`n"
+            $message = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Python wheel build failed::$message"
+            exit $exitCode
+          }
 
       - name: Install Python wheel
         run: uv pip install --python .venv --reinstall --no-index --find-links dist hashcodecs

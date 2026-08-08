@@ -1,0 +1,128 @@
+name: CI
+run-name: CI / ${{ github.ref_name }}
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust / ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+      - name: Lint Rust library
+        run: cargo clippy -- -D warnings
+
+      - name: Lint all Rust targets
+        run: cargo clippy --all-targets --features python -- -D warnings
+
+      - name: Test Rust library
+        run: cargo test
+
+      - name: Test Rust Python feature
+        run: cargo test --features python
+
+      - name: Install Rust coverage tool
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@v2.85.10
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Check Rust line coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo llvm-cov --no-default-features --fail-under-lines 100
+
+  python_quality:
+    name: Python / Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          prune-cache: false
+
+      - name: Install Python development dependencies
+        run: uv sync --all-groups --no-install-project --frozen
+
+      - name: Lint Python
+        run: uv run --frozen --no-sync ruff check .
+
+      - name: Check Python formatting
+        run: uv run --frozen --no-sync ruff format --check .
+
+  python_test:
+    name: Python / ${{ matrix.os }} / ${{ matrix.python-version }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-14]
+        python-version: ["3.10", "3.12", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          prune-cache: false
+
+      - name: Install Python development dependencies
+        run: uv sync --all-groups --no-install-project --frozen
+
+      - name: Build Python wheel
+        run: uv build --wheel --out-dir dist
+
+      - name: Install Python wheel
+        run: uv pip install --python .venv --reinstall --no-index --find-links dist hashcodecs
+
+      - name: Test Python API and coverage
+        run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
+
+  ci_summary:
+    name: CI Summary
+    if: always()
+    needs: [rust, python_quality, python_test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        if: needs.rust.result != 'success' || needs.python_quality.result != 'success' || needs.python_test.result != 'success'
+        run: exit 1
+
+      - name: Report success
+        run: echo "Rust and Python checks passed"

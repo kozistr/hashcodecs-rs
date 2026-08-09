@@ -1,8 +1,7 @@
-//! MurmurHash3 reference-compatible functions.
+//! MurmurHash3 reference-compatible functions with runtime SIMD dispatch.
 //!
-//! MurmurHash3 has loop-carried state within each hash, so these single-buffer
-//! functions use tight scalar loops instead of forcing SIMD across dependent
-//! blocks.
+//! SIMD kernels premix independent input words in parallel. The canonical
+//! loop-carried state transitions remain ordered exactly as specified.
 
 #[inline(always)]
 fn fmix32(mut hash: u32) -> u32 {
@@ -71,10 +70,10 @@ fn read_partial_u64_le(input: &[u8]) -> u64 {
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
-        if std::is_x86_feature_detected!("avx2") {
+        if key.len() >= 32 && std::is_x86_feature_detected!("avx2") {
             return unsafe { x86::murmur3_x86_32_avx2(key, seed) };
         }
-        if std::is_x86_feature_detected!("sse4.1") {
+        if key.len() >= 16 && std::is_x86_feature_detected!("sse4.1") {
             return unsafe { x86::murmur3_x86_32_sse41(key, seed) };
         }
     }
@@ -135,8 +134,12 @@ pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
     let mut hashes = [seed; 4];
     let block_end = key.len() & !15;
     mix_x86_128_body(&key[..block_end], &mut hashes);
+    finish_x86_128(key, hashes, block_end)
+}
 
-    let tail = &key[block_end..];
+#[inline]
+fn finish_x86_128(key: &[u8], mut hashes: [u32; 4], offset: usize) -> [u32; 4] {
+    let tail = &key[offset..];
     let mut blocks = [0u32; 4];
     for (index, byte) in tail.iter().copied().enumerate() {
         blocks[index / 4] |= (byte as u32) << ((index % 4) * 8);
@@ -172,23 +175,42 @@ pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
 /// Computes the canonical MurmurHash3 x64 128-bit hash as two `u64` words.
 #[inline(always)]
 pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
-    let hash = murmur3_x64_128_inner(key, seed as u64);
-    [hash as u64, (hash >> 64) as u64]
+    murmur3_x64_128_inner(key, seed as u64)
 }
 
 #[inline(never)]
-fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> u128 {
+fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
+    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        let block_end = key.len() & !15;
+        if key.len() >= 32 && std::is_x86_feature_detected!("avx2") {
+            let hashes = unsafe { x86::mix_x64_128_body_avx2(&key[..block_end], seed) };
+            return finish_x64_128(key, hashes, block_end);
+        }
+        if key.len() >= 16
+            && key.len() <= 8 * 1024 * 1024
+            && std::is_x86_feature_detected!("sse4.1")
+        {
+            let hashes = unsafe { x86::mix_x64_128_body_sse41(&key[..block_end], seed) };
+            return finish_x64_128(key, hashes, block_end);
+        }
+    }
+    murmur3_x64_128_scalar_inner(key, seed)
+}
+
+#[inline(never)]
+fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
     const C1: u64 = 0x87c3_7b91_1142_53d5;
     const C2: u64 = 0x4cf5_ad43_2745_937f;
 
     let mut hash1 = seed;
-    let mut hash2 = hash1;
+    let mut hash2 = seed;
     let block_end = key.len() & !15;
-    for block in key[..block_end].chunks(16) {
-        // Byte-array loads have alignment one and let LLVM schedule both
-        // independent words before either dependent hash chain advances.
-        let value1 = u64::from_le_bytes(unsafe { block.as_ptr().cast::<[u8; 8]>().read() });
-        let value2 = u64::from_le_bytes(unsafe { block.as_ptr().add(8).cast::<[u8; 8]>().read() });
+    let mut input = key.as_ptr();
+    let end = unsafe { input.add(block_end) };
+    while input < end {
+        let value1 = u64::from_le(unsafe { input.cast::<u64>().read_unaligned() });
+        let value2 = u64::from_le(unsafe { input.add(8).cast::<u64>().read_unaligned() });
         let block1 = value1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
         let block2 = value2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
         hash1 ^= block1;
@@ -203,6 +225,7 @@ fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> u128 {
             .wrapping_add(hash1)
             .wrapping_mul(5)
             .wrapping_add(0x3849_5ab5);
+        input = unsafe { input.add(16) };
     }
 
     let tail = &key[block_end..];
@@ -224,11 +247,48 @@ fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> u128 {
     hash2 = fmix64(hash2);
     hash1 = hash1.wrapping_add(hash2);
     hash2 = hash2.wrapping_add(hash1);
-    (hash1 as u128) | ((hash2 as u128) << 64)
+    [hash1, hash2]
+}
+
+#[inline]
+fn finish_x64_128(key: &[u8], mut hashes: [u64; 2], offset: usize) -> [u64; 2] {
+    const C1: u64 = 0x87c3_7b91_1142_53d5;
+    const C2: u64 = 0x4cf5_ad43_2745_937f;
+    let tail = &key[offset..];
+    if tail.len() > 8 {
+        let block2 = read_partial_u64_le(&tail[8..]);
+        hashes[1] ^= block2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
+    }
+    if !tail.is_empty() {
+        let block1 = read_partial_u64_le(&tail[..tail.len().min(8)]);
+        hashes[0] ^= block1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
+    }
+
+    let length = key.len() as u64;
+    hashes[0] ^= length;
+    hashes[1] ^= length;
+    hashes[0] = hashes[0].wrapping_add(hashes[1]);
+    hashes[1] = hashes[1].wrapping_add(hashes[0]);
+    hashes[0] = fmix64(hashes[0]);
+    hashes[1] = fmix64(hashes[1]);
+    hashes[0] = hashes[0].wrapping_add(hashes[1]);
+    hashes[1] = hashes[1].wrapping_add(hashes[0]);
+    hashes
 }
 
 #[inline]
 fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
+    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        if key.len() >= 256 && std::is_x86_feature_detected!("avx2") {
+            unsafe { x86::mix_x86_128_body_avx2(key, hashes) };
+            return;
+        }
+        if key.len() >= 16 * 1024 * 1024 && std::is_x86_feature_detected!("sse4.1") {
+            unsafe { x86::mix_x86_128_body_sse41(key, hashes) };
+            return;
+        }
+    }
     mix_x86_128_body_scalar(key, hashes);
 }
 
@@ -237,8 +297,6 @@ fn mix_x86_128_body_scalar(key: &[u8], hashes: &mut [u32; 4]) {
     const C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
     const C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
     const ROTATE_K: [u32; 4] = [15, 16, 17, 18];
-    const ROTATE_H: [u32; 4] = [19, 17, 15, 13];
-    const ADD: [u32; 4] = [0x561c_cd1b, 0x0bca_a747, 0x96cd_1c35, 0x32ac_3b17];
 
     let mut offset = 0;
     while offset < key.len() {
@@ -246,44 +304,52 @@ fn mix_x86_128_body_scalar(key: &[u8], hashes: &mut [u32; 4]) {
             .wrapping_mul(C1[0])
             .rotate_left(ROTATE_K[0])
             .wrapping_mul(C2[0]);
-        hashes[0] ^= block1;
-        hashes[0] = hashes[0]
-            .rotate_left(ROTATE_H[0])
-            .wrapping_add(hashes[1])
-            .wrapping_mul(5)
-            .wrapping_add(ADD[0]);
         let block2 = read_u32_le(key, offset + 4)
             .wrapping_mul(C1[1])
             .rotate_left(ROTATE_K[1])
             .wrapping_mul(C2[1]);
-        hashes[1] ^= block2;
-        hashes[1] = hashes[1]
-            .rotate_left(ROTATE_H[1])
-            .wrapping_add(hashes[2])
-            .wrapping_mul(5)
-            .wrapping_add(ADD[1]);
         let block3 = read_u32_le(key, offset + 8)
             .wrapping_mul(C1[2])
             .rotate_left(ROTATE_K[2])
             .wrapping_mul(C2[2]);
-        hashes[2] ^= block3;
-        hashes[2] = hashes[2]
-            .rotate_left(ROTATE_H[2])
-            .wrapping_add(hashes[3])
-            .wrapping_mul(5)
-            .wrapping_add(ADD[2]);
         let block4 = read_u32_le(key, offset + 12)
             .wrapping_mul(C1[3])
             .rotate_left(ROTATE_K[3])
             .wrapping_mul(C2[3]);
-        hashes[3] ^= block4;
-        hashes[3] = hashes[3]
-            .rotate_left(ROTATE_H[3])
-            .wrapping_add(hashes[0])
-            .wrapping_mul(5)
-            .wrapping_add(ADD[3]);
+        mix_x86_128_hashes(hashes, block1, block2, block3, block4);
         offset += 16;
     }
+}
+
+#[inline(always)]
+fn mix_x86_128_hashes(hashes: &mut [u32; 4], block1: u32, block2: u32, block3: u32, block4: u32) {
+    const ROTATE_H: [u32; 4] = [19, 17, 15, 13];
+    const ADD: [u32; 4] = [0x561c_cd1b, 0x0bca_a747, 0x96cd_1c35, 0x32ac_3b17];
+
+    hashes[0] ^= block1;
+    hashes[0] = hashes[0]
+        .rotate_left(ROTATE_H[0])
+        .wrapping_add(hashes[1])
+        .wrapping_mul(5)
+        .wrapping_add(ADD[0]);
+    hashes[1] ^= block2;
+    hashes[1] = hashes[1]
+        .rotate_left(ROTATE_H[1])
+        .wrapping_add(hashes[2])
+        .wrapping_mul(5)
+        .wrapping_add(ADD[1]);
+    hashes[2] ^= block3;
+    hashes[2] = hashes[2]
+        .rotate_left(ROTATE_H[2])
+        .wrapping_add(hashes[3])
+        .wrapping_mul(5)
+        .wrapping_add(ADD[2]);
+    hashes[3] ^= block4;
+    hashes[3] = hashes[3]
+        .rotate_left(ROTATE_H[3])
+        .wrapping_add(hashes[0])
+        .wrapping_mul(5)
+        .wrapping_add(ADD[3]);
 }
 
 #[inline]
@@ -325,6 +391,86 @@ mod tests {
             bytes[index * 4..index * 4 + 4].copy_from_slice(&word.to_le_bytes());
         }
         u128::from_le_bytes(bytes)
+    }
+
+    fn x64_words_as_u128(words: [u64; 2]) -> u128 {
+        (words[0] as u128) | ((words[1] as u128) << 64)
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
+        let block_end = input.len() & !15;
+        #[cfg(coverage)]
+        unsafe {
+            let mut sse = [seed; 4];
+            x86::mix_x86_128_body_sse41(&input[..block_end], &mut sse);
+            assert_eq!(
+                x86_words_as_u128(finish_x86_128(input, sse, block_end)),
+                expected
+            );
+
+            let mut avx = [seed; 4];
+            x86::mix_x86_128_body_avx2(&input[..block_end], &mut avx);
+            assert_eq!(
+                x86_words_as_u128(finish_x86_128(input, avx, block_end)),
+                expected
+            );
+        }
+        #[cfg(not(coverage))]
+        unsafe {
+            if std::is_x86_feature_detected!("sse4.1") {
+                let mut sse = [seed; 4];
+                x86::mix_x86_128_body_sse41(&input[..block_end], &mut sse);
+                assert_eq!(
+                    x86_words_as_u128(finish_x86_128(input, sse, block_end)),
+                    expected
+                );
+            }
+            if std::is_x86_feature_detected!("avx2") {
+                let mut avx = [seed; 4];
+                x86::mix_x86_128_body_avx2(&input[..block_end], &mut avx);
+                assert_eq!(
+                    x86_words_as_u128(finish_x86_128(input, avx, block_end)),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
+        let block_end = input.len() & !15;
+        #[cfg(coverage)]
+        unsafe {
+            let sse = x86::mix_x64_128_body_sse41(&input[..block_end], seed as u64);
+            assert_eq!(
+                x64_words_as_u128(finish_x64_128(input, sse, block_end)),
+                expected
+            );
+
+            let avx = x86::mix_x64_128_body_avx2(&input[..block_end], seed as u64);
+            assert_eq!(
+                x64_words_as_u128(finish_x64_128(input, avx, block_end)),
+                expected
+            );
+        }
+        #[cfg(not(coverage))]
+        unsafe {
+            if std::is_x86_feature_detected!("sse4.1") {
+                let sse = x86::mix_x64_128_body_sse41(&input[..block_end], seed as u64);
+                assert_eq!(
+                    x64_words_as_u128(finish_x64_128(input, sse, block_end)),
+                    expected
+                );
+            }
+            if std::is_x86_feature_detected!("avx2") {
+                let avx = x86::mix_x64_128_body_avx2(&input[..block_end], seed as u64);
+                assert_eq!(
+                    x64_words_as_u128(finish_x64_128(input, avx, block_end)),
+                    expected
+                );
+            }
+        }
     }
 
     #[test]
@@ -406,20 +552,32 @@ mod tests {
                     }
                 }
 
+                let expected_x86_128 =
+                    murmur3::murmur3_x86_128(&mut Cursor::new(&input), seed).unwrap();
                 let x86 = x86_words_as_u128(murmur3_x86_128(&input, seed));
+                assert_eq!(x86, expected_x86_128, "x86_128 length={length} seed={seed}");
+                let block_end = input.len() & !15;
+                let mut scalar_x86_128 = [seed; 4];
+                mix_x86_128_body_scalar(&input[..block_end], &mut scalar_x86_128);
                 assert_eq!(
-                    x86,
-                    murmur3::murmur3_x86_128(&mut Cursor::new(&input), seed).unwrap(),
-                    "x86_128 length={length} seed={seed}"
+                    x86_words_as_u128(finish_x86_128(&input, scalar_x86_128, block_end)),
+                    expected_x86_128,
+                    "scalar x86_128 length={length} seed={seed}"
                 );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                assert_x86_128_simd_backends(&input, seed, expected_x86_128);
 
-                let x64_words = murmur3_x64_128(&input, seed);
-                let x64 = ((x64_words[1] as u128) << 64) | x64_words[0] as u128;
+                let x64 = x64_words_as_u128(murmur3_x64_128(&input, seed));
+                let expected_x64_128 =
+                    murmur3::murmur3_x64_128(&mut Cursor::new(&input), seed).unwrap();
+                assert_eq!(x64, expected_x64_128, "x64_128 length={length} seed={seed}");
                 assert_eq!(
-                    x64,
-                    murmur3::murmur3_x64_128(&mut Cursor::new(&input), seed).unwrap(),
-                    "x64_128 length={length} seed={seed}"
+                    x64_words_as_u128(murmur3_x64_128_scalar_inner(&input, seed as u64)),
+                    expected_x64_128,
+                    "scalar x64_128 length={length} seed={seed}"
                 );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                assert_x64_128_simd_backends(&input, seed, expected_x64_128);
             }
         }
     }

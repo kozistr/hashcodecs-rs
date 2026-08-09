@@ -65,9 +65,92 @@ fn read_partial_u64_le(input: &[u8]) -> u64 {
     }
 }
 
+#[inline]
+fn consume_blocks<const BLOCK_SIZE: usize>(
+    tail: &mut [u8; BLOCK_SIZE],
+    tail_len: &mut usize,
+    mut input: &[u8],
+    mut consume: impl FnMut(&[u8]),
+) {
+    debug_assert!(BLOCK_SIZE.is_power_of_two());
+    if *tail_len != 0 {
+        let needed = BLOCK_SIZE - *tail_len;
+        let copied = needed.min(input.len());
+        tail[*tail_len..*tail_len + copied].copy_from_slice(&input[..copied]);
+        *tail_len += copied;
+        input = &input[copied..];
+        if *tail_len != BLOCK_SIZE {
+            return;
+        }
+        consume(tail);
+        *tail_len = 0;
+    }
+
+    let body_len = input.len() & !(BLOCK_SIZE - 1);
+    if body_len != 0 {
+        consume(&input[..body_len]);
+    }
+    let remaining = &input[body_len..];
+    tail[..remaining.len()].copy_from_slice(remaining);
+    *tail_len = remaining.len();
+}
+
+/// Incremental MurmurHash3 x86 32-bit state.
+#[derive(Clone, Debug)]
+pub struct Murmur3X86Hasher32 {
+    hash: u32,
+    tail: [u8; 4],
+    tail_len: usize,
+    length: u32,
+}
+
+impl Murmur3X86Hasher32 {
+    /// Creates an empty hasher with the supplied seed.
+    #[inline]
+    pub const fn new(seed: u32) -> Self {
+        Self {
+            hash: seed,
+            tail: [0; 4],
+            tail_len: 0,
+            length: 0,
+        }
+    }
+
+    /// Adds bytes to the hash state.
+    #[inline]
+    pub fn update(&mut self, input: &[u8]) {
+        self.length = self.length.wrapping_add(input.len() as u32);
+        let hash = &mut self.hash;
+        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+            mix_x86_32_body(blocks, hash);
+        });
+    }
+
+    /// Returns the current digest without consuming the state.
+    #[inline]
+    pub fn digest(&self) -> u32 {
+        finish_x86_32_tail(&self.tail[..self.tail_len], self.hash, self.length)
+    }
+}
+
+impl Default for Murmur3X86Hasher32 {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}
+
 /// Computes the canonical MurmurHash3 x86 32-bit hash.
 #[inline]
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
+    let block_end = key.len() & !3;
+    let mut hash = seed;
+    mix_x86_32_body(&key[..block_end], &mut hash);
+    finish_x86_32(key, hash, block_end)
+}
+
+#[inline]
+fn mix_x86_32_body(key: &[u8], hash: &mut u32) {
+    debug_assert!(key.len().is_multiple_of(4));
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
         match dispatch::x86_32(
@@ -76,35 +159,43 @@ pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
             std::is_x86_feature_detected!("sse4.1"),
         ) {
             dispatch::Backend::Avx2 => {
-                return unsafe { x86::murmur3_x86_32_avx2(key, seed) };
+                unsafe { x86::mix_x86_32_body_avx2(key, hash) };
+                return;
             }
             dispatch::Backend::Sse41 => {
-                return unsafe { x86::murmur3_x86_32_sse41(key, seed) };
+                unsafe { x86::mix_x86_32_body_sse41(key, hash) };
+                return;
             }
             dispatch::Backend::Scalar => {}
         }
     }
-    murmur3_x86_32_scalar(key, seed)
+    mix_x86_32_body_scalar(key, hash);
 }
 
 #[inline]
+#[cfg(test)]
 fn murmur3_x86_32_scalar(key: &[u8], seed: u32) -> u32 {
+    let mut hash = seed;
+    let block_end = key.len() & !3;
+    mix_x86_32_body_scalar(&key[..block_end], &mut hash);
+    finish_x86_32(key, hash, block_end)
+}
+
+#[inline]
+fn mix_x86_32_body_scalar(key: &[u8], hash: &mut u32) {
     const C1: u32 = 0xcc9e_2d51;
     const C2: u32 = 0x1b87_3593;
 
-    let mut hash = seed;
-    let block_end = key.len() & !3;
+    debug_assert!(key.len().is_multiple_of(4));
     let mut offset = 0;
-    while offset < block_end {
+    while offset < key.len() {
         let block = read_u32_le(key, offset)
             .wrapping_mul(C1)
             .rotate_left(15)
             .wrapping_mul(C2);
-        hash = mix_x86_32_hash(hash, block);
+        *hash = mix_x86_32_hash(*hash, block);
         offset += 4;
     }
-
-    finish_x86_32(key, hash, offset)
 }
 
 #[inline(always)]
@@ -116,23 +207,73 @@ fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
 }
 
 #[inline(always)]
-fn finish_x86_32(key: &[u8], mut hash: u32, offset: usize) -> u32 {
+fn finish_x86_32(key: &[u8], hash: u32, offset: usize) -> u32 {
+    finish_x86_32_tail(&key[offset..], hash, key.len() as u32)
+}
+
+#[inline(always)]
+fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
     const C1: u32 = 0xcc9e_2d51;
     const C2: u32 = 0x1b87_3593;
-    let tail_len = key.len() & 3;
+    debug_assert!(tail_bytes.len() < 4);
+    let tail_len = tail_bytes.len();
     let mut tail = 0u32;
     if tail_len == 3 {
-        tail ^= (key[offset + 2] as u32) << 16;
+        tail ^= (tail_bytes[2] as u32) << 16;
     }
     if tail_len >= 2 {
-        tail ^= (key[offset + 1] as u32) << 8;
+        tail ^= (tail_bytes[1] as u32) << 8;
     }
     if tail_len != 0 {
-        tail ^= key[offset] as u32;
+        tail ^= tail_bytes[0] as u32;
         hash ^= tail.wrapping_mul(C1).rotate_left(15).wrapping_mul(C2);
     }
 
-    fmix32(hash ^ key.len() as u32)
+    fmix32(hash ^ length)
+}
+
+/// Incremental MurmurHash3 x86 128-bit state.
+#[derive(Clone, Debug)]
+pub struct Murmur3X86Hasher128 {
+    hashes: [u32; 4],
+    tail: [u8; 16],
+    tail_len: usize,
+    length: u32,
+}
+
+impl Murmur3X86Hasher128 {
+    /// Creates an empty hasher with the supplied seed.
+    #[inline]
+    pub const fn new(seed: u32) -> Self {
+        Self {
+            hashes: [seed; 4],
+            tail: [0; 16],
+            tail_len: 0,
+            length: 0,
+        }
+    }
+
+    /// Adds bytes to the hash state.
+    #[inline]
+    pub fn update(&mut self, input: &[u8]) {
+        self.length = self.length.wrapping_add(input.len() as u32);
+        let hashes = &mut self.hashes;
+        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+            mix_x86_128_body(blocks, hashes);
+        });
+    }
+
+    /// Returns the current digest without consuming the state.
+    #[inline]
+    pub fn digest(&self) -> [u32; 4] {
+        finish_x86_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
+    }
+}
+
+impl Default for Murmur3X86Hasher128 {
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 /// Computes the canonical MurmurHash3 x86 128-bit hash as four `u32` words.
@@ -145,8 +286,13 @@ pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
 }
 
 #[inline]
-fn finish_x86_128(key: &[u8], mut hashes: [u32; 4], offset: usize) -> [u32; 4] {
-    let tail = &key[offset..];
+fn finish_x86_128(key: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
+    finish_x86_128_tail(&key[offset..], hashes, key.len() as u32)
+}
+
+#[inline]
+fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 4] {
+    debug_assert!(tail.len() < 16);
     let mut blocks = [0u32; 4];
     for (index, byte) in tail.iter().copied().enumerate() {
         blocks[index / 4] |= (byte as u32) << ((index % 4) * 8);
@@ -176,7 +322,51 @@ fn finish_x86_128(key: &[u8], mut hashes: [u32; 4], offset: usize) -> [u32; 4] {
             .wrapping_mul(0xab0e_9789);
     }
 
-    finalize_x86_128(hashes, key.len() as u32)
+    finalize_x86_128(hashes, length)
+}
+
+/// Incremental MurmurHash3 x64 128-bit state.
+#[derive(Clone, Debug)]
+pub struct Murmur3X64Hasher128 {
+    hashes: [u64; 2],
+    tail: [u8; 16],
+    tail_len: usize,
+    length: u64,
+}
+
+impl Murmur3X64Hasher128 {
+    /// Creates an empty hasher with the supplied seed.
+    #[inline]
+    pub const fn new(seed: u32) -> Self {
+        Self {
+            hashes: [seed as u64; 2],
+            tail: [0; 16],
+            tail_len: 0,
+            length: 0,
+        }
+    }
+
+    /// Adds bytes to the hash state.
+    #[inline]
+    pub fn update(&mut self, input: &[u8]) {
+        self.length = self.length.wrapping_add(input.len() as u64);
+        let hashes = &mut self.hashes;
+        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+            mix_x64_128_body(blocks, hashes);
+        });
+    }
+
+    /// Returns the current digest without consuming the state.
+    #[inline]
+    pub fn digest(&self) -> [u64; 2] {
+        finish_x64_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
+    }
+}
+
+impl Default for Murmur3X64Hasher128 {
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 /// Computes the canonical MurmurHash3 x64 128-bit hash as two `u64` words.
@@ -187,38 +377,59 @@ pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
 
 #[inline(never)]
 fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
+    let block_end = key.len() & !15;
+    let mut hashes = [seed; 2];
+    mix_x64_128_body(&key[..block_end], &mut hashes);
+    finish_x64_128(key, hashes, block_end)
+}
+
+#[inline]
+fn mix_x64_128_body(key: &[u8], hashes: &mut [u64; 2]) {
+    debug_assert!(key.len().is_multiple_of(16));
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
-        let block_end = key.len() & !15;
         match dispatch::x64_128(
             key.len(),
             std::is_x86_feature_detected!("avx2"),
             std::is_x86_feature_detected!("sse4.1"),
         ) {
             dispatch::Backend::Avx2 => {
-                let hashes = unsafe { x86::mix_x64_128_body_avx2(&key[..block_end], seed) };
-                return finish_x64_128(key, hashes, block_end);
+                *hashes = if std::is_x86_feature_detected!("bmi2") {
+                    unsafe { x86::mix_x64_128_body_avx2_bmi2(key, *hashes) }
+                } else {
+                    unsafe { x86::mix_x64_128_body_avx2(key, *hashes) }
+                };
+                return;
             }
             dispatch::Backend::Sse41 => {
-                let hashes = unsafe { x86::mix_x64_128_body_sse41(&key[..block_end], seed) };
-                return finish_x64_128(key, hashes, block_end);
+                *hashes = unsafe { x86::mix_x64_128_body_sse41(key, *hashes) };
+                return;
             }
             dispatch::Backend::Scalar => {}
         }
     }
-    murmur3_x64_128_scalar_inner(key, seed)
+    mix_x64_128_body_scalar(key, hashes);
 }
 
 #[inline(never)]
+#[cfg(test)]
 fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
+    let block_end = key.len() & !15;
+    let mut hashes = [seed; 2];
+    mix_x64_128_body_scalar(&key[..block_end], &mut hashes);
+    finish_x64_128(key, hashes, block_end)
+}
+
+#[inline]
+fn mix_x64_128_body_scalar(key: &[u8], hashes: &mut [u64; 2]) {
     const C1: u64 = 0x87c3_7b91_1142_53d5;
     const C2: u64 = 0x4cf5_ad43_2745_937f;
 
-    let mut hash1 = seed;
-    let mut hash2 = seed;
-    let block_end = key.len() & !15;
+    debug_assert!(key.len().is_multiple_of(16));
+    let mut hash1 = hashes[0];
+    let mut hash2 = hashes[1];
     let mut input = key.as_ptr();
-    let end = unsafe { input.add(block_end) };
+    let end = unsafe { input.add(key.len()) };
     while input < end {
         let value1 = u64::from_le(unsafe { input.cast::<u64>().read_unaligned() });
         let value2 = u64::from_le(unsafe { input.add(8).cast::<u64>().read_unaligned() });
@@ -238,34 +449,19 @@ fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
             .wrapping_add(0x3849_5ab5);
         input = unsafe { input.add(16) };
     }
-
-    let tail = &key[block_end..];
-    if tail.len() > 8 {
-        let block2 = read_partial_u64_le(&tail[8..]);
-        hash2 ^= block2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
-    }
-    if !tail.is_empty() {
-        let block1 = read_partial_u64_le(&tail[..tail.len().min(8)]);
-        hash1 ^= block1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
-    }
-
-    let length = key.len() as u64;
-    hash1 ^= length;
-    hash2 ^= length;
-    hash1 = hash1.wrapping_add(hash2);
-    hash2 = hash2.wrapping_add(hash1);
-    hash1 = fmix64(hash1);
-    hash2 = fmix64(hash2);
-    hash1 = hash1.wrapping_add(hash2);
-    hash2 = hash2.wrapping_add(hash1);
-    [hash1, hash2]
+    *hashes = [hash1, hash2];
 }
 
 #[inline]
-fn finish_x64_128(key: &[u8], mut hashes: [u64; 2], offset: usize) -> [u64; 2] {
+fn finish_x64_128(key: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
+    finish_x64_128_tail(&key[offset..], hashes, key.len() as u64)
+}
+
+#[inline]
+fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 2] {
     const C1: u64 = 0x87c3_7b91_1142_53d5;
     const C2: u64 = 0x4cf5_ad43_2745_937f;
-    let tail = &key[offset..];
+    debug_assert!(tail.len() < 16);
     if tail.len() > 8 {
         let block2 = read_partial_u64_le(&tail[8..]);
         hashes[1] ^= block2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
@@ -275,7 +471,6 @@ fn finish_x64_128(key: &[u8], mut hashes: [u64; 2], offset: usize) -> [u64; 2] {
         hashes[0] ^= block1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
     }
 
-    let length = key.len() as u64;
     hashes[0] ^= length;
     hashes[1] ^= length;
     hashes[0] = hashes[0].wrapping_add(hashes[1]);
@@ -441,6 +636,47 @@ mod tests {
         assert_eq!(dispatch::x64_128(8 * 1024 * 1024 + 1, false, true), Scalar);
     }
 
+    #[test]
+    fn incremental_hashers_match_one_shot_for_all_tail_lengths() {
+        let seeds = [0, 1, u32::MAX];
+        let chunk_sizes = [1, 2, 3, 4, 7, 16, 31, 64];
+        for length in 0..=128 {
+            let input: Vec<u8> = (0..length)
+                .map(|index| (index as u8).wrapping_mul(29).wrapping_add(7))
+                .collect();
+            for seed in seeds {
+                for chunk_size in chunk_sizes {
+                    let mut x86_32 = Murmur3X86Hasher32::new(seed);
+                    let mut x86_128 = Murmur3X86Hasher128::new(seed);
+                    let mut x64_128 = Murmur3X64Hasher128::new(seed);
+                    for chunk in input.chunks(chunk_size) {
+                        x86_32.update(chunk);
+                        x86_128.update(chunk);
+                        x64_128.update(chunk);
+                    }
+                    assert_eq!(x86_32.digest(), murmur3_x86_32(&input, seed));
+                    assert_eq!(x86_128.digest(), murmur3_x86_128(&input, seed));
+                    assert_eq!(x64_128.digest(), murmur3_x64_128(&input, seed));
+                }
+            }
+        }
+
+        let mut original = Murmur3X64Hasher128::default();
+        original.update(b"prefix");
+        let snapshot = original.clone();
+        original.update(b"-suffix");
+        assert_eq!(snapshot.digest(), murmur3_x64_128(b"prefix", 0));
+        assert_eq!(original.digest(), murmur3_x64_128(b"prefix-suffix", 0));
+        assert_eq!(
+            Murmur3X86Hasher32::default().digest(),
+            murmur3_x86_32(b"", 0)
+        );
+        assert_eq!(
+            Murmur3X86Hasher128::default().digest(),
+            murmur3_x86_128(b"", 0)
+        );
+    }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
         let block_end = input.len() & !15;
@@ -486,13 +722,13 @@ mod tests {
         let block_end = input.len() & !15;
         #[cfg(coverage)]
         unsafe {
-            let sse = x86::mix_x64_128_body_sse41(&input[..block_end], seed as u64);
+            let sse = x86::mix_x64_128_body_sse41(&input[..block_end], [seed as u64; 2]);
             assert_eq!(
                 x64_words_as_u128(finish_x64_128(input, sse, block_end)),
                 expected
             );
 
-            let avx = x86::mix_x64_128_body_avx2(&input[..block_end], seed as u64);
+            let avx = x86::mix_x64_128_body_avx2(&input[..block_end], [seed as u64; 2]);
             assert_eq!(
                 x64_words_as_u128(finish_x64_128(input, avx, block_end)),
                 expected
@@ -501,18 +737,26 @@ mod tests {
         #[cfg(not(coverage))]
         unsafe {
             if std::is_x86_feature_detected!("sse4.1") {
-                let sse = x86::mix_x64_128_body_sse41(&input[..block_end], seed as u64);
+                let sse = x86::mix_x64_128_body_sse41(&input[..block_end], [seed as u64; 2]);
                 assert_eq!(
                     x64_words_as_u128(finish_x64_128(input, sse, block_end)),
                     expected
                 );
             }
             if std::is_x86_feature_detected!("avx2") {
-                let avx = x86::mix_x64_128_body_avx2(&input[..block_end], seed as u64);
+                let avx = x86::mix_x64_128_body_avx2(&input[..block_end], [seed as u64; 2]);
                 assert_eq!(
                     x64_words_as_u128(finish_x64_128(input, avx, block_end)),
                     expected
                 );
+                if std::is_x86_feature_detected!("bmi2") {
+                    let bmi2 =
+                        x86::mix_x64_128_body_avx2_bmi2(&input[..block_end], [seed as u64; 2]);
+                    assert_eq!(
+                        x64_words_as_u128(finish_x64_128(input, bmi2, block_end)),
+                        expected
+                    );
+                }
             }
         }
     }
@@ -567,29 +811,40 @@ mod tests {
                 unsafe {
                     #[cfg(coverage)]
                     {
+                        let block_end = input.len() & !3;
+                        let mut sse_hash = seed;
+                        x86::mix_x86_32_body_sse41(&input[..block_end], &mut sse_hash);
                         assert_eq!(
-                            x86::murmur3_x86_32_sse41(&input, seed),
+                            finish_x86_32(&input, sse_hash, block_end),
                             expected_x86_32,
                             "SSE4.1 x86_32 length={length} seed={seed}"
                         );
+                        let mut avx_hash = seed;
+                        x86::mix_x86_32_body_avx2(&input[..block_end], &mut avx_hash);
                         assert_eq!(
-                            x86::murmur3_x86_32_avx2(&input, seed),
+                            finish_x86_32(&input, avx_hash, block_end),
                             expected_x86_32,
                             "AVX2 x86_32 length={length} seed={seed}"
                         );
                     }
                     #[cfg(not(coverage))]
                     if std::is_x86_feature_detected!("sse4.1") {
+                        let block_end = input.len() & !3;
+                        let mut hash = seed;
+                        x86::mix_x86_32_body_sse41(&input[..block_end], &mut hash);
                         assert_eq!(
-                            x86::murmur3_x86_32_sse41(&input, seed),
+                            finish_x86_32(&input, hash, block_end),
                             expected_x86_32,
                             "SSE4.1 x86_32 length={length} seed={seed}"
                         );
                     }
                     #[cfg(not(coverage))]
                     if std::is_x86_feature_detected!("avx2") {
+                        let block_end = input.len() & !3;
+                        let mut hash = seed;
+                        x86::mix_x86_32_body_avx2(&input[..block_end], &mut hash);
                         assert_eq!(
-                            x86::murmur3_x86_32_avx2(&input, seed),
+                            finish_x86_32(&input, hash, block_end),
                             expected_x86_32,
                             "AVX2 x86_32 length={length} seed={seed}"
                         );

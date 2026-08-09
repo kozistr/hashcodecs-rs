@@ -4,21 +4,20 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::{
-    finish_x86_32, mix_x86_32_hash, mix_x86_128_body_scalar, mix_x86_128_hashes, read_u32_le,
-    read_u64_le,
+    mix_x86_32_hash, mix_x86_128_body_scalar, mix_x86_128_hashes, read_u32_le, read_u64_le,
 };
 
 const C1: u32 = 0xcc9e_2d51;
 const C2: u32 = 0x1b87_3593;
 
 #[target_feature(enable = "avx2")]
-pub(super) unsafe fn murmur3_x86_32_avx2(key: &[u8], seed: u32) -> u32 {
-    let block_end = key.len() & !3;
-    let mut hash = seed;
+pub(super) unsafe fn mix_x86_32_body_avx2(key: &[u8], hash: &mut u32) {
+    debug_assert!(key.len().is_multiple_of(4));
+    let mut value = *hash;
     let mut offset = 0;
     let mut mixed = [0_u32; 32];
 
-    while offset + 128 <= block_end {
+    while offset + 128 <= key.len() {
         let first = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset).cast()) };
         let second = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset + 32).cast()) };
         let third = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset + 64).cast()) };
@@ -32,28 +31,28 @@ pub(super) unsafe fn murmur3_x86_32_avx2(key: &[u8], seed: u32) -> u32 {
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(16).cast(), third) };
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(24).cast(), fourth) };
         for &block in &mixed {
-            hash = mix_x86_32_hash(hash, block);
+            value = mix_x86_32_hash(value, block);
         }
         offset += 128;
     }
-    while offset + 32 <= block_end {
+    while offset + 32 <= key.len() {
         let blocks = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset).cast()) };
         let blocks = premix_avx2(blocks);
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), blocks) };
         for &block in &mixed[..8] {
-            hash = mix_x86_32_hash(hash, block);
+            value = mix_x86_32_hash(value, block);
         }
         offset += 32;
     }
-    while offset < block_end {
+    while offset < key.len() {
         let block = read_u32_le(key, offset)
             .wrapping_mul(C1)
             .rotate_left(15)
             .wrapping_mul(C2);
-        hash = mix_x86_32_hash(hash, block);
+        value = mix_x86_32_hash(value, block);
         offset += 4;
     }
-    finish_x86_32(key, hash, offset)
+    *hash = value;
 }
 
 #[target_feature(enable = "avx2")]
@@ -68,13 +67,13 @@ fn premix_avx2(blocks: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "sse4.1")]
-pub(super) unsafe fn murmur3_x86_32_sse41(key: &[u8], seed: u32) -> u32 {
-    let block_end = key.len() & !3;
-    let mut hash = seed;
+pub(super) unsafe fn mix_x86_32_body_sse41(key: &[u8], hash: &mut u32) {
+    debug_assert!(key.len().is_multiple_of(4));
+    let mut value = *hash;
     let mut offset = 0;
     let mut mixed = [0_u32; 16];
 
-    while offset + 64 <= block_end {
+    while offset + 64 <= key.len() {
         let first = unsafe { _mm_loadu_si128(key.as_ptr().add(offset).cast()) };
         let second = unsafe { _mm_loadu_si128(key.as_ptr().add(offset + 16).cast()) };
         let third = unsafe { _mm_loadu_si128(key.as_ptr().add(offset + 32).cast()) };
@@ -88,28 +87,28 @@ pub(super) unsafe fn murmur3_x86_32_sse41(key: &[u8], seed: u32) -> u32 {
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(8).cast(), third) };
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(12).cast(), fourth) };
         for &block in &mixed {
-            hash = mix_x86_32_hash(hash, block);
+            value = mix_x86_32_hash(value, block);
         }
         offset += 64;
     }
-    while offset + 16 <= block_end {
+    while offset + 16 <= key.len() {
         let blocks = unsafe { _mm_loadu_si128(key.as_ptr().add(offset).cast()) };
         let blocks = premix_sse41(blocks);
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().cast(), blocks) };
         for &block in &mixed[..4] {
-            hash = mix_x86_32_hash(hash, block);
+            value = mix_x86_32_hash(value, block);
         }
         offset += 16;
     }
-    while offset < block_end {
+    while offset < key.len() {
         let block = read_u32_le(key, offset)
             .wrapping_mul(C1)
             .rotate_left(15)
             .wrapping_mul(C2);
-        hash = mix_x86_32_hash(hash, block);
+        value = mix_x86_32_hash(value, block);
         offset += 4;
     }
-    finish_x86_32(key, hash, offset)
+    *hash = value;
 }
 
 #[target_feature(enable = "sse4.1")]
@@ -301,60 +300,71 @@ fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
 const X64_128_C1: u64 = 0x87c3_7b91_1142_53d5;
 const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
 
-#[target_feature(enable = "avx2")]
-pub(super) unsafe fn mix_x64_128_body_avx2(key: &[u8], seed: u64) -> [u64; 2] {
-    debug_assert!(key.len().is_multiple_of(16));
-    let c1 = _mm256_setr_epi64x(
-        X64_128_C1 as i64,
-        X64_128_C2 as i64,
-        X64_128_C1 as i64,
-        X64_128_C2 as i64,
-    );
-    let c2 = _mm256_setr_epi64x(
-        X64_128_C2 as i64,
-        X64_128_C1 as i64,
-        X64_128_C2 as i64,
-        X64_128_C1 as i64,
-    );
-    let rotate_left = _mm256_setr_epi64x(31, 33, 31, 33);
-    let rotate_right = _mm256_setr_epi64x(33, 31, 33, 31);
-    let mut hash1 = seed;
-    let mut hash2 = seed;
-    let mut mixed = [0_u64; 16];
-    let mut offset = 0;
+macro_rules! define_x64_128_avx2_kernel {
+    ($name:ident, $features:literal) => {
+        #[target_feature(enable = $features)]
+        #[cfg_attr(coverage, allow(dead_code))]
+        pub(super) unsafe fn $name(key: &[u8], hashes: [u64; 2]) -> [u64; 2] {
+            debug_assert!(key.len().is_multiple_of(16));
+            let c1 = _mm256_setr_epi64x(
+                X64_128_C1 as i64,
+                X64_128_C2 as i64,
+                X64_128_C1 as i64,
+                X64_128_C2 as i64,
+            );
+            let c2 = _mm256_setr_epi64x(
+                X64_128_C2 as i64,
+                X64_128_C1 as i64,
+                X64_128_C2 as i64,
+                X64_128_C1 as i64,
+            );
+            let rotate_left = _mm256_setr_epi64x(31, 33, 31, 33);
+            let rotate_right = _mm256_setr_epi64x(33, 31, 33, 31);
+            let mut hash1 = hashes[0];
+            let mut hash2 = hashes[1];
+            let mut mixed = [0_u64; 16];
+            let mut offset = 0;
 
-    while offset + 128 <= key.len() {
-        for vector in 0..4 {
-            let blocks =
-                unsafe { _mm256_loadu_si256(key.as_ptr().add(offset + vector * 32).cast()) };
-            let blocks = premix_x64_128_avx2(blocks, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 4).cast(), blocks) };
+            while offset + 128 <= key.len() {
+                for vector in 0..4 {
+                    let blocks = unsafe {
+                        _mm256_loadu_si256(key.as_ptr().add(offset + vector * 32).cast())
+                    };
+                    let blocks = premix_x64_128_avx2(blocks, c1, c2, rotate_left, rotate_right);
+                    unsafe {
+                        _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 4).cast(), blocks)
+                    };
+                }
+                mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
+                offset += 128;
+            }
+            while offset + 32 <= key.len() {
+                let blocks = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset).cast()) };
+                let blocks = premix_x64_128_avx2(blocks, c1, c2, rotate_left, rotate_right);
+                unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), blocks) };
+                mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..4]);
+                offset += 32;
+            }
+            if offset < key.len() {
+                let value1 = read_u64_le(key, offset);
+                let value2 = read_u64_le(key, offset + 8);
+                let block1 = value1
+                    .wrapping_mul(X64_128_C1)
+                    .rotate_left(31)
+                    .wrapping_mul(X64_128_C2);
+                let block2 = value2
+                    .wrapping_mul(X64_128_C2)
+                    .rotate_left(33)
+                    .wrapping_mul(X64_128_C1);
+                mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
+            }
+            [hash1, hash2]
         }
-        mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
-        offset += 128;
-    }
-    while offset + 32 <= key.len() {
-        let blocks = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset).cast()) };
-        let blocks = premix_x64_128_avx2(blocks, c1, c2, rotate_left, rotate_right);
-        unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), blocks) };
-        mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..4]);
-        offset += 32;
-    }
-    if offset < key.len() {
-        let value1 = read_u64_le(key, offset);
-        let value2 = read_u64_le(key, offset + 8);
-        let block1 = value1
-            .wrapping_mul(X64_128_C1)
-            .rotate_left(31)
-            .wrapping_mul(X64_128_C2);
-        let block2 = value2
-            .wrapping_mul(X64_128_C2)
-            .rotate_left(33)
-            .wrapping_mul(X64_128_C1);
-        mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
-    }
-    [hash1, hash2]
+    };
 }
+
+define_x64_128_avx2_kernel!(mix_x64_128_body_avx2, "avx2");
+define_x64_128_avx2_kernel!(mix_x64_128_body_avx2_bmi2, "avx2,bmi2");
 
 #[target_feature(enable = "avx2")]
 #[inline]
@@ -387,12 +397,12 @@ fn mullo_epi64_avx2(left: __m256i, right: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "sse4.1")]
-pub(super) unsafe fn mix_x64_128_body_sse41(key: &[u8], seed: u64) -> [u64; 2] {
+pub(super) unsafe fn mix_x64_128_body_sse41(key: &[u8], hashes: [u64; 2]) -> [u64; 2] {
     debug_assert!(key.len().is_multiple_of(16));
     let c1 = _mm_set_epi64x(X64_128_C2 as i64, X64_128_C1 as i64);
     let c2 = _mm_set_epi64x(X64_128_C1 as i64, X64_128_C2 as i64);
-    let mut hash1 = seed;
-    let mut hash2 = seed;
+    let mut hash1 = hashes[0];
+    let mut hash2 = hashes[1];
     let mut mixed = [0_u64; 8];
     let mut offset = 0;
 

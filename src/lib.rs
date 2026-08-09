@@ -13,7 +13,10 @@ pub use base64::{
     b64decoded_len, b64encode, b64encode_into, b64encode_urlsafe, b64encode_urlsafe_into,
     b64encoded_len,
 };
-pub use murmur3::{murmur3_x64_128, murmur3_x86_32, murmur3_x86_128};
+pub use murmur3::{
+    Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
+    murmur3_x86_128,
+};
 
 #[cfg(feature = "python")]
 mod python;

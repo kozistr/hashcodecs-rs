@@ -2,7 +2,10 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
 use self::base64::{b64decode, b64encode};
-use self::murmur3::{murmur3_32, murmur3_x64_128_digest, murmur3_x86_128_digest};
+use self::murmur3::{
+    PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128, murmur3_32,
+    murmur3_x64_128_digest, murmur3_x86_128_digest,
+};
 
 mod base64;
 mod buffer;
@@ -17,5 +20,8 @@ fn python_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(murmur3_32, module)?)?;
     module.add_function(wrap_pyfunction!(murmur3_x86_128_digest, module)?)?;
     module.add_function(wrap_pyfunction!(murmur3_x64_128_digest, module)?)?;
+    module.add_class::<PyMurmur3X86Hasher32>()?;
+    module.add_class::<PyMurmur3X86Hasher128>()?;
+    module.add_class::<PyMurmur3X64Hasher128>()?;
     Ok(())
 }

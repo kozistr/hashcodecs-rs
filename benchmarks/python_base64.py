@@ -22,25 +22,25 @@ def benchmark(
     for _, reference in references:
         assert ours_result == reference()
     ours_rate = throughput(ours, input_size)
-    measurements = [f"hashcodecs={ours_rate / 1024**3:6.2f} GiB/s"]
+    measurements = [f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s']
     for label, reference in references:
         reference_rate = throughput(reference, input_size)
-        measurements.append(f"{label}={reference_rate / 1024**3:6.2f} GiB/s ({ours_rate / reference_rate:4.2f}x)")
-    print(f"{name:18} {input_size // 1024:>6} KiB  {'  '.join(measurements)}")
+        measurements.append(f'{label}={reference_rate / 1024**3:6.2f} GiB/s ({ours_rate / reference_rate:4.2f}x)')
+    print(f'{name:18} {input_size // 1024:>6} KiB  {"  ".join(measurements)}')
 
 
 def benchmark_ours(name: str, input_size: int, ours: Callable[[], bytes], expected: bytes) -> None:
     assert ours() == expected
     ours_rate = throughput(ours, input_size)
-    print(f"{name:22} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s")
+    print(f'{name:22} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--hashcodecs-only",
-        action="store_true",
-        help="time hashcodecs without timing competitors",
+        '--hashcodecs-only',
+        action='store_true',
+        help='time hashcodecs without timing competitors',
     )
     args = parser.parse_args()
 
@@ -54,76 +54,76 @@ def main() -> None:
 
             if args.hashcodecs_only:
                 benchmark_ours(
-                    "standard encode",
+                    'standard encode',
                     size,
                     lambda payload=payload: hashcodecs_base64.standard_b64encode(payload),
                     standard,
                 )
                 benchmark_ours(
-                    "standard decode",
+                    'standard decode',
                     size,
                     lambda standard=standard: hashcodecs_base64.b64decode(standard, validate=True),
                     payload,
                 )
                 benchmark_ours(
-                    "URL-safe encode",
+                    'URL-safe encode',
                     size,
                     lambda payload=payload: hashcodecs_base64.urlsafe_b64encode(payload),
                     urlsafe,
                 )
                 benchmark_ours(
-                    "URL-safe decode",
+                    'URL-safe decode',
                     size,
-                    lambda urlsafe=urlsafe: hashcodecs_base64.b64decode(urlsafe, b"-_", validate=True),
+                    lambda urlsafe=urlsafe: hashcodecs_base64.b64decode(urlsafe, b'-_', validate=True),
                     payload,
                 )
                 continue
 
             benchmark(
-                "standard encode",
+                'standard encode',
                 size,
                 lambda payload=payload: hashcodecs_base64.standard_b64encode(payload),
                 (
-                    ("stdlib", lambda payload=payload: stdlib_base64.b64encode(payload)),
-                    ("pybase64", lambda payload=payload: pybase64.standard_b64encode(payload)),
+                    ('stdlib', lambda payload=payload: stdlib_base64.b64encode(payload)),
+                    ('pybase64', lambda payload=payload: pybase64.standard_b64encode(payload)),
                 ),
             )
             benchmark(
-                "standard decode",
+                'standard decode',
                 size,
                 lambda standard=standard: hashcodecs_base64.b64decode(standard, validate=True),
                 (
                     (
-                        "stdlib",
+                        'stdlib',
                         lambda standard=standard: stdlib_base64.b64decode(standard, validate=True),
                     ),
                     (
-                        "pybase64",
+                        'pybase64',
                         lambda standard=standard: pybase64.b64decode(standard, validate=True),
                     ),
                 ),
             )
             benchmark(
-                "URL-safe encode",
+                'URL-safe encode',
                 size,
                 lambda payload=payload: hashcodecs_base64.urlsafe_b64encode(payload),
                 (
-                    ("stdlib", lambda payload=payload: stdlib_base64.urlsafe_b64encode(payload)),
-                    ("pybase64", lambda payload=payload: pybase64.urlsafe_b64encode(payload)),
+                    ('stdlib', lambda payload=payload: stdlib_base64.urlsafe_b64encode(payload)),
+                    ('pybase64', lambda payload=payload: pybase64.urlsafe_b64encode(payload)),
                 ),
             )
             benchmark(
-                "URL-safe decode",
+                'URL-safe decode',
                 size,
-                lambda urlsafe=urlsafe: hashcodecs_base64.b64decode(urlsafe, b"-_", validate=True),
+                lambda urlsafe=urlsafe: hashcodecs_base64.b64decode(urlsafe, b'-_', validate=True),
                 (
                     (
-                        "stdlib",
-                        lambda urlsafe=urlsafe: stdlib_base64.b64decode(urlsafe, b"-_", validate=True),
+                        'stdlib',
+                        lambda urlsafe=urlsafe: stdlib_base64.b64decode(urlsafe, b'-_', validate=True),
                     ),
                     (
-                        "pybase64",
-                        lambda urlsafe=urlsafe: pybase64.b64decode(urlsafe, b"-_", validate=True),
+                        'pybase64',
+                        lambda urlsafe=urlsafe: pybase64.b64decode(urlsafe, b'-_', validate=True),
                     ),
                 ),
             )
@@ -131,5 +131,5 @@ def main() -> None:
         gc.enable()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

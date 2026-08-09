@@ -15,8 +15,8 @@ MINIMUM_SAMPLE_SECONDS = 0.2
 
 
 def pin_to_one_cpu() -> None:
-    if sys.platform == "win32":
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if sys.platform == 'win32':
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
         get_current_process = kernel32.GetCurrentProcess
         get_current_process.restype = ctypes.c_void_p
         get_process_affinity = kernel32.GetProcessAffinityMask
@@ -39,8 +39,8 @@ def pin_to_one_cpu() -> None:
             raise ctypes.WinError(ctypes.get_last_error())
         return
 
-    get_affinity = getattr(os, "sched_getaffinity", None)
-    set_affinity = getattr(os, "sched_setaffinity", None)
+    get_affinity = getattr(os, 'sched_getaffinity', None)
+    set_affinity = getattr(os, 'sched_setaffinity', None)
     if get_affinity is not None and set_affinity is not None:
         available = get_affinity(0)
         set_affinity(0, {min(available)})

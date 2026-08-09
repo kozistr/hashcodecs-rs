@@ -15,42 +15,42 @@ class CustomBuildHook(BuildHookInterface[Any]):
     """Build the portable ABI3 extension and give the wheel its native tag."""
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
-        if self.target_name != "wheel":
+        if self.target_name != 'wheel':
             return
 
         root = Path(self.root)
         subprocess.run(
             [
-                "cargo",
-                "build",
-                "--manifest-path",
-                str(root / "Cargo.toml"),
-                "--release",
-                "--features",
-                "extension-module",
+                'cargo',
+                'build',
+                '--manifest-path',
+                str(root / 'Cargo.toml'),
+                '--release',
+                '--features',
+                'extension-module',
             ],
             check=True,
             cwd=root,
         )
 
-        extension = root / "target" / "release" / self._library_name()
-        build_data["force_include"] = {str(extension): f"hashcodecs/_hashcodecs{self._extension_suffix()}"}
-        build_data["pure_python"] = False
-        build_data["tag"] = self._wheel_tag()
+        extension = root / 'target' / 'release' / self._library_name()
+        build_data['force_include'] = {str(extension): f'hashcodecs/_hashcodecs{self._extension_suffix()}'}
+        build_data['pure_python'] = False
+        build_data['tag'] = self._wheel_tag()
 
     @staticmethod
     def _library_name() -> str:
         system = platform.system()
-        if system == "Windows":
-            return "hashcodecs.dll"
-        if system == "Darwin":
-            return "libhashcodecs.dylib"
-        return "libhashcodecs.so"
+        if system == 'Windows':
+            return 'hashcodecs.dll'
+        if system == 'Darwin':
+            return 'libhashcodecs.dylib'
+        return 'libhashcodecs.so'
 
     @staticmethod
     def _extension_suffix() -> str:
-        return ".pyd" if platform.system() == "Windows" else ".so"
+        return '.pyd' if platform.system() == 'Windows' else '.so'
 
     @staticmethod
     def _wheel_tag() -> str:
-        return f"cp310-abi3-{next(sys_tags()).platform}"
+        return f'cp310-abi3-{next(sys_tags()).platform}'

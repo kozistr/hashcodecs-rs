@@ -66,6 +66,7 @@ line-length = 119
 target-version = "py312"
 
 [tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 select = [
     "E",
     "F",
@@ -79,10 +80,23 @@ select = [
     "PTH",
     "PT",
     "PYI",
+    "Q",
     "RET",
     "RUF",
     "SIM",
 ]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "single"
+
+[tool.ruff.lint.isort]
+combine-as-imports = false
+detect-same-package = true
+force-sort-within-sections = false
+
+[tool.ruff.format]
+quote-style = "single"
 
 [tool.coverage.run]
 branch = true

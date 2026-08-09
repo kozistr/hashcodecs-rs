@@ -1,8 +1,9 @@
+use pyo3::marker::Ungil;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
 use super::DETACH_THRESHOLD;
-use super::buffer::bytes_like;
+use super::buffer::{BytesLike, bytes_like};
 use crate::{
     Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
     murmur3_x86_128,
@@ -34,6 +35,23 @@ fn hex_digest(bytes: &[u8]) -> String {
     output
 }
 
+fn with_input<T: Ungil>(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    operation: impl Ungil + Send + FnOnce(&[u8]) -> T,
+) -> T {
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    unsafe {
+        input.with_bytes(|input| {
+            if detach {
+                py.detach(|| operation(input))
+            } else {
+                operation(input)
+            }
+        })
+    }
+}
+
 #[pyclass(
     name = "murmur3_x86_32",
     module = "hashcodecs.murmur3",
@@ -52,22 +70,14 @@ impl PyMurmur3X86Hasher32 {
         let mut state = Murmur3X86Hasher32::new(seed);
         if let Some(data) = data {
             let input = bytes_like(py, data, "data")?;
-            if input.as_bytes().len() >= DETACH_THRESHOLD {
-                py.detach(|| state.update(input.as_bytes()));
-            } else {
-                state.update(input.as_bytes());
-            }
+            with_input(py, &input, |input| state.update(input));
         }
         Ok(Self { state })
     }
 
     fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
         let input = bytes_like(py, data, "data")?;
-        if input.as_bytes().len() >= DETACH_THRESHOLD {
-            py.detach(|| self.state.update(input.as_bytes()));
-        } else {
-            self.state.update(input.as_bytes());
-        }
+        with_input(py, &input, |input| self.state.update(input));
         Ok(())
     }
 
@@ -117,22 +127,14 @@ impl PyMurmur3X86Hasher128 {
         let mut state = Murmur3X86Hasher128::new(seed);
         if let Some(data) = data {
             let input = bytes_like(py, data, "data")?;
-            if input.as_bytes().len() >= DETACH_THRESHOLD {
-                py.detach(|| state.update(input.as_bytes()));
-            } else {
-                state.update(input.as_bytes());
-            }
+            with_input(py, &input, |input| state.update(input));
         }
         Ok(Self { state })
     }
 
     fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
         let input = bytes_like(py, data, "data")?;
-        if input.as_bytes().len() >= DETACH_THRESHOLD {
-            py.detach(|| self.state.update(input.as_bytes()));
-        } else {
-            self.state.update(input.as_bytes());
-        }
+        with_input(py, &input, |input| self.state.update(input));
         Ok(())
     }
 
@@ -182,22 +184,14 @@ impl PyMurmur3X64Hasher128 {
         let mut state = Murmur3X64Hasher128::new(seed);
         if let Some(data) = data {
             let input = bytes_like(py, data, "data")?;
-            if input.as_bytes().len() >= DETACH_THRESHOLD {
-                py.detach(|| state.update(input.as_bytes()));
-            } else {
-                state.update(input.as_bytes());
-            }
+            with_input(py, &input, |input| state.update(input));
         }
         Ok(Self { state })
     }
 
     fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
         let input = bytes_like(py, data, "data")?;
-        if input.as_bytes().len() >= DETACH_THRESHOLD {
-            py.detach(|| self.state.update(input.as_bytes()));
-        } else {
-            self.state.update(input.as_bytes());
-        }
+        with_input(py, &input, |input| self.state.update(input));
         Ok(())
     }
 
@@ -232,12 +226,7 @@ impl PyMurmur3X64Hasher128 {
 #[pyfunction(signature = (s, seed=0))]
 pub(super) fn murmur3_32(py: Python<'_>, s: &Bound<'_, PyAny>, seed: u32) -> PyResult<u32> {
     let input = bytes_like(py, s, "s")?;
-    let hash = || murmur3_x86_32(input.as_bytes(), seed);
-    Ok(if input.as_bytes().len() >= DETACH_THRESHOLD {
-        py.detach(hash)
-    } else {
-        hash()
-    })
+    Ok(with_input(py, &input, |input| murmur3_x86_32(input, seed)))
 }
 
 #[pyfunction(signature = (s, seed=0))]
@@ -247,12 +236,7 @@ pub(super) fn murmur3_x86_128_digest<'py>(
     seed: u32,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = bytes_like(py, s, "s")?;
-    let hash = || murmur3_x86_128(input.as_bytes(), seed);
-    let words = if input.as_bytes().len() >= DETACH_THRESHOLD {
-        py.detach(hash)
-    } else {
-        hash()
-    };
+    let words = with_input(py, &input, |input| murmur3_x86_128(input, seed));
     let digest = x86_128_digest(words);
     Ok(PyBytes::new(py, &digest))
 }
@@ -264,12 +248,7 @@ pub(super) fn murmur3_x64_128_digest<'py>(
     seed: u32,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = bytes_like(py, s, "s")?;
-    let hash = || murmur3_x64_128(input.as_bytes(), seed);
-    let words = if input.as_bytes().len() >= DETACH_THRESHOLD {
-        py.detach(hash)
-    } else {
-        hash()
-    };
+    let words = with_input(py, &input, |input| murmur3_x64_128(input, seed));
     let digest = x64_128_digest(words);
     Ok(PyBytes::new(py, &digest))
 }

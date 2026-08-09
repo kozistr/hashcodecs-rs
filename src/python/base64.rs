@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyDict, PyType};
 
 use super::DETACH_THRESHOLD;
-use super::buffer::{ascii_or_bytes, contiguous_bytes_like};
+use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
 use crate::base64::{
     Base64Error, DecodeAlphabet, decode_layout, decode_to_slice_with_layout_and_alphabet,
     encode_to_slice, encoded_len,
@@ -25,20 +25,21 @@ fn parse_altchars(
     } else {
         contiguous_bytes_like(py, value, "altchars")?
     };
-    let bytes = bytes.as_bytes();
     if bytes.len() != 2 {
         return Err(PyAssertionError::new_err(
             "altchars must be a bytes-like object or ASCII string of length 2",
         ));
     }
-    Ok(Some([bytes[0], bytes[1]]))
+    Ok(Some(unsafe {
+        bytes.with_bytes(|bytes| [bytes[0], bytes[1]])
+    }))
 }
 
-fn pybytes_with_len<'py>(
+fn pybytes_with_len<'py, T>(
     py: Python<'py>,
     length: usize,
-    init: impl FnOnce(&mut [u8]) -> PyResult<()>,
-) -> PyResult<Bound<'py, PyBytes>> {
+    init: impl FnOnce(&mut [u8]) -> T,
+) -> PyResult<(Bound<'py, PyBytes>, T)> {
     let length = ffi::Py_ssize_t::try_from(length)
         .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
     unsafe {
@@ -49,36 +50,40 @@ fn pybytes_with_len<'py>(
         debug_assert!(!buffer.is_null());
 
         // The object is never exposed until the initializer has written every byte.
-        init(slice::from_raw_parts_mut(buffer, length as usize)).map(|()| bytes)
+        let initialized = init(slice::from_raw_parts_mut(buffer, length as usize));
+        Ok((bytes, initialized))
     }
 }
 
 fn encode_with_altchars<'py>(
     py: Python<'py>,
-    input: &[u8],
+    input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    pybytes_with_len(py, encoded_len(input.len()), |output| {
-        let encode = || {
-            let urlsafe = altchars == Some(*b"-_");
-            encode_to_slice(input, output, urlsafe);
-            if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
-                for byte in output {
-                    if *byte == b'+' {
-                        *byte = plus;
-                    } else if *byte == b'/' {
-                        *byte = slash;
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let (output, ()) = pybytes_with_len(py, encoded_len(input.len()), |output| unsafe {
+        input.with_bytes(|input| {
+            let encode = || {
+                let urlsafe = altchars == Some(*b"-_");
+                encode_to_slice(input, output, urlsafe);
+                if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
+                    for byte in output {
+                        if *byte == b'+' {
+                            *byte = plus;
+                        } else if *byte == b'/' {
+                            *byte = slash;
+                        }
                     }
                 }
+            };
+            if detach {
+                py.detach(encode);
+            } else {
+                encode();
             }
-        };
-        if input.len() >= DETACH_THRESHOLD {
-            py.detach(encode);
-        } else {
-            encode();
-        }
-        Ok(())
-    })
+        })
+    })?;
+    Ok(output)
 }
 
 fn output_ptr(output: &Bound<'_, PyByteArray>, required: usize) -> PyResult<*mut u8> {
@@ -96,6 +101,18 @@ fn output_too_small(required: usize, provided: usize) -> PyErr {
 }
 
 fn encode_into_with_altchars(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+) -> PyResult<usize> {
+    if input.aliases(output) {
+        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+        return encode_slice_into_with_altchars(&input, output, altchars);
+    }
+    unsafe { input.with_bytes(|input| encode_slice_into_with_altchars(input, output, altchars)) }
+}
+
+fn encode_slice_into_with_altchars(
     input: &[u8],
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
@@ -118,23 +135,36 @@ fn encode_into_with_altchars(
 
 fn decode_strict<'py>(
     py: Python<'py>,
-    input: &[u8],
+    input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let layout = decode_layout(input).map_err(|_| decoding_error(py, "Incorrect padding"))?;
-    pybytes_with_len(py, layout.output_len, |output| {
-        let mut decode =
-            || decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet);
-        let result = if input.len() >= DETACH_THRESHOLD {
-            py.detach(decode)
-        } else {
-            decode()
-        };
-        result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))
-    })
+    let layout = unsafe { input.with_bytes(decode_layout) }
+        .map_err(|_| decoding_error(py, "Incorrect padding"))?;
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let (output, result) = pybytes_with_len(py, layout.output_len, |output| unsafe {
+        input.with_bytes(|input| {
+            let mut decode =
+                || decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet);
+            if detach { py.detach(decode) } else { decode() }
+        })
+    })?;
+    result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))?;
+    Ok(output)
 }
 
 fn decode_strict_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+) -> Result<usize, Base64Error> {
+    if input.aliases(output) {
+        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+        return decode_strict_slice_into(&input, output, alphabet);
+    }
+    unsafe { input.with_bytes(|input| decode_strict_slice_into(input, output, alphabet)) }
+}
+
+fn decode_strict_slice_into(
     input: &[u8],
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
@@ -190,30 +220,35 @@ fn translate_altchars(input: &[u8], [plus, slash]: [u8; 2]) -> Vec<u8> {
 
 fn decode_strict_with_altchars<'py>(
     py: Python<'py>,
-    input: &[u8],
+    input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     match altchars {
         None => decode_strict(py, input, DecodeAlphabet::Standard),
         Some([b'-', b'_']) => decode_strict(py, input, DecodeAlphabet::Mixed),
-        Some(altchars) => decode_strict(
-            py,
-            &translate_altchars(input, altchars),
-            DecodeAlphabet::Standard,
-        ),
+        Some(altchars) => {
+            let translated =
+                unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
+            decode_strict(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+        }
     }
 }
 
 fn decode_with_binascii<'py>(
     py: Python<'py>,
-    input: &[u8],
+    input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
     strict_mode: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let translated = altchars.map(|altchars| translate_altchars(input, altchars));
-    let input = translated.as_deref().unwrap_or(input);
+    let translated = altchars
+        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
+    let data = if let Some(translated) = translated.as_deref() {
+        PyBytes::new(py, translated)
+    } else {
+        unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
+    };
+    let input = data.as_bytes();
     let decode = py.import("binascii")?.getattr("a2b_base64")?;
-    let data = PyBytes::new(py, input);
     let output = if py.version_info() < (3, 11) {
         if strict_mode && !strict_base64_310(input) {
             return Err(decoding_error(py, "Non-base64 digit found"));
@@ -257,7 +292,7 @@ pub(super) fn b64encode<'py>(
     altchars: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = contiguous_bytes_like(py, s, "s")?;
-    encode_with_altchars(py, input.as_bytes(), parse_altchars(py, altchars, false)?)
+    encode_with_altchars(py, &input, parse_altchars(py, altchars, false)?)
 }
 
 #[pyfunction(signature = (s, output, altchars=None))]
@@ -269,7 +304,7 @@ pub(super) fn b64encode_into(
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, false)?;
-    encode_into_with_altchars(input.as_bytes(), output, altchars)
+    encode_into_with_altchars(&input, output, altchars)
 }
 
 #[pyfunction(signature = (s, altchars=None, validate=false))]
@@ -282,10 +317,10 @@ pub(super) fn b64decode<'py>(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     if validate {
-        return match decode_strict_with_altchars(py, input.as_bytes(), altchars) {
+        return match decode_strict_with_altchars(py, &input, altchars) {
             Ok(output) => Ok(output),
             Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
-            Err(_) => decode_with_binascii(py, input.as_bytes(), altchars, true),
+            Err(_) => decode_with_binascii(py, &input, altchars, true),
         };
     }
 
@@ -295,11 +330,11 @@ pub(super) fn b64decode<'py>(
         Some(_) => None,
     };
     if let Some(alphabet) = direct
-        && let Ok(output) = decode_strict(py, input.as_bytes(), alphabet)
+        && let Ok(output) = decode_strict(py, &input, alphabet)
     {
         return Ok(output);
     }
-    decode_with_binascii(py, input.as_bytes(), altchars, false)
+    decode_with_binascii(py, &input, altchars, false)
 }
 
 #[pyfunction(signature = (s, output, altchars=None, validate=false))]
@@ -314,8 +349,9 @@ pub(super) fn b64decode_into(
     let altchars = parse_altchars(py, altchars, true)?;
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
-        .map(|altchars| translate_altchars(input.as_bytes(), altchars));
-    let direct_input = translated.as_deref().unwrap_or(input.as_bytes());
+        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
+    let translated = translated.map(BytesLike::Owned);
+    let direct_input = translated.as_ref().unwrap_or(&input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
     } else {
@@ -330,6 +366,6 @@ pub(super) fn b64decode_into(
         Err(Base64Error::InvalidInput) => {}
     }
 
-    let decoded = decode_with_binascii(py, input.as_bytes(), altchars, validate)?;
+    let decoded = decode_with_binascii(py, &input, altchars, validate)?;
     copy_decoded_into(&decoded, output)
 }

@@ -1,17 +1,36 @@
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyList, PyString, PyTuple};
+use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyList, PyString, PyTuple};
 
-pub(super) enum BytesLike<'a> {
-    Borrowed(&'a [u8]),
+pub(super) enum BytesLike<'a, 'py> {
+    Bytes(&'a Bound<'py, PyBytes>),
+    ByteArray(&'a Bound<'py, PyByteArray>),
     Owned(Vec<u8>),
 }
 
-impl BytesLike<'_> {
-    pub(super) fn as_bytes(&self) -> &[u8] {
+impl BytesLike<'_, '_> {
+    pub(super) fn len(&self) -> usize {
         match self {
-            Self::Borrowed(bytes) => bytes,
-            Self::Owned(bytes) => bytes,
+            Self::Bytes(bytes) => bytes.as_bytes().len(),
+            Self::ByteArray(bytes) => bytes.len(),
+            Self::Owned(bytes) => bytes.len(),
+        }
+    }
+
+    pub(super) fn detach_safe(&self) -> bool {
+        !matches!(self, Self::ByteArray(_))
+    }
+
+    pub(super) fn aliases(&self, output: &Bound<'_, PyByteArray>) -> bool {
+        matches!(self, Self::ByteArray(input) if input.as_ptr() == output.as_ptr())
+    }
+
+    /// The callback must not run arbitrary Python or release the GIL when the input is mutable.
+    pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
+        match self {
+            Self::Bytes(bytes) => callback(bytes.as_bytes()),
+            Self::ByteArray(bytes) => callback(unsafe { bytes.as_bytes() }),
+            Self::Owned(bytes) => callback(bytes),
         }
     }
 }
@@ -20,12 +39,15 @@ pub(super) fn bytes_like<'a, 'py>(
     py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
-) -> PyResult<BytesLike<'a>> {
+) -> PyResult<BytesLike<'a, 'py>> {
     if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
         return Err(type_error(argument));
     }
     if let Ok(bytes) = value.cast::<PyBytes>() {
-        return Ok(BytesLike::Borrowed(bytes.as_bytes()));
+        return Ok(BytesLike::Bytes(bytes));
+    }
+    if let Ok(bytes) = value.cast::<PyByteArray>() {
+        return Ok(BytesLike::ByteArray(bytes));
     }
     copied_memoryview(py, value, argument, false).map(BytesLike::Owned)
 }
@@ -34,9 +56,12 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
-) -> PyResult<BytesLike<'a>> {
+) -> PyResult<BytesLike<'a, 'py>> {
     if let Ok(bytes) = value.cast::<PyBytes>() {
-        return Ok(BytesLike::Borrowed(bytes.as_bytes()));
+        return Ok(BytesLike::Bytes(bytes));
+    }
+    if let Ok(bytes) = value.cast::<PyByteArray>() {
+        return Ok(BytesLike::ByteArray(bytes));
     }
     copied_memoryview(py, value, argument, true).map(BytesLike::Owned)
 }
@@ -45,7 +70,7 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
-) -> PyResult<BytesLike<'a>> {
+) -> PyResult<BytesLike<'a, 'py>> {
     if let Ok(text) = value.cast::<PyString>() {
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
         if !text.is_ascii() {

@@ -15,8 +15,8 @@
 - Rust-owned results use the `mimalloc` global allocator.
 - Every MurmurHash3 variant uses runtime-dispatched AVX2 or SSE4.1 pre-mixing where its measured crossover beats the scalar loop. The x64 128-bit AVX2 kernel also selects BMI2 rotations when available. Ordered state transitions remain reference-compatible, and every variant has a portable scalar fallback.
 - The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
-- Python callers can reuse a `bytearray` through the `*_into` APIs when returned `bytes` ownership is unnecessary.
-- Large Python calls release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
+- Python callers can reuse a `bytearray` through the `*_into` APIs when returned `bytes` ownership is unnecessary. Mutable inputs are borrowed without a copy and keep the GIL to prevent concurrent mutation.
+- Large immutable Python inputs release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
 
 ## Install
 
@@ -48,9 +48,13 @@ assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
 assert murmur3_32(b'hello') == 0x248BFA47
 
-output = bytearray(8)
-written = base64.b64encode_into(b'hello', output)
-assert output[:written] == b'aGVsbG8='
+payload = b'hello'
+encoded = bytearray(4 * ((len(payload) + 2) // 3))
+encoded_len = base64.b64encode_into(payload, encoded)
+decoded = bytearray(len(encoded))
+decoded_len = base64.b64decode_into(encoded, decoded, validate=True)
+assert encoded[:encoded_len] == b'aGVsbG8='
+assert decoded[:decoded_len] == payload
 
 hasher = murmur3_x64_128(seed=42)
 hasher.update(b'hello')
@@ -67,7 +71,7 @@ uv build
 
 Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
 
-Conditions: clean builds, one pinned logical CPU, single-threaded execution, 50 Rust samples, and nine Python samples. Returned-output allocation is included except in the reusable-buffer table. Higher is better.
+Conditions: clean builds, one pinned logical CPU, and single-threaded execution. Higher is better.
 
 ## Run Locally
 
@@ -79,6 +83,7 @@ cargo bench --bench murmur3
 uv sync --group benchmark --no-install-project
 uv run --no-project python benchmarks/python_base64.py
 uv run --no-project python benchmarks/python_base64.py --into
+uv run --no-project python benchmarks/python_base64.py --bytearray-input
 uv run --no-project python benchmarks/python_murmur3.py
 uv run --no-project python benchmarks/python_murmur3.py --incremental
 ```
@@ -91,6 +96,8 @@ cargo bench --bench murmur3 -- hashcodecs
 uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
 uv run --no-project python benchmarks/python_murmur3.py --hashcodecs-only
 uv run --no-project python benchmarks/python_murmur3.py --incremental --hashcodecs-only
+uv run --no-project python benchmarks/python_murmur3.py --bytearray-input --hashcodecs-only
+uv run --no-project python benchmarks/python_murmur3.py --incremental --bytearray-input --hashcodecs-only
 ```
 
 ## Base64: Rust
@@ -143,23 +150,6 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 |  | 32 MiB | encode | **3.78 GiB/s** | 0.36 GiB/s | 0.99 GiB/s |
 |  | 32 MiB | decode | **4.23 GiB/s** | 0.57 GiB/s | 1.67 GiB/s |
 
-### Reusable Python Buffers
-
-| Alphabet | Input | Operation | hashcodecs |
-| --- | --- | --- | ---: |
-| Standard | 4 KiB | encode | **15.48 GiB/s** |
-|  | 4 KiB | decode | **17.20 GiB/s** |
-|  | 1 MiB | encode | **19.18 GiB/s** |
-|  | 1 MiB | decode | **23.82 GiB/s** |
-|  | 32 MiB | encode | **10.95 GiB/s** |
-|  | 32 MiB | decode | **10.47 GiB/s** |
-| URL-safe | 4 KiB | encode | **15.36 GiB/s** |
-|  | 4 KiB | decode | **13.48 GiB/s** |
-|  | 1 MiB | encode | **19.20 GiB/s** |
-|  | 1 MiB | decode | **18.25 GiB/s** |
-|  | 32 MiB | encode | **10.87 GiB/s** |
-|  | 32 MiB | decode | **9.88 GiB/s** |
-
 ## MurmurHash3: Python
 
 | Variant | API | Input | hashcodecs | `mmh3` |
@@ -182,6 +172,8 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 |  | incremental | 4 KiB | 7.57 GiB/s | **8.02 GiB/s** |
 |  |  | 1 MiB | **10.07 GiB/s** | 9.18 GiB/s |
 |  |  | 32 MiB | **9.57 GiB/s** | 7.44 GiB/s |
+
+Reusable-buffer and mutable-input results are available in [BENCHMARK.md](https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md).
 
 ## SIMD References
 

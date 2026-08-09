@@ -15,6 +15,7 @@
 - Rust-owned results use the `mimalloc` global allocator.
 - Every MurmurHash3 variant uses runtime-dispatched AVX2 or SSE4.1 pre-mixing where its measured crossover beats the scalar loop. The x64 128-bit AVX2 kernel also selects BMI2 rotations when available. Ordered state transitions remain reference-compatible, and every variant has a portable scalar fallback.
 - The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
+- Python callers can reuse a `bytearray` through the `*_into` APIs when returned `bytes` ownership is unnecessary.
 - Large Python calls release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
 
 ## Install
@@ -47,6 +48,10 @@ assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
 assert murmur3_32(b'hello') == 0x248BFA47
 
+output = bytearray(8)
+written = base64.b64encode_into(b'hello', output)
+assert output[:written] == b'aGVsbG8='
+
 hasher = murmur3_x64_128(seed=42)
 hasher.update(b'hello')
 assert hasher.hexdigest() == hasher.digest().hex()
@@ -73,6 +78,7 @@ cargo bench --bench base64
 cargo bench --bench murmur3
 uv sync --group benchmark --no-install-project
 uv run --no-project python benchmarks/python_base64.py
+uv run --no-project python benchmarks/python_base64.py --into
 uv run --no-project python benchmarks/python_murmur3.py
 uv run --no-project python benchmarks/python_murmur3.py --incremental
 ```

@@ -160,20 +160,49 @@ pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
 
     let mut source = 0;
     let mut destination = 0;
+    while source + 128 <= input.len() {
+        let (first, first_invalid) = unsafe {
+            decode_64(
+                input.as_ptr().add(source),
+                lower_table,
+                upper_table,
+                pack_shuffle,
+                compact_shuffle,
+            )
+        };
+        let (second, second_invalid) = unsafe {
+            decode_64(
+                input.as_ptr().add(source + 64),
+                lower_table,
+                upper_table,
+                pack_shuffle,
+                compact_shuffle,
+            )
+        };
+        if first_invalid | second_invalid != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+        unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), INPUT_MASK_48, first) };
+        unsafe {
+            _mm512_mask_storeu_epi8(output.add(destination + 48).cast(), INPUT_MASK_48, second)
+        };
+        source += 128;
+        destination += 96;
+    }
     while source + 64 <= input.len() {
-        let ascii = unsafe { _mm512_loadu_si512(input.as_ptr().add(source).cast()) };
-        let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
-        let invalid = _mm512_cmpgt_epu8_mask(indices, _mm512_set1_epi8(63))
-            | _mm512_cmpgt_epu8_mask(ascii, _mm512_set1_epi8(0x7f));
+        let (decoded, invalid) = unsafe {
+            decode_64(
+                input.as_ptr().add(source),
+                lower_table,
+                upper_table,
+                pack_shuffle,
+                compact_shuffle,
+            )
+        };
         if invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
-
-        let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
-        let packed = _mm512_madd_epi16(merged, _mm512_set1_epi32(0x0001_1000));
-        let packed = _mm512_shuffle_epi8(packed, pack_shuffle);
-        let packed = _mm512_permutexvar_epi8(compact_shuffle, packed);
-        unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), INPUT_MASK_48, packed) };
+        unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), INPUT_MASK_48, decoded) };
         source += 64;
         destination += 48;
     }
@@ -181,4 +210,23 @@ pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
     let (tail_source, tail_destination) =
         unsafe { x86::decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
     Ok((source + tail_source, destination + tail_destination))
+}
+
+#[target_feature(enable = "avx512vbmi")]
+#[inline]
+unsafe fn decode_64(
+    input: *const u8,
+    lower_table: __m512i,
+    upper_table: __m512i,
+    pack_shuffle: __m512i,
+    compact_shuffle: __m512i,
+) -> (__m512i, __mmask64) {
+    let ascii = unsafe { _mm512_loadu_si512(input.cast()) };
+    let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
+    let invalid = _mm512_cmpgt_epu8_mask(indices, _mm512_set1_epi8(63))
+        | _mm512_cmpgt_epu8_mask(ascii, _mm512_set1_epi8(0x7f));
+    let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
+    let packed = _mm512_madd_epi16(merged, _mm512_set1_epi32(0x0001_1000));
+    let packed = _mm512_shuffle_epi8(packed, pack_shuffle);
+    (_mm512_permutexvar_epi8(compact_shuffle, packed), invalid)
 }

@@ -21,15 +21,15 @@ def benchmark(
     ours_rate = throughput(ours, input_size)
     reference_rate = throughput(reference, input_size)
     print(
-        f"{name:12} {input_size // 1024:>6} KiB  "
-        f"hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  "
-        f"mmh3={reference_rate / 1024**3:6.2f} GiB/s ({ours_rate / reference_rate:4.2f}x)"
+        f'{name:12} {input_size // 1024:>6} KiB  '
+        f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  '
+        f'mmh3={reference_rate / 1024**3:6.2f} GiB/s ({ours_rate / reference_rate:4.2f}x)'
     )
 
 
 def benchmark_ours(name: str, input_size: int, ours: Callable[[], object]) -> None:
     ours_rate = throughput(ours, input_size)
-    print(f"{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s")
+    print(f'{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
 
 def incremental(constructor: Callable[[], object], payload: bytes) -> bytes:
@@ -41,14 +41,14 @@ def incremental(constructor: Callable[[], object], payload: bytes) -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--hashcodecs-only",
-        action="store_true",
-        help="time hashcodecs without timing mmh3",
+        '--hashcodecs-only',
+        action='store_true',
+        help='time hashcodecs without timing mmh3',
     )
     parser.add_argument(
-        "--incremental",
-        action="store_true",
-        help="time constructor, update, and digest instead of the one-shot functions",
+        '--incremental',
+        action='store_true',
+        help='time constructor, update, and digest instead of the one-shot functions',
     )
     args = parser.parse_args()
 
@@ -60,17 +60,17 @@ def main() -> None:
             if args.incremental:
                 cases = (
                     (
-                        "x86 32-bit",
+                        'x86 32-bit',
                         lambda payload=payload: incremental(hashcodecs_murmur3.murmur3_x86_32, payload),
                         lambda payload=payload: incremental(mmh3.mmh3_32, payload),
                     ),
                     (
-                        "x86 128-bit",
+                        'x86 128-bit',
                         lambda payload=payload: incremental(hashcodecs_murmur3.murmur3_x86_128, payload),
                         lambda payload=payload: incremental(mmh3.mmh3_x86_128, payload),
                     ),
                     (
-                        "x64 128-bit",
+                        'x64 128-bit',
                         lambda payload=payload: incremental(hashcodecs_murmur3.murmur3_x64_128, payload),
                         lambda payload=payload: incremental(mmh3.mmh3_x64_128, payload),
                     ),
@@ -78,17 +78,17 @@ def main() -> None:
             else:
                 cases = (
                     (
-                        "x86 32-bit",
+                        'x86 32-bit',
                         lambda payload=payload: hashcodecs_murmur3.murmur3_32(payload),
                         lambda payload=payload: mmh3.mmh3_32_uintdigest(payload),
                     ),
                     (
-                        "x86 128-bit",
+                        'x86 128-bit',
                         lambda payload=payload: hashcodecs_murmur3.murmur3_x86_128_digest(payload),
                         lambda payload=payload: mmh3.mmh3_x86_128_digest(payload),
                     ),
                     (
-                        "x64 128-bit",
+                        'x64 128-bit',
                         lambda payload=payload: hashcodecs_murmur3.murmur3_x64_128_digest(payload),
                         lambda payload=payload: mmh3.mmh3_x64_128_digest(payload),
                     ),
@@ -102,5 +102,5 @@ def main() -> None:
         gc.enable()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

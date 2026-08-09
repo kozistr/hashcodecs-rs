@@ -15,19 +15,19 @@ def standard_b64decode(s) -> bytes:
 
 def urlsafe_b64encode(s) -> bytes:
     """Encode *s* with the URL-safe Base64 alphabet."""
-    return b64encode(s, b"-_")
+    return b64encode(s, b'-_')
 
 
 def urlsafe_b64decode(s) -> bytes:
     """Decode *s* with the URL-safe Base64 alphabet."""
-    return b64decode(s, b"-_")
+    return b64decode(s, b'-_')
 
 
 __all__ = [
-    "b64decode",
-    "b64encode",
-    "standard_b64decode",
-    "standard_b64encode",
-    "urlsafe_b64decode",
-    "urlsafe_b64encode",
+    'b64decode',
+    'b64encode',
+    'standard_b64decode',
+    'standard_b64encode',
+    'urlsafe_b64decode',
+    'urlsafe_b64encode',
 ]

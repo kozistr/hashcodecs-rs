@@ -24,6 +24,8 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.urlsafe_b64decode(b'-_8=') == b'\xfb\xff'
     assert base64.b64decode(b'-_8=', b'-_', validate=True) == b'\xfb\xff'
     assert base64.b64encode(bytearray(b'abc')) == b'YWJj'
+    assert base64.b64decode(bytearray(b'YWJj'), validate=True) == b'abc'
+    assert base64.b64encode(b'\xfb\xff', bytearray(b'@#')) == b'@#8='
     assert base64.b64encode(memoryview(b'abc')) == b'YWJj'
     assert base64.b64decode(b'Y W\nJj', validate=False) == b'abc'
     assert base64.b64decode(b'YWJj====', validate=False) == b'abc'
@@ -46,6 +48,7 @@ def test_base64_into_variants_and_errors() -> None:
     assert base64.b64encode_into(b'abc', encoded) == 4
     assert encoded[:4] == b'YWJj'
     assert encoded[4:] == bytearray([0xA5] * 8)
+    assert base64.b64encode_into(bytearray(b'abc'), encoded) == 4
     assert base64.standard_b64encode_into(b'abc', encoded) == 4
     assert hashcodecs.b64encode_into(b'\xfb\xff', encoded, b'@#') == 4
     assert encoded[:4] == b'@#8='
@@ -82,6 +85,10 @@ def test_base64_into_handles_aliases_and_every_short_length() -> None:
     assert base64.b64encode_into(memoryview(shared)[:3], shared) == 4
     assert shared[:4] == b'YWJj'
     assert base64.b64decode_into(memoryview(shared)[:4], shared, validate=True) == 3
+    assert shared[:3] == b'abc'
+
+    shared = bytearray(b'YWJj')
+    assert base64.b64decode_into(shared, shared, validate=True) == 3
     assert shared[:3] == b'abc'
 
     for length in range(1025):
@@ -135,14 +142,14 @@ def test_encode_requires_contiguous_buffers() -> None:
         base64.b64encode(b'abc', b'_')
 
 
-def _outcome(function: Callable[..., bytes], value: bytes, altchars: bytes | None, validate: bool) -> Any:
+def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
     try:
         return function(value, altchars, validate=validate)
     except Exception as error:
         return type(error)
 
 
-def _into_outcome(value: bytes, altchars: bytes | None, validate: bool) -> Any:
+def _into_outcome(value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
     output = bytearray(len(value))
     try:
         written = base64.b64decode_into(value, output, altchars, validate=validate)
@@ -203,6 +210,9 @@ def test_decode_edge_cases_match_cpython(value: bytes, altchars: bytes | None, v
     actual = _outcome(base64.b64decode, value, altchars, validate)
     assert actual == expected
     assert _into_outcome(value, altchars, validate) == expected
+    mutable = bytearray(value)
+    assert _outcome(base64.b64decode, mutable, altchars, validate) == expected
+    assert _into_outcome(mutable, altchars, validate) == expected
 
 
 def test_all_short_payload_lengths_match_cpython() -> None:

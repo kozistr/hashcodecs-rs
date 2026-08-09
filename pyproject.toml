@@ -33,6 +33,7 @@ packages = ["python/hashcodecs"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "/BENCHMARK.md",
     "/Cargo.lock",
     "/Cargo.toml",
     "/build.rs",

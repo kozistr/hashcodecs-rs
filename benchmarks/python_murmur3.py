@@ -32,7 +32,7 @@ def benchmark_ours(name: str, input_size: int, ours: Callable[[], object]) -> No
     print(f'{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
 
-def incremental(constructor: Callable[[], object], payload: bytes) -> bytes:
+def incremental(constructor: Callable[[], object], payload: bytes | bytearray) -> bytes:
     hasher = constructor()
     hasher.update(payload)
     return hasher.digest()
@@ -50,6 +50,11 @@ def main() -> None:
         action='store_true',
         help='time constructor, update, and digest instead of the one-shot functions',
     )
+    parser.add_argument(
+        '--bytearray-input',
+        action='store_true',
+        help='time mutable bytearray inputs instead of immutable bytes',
+    )
     args = parser.parse_args()
 
     pin_to_one_cpu()
@@ -57,6 +62,8 @@ def main() -> None:
     try:
         for size in SIZES:
             payload = data(size)
+            if args.bytearray_input:
+                payload = bytearray(payload)
             if args.incremental:
                 cases = (
                     (

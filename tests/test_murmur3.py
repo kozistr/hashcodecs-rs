@@ -9,6 +9,7 @@ import pytest
 def test_murmur3_known_answers_and_buffer_inputs() -> None:
     assert hashcodecs.murmur3_32(b'hello') == 0x248BFA47
     assert murmur3.murmur3_32(b'hello') == 0x248BFA47
+    assert hashcodecs.murmur3_32(bytearray(b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_32(memoryview(b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_x86_128_digest(bytes([1, 2, 3])) == bytes.fromhex('e16401f6334213b5334213b5334213b5')
     assert hashcodecs.murmur3_x64_128_digest(bytes([1, 2, 3])) == bytes.fromhex('a937130eef3e641a659a233c404a4e49')
@@ -86,5 +87,5 @@ def test_large_murmur3_calls_cross_the_gil_release_threshold() -> None:
     assert hashcodecs.murmur3_x64_128_digest(payload, 42) == hashcodecs.murmur3_x64_128_digest(bytearray(payload), 42)
     for constructor in (murmur3.murmur3_x86_32, murmur3.murmur3_x86_128, murmur3.murmur3_x64_128):
         hasher = constructor(seed=42)
-        hasher.update(payload)
+        hasher.update(bytearray(payload))
         assert hasher.digest() == constructor(payload, 42).digest()

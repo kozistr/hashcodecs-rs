@@ -61,6 +61,11 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs with reusable bytearray output buffers',
     )
+    mode.add_argument(
+        '--bytearray-input',
+        action='store_true',
+        help='time hashcodecs with mutable bytearray inputs',
+    )
     args = parser.parse_args()
 
     pin_to_one_cpu()
@@ -70,6 +75,43 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.bytearray_input:
+                mutable_payload = bytearray(payload)
+                mutable_standard = bytearray(standard)
+                encoded_output = bytearray(len(standard))
+                decoded_output = bytearray(size)
+                benchmark_ours(
+                    'bytearray encode',
+                    size,
+                    lambda payload=mutable_payload: hashcodecs_base64.b64encode(payload),
+                    standard,
+                )
+                benchmark_ours(
+                    'bytearray decode',
+                    size,
+                    lambda standard=mutable_standard: hashcodecs_base64.b64decode(standard, validate=True),
+                    payload,
+                )
+                benchmark_into(
+                    'bytearray encode into',
+                    size,
+                    lambda payload=mutable_payload, output=encoded_output: hashcodecs_base64.b64encode_into(
+                        payload, output
+                    ),
+                    encoded_output,
+                    standard,
+                )
+                benchmark_into(
+                    'bytearray decode into',
+                    size,
+                    lambda standard=mutable_standard, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        standard, output, validate=True
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                continue
 
             if args.into:
                 encoded_output = bytearray(len(standard))

@@ -35,12 +35,31 @@ def benchmark_ours(name: str, input_size: int, ours: Callable[[], bytes], expect
     print(f'{name:22} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
 
+def benchmark_into(
+    name: str,
+    input_size: int,
+    operation: Callable[[], int],
+    output: bytearray,
+    expected: bytes,
+) -> None:
+    written = operation()
+    assert output[:written] == expected
+    ours_rate = throughput(operation, input_size)
+    print(f'{name:22} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         '--hashcodecs-only',
         action='store_true',
         help='time hashcodecs without timing competitors',
+    )
+    mode.add_argument(
+        '--into',
+        action='store_true',
+        help='time hashcodecs with reusable bytearray output buffers',
     )
     args = parser.parse_args()
 
@@ -51,6 +70,45 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.into:
+                encoded_output = bytearray(len(standard))
+                decoded_output = bytearray(size)
+                benchmark_into(
+                    'standard encode into',
+                    size,
+                    lambda payload=payload, output=encoded_output: hashcodecs_base64.b64encode_into(payload, output),
+                    encoded_output,
+                    standard,
+                )
+                benchmark_into(
+                    'standard decode into',
+                    size,
+                    lambda standard=standard, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        standard, output, validate=True
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                benchmark_into(
+                    'URL-safe encode into',
+                    size,
+                    lambda payload=payload, output=encoded_output: hashcodecs_base64.b64encode_into(
+                        payload, output, b'-_'
+                    ),
+                    encoded_output,
+                    urlsafe,
+                )
+                benchmark_into(
+                    'URL-safe decode into',
+                    size,
+                    lambda urlsafe=urlsafe, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        urlsafe, output, b'-_', validate=True
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                continue
 
             if args.hashcodecs_only:
                 benchmark_ours(

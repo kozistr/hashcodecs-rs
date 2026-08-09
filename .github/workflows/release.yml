@@ -32,8 +32,6 @@ jobs:
       - name: Cache Rust build
         if: runner.os != 'Linux'
         uses: Swatinem/rust-cache@v2.9.1
-        with:
-          shared-key: python-wheel
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.1.1

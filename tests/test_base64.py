@@ -353,12 +353,15 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
 def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
     assert base64.urlsafe_b64encode(b'\xfb\xff', padded=False) == b'-_8'
     assert base64.urlsafe_b64decode(b'-_8', padded=False) == b'\xfb\xff'
+    assert base64.urlsafe_b64decode(b'-_8=', padded=True) == b'\xfb\xff'
 
     encoded = bytearray(4)
     assert base64.urlsafe_b64encode_into(b'\xfb\xff', encoded, padded=False) == 3
     assert encoded[:3] == b'-_8'
     decoded = bytearray(2)
     assert base64.urlsafe_b64decode_into(b'-_8', decoded, padded=False) == 2
+    assert decoded == b'\xfb\xff'
+    assert base64.urlsafe_b64decode_into(b'-_8=', decoded, padded=True) == 2
     assert decoded == b'\xfb\xff'
 
     if PYTHON_315:

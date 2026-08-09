@@ -225,6 +225,23 @@ fn decode_unpadded_with_altchars<'py>(
     decode_strict_with_altchars(py, &input, altchars)
 }
 
+fn decode_unpadded<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    alphabet: DecodeAlphabet,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let aligned_without_padding = unsafe {
+        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
+    };
+    if aligned_without_padding {
+        return decode_strict(py, input, alphabet);
+    }
+    let Some(input) = padded_input(input) else {
+        return Err(decoding_error(py, "Incorrect padding"));
+    };
+    decode_strict(py, &input, alphabet)
+}
+
 fn decode_unpadded_into_with_altchars(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
@@ -246,6 +263,24 @@ fn decode_unpadded_into_with_altchars(
     decode_strict_into(direct_input, output, alphabet)
 }
 
+fn decode_unpadded_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+) -> Result<usize, Base64Error> {
+    let aligned_without_padding = unsafe {
+        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
+    };
+    if aligned_without_padding {
+        return decode_strict_into(input, output, alphabet);
+    }
+    let Some(input) = padded_input(input) else {
+        return Err(Base64Error::InvalidInput);
+    };
+    decode_strict_into(&input, output, alphabet)
+}
+
+#[inline]
 fn warn_legacy_altchars(
     py: Python<'_>,
     input: &BytesLike<'_, '_>,
@@ -253,12 +288,15 @@ fn warn_legacy_altchars(
     ignorechars_specified: bool,
     strict_mode: bool,
 ) -> PyResult<()> {
-    if py.version_info() < (3, 15) || ignorechars_specified {
+    if ignorechars_specified {
         return Ok(());
     }
     let Some(altchars) = altchars else {
         return Ok(());
     };
+    if py.version_info() < (3, 15) {
+        return Ok(());
+    }
     let badchar = unsafe {
         input.with_bytes(|input| {
             b"+/"
@@ -530,6 +568,28 @@ pub(super) fn b64decode<'py>(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     let strict_mode = validate.unwrap_or(ignorechars.is_some());
+
+    if ignorechars.is_none()
+        && !canonical
+        && altchars == Some(*b"-_")
+        && py.version_info() >= (3, 15)
+    {
+        if padded || !strict_mode {
+            match decode_strict(py, &input, DecodeAlphabet::UrlSafe) {
+                Ok(output) => return Ok(output),
+                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
+                Err(_) => {}
+            }
+        }
+        if !padded {
+            match decode_unpadded(py, &input, DecodeAlphabet::UrlSafe) {
+                Ok(output) => return Ok(output),
+                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
+                Err(_) => {}
+            }
+        }
+    }
+
     warn_legacy_altchars(py, &input, altchars, ignorechars.is_some(), strict_mode)?;
     let ignorechars = ignorechars.as_ref().map(|value| value.bind(py));
     if ignorechars.is_none() && !canonical && strict_mode {
@@ -588,6 +648,32 @@ pub(super) fn b64decode_into(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     let strict_mode = validate.unwrap_or(ignorechars.is_some());
+
+    if ignorechars.is_none()
+        && !canonical
+        && altchars == Some(*b"-_")
+        && py.version_info() >= (3, 15)
+    {
+        if padded || !strict_mode {
+            match decode_strict_into(&input, output, DecodeAlphabet::UrlSafe) {
+                Ok(written) => return Ok(written),
+                Err(Base64Error::OutputTooSmall { required, provided }) => {
+                    return Err(output_too_small(required, provided));
+                }
+                Err(Base64Error::InvalidInput) => {}
+            }
+        }
+        if !padded {
+            match decode_unpadded_into(&input, output, DecodeAlphabet::UrlSafe) {
+                Ok(written) => return Ok(written),
+                Err(Base64Error::OutputTooSmall { required, provided }) => {
+                    return Err(output_too_small(required, provided));
+                }
+                Err(Base64Error::InvalidInput) => {}
+            }
+        }
+    }
+
     warn_legacy_altchars(py, &input, altchars, ignorechars.is_some(), strict_mode)?;
     let ignorechars = ignorechars.as_ref().map(|value| value.bind(py));
     let translated = altchars

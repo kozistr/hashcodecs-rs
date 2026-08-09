@@ -12,7 +12,7 @@ fn backend_supported(backend: Backend) -> bool {
                 std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
             }
             Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
-            Backend::Avx512 => std::is_x86_feature_detected!("avx512vbmi"),
+            Backend::Avx512 => dispatch::avx512_supported(),
         }
     }
     #[cfg(target_arch = "aarch64")]

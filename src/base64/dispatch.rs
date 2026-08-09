@@ -46,7 +46,7 @@ fn detect_backend() -> Backend {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         select_x86_backend(
-            std::is_x86_feature_detected!("avx512vbmi"),
+            avx512_supported(),
             std::is_x86_feature_detected!("avx2"),
             std::is_x86_feature_detected!("sse4.1"),
             std::is_x86_feature_detected!("ssse3"),
@@ -59,6 +59,19 @@ fn detect_backend() -> Backend {
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     {
         Backend::Scalar
+    }
+}
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) fn avx512_supported() -> bool {
+    #[cfg(not(coverage))]
+    {
+        std::is_x86_feature_detected!("avx512vbmi")
+    }
+    #[cfg(coverage)]
+    {
+        false
     }
 }
 

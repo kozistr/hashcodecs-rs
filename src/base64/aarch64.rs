@@ -2,6 +2,31 @@ use std::arch::aarch64::*;
 
 use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
+const STANDARD_HIGH_CLASSES: [u8; 16] = [
+    0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+];
+const STANDARD_LOW_CLASSES: [u8; 16] = [
+    0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x2a, 0x2b, 0x2b, 0x2b, 0x2a,
+];
+const URLSAFE_HIGH_CLASSES: [u8; 16] = [
+    0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+];
+const URLSAFE_LOW_CLASSES: [u8; 16] = [
+    0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3b, 0x3b, 0x3a, 0x3b, 0x33,
+];
+const MIXED_LOW_CLASSES: [u8; 16] = [
+    0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b, 0x32,
+];
+const STANDARD_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
+const URLSAFE_OFFSETS: [u8; 16] = [0, 0, 17, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
+
+#[derive(Clone, Copy)]
+struct DecodeTables {
+    high_classes: uint8x16_t,
+    low_classes: uint8x16_t,
+    offsets: uint8x16_t,
+}
+
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn encode_neon<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let alphabet = if URLSAFE {
@@ -84,28 +109,36 @@ pub(super) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
+    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
     let mut source = 0;
     let mut destination = 0;
     while source + 256 <= input.len() {
         unsafe {
-            decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination))?
+            decode_64::<URLSAFE, MIXED>(
+                input.as_ptr().add(source),
+                output.add(destination),
+                tables,
+            )?
         };
         unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 64),
                 output.add(destination + 48),
+                tables,
             )?
         };
         unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 128),
                 output.add(destination + 96),
+                tables,
             )?
         };
         unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 192),
                 output.add(destination + 144),
+                tables,
             )?
         };
         source += 256;
@@ -113,14 +146,22 @@ pub(super) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
     }
     while source + 64 <= input.len() {
         unsafe {
-            decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination))?
+            decode_64::<URLSAFE, MIXED>(
+                input.as_ptr().add(source),
+                output.add(destination),
+                tables,
+            )?
         };
         source += 64;
         destination += 48;
     }
     while source + 16 <= input.len() {
         unsafe {
-            decode_16::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination))?
+            decode_16::<URLSAFE, MIXED>(
+                input.as_ptr().add(source),
+                output.add(destination),
+                tables,
+            )?
         };
         source += 16;
         destination += 12;
@@ -133,9 +174,10 @@ pub(super) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
 unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     input: *const u8,
     output: *mut u8,
+    tables: DecodeTables,
 ) -> Result<(), Base64Error> {
     let input = unsafe { vld1q_u8(input) };
-    let (indices, valid) = decode_indices::<URLSAFE, MIXED>(input);
+    let (indices, valid) = decode_indices::<URLSAFE, MIXED>(input, tables);
     if vminvq_u8(valid) != u8::MAX {
         return Err(Base64Error::InvalidInput);
     }
@@ -165,12 +207,13 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
 unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
     input: *const u8,
     output: *mut u8,
+    tables: DecodeTables,
 ) -> Result<(), Base64Error> {
     let input = unsafe { vld4q_u8(input) };
-    let (first, first_valid) = decode_indices::<URLSAFE, MIXED>(input.0);
-    let (second, second_valid) = decode_indices::<URLSAFE, MIXED>(input.1);
-    let (third, third_valid) = decode_indices::<URLSAFE, MIXED>(input.2);
-    let (fourth, fourth_valid) = decode_indices::<URLSAFE, MIXED>(input.3);
+    let (first, first_valid) = decode_indices::<URLSAFE, MIXED>(input.0, tables);
+    let (second, second_valid) = decode_indices::<URLSAFE, MIXED>(input.1, tables);
+    let (third, third_valid) = decode_indices::<URLSAFE, MIXED>(input.2, tables);
+    let (fourth, fourth_valid) = decode_indices::<URLSAFE, MIXED>(input.3, tables);
     let valid = vandq_u8(
         vandq_u8(first_valid, second_valid),
         vandq_u8(third_valid, fourth_valid),
@@ -192,46 +235,59 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
 #[inline]
 fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
     value: uint8x16_t,
+    tables: DecodeTables,
 ) -> (uint8x16_t, uint8x16_t) {
-    let uppercase = between(value, b'A', b'Z');
-    let lowercase = between(value, b'a', b'z');
-    let digit = between(value, b'0', b'9');
-    let standard_62 = vceqq_u8(value, vdupq_n_u8(b'+'));
-    let standard_63 = vceqq_u8(value, vdupq_n_u8(b'/'));
-    let urlsafe_62 = vceqq_u8(value, vdupq_n_u8(b'-'));
-    let urlsafe_63 = vceqq_u8(value, vdupq_n_u8(b'_'));
-    let special_62 = if MIXED {
-        vorrq_u8(standard_62, urlsafe_62)
-    } else if URLSAFE {
-        urlsafe_62
-    } else {
-        standard_62
-    };
-    let special_63 = if MIXED {
-        vorrq_u8(standard_63, urlsafe_63)
-    } else if URLSAFE {
-        urlsafe_63
-    } else {
-        standard_63
-    };
-
-    let mut indices = vsubq_u8(value, vdupq_n_u8(b'A'));
-    indices = vbslq_u8(lowercase, vsubq_u8(value, vdupq_n_u8(b'a' - 26)), indices);
-    indices = vbslq_u8(digit, vaddq_u8(value, vdupq_n_u8(4)), indices);
-    indices = vbslq_u8(special_62, vdupq_n_u8(62), indices);
-    indices = vbslq_u8(special_63, vdupq_n_u8(63), indices);
-    let valid = vorrq_u8(
-        vorrq_u8(uppercase, lowercase),
-        vorrq_u8(digit, vorrq_u8(special_62, special_63)),
+    let high_nibbles = vshrq_n_u8::<4>(value);
+    let low_nibbles = vandq_u8(value, vdupq_n_u8(0x0f));
+    let errors = vandq_u8(
+        vqtbl1q_u8(tables.high_classes, high_nibbles),
+        vqtbl1q_u8(tables.low_classes, low_nibbles),
     );
-    (indices, valid)
+    let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
+    let offset_indices = if MIXED || !URLSAFE {
+        vaddq_u8(high_nibbles, slash)
+    } else {
+        high_nibbles
+    };
+    let mut indices = vaddq_u8(value, vqtbl1q_u8(tables.offsets, offset_indices));
+    if MIXED {
+        let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
+        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
+        let corrections = vorrq_u8(
+            vandq_u8(dash, vdupq_n_u8(254)),
+            vandq_u8(underscore, vdupq_n_u8(33)),
+        );
+        indices = vaddq_u8(indices, corrections);
+    } else if URLSAFE {
+        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
+        indices = vaddq_u8(indices, vandq_u8(underscore, vdupq_n_u8(33)));
+    }
+    (indices, vceqq_u8(errors, vdupq_n_u8(0)))
 }
 
 #[target_feature(enable = "neon")]
 #[inline]
-fn between(value: uint8x16_t, lower: u8, upper: u8) -> uint8x16_t {
-    vandq_u8(
-        vcgeq_u8(value, vdupq_n_u8(lower)),
-        vcleq_u8(value, vdupq_n_u8(upper)),
-    )
+unsafe fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
+    let (high_classes, low_classes, offsets) = if MIXED {
+        (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &STANDARD_OFFSETS)
+    } else if URLSAFE {
+        (
+            &URLSAFE_HIGH_CLASSES,
+            &URLSAFE_LOW_CLASSES,
+            &URLSAFE_OFFSETS,
+        )
+    } else {
+        (
+            &STANDARD_HIGH_CLASSES,
+            &STANDARD_LOW_CLASSES,
+            &STANDARD_OFFSETS,
+        )
+    };
+    unsafe {
+        DecodeTables {
+            high_classes: vld1q_u8(high_classes.as_ptr()),
+            low_classes: vld1q_u8(low_classes.as_ptr()),
+            offsets: vld1q_u8(offsets.as_ptr()),
+        }
+    }
 }

@@ -464,11 +464,11 @@ unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m256i) {
     let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices));
     let dash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'-' as i8));
     let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
-    let indices = _mm256_blendv_epi8(indices, _mm256_set1_epi8(62), dash);
-    (
-        _mm256_blendv_epi8(indices, _mm256_set1_epi8(63), underscore),
-        errors,
-    )
+    let corrections = _mm256_or_si256(
+        _mm256_and_si256(dash, _mm256_set1_epi8(-2)),
+        _mm256_and_si256(underscore, _mm256_set1_epi8(33)),
+    );
+    (_mm256_add_epi8(indices, corrections), errors)
 }
 
 #[target_feature(enable = "avx2")]

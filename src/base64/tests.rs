@@ -254,6 +254,18 @@ fn backend_selection_and_kernels_match_scalar_output() {
             ),
             Err(Base64Error::InvalidInput)
         );
+
+        let mut invalid_double_block = [b'A'; 128];
+        invalid_double_block[127] = b'!';
+        assert_eq!(
+            decode_with_backend(
+                &invalid_double_block,
+                &mut [0; 96],
+                backend,
+                DecodeAlphabet::Standard,
+            ),
+            Err(Base64Error::InvalidInput)
+        );
     }
 
     let mut scalar_mixed = [0; 3];

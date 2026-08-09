@@ -70,11 +70,18 @@ fn read_partial_u64_le(input: &[u8]) -> u64 {
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
-        if key.len() >= 32 && std::is_x86_feature_detected!("avx2") {
-            return unsafe { x86::murmur3_x86_32_avx2(key, seed) };
-        }
-        if key.len() >= 16 && std::is_x86_feature_detected!("sse4.1") {
-            return unsafe { x86::murmur3_x86_32_sse41(key, seed) };
+        match dispatch::x86_32(
+            key.len(),
+            std::is_x86_feature_detected!("avx2"),
+            std::is_x86_feature_detected!("sse4.1"),
+        ) {
+            dispatch::Backend::Avx2 => {
+                return unsafe { x86::murmur3_x86_32_avx2(key, seed) };
+            }
+            dispatch::Backend::Sse41 => {
+                return unsafe { x86::murmur3_x86_32_sse41(key, seed) };
+            }
+            dispatch::Backend::Scalar => {}
         }
     }
     murmur3_x86_32_scalar(key, seed)
@@ -183,16 +190,20 @@ fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
         let block_end = key.len() & !15;
-        if key.len() >= 32 && std::is_x86_feature_detected!("avx2") {
-            let hashes = unsafe { x86::mix_x64_128_body_avx2(&key[..block_end], seed) };
-            return finish_x64_128(key, hashes, block_end);
-        }
-        if key.len() >= 16
-            && key.len() <= 8 * 1024 * 1024
-            && std::is_x86_feature_detected!("sse4.1")
-        {
-            let hashes = unsafe { x86::mix_x64_128_body_sse41(&key[..block_end], seed) };
-            return finish_x64_128(key, hashes, block_end);
+        match dispatch::x64_128(
+            key.len(),
+            std::is_x86_feature_detected!("avx2"),
+            std::is_x86_feature_detected!("sse4.1"),
+        ) {
+            dispatch::Backend::Avx2 => {
+                let hashes = unsafe { x86::mix_x64_128_body_avx2(&key[..block_end], seed) };
+                return finish_x64_128(key, hashes, block_end);
+            }
+            dispatch::Backend::Sse41 => {
+                let hashes = unsafe { x86::mix_x64_128_body_sse41(&key[..block_end], seed) };
+                return finish_x64_128(key, hashes, block_end);
+            }
+            dispatch::Backend::Scalar => {}
         }
     }
     murmur3_x64_128_scalar_inner(key, seed)
@@ -280,13 +291,20 @@ fn finish_x64_128(key: &[u8], mut hashes: [u64; 2], offset: usize) -> [u64; 2] {
 fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
     #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
     {
-        if key.len() >= 256 && std::is_x86_feature_detected!("avx2") {
-            unsafe { x86::mix_x86_128_body_avx2(key, hashes) };
-            return;
-        }
-        if key.len() >= 16 * 1024 * 1024 && std::is_x86_feature_detected!("sse4.1") {
-            unsafe { x86::mix_x86_128_body_sse41(key, hashes) };
-            return;
+        match dispatch::x86_128(
+            key.len(),
+            std::is_x86_feature_detected!("avx2"),
+            std::is_x86_feature_detected!("sse4.1"),
+        ) {
+            dispatch::Backend::Avx2 => {
+                unsafe { x86::mix_x86_128_body_avx2(key, hashes) };
+                return;
+            }
+            dispatch::Backend::Sse41 => {
+                unsafe { x86::mix_x86_128_body_sse41(key, hashes) };
+                return;
+            }
+            dispatch::Backend::Scalar => {}
         }
     }
     mix_x86_128_body_scalar(key, hashes);
@@ -377,6 +395,9 @@ fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     hashes
 }
 
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+mod dispatch;
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
 
@@ -395,6 +416,29 @@ mod tests {
 
     fn x64_words_as_u128(words: [u64; 2]) -> u128 {
         (words[0] as u128) | ((words[1] as u128) << 64)
+    }
+
+    #[test]
+    fn dispatch_thresholds_are_explicit_and_feature_gated() {
+        use dispatch::Backend::{Avx2, Scalar, Sse41};
+
+        assert_eq!(dispatch::x86_32(15, true, true), Scalar);
+        assert_eq!(dispatch::x86_32(31, true, false), Scalar);
+        assert_eq!(dispatch::x86_32(16, false, true), Sse41);
+        assert_eq!(dispatch::x86_32(32, true, true), Avx2);
+        assert_eq!(dispatch::x86_32(usize::MAX, false, false), Scalar);
+
+        assert_eq!(dispatch::x86_128(255, true, true), Scalar);
+        assert_eq!(dispatch::x86_128(256, true, true), Avx2);
+        assert_eq!(dispatch::x86_128(16 * 1024 * 1024 - 1, false, true), Scalar);
+        assert_eq!(dispatch::x86_128(16 * 1024 * 1024, false, true), Sse41);
+        assert_eq!(dispatch::x86_128(usize::MAX, false, false), Scalar);
+
+        assert_eq!(dispatch::x64_128(15, true, true), Scalar);
+        assert_eq!(dispatch::x64_128(16, false, true), Sse41);
+        assert_eq!(dispatch::x64_128(32, true, true), Avx2);
+        assert_eq!(dispatch::x64_128(8 * 1024 * 1024, false, true), Sse41);
+        assert_eq!(dispatch::x64_128(8 * 1024 * 1024 + 1, false, true), Scalar);
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

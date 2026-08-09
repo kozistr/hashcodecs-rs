@@ -11,11 +11,6 @@ fn backend_supported(backend: Backend) -> bool {
             Backend::Sse41 => {
                 std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
             }
-            Backend::Sse42 => {
-                std::is_x86_feature_detected!("ssse3")
-                    && std::is_x86_feature_detected!("sse4.1")
-                    && std::is_x86_feature_detected!("sse4.2")
-            }
             Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
             Backend::Avx512 => std::is_x86_feature_detected!("avx512vbmi"),
         }
@@ -100,31 +95,21 @@ fn matches_the_standard_engine_for_all_short_lengths() {
 #[test]
 fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(
-        select_x86_backend(false, false, false, false, false),
+        select_x86_backend(false, false, false, false),
         Backend::Scalar
     );
     assert_eq!(
-        select_x86_backend(false, false, false, false, true),
+        select_x86_backend(false, false, false, true),
         Backend::Ssse3
     );
+    assert_eq!(select_x86_backend(false, false, true, true), Backend::Sse41);
     assert_eq!(
-        select_x86_backend(false, false, false, true, true),
-        Backend::Sse41
+        select_x86_backend(false, false, true, false),
+        Backend::Scalar
     );
+    assert_eq!(select_x86_backend(false, true, false, false), Backend::Avx2);
     assert_eq!(
-        select_x86_backend(false, false, true, true, true),
-        Backend::Sse42
-    );
-    assert_eq!(
-        select_x86_backend(false, false, true, false, true),
-        Backend::Ssse3
-    );
-    assert_eq!(
-        select_x86_backend(false, true, false, false, false),
-        Backend::Avx2
-    );
-    assert_eq!(
-        select_x86_backend(true, false, false, false, false),
+        select_x86_backend(true, false, false, false),
         Backend::Avx512
     );
     assert_eq!(select_aarch64_backend(false), Backend::Scalar);
@@ -174,22 +159,14 @@ fn backend_selection_and_kernels_match_scalar_output() {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     unsafe {
         assert_eq!(
-            encode_sse4(&input, scalar.as_mut_ptr(), false, false, false),
-            0
-        );
-        assert_eq!(
-            decode_sse4(
+            dispatch::decode_sse41::<x86::StandardDecoder, x86::ExactStore>(
                 expected.as_bytes(),
                 scalar_decoded.as_mut_ptr(),
-                DecodeAlphabet::Standard,
-                false,
-                false,
                 false,
             ),
             Ok((0, 0))
         );
     }
-
     let expected_urlsafe = b64encode_urlsafe(&input);
     let mixed = b"-///".repeat(32);
     let mixed_expected = [0xfb, 0xff, 0xff].repeat(32);
@@ -197,7 +174,6 @@ fn backend_selection_and_kernels_match_scalar_output() {
         Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,
-        Backend::Sse42,
         Backend::Avx2,
         Backend::Avx512,
     ]
@@ -297,7 +273,6 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
         Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,
-        Backend::Sse42,
         Backend::Avx2,
         Backend::Avx512,
     ]

@@ -145,16 +145,6 @@ pub(super) unsafe fn encode_ssse3<const URLSAFE: bool>(input: &[u8], output: *mu
     source
 }
 
-#[target_feature(enable = "ssse3,sse4.1")]
-pub(super) unsafe fn encode_sse41<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
-    unsafe { encode_ssse3::<URLSAFE>(input, output) }
-}
-
-#[target_feature(enable = "ssse3,sse4.1,sse4.2")]
-pub(super) unsafe fn encode_sse42<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
-    unsafe { encode_ssse3::<URLSAFE>(input, output) }
-}
-
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let mut source = 0;
@@ -278,14 +268,6 @@ pub(super) unsafe fn decode_sse41<A: Decoder, S: Store>(
         destination += 12;
     }
     Ok((source, destination))
-}
-
-#[target_feature(enable = "ssse3,sse4.1,sse4.2")]
-pub(super) unsafe fn decode_sse42<A: Decoder, S: Store>(
-    input: &[u8],
-    output: *mut u8,
-) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_sse41::<A, S>(input, output) }
 }
 
 #[target_feature(enable = "ssse3")]

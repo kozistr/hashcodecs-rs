@@ -10,7 +10,7 @@
 
 ## Design
 
-- Base64 is implemented in this crate with runtime AVX-512 VBMI, AVX2, SSE4.2, SSE4.1, SSSE3, and AArch64 NEON dispatch. Portable wheels select the best available SIMD backend and fall back to scalar code otherwise.
+- Base64 is implemented in this crate with runtime AVX-512 VBMI, AVX2, SSE4.1, SSSE3, and AArch64 NEON dispatch. Portable wheels select the best available SIMD backend and fall back to scalar code otherwise.
 - Rust callers can reuse their own output buffers through the `*_into` APIs. Every backend writes exactly the documented prefix; it never depends on spare capacity after the destination slice.
 - Rust-owned results use the `mimalloc` global allocator.
 - Every MurmurHash3 variant uses runtime-dispatched AVX2 or SSE4.1 pre-mixing where its measured crossover beats the scalar loop. Ordered state transitions remain reference-compatible, and every variant has a portable scalar fallback.

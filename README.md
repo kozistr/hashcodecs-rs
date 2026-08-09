@@ -43,12 +43,12 @@ assert_eq!(hashcodecs::murmur3_x86_32(b"hello", 0), 0x248b_fa47);
 import hashcodecs.base64 as base64
 from hashcodecs import murmur3_32, murmur3_x64_128
 
-assert base64.b64encode(b"hello") == b"aGVsbG8="
-assert base64.b64decode(b"aGVsbG8=") == b"hello"
-assert murmur3_32(b"hello") == 0x248BFA47
+assert base64.b64encode(b'hello') == b'aGVsbG8='
+assert base64.b64decode(b'aGVsbG8=') == b'hello'
+assert murmur3_32(b'hello') == 0x248BFA47
 
 hasher = murmur3_x64_128(seed=42)
-hasher.update(b"hello")
+hasher.update(b'hello')
 assert hasher.hexdigest() == hasher.digest().hex()
 ```
 
@@ -162,4 +162,4 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 ## SIMD References
 
-The AVX2 block structure uses the 24-byte encode and 32-byte decode arrangement described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605). The AVX-512 VBMI path processes 48-byte encode and 64-byte decode blocks with cross-lane byte permutations, while AArch64 uses 48-byte NEON encoding and 64-byte NEON decoding blocks. The Rust 1.89 MSRV is the first stable release that exposes the required AVX-512 intrinsics.
+The SIMD implementation follows the approach described in [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605), with AVX-512 VBMI and AArch64 NEON backends selected automatically when available.

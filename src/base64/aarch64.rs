@@ -118,7 +118,46 @@ pub(super) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
         source += 64;
         destination += 48;
     }
+    while source + 16 <= input.len() {
+        unsafe {
+            decode_16::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination))?
+        };
+        source += 16;
+        destination += 12;
+    }
     Ok((source, destination))
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
+    input: *const u8,
+    output: *mut u8,
+) -> Result<(), Base64Error> {
+    let input = unsafe { vld1q_u8(input) };
+    let (indices, valid) = decode_indices::<URLSAFE, MIXED>(input);
+    if vminvq_u8(valid) != u8::MAX {
+        return Err(Base64Error::InvalidInput);
+    }
+
+    let mut indices_array = [0_u8; 16];
+    unsafe { vst1q_u8(indices_array.as_mut_ptr(), indices) };
+    for group in 0..4 {
+        let source = group * 4;
+        let destination = group * 3;
+        let first = indices_array[source];
+        let second = indices_array[source + 1];
+        let third = indices_array[source + 2];
+        let fourth = indices_array[source + 3];
+        unsafe {
+            output.add(destination).write((first << 2) | (second >> 4));
+            output
+                .add(destination + 1)
+                .write((second << 4) | (third >> 2));
+            output.add(destination + 2).write((third << 6) | fourth);
+        }
+    }
+    Ok(())
 }
 
 #[target_feature(enable = "neon")]

@@ -402,80 +402,88 @@ fn pack_16_indices(indices: __m128i) -> __m128i {
 
 #[target_feature(enable = "avx2")]
 unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, __m256i) {
-    let (value, mut indices) = unsafe { decode_indices_32_base(input) };
-    let special_62 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'+' as i8));
-    let special_63 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
-    indices = _mm256_add_epi8(indices, _mm256_and_si256(special_63, _mm256_set1_epi8(-3)));
-    decode_indices_32_finish(value, indices, special_62, special_63)
+    let value = unsafe { _mm256_loadu_si256(input.cast()) };
+    let high_classes = _mm_setr_epi8(
+        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+        0x20,
+    );
+    let low_classes = _mm_setr_epi8(
+        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x2a, 0x2b, 0x2b, 0x2b,
+        0x2a,
+    );
+    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
+    let offset_indices = _mm256_add_epi8(high_nibbles, slash);
+    let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
+        0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0,
+    ));
+    (
+        _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices)),
+        errors,
+    )
 }
 
 #[target_feature(enable = "avx2")]
 unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __m256i) {
-    let (value, mut indices) = unsafe { decode_indices_32_base(input) };
-    let special_62 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'-' as i8));
-    let special_63 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
-    let corrections = _mm256_or_si256(
-        _mm256_and_si256(special_62, _mm256_set1_epi8(-2)),
-        _mm256_and_si256(special_63, _mm256_set1_epi8(33)),
+    let value = unsafe { _mm256_loadu_si256(input.cast()) };
+    let high_classes = _mm_setr_epi8(
+        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+        0x20,
     );
-    indices = _mm256_add_epi8(indices, corrections);
-    decode_indices_32_finish(value, indices, special_62, special_63)
+    let low_classes = _mm_setr_epi8(
+        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3b, 0x3b, 0x3a, 0x3b,
+        0x33,
+    );
+    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
+        0, 0, 17, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0,
+    ));
+    let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, high_nibbles));
+    let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
+    let correction = _mm256_and_si256(underscore, _mm256_set1_epi8(33));
+    (_mm256_add_epi8(indices, correction), errors)
 }
 
 #[target_feature(enable = "avx2")]
 unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m256i) {
-    let (value, mut indices) = unsafe { decode_indices_32_base(input) };
-    let standard_62 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'+' as i8));
-    let standard_63 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
-    let urlsafe_62 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'-' as i8));
-    let urlsafe_63 = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
-    let special_62 = _mm256_or_si256(standard_62, urlsafe_62);
-    let special_63 = _mm256_or_si256(standard_63, urlsafe_63);
-    let corrections = _mm256_or_si256(
-        _mm256_and_si256(urlsafe_62, _mm256_set1_epi8(-2)),
-        _mm256_or_si256(
-            _mm256_and_si256(standard_63, _mm256_set1_epi8(-3)),
-            _mm256_and_si256(urlsafe_63, _mm256_set1_epi8(33)),
-        ),
-    );
-    indices = _mm256_add_epi8(indices, corrections);
-    decode_indices_32_finish(value, indices, special_62, special_63)
-}
-
-#[target_feature(enable = "avx2")]
-unsafe fn decode_indices_32_base(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
-    let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), _mm256_set1_epi8(0x0f));
+    let high_classes = _mm_setr_epi8(
+        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+        0x20,
+    );
+    let low_classes = _mm_setr_epi8(
+        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b,
+        0x32,
+    );
+    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
+    let offset_indices = _mm256_add_epi8(high_nibbles, slash);
     let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
-        0, 0, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0,
     ));
+    let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices));
+    let dash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'-' as i8));
+    let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
+    let indices = _mm256_blendv_epi8(indices, _mm256_set1_epi8(62), dash);
     (
-        value,
-        _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, high_nibbles)),
+        _mm256_blendv_epi8(indices, _mm256_set1_epi8(63), underscore),
+        errors,
     )
 }
 
 #[target_feature(enable = "avx2")]
-fn decode_indices_32_finish(
+fn classify_ascii_avx2(
     value: __m256i,
-    indices: __m256i,
-    special_62: __m256i,
-    special_63: __m256i,
+    high_classes: __m128i,
+    low_classes: __m128i,
 ) -> (__m256i, __m256i) {
-    let digits = range_errors_avx2(value, b'0', 9);
-    let uppercase = range_errors_avx2(value, b'A', 25);
-    let lowercase = range_errors_avx2(value, b'a', 25);
-    let range_errors = _mm256_min_epu8(digits, _mm256_min_epu8(uppercase, lowercase));
-    let symbols = _mm256_or_si256(special_62, special_63);
-    (indices, _mm256_andnot_si256(symbols, range_errors))
-}
-
-#[target_feature(enable = "avx2")]
-fn range_errors_avx2(value: __m256i, start: u8, length: i8) -> __m256i {
-    _mm256_subs_epu8(
-        _mm256_sub_epi8(value, _mm256_set1_epi8(start as i8)),
-        _mm256_set1_epi8(length),
-    )
+    // Invalid high/low nibble pairs share a class bit; valid pairs produce zero.
+    let mask = _mm256_set1_epi8(0x0f);
+    let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), mask);
+    let low_nibbles = _mm256_and_si256(value, mask);
+    let high_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(high_classes), high_nibbles);
+    let low_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), low_nibbles);
+    (high_nibbles, _mm256_and_si256(high_matches, low_matches))
 }
 
 #[target_feature(enable = "avx2")]

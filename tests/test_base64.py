@@ -1,8 +1,11 @@
 import base64 as stdlib_base64
 import binascii
+import inspect
 import sys
+import threading
 import warnings
 from collections.abc import Callable
+from time import sleep
 from typing import Any
 
 import hashcodecs
@@ -377,3 +380,146 @@ def test_python_315_decode_options_are_backported() -> None:
     assert base64.b64decode(b'AA', padded=False, canonical=True) == b'\x00'
     with pytest.raises(binascii.Error):
         base64.b64decode(b'AB', padded=False, canonical=True)
+
+
+class _BatchList(list[object]):
+    pass
+
+
+def test_base64_batch_empty_single_heterogeneous_and_ordered() -> None:
+    payloads = _BatchList([b'', bytearray(b'a'), memoryview(b'ab'), b'abc', bytes(range(256))])
+    expected = [stdlib_base64.b64encode(payload) for payload in payloads]
+
+    assert base64.b64encode_batch([]) == []
+    assert base64.b64encode_batch([b'a']) == [b'YQ==']
+    assert base64.b64encode_batch(payloads) == expected
+    assert hashcodecs.b64encode_batch(payloads) == expected
+
+    encoded = _BatchList([expected[0], bytearray(expected[1]), memoryview(expected[2]), expected[3].decode()])
+    decoded = [b'', b'a', b'ab', b'abc']
+    assert base64.b64decode_batch([]) == []
+    assert base64.b64decode_batch(encoded, validate=True) == decoded
+    assert hashcodecs.b64decode_batch(encoded, validate=True) == decoded
+
+
+@pytest.mark.parametrize('batch_size', [8, 64, 1024])
+def test_base64_batch_cardinalities_and_boundaries(batch_size: int) -> None:
+    lengths = [0, 1, 2, 3, 15, 16, 31, 32, 47, 48, 63, 64, 65]
+    payloads = [
+        bytes((index * 37 + offset) & 0xFF for index in range(lengths[offset % len(lengths)]))
+        for offset in range(batch_size)
+    ]
+    expected = [stdlib_base64.b64encode(payload) for payload in payloads]
+
+    assert base64.b64encode_batch(payloads) == expected
+    assert base64.b64decode_batch(expected, validate=True) == payloads
+
+
+def test_base64_batch_alphabets_and_wrappers() -> None:
+    payloads = [b'', b'abc', b'\xfb\xff', bytes(range(64))]
+    standard = [stdlib_base64.b64encode(payload) for payload in payloads]
+    urlsafe = [stdlib_base64.urlsafe_b64encode(payload) for payload in payloads]
+    custom = [stdlib_base64.b64encode(payload, b'@#') for payload in payloads]
+    duplicate = [stdlib_base64.b64encode(payload, b'++') for payload in payloads]
+
+    assert base64.standard_b64encode_batch(payloads) == standard
+    assert base64.standard_b64decode_batch(standard) == payloads
+    assert base64.urlsafe_b64encode_batch(payloads) == urlsafe
+    assert base64.urlsafe_b64decode_batch(urlsafe) == payloads
+    assert base64.b64encode_batch(payloads, b'@#') == custom
+    assert base64.b64decode_batch(custom, '@#', validate=True) == payloads
+    assert base64.b64encode_batch(payloads, b'++') == duplicate
+    assert base64.b64decode_batch(duplicate, b'++') == [stdlib_base64.b64decode(value, b'++') for value in duplicate]
+
+
+@pytest.mark.parametrize('failure_index', [0, 1, 2])
+def test_base64_batch_decode_is_fail_fast(failure_index: int) -> None:
+    encoded = [b'YQ==', b'Yg==', b'Yw==']
+    encoded[failure_index] = b'not base64!'
+    with pytest.raises(binascii.Error):
+        base64.b64decode_batch(encoded, validate=True)
+
+
+def test_base64_batch_lenient_mode_and_noncontiguous_decode() -> None:
+    values = [b'Y W\nJj', b'YWJj====']
+    assert base64.b64decode_batch(values) == [b'abc', b'abc']
+
+    trailing_data = b'AA==anything after padding'
+    try:
+        expected = base64.b64decode(trailing_data)
+    except Exception as error:
+        with pytest.raises(type(error)):
+            base64.b64decode_batch([trailing_data])
+    else:
+        assert base64.b64decode_batch([trailing_data]) == [expected]
+
+    assert base64.b64decode_batch([memoryview(b'YxWxJxjx')[::2]], validate=True) == [b'abc']
+
+
+def test_base64_batch_rejects_invalid_inputs() -> None:
+    for outer in ((b'abc',), iter([b'abc']), b'abc'):
+        with pytest.raises(TypeError):
+            base64.b64encode_batch(outer)  # type: ignore[arg-type]
+        with pytest.raises(TypeError):
+            base64.b64decode_batch(outer)  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError):
+        base64.b64encode_batch([object()])  # type: ignore[list-item]
+    with pytest.raises(TypeError):
+        base64.b64decode_batch([[65, 66]])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match='only ASCII'):
+        base64.b64decode_batch(['\u2603'])
+    with pytest.raises(BufferError):
+        base64.b64encode_batch([memoryview(b'abcdef')[::2]])
+    with pytest.raises(ALTCHARS_ERROR):
+        base64.b64encode_batch([], b'_')
+    with pytest.raises(ALTCHARS_ERROR):
+        base64.b64decode_batch([], b'___')
+
+
+def test_base64_batch_exports_docstrings_and_signatures() -> None:
+    names = {
+        'b64decode_batch',
+        'b64encode_batch',
+        'standard_b64decode_batch',
+        'standard_b64encode_batch',
+        'urlsafe_b64decode_batch',
+        'urlsafe_b64encode_batch',
+    }
+    assert names <= set(base64.__all__)
+    assert names <= set(hashcodecs.__all__)
+    assert base64.b64encode_batch.__doc__
+    assert base64.b64decode_batch.__doc__
+    assert str(inspect.signature(base64.b64encode_batch)) == '(items, altchars=None)'
+    assert str(inspect.signature(base64.b64decode_batch)) == '(items, altchars=None, validate=False)'
+
+
+def _assert_batch_releases_the_gil(operation: Callable[[], list[bytes]], expected: list[bytes]) -> None:
+    ready = threading.Event()
+    progressed = threading.Event()
+
+    def delayed_progress() -> None:
+        ready.set()
+        sleep(0.001)
+        progressed.set()
+
+    worker = threading.Thread(target=delayed_progress)
+    worker.start()
+    assert ready.wait(timeout=1)
+    result = operation()
+    progressed_during_call = progressed.is_set()
+    worker.join(timeout=1)
+
+    assert not worker.is_alive()
+    assert progressed_during_call
+    assert result == expected
+
+
+def test_large_base64_batch_crosses_the_gil_release_threshold() -> None:
+    payload = bytes(range(256)) * 256
+    encoded_item = stdlib_base64.b64encode(payload)
+    payloads = [payload] * 1024
+    encoded = [encoded_item] * 1024
+
+    _assert_batch_releases_the_gil(lambda: base64.b64encode_batch(payloads), encoded)
+    _assert_batch_releases_the_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads)

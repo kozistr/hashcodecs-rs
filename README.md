@@ -16,8 +16,10 @@
 - Every MurmurHash3 variant uses runtime-dispatched AVX2 or SSE4.1 pre-mixing where its measured crossover beats the scalar loop. The x64 128-bit AVX2 kernel also selects BMI2 rotations when available. Ordered state transitions remain reference-compatible, and every variant has a portable scalar fallback.
 - The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
 - Python 3.15 Base64 options are supported, including unpadded and wrapped encoding plus configurable padding, ignored characters, and canonical decoding.
+- Python callers can encode or decode an ordered list of independent values in one native call through the `*_batch` APIs. A batch uses one alphabet and validation setting, stops at the first error, and returns `list[bytes]` in input order.
 - Python callers can reuse a `bytearray` through the `*_into` APIs when returned `bytes` ownership is unnecessary. Mutable inputs are borrowed without a copy and keep the GIL to prevent concurrent mutation.
 - Large immutable Python inputs release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
+- Batch processing is single-threaded and uses memory proportional to its results. Items below 64 KiB retain the GIL; each larger immutable item releases and reacquires it independently. Callers must not mutate the input list concurrently.
 
 ## Install
 
@@ -47,6 +49,8 @@ from hashcodecs import murmur3_32, murmur3_x64_128
 
 assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
+assert base64.b64encode_batch([b'hello', b'world']) == [b'aGVsbG8=', b'd29ybGQ=']
+assert base64.b64decode_batch([b'aGVsbG8=', 'd29ybGQ=']) == [b'hello', b'world']
 assert base64.b64encode(b'hello', padded=False) == b'aGVsbG8'
 assert base64.b64decode(b'aGVsbG8', padded=False, canonical=True) == b'hello'
 assert murmur3_32(b'hello') == 0x248BFA47
@@ -87,6 +91,7 @@ uv sync --group benchmark --no-install-project
 uv run --no-project python benchmarks/python_base64.py
 uv run --no-project python benchmarks/python_base64.py --into
 uv run --no-project python benchmarks/python_base64.py --bytearray-input
+uv run --no-project python benchmarks/python_base64_batch.py
 uv run --no-project python benchmarks/python_murmur3.py
 uv run --no-project python benchmarks/python_murmur3.py --incremental
 ```

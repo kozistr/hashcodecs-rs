@@ -7,6 +7,7 @@ def b64encode(
     padded: bool = True,
     wrapcol: int = 0,
 ) -> bytes: ...
+def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None = None) -> list[bytes]: ...
 def b64encode_into(
     s: ReadableBuffer,
     output: bytearray,
@@ -24,6 +25,11 @@ def b64decode(
     ignorechars: ReadableBuffer = ...,
     canonical: bool = False,
 ) -> bytes: ...
+def b64decode_batch(
+    items: list[str | ReadableBuffer],
+    altchars: str | ReadableBuffer | None = None,
+    validate: bool = False,
+) -> list[bytes]: ...
 def b64decode_into(
     s: str | ReadableBuffer,
     output: bytearray,

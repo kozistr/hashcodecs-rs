@@ -5,7 +5,7 @@ use pyo3::exceptions::{
 };
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyDict, PyType};
+use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyDict, PyList, PyType};
 
 use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
@@ -517,6 +517,14 @@ fn strict_base64_310(input: &[u8]) -> bool {
         && input[padding..].iter().all(|&byte| byte == b'=')
 }
 
+fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
+    let mut results = Vec::new();
+    results
+        .try_reserve_exact(length)
+        .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
+    Ok(results)
+}
+
 #[pyfunction(signature = (s, altchars=None, *, padded=true, wrapcol=0))]
 pub(super) fn b64encode<'py>(
     py: Python<'py>,
@@ -533,6 +541,27 @@ pub(super) fn b64encode<'py>(
         padded,
         encode::normalize_wrapcol(wrapcol)?,
     )
+}
+
+/// Encode each bytes-like item and return results in input order.
+///
+/// ``items`` must be a list. ``altchars`` applies to every item. Processing is
+/// fail-fast: an error discards the partial result and is raised immediately.
+/// Processing is single-threaded. Immutable items of at least 64 KiB release
+/// the GIL independently; smaller and mutable items do not. Do not mutate
+/// ``items`` concurrently while this function is running.
+#[pyfunction(signature = (items, altchars=None))]
+pub(super) fn b64encode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    altchars: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyList>> {
+    parse_altchars(py, altchars, false)?;
+    let mut encoded = batch_results(items.len())?;
+    for item in items.iter() {
+        encoded.push(b64encode(py, &item, altchars, true, 0)?);
+    }
+    PyList::new(py, encoded)
 }
 
 #[pyfunction(signature = (s, output, altchars=None, *, padded=true, wrapcol=0))]
@@ -633,6 +662,36 @@ pub(super) fn b64decode<'py>(
     )
 }
 
+/// Decode each ASCII string or bytes-like item and return results in input order.
+///
+/// ``items`` must be a list. ``altchars`` and ``validate`` apply to every item.
+/// Processing is fail-fast: an error discards the partial result and is raised
+/// immediately. Processing is single-threaded. Immutable items of at least
+/// 64 KiB release the GIL independently; smaller and mutable items do not. Do
+/// not mutate ``items`` concurrently while this function is running.
+#[pyfunction(signature = (items, altchars=None, validate=false))]
+pub(super) fn b64decode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    altchars: Option<&Bound<'py, PyAny>>,
+    #[pyo3(from_py_with = extract_truthy)] validate: bool,
+) -> PyResult<Bound<'py, PyList>> {
+    parse_altchars(py, altchars, true)?;
+    let mut decoded = batch_results(items.len())?;
+    for item in items.iter() {
+        decoded.push(b64decode(
+            py,
+            &item,
+            altchars,
+            Some(validate),
+            true,
+            None,
+            false,
+        )?);
+    }
+    PyList::new(py, decoded)
+}
+
 #[pyfunction(signature = (s, output, altchars=None, validate=None, *, padded=true, ignorechars=None, canonical=false))]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn b64decode_into(
@@ -720,4 +779,14 @@ pub(super) fn b64decode_into(
         canonical,
     )?;
     copy_decoded_into(&decoded, output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::batch_results;
+
+    #[test]
+    fn oversized_batch_capacity_is_an_error() {
+        assert!(batch_results::<u8>(usize::MAX).is_err());
+    }
 }

@@ -90,18 +90,6 @@ uv run --no-project python benchmarks/python_murmur3.py
 uv run --no-project python benchmarks/python_murmur3.py --incremental
 ```
 
-To time only this implementation:
-
-```sh
-cargo bench --bench base64 -- hashcodecs
-cargo bench --bench murmur3 -- hashcodecs
-uv run --no-project python benchmarks/python_base64.py --hashcodecs-only
-uv run --no-project python benchmarks/python_murmur3.py --hashcodecs-only
-uv run --no-project python benchmarks/python_murmur3.py --incremental --hashcodecs-only
-uv run --no-project python benchmarks/python_murmur3.py --bytearray-input --hashcodecs-only
-uv run --no-project python benchmarks/python_murmur3.py --incremental --bytearray-input --hashcodecs-only
-```
-
 ## Base64: Rust
 
 | Alphabet | Input | Operation | hashcodecs | `base64` | `base64-turbo` |

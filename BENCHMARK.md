@@ -8,18 +8,18 @@ Conditions: clean builds, one pinned logical CPU, single-threaded execution, and
 
 | Alphabet | Input | Operation | hashcodecs |
 | --- | --- | --- | ---: |
-| Standard | 4 KiB | encode | **15.48 GiB/s** |
-|  | 4 KiB | decode | **17.20 GiB/s** |
-|  | 1 MiB | encode | **19.18 GiB/s** |
-|  | 1 MiB | decode | **23.82 GiB/s** |
-|  | 32 MiB | encode | **10.95 GiB/s** |
-|  | 32 MiB | decode | **10.47 GiB/s** |
-| URL-safe | 4 KiB | encode | **15.36 GiB/s** |
-|  | 4 KiB | decode | **13.48 GiB/s** |
-|  | 1 MiB | encode | **19.20 GiB/s** |
-|  | 1 MiB | decode | **18.25 GiB/s** |
-|  | 32 MiB | encode | **10.87 GiB/s** |
-|  | 32 MiB | decode | **9.88 GiB/s** |
+| Standard | 4 KiB | encode | **15.36 GiB/s** |
+|  | 4 KiB | decode | **18.59 GiB/s** |
+|  | 1 MiB | encode | **39.68 GiB/s** |
+|  | 1 MiB | decode | **29.08 GiB/s** |
+|  | 32 MiB | encode | **11.05 GiB/s** |
+|  | 32 MiB | decode | **10.63 GiB/s** |
+| URL-safe | 4 KiB | encode | **15.22 GiB/s** |
+|  | 4 KiB | decode | **12.32 GiB/s** |
+|  | 1 MiB | encode | **39.73 GiB/s** |
+|  | 1 MiB | decode | **20.73 GiB/s** |
+|  | 32 MiB | encode | **11.20 GiB/s** |
+|  | 32 MiB | decode | **10.70 GiB/s** |
 
 ## Mutable Python Inputs
 
@@ -27,12 +27,12 @@ Conditions: clean builds, one pinned logical CPU, single-threaded execution, and
 
 | Input | Operation | Returned `bytes` | Reusable `bytearray` |
 | --- | --- | ---: | ---: |
-| 4 KiB | encode | 13.93 GiB/s | **14.71 GiB/s** |
-|  | decode | 15.39 GiB/s | **16.50 GiB/s** |
-| 1 MiB | encode | 3.56 GiB/s | **18.70 GiB/s** |
-|  | decode | 3.50 GiB/s | **23.90 GiB/s** |
-| 32 MiB | encode | 3.70 GiB/s | **10.50 GiB/s** |
-|  | decode | 3.75 GiB/s | **10.03 GiB/s** |
+| 4 KiB | encode | 14.39 GiB/s | **15.30 GiB/s** |
+|  | decode | 16.84 GiB/s | **18.38 GiB/s** |
+| 1 MiB | encode | 2.98 GiB/s | **39.62 GiB/s** |
+|  | decode | 3.73 GiB/s | **29.25 GiB/s** |
+| 32 MiB | encode | 2.90 GiB/s | **11.19 GiB/s** |
+|  | decode | 3.67 GiB/s | **10.69 GiB/s** |
 
 ### MurmurHash3
 

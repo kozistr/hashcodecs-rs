@@ -1,3 +1,4 @@
+use std::arch::asm;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -17,8 +18,7 @@ pub(super) trait Decoder {
     #[cfg(not(coverage))]
     fn decode_table() -> &'static [u8; 256];
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i);
-    unsafe fn decode_16(input: *const u8) -> Option<__m128i>;
-    unsafe fn decode_indices_16_sse41(input: *const u8) -> (__m128i, __m128i);
+    unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i);
 }
 
 pub(super) trait Store {
@@ -63,13 +63,8 @@ impl Decoder for StandardDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_16(input: *const u8) -> Option<__m128i> {
-        unsafe { decode_16_standard(input) }
-    }
-
-    #[inline(always)]
-    unsafe fn decode_indices_16_sse41(input: *const u8) -> (__m128i, __m128i) {
-        unsafe { decode_indices_16_sse41_standard(input) }
+    unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i) {
+        unsafe { decode_indices_16_standard(input) }
     }
 }
 
@@ -86,13 +81,8 @@ impl Decoder for UrlSafeDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_16(input: *const u8) -> Option<__m128i> {
-        unsafe { decode_16_urlsafe(input) }
-    }
-
-    #[inline(always)]
-    unsafe fn decode_indices_16_sse41(input: *const u8) -> (__m128i, __m128i) {
-        unsafe { decode_indices_16_sse41_urlsafe(input) }
+    unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i) {
+        unsafe { decode_indices_16_urlsafe(input) }
     }
 }
 
@@ -109,13 +99,8 @@ impl Decoder for MixedDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_16(input: *const u8) -> Option<__m128i> {
-        unsafe { decode_16_mixed(input) }
-    }
-
-    #[inline(always)]
-    unsafe fn decode_indices_16_sse41(input: *const u8) -> (__m128i, __m128i) {
-        unsafe { decode_indices_16_sse41_mixed(input) }
+    unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i) {
+        unsafe { decode_indices_16_mixed(input) }
     }
 }
 
@@ -147,28 +132,187 @@ pub(super) unsafe fn encode_ssse3<const URLSAFE: bool>(input: &[u8], output: *mu
 
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
-    let mut source = 0;
-    let mut destination = 0;
-    while source + 104 <= input.len() {
-        let first = unsafe { encode_24::<URLSAFE>(input.as_ptr().add(source)) };
-        let second = unsafe { encode_24::<URLSAFE>(input.as_ptr().add(source + 24)) };
-        let third = unsafe { encode_24::<URLSAFE>(input.as_ptr().add(source + 48)) };
-        let fourth = unsafe { encode_24::<URLSAFE>(input.as_ptr().add(source + 72)) };
+    if input.len() < 32 {
+        return unsafe { encode_ssse3::<URLSAFE>(input, output) };
+    }
+
+    let first = unsafe { encode_24_first::<URLSAFE>(input.as_ptr()) };
+    unsafe { _mm256_storeu_si256(output.cast(), first) };
+
+    // Later loads start four bytes before the block they encode. Keeping the
+    // actual load offset avoids forming a pointer before the start of `input`.
+    let mut load_offset = 20;
+    let mut destination = 32;
+    #[cfg(all(target_arch = "x86_64", not(coverage)))]
+    if input.len() >= 64 * 1024 {
+        // A group needs four 32-byte shifted loads for 96 logical input bytes.
+        // `input.len() - load_offset - 8` is an equivalent division form of
+        // the final-load bound `load_offset + 104 <= input.len()`.
+        let groups = (input.len() - load_offset - 8) / 96;
+        if groups != 0 {
+            unsafe {
+                encode_96_shifted_asm::<URLSAFE>(
+                    input.as_ptr().add(load_offset),
+                    output.add(destination),
+                    groups,
+                )
+            };
+            load_offset += groups * 96;
+            destination += groups * 128;
+        }
+    }
+    // The helper's fixed call and register-save costs outweigh its scheduling
+    // benefit on small inputs. This loop is also the 32-bit x86 fallback.
+    while load_offset + 104 <= input.len() {
+        let first = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
+        let second = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 24)) };
+        let third = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 48)) };
+        let fourth = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 72)) };
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), first) };
         unsafe { _mm256_storeu_si256(output.add(destination + 32).cast(), second) };
         unsafe { _mm256_storeu_si256(output.add(destination + 64).cast(), third) };
         unsafe { _mm256_storeu_si256(output.add(destination + 96).cast(), fourth) };
-        source += 96;
+        load_offset += 96;
         destination += 128;
     }
-    while source + 32 <= input.len() {
-        let encoded = unsafe { encode_24::<URLSAFE>(input.as_ptr().add(source)) };
+    while load_offset + 32 <= input.len() {
+        let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), encoded) };
-        source += 24;
+        load_offset += 24;
         destination += 32;
     }
+
+    // The shifted load is four bytes behind the logical source position.
+    let source = load_offset + 4;
     // The remainder still benefits from the SSSE3 kernel.
     source + unsafe { encode_ssse3::<URLSAFE>(&input[source..], output.add(destination)) }
+}
+
+#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[inline(never)]
+#[target_feature(enable = "avx2")]
+unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
+    input: *const u8,
+    output: *mut u8,
+    groups: usize,
+) {
+    let shuffle = _mm256_setr_epi8(
+        5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14, 1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7,
+        10, 9, 11, 10,
+    );
+    let higher_mask = _mm256_set1_epi32(0x0fc0_fc00);
+    let higher_multiplier = _mm256_set1_epi32(0x0400_0040);
+    let lower_mask = _mm256_set1_epi32(0x003f_03f0);
+    let lower_multiplier = _mm256_set1_epi32(0x0100_0010);
+    let reduction_base = _mm256_set1_epi8(51);
+    let lower_bound = _mm256_set1_epi8(25);
+    let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
+        b'A' as i8,
+        (b'a' - 26) as i8,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        if URLSAFE { -17 } else { -19 },
+        if URLSAFE { 32 } else { -16 },
+        0,
+        0,
+    ));
+
+    // Keep the actual branch target aligned, rather than placing an alignment
+    // directive in a Rust loop where LLVM's backedge label precedes the NOPs.
+    // Eight input constants plus eight early-clobber outputs occupy all YMM
+    // registers on x86-64, preventing accidental input/output register aliasing.
+    unsafe {
+        asm!(
+            ".p2align 5",
+            "2:",
+            "vmovdqu {value0}, [{input}]",
+            "vmovdqu {value1}, [{input} + 24]",
+            "vmovdqu {value2}, [{input} + 48]",
+            "vmovdqu {value3}, [{input} + 72]",
+            "vpshufb {value0}, {value0}, {shuffle}",
+            "vpshufb {value1}, {value1}, {shuffle}",
+            "vpshufb {value2}, {value2}, {shuffle}",
+            "vpshufb {value3}, {value3}, {shuffle}",
+            "vpand {temporary0}, {value0}, {higher_mask}",
+            "vpand {temporary1}, {value1}, {higher_mask}",
+            "vpand {temporary2}, {value2}, {higher_mask}",
+            "vpand {temporary3}, {value3}, {higher_mask}",
+            "vpmulhuw {temporary0}, {temporary0}, {higher_multiplier}",
+            "vpmulhuw {temporary1}, {temporary1}, {higher_multiplier}",
+            "vpmulhuw {temporary2}, {temporary2}, {higher_multiplier}",
+            "vpmulhuw {temporary3}, {temporary3}, {higher_multiplier}",
+            "vpand {value0}, {value0}, {lower_mask}",
+            "vpand {value1}, {value1}, {lower_mask}",
+            "vpand {value2}, {value2}, {lower_mask}",
+            "vpand {value3}, {value3}, {lower_mask}",
+            "vpmullw {value0}, {value0}, {lower_multiplier}",
+            "vpmullw {value1}, {value1}, {lower_multiplier}",
+            "vpmullw {value2}, {value2}, {lower_multiplier}",
+            "vpmullw {value3}, {value3}, {lower_multiplier}",
+            "vpor {value0}, {value0}, {temporary0}",
+            "vpor {value1}, {value1}, {temporary1}",
+            "vpor {value2}, {value2}, {temporary2}",
+            "vpor {value3}, {value3}, {temporary3}",
+            // Translate two independent vectors at a time so both dependency
+            // chains remain available to the scheduler.
+            "vpsubusb {temporary0}, {value0}, {reduction_base}",
+            "vpsubusb {temporary1}, {value1}, {reduction_base}",
+            "vpcmpgtb {temporary2}, {value0}, {lower_bound}",
+            "vpcmpgtb {temporary3}, {value1}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary2}",
+            "vpsubb {temporary1}, {temporary1}, {temporary3}",
+            "vpshufb {temporary0}, {offsets}, {temporary0}",
+            "vpshufb {temporary1}, {offsets}, {temporary1}",
+            "vpaddb {value0}, {value0}, {temporary0}",
+            "vpaddb {value1}, {value1}, {temporary1}",
+            "vpsubusb {temporary0}, {value2}, {reduction_base}",
+            "vpsubusb {temporary1}, {value3}, {reduction_base}",
+            "vpcmpgtb {temporary2}, {value2}, {lower_bound}",
+            "vpcmpgtb {temporary3}, {value3}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary2}",
+            "vpsubb {temporary1}, {temporary1}, {temporary3}",
+            "vpshufb {temporary0}, {offsets}, {temporary0}",
+            "vpshufb {temporary1}, {offsets}, {temporary1}",
+            "vpaddb {value2}, {value2}, {temporary0}",
+            "vpaddb {value3}, {value3}, {temporary1}",
+            "vmovdqu [{output}], {value0}",
+            "vmovdqu [{output} + 32], {value1}",
+            "vmovdqu [{output} + 64], {value2}",
+            "vmovdqu [{output} + 96], {value3}",
+            "add {input}, 96",
+            "add {output}, 128",
+            "dec {groups}",
+            "jnz 2b",
+            input = inout(reg) input => _,
+            output = inout(reg) output => _,
+            groups = inout(reg) groups => _,
+            shuffle = in(ymm_reg) shuffle,
+            higher_mask = in(ymm_reg) higher_mask,
+            higher_multiplier = in(ymm_reg) higher_multiplier,
+            lower_mask = in(ymm_reg) lower_mask,
+            lower_multiplier = in(ymm_reg) lower_multiplier,
+            reduction_base = in(ymm_reg) reduction_base,
+            lower_bound = in(ymm_reg) lower_bound,
+            offsets = in(ymm_reg) offsets,
+            value0 = out(ymm_reg) _,
+            value1 = out(ymm_reg) _,
+            value2 = out(ymm_reg) _,
+            value3 = out(ymm_reg) _,
+            temporary0 = out(ymm_reg) _,
+            temporary1 = out(ymm_reg) _,
+            temporary2 = out(ymm_reg) _,
+            temporary3 = out(ymm_reg) _,
+            options(nostack)
+        );
+    }
 }
 
 #[target_feature(enable = "avx2")]
@@ -190,10 +334,17 @@ pub(super) unsafe fn decode_avx2<A: Decoder, S: Store>(
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
-        unsafe { S::store_24(output.add(destination), pack_32(first)) };
-        unsafe { S::store_24(output.add(destination + 24), pack_32(second)) };
-        unsafe { S::store_24(output.add(destination + 48), pack_32(third)) };
-        unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
+        // The padded stores write four bytes into the following block's output,
+        // where the next store replaces them. This is safe for exact-output
+        // callers because each of these blocks has a complete successor.
+        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        if source + 160 <= input.len() {
+            unsafe { store_24_padded(output.add(destination + 72), pack_32(fourth)) };
+        } else {
+            unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
+        }
         source += 128;
         destination += 96;
     }
@@ -202,13 +353,28 @@ pub(super) unsafe fn decode_avx2<A: Decoder, S: Store>(
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
-        unsafe { S::store_24(output.add(destination), pack_32(indices)) };
+        if source + 64 <= input.len() {
+            // A complete following block provides enough in-bounds output for
+            // the four-byte overlap, which that block replaces.
+            unsafe { store_24_padded(output.add(destination), pack_32(indices)) };
+        } else {
+            unsafe { S::store_24(output.add(destination), pack_32(indices)) };
+        }
         source += 32;
         destination += 24;
     }
-    let (tail_source, tail_destination) =
-        unsafe { decode_ssse3::<A, S>(&input[source..], output.add(destination)) }?;
-    Ok((source + tail_source, destination + tail_destination))
+    // At most one 16-byte block remains after the AVX2 loops. Decode it
+    // directly so the bulk SSSE3 entry point does not sit on the AVX2 hot path.
+    if source + 16 <= input.len() {
+        let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+        if !errors_are_zero_ssse3(errors) {
+            return Err(Base64Error::InvalidInput);
+        }
+        unsafe { S::store_12(output.add(destination), pack_16_indices(indices)) };
+        source += 16;
+        destination += 12;
+    }
+    Ok((source, destination))
 }
 
 #[target_feature(enable = "ssse3")]
@@ -218,10 +384,34 @@ pub(super) unsafe fn decode_ssse3<A: Decoder, S: Store>(
 ) -> Result<(usize, usize), Base64Error> {
     let mut source = 0;
     let mut destination = 0;
+    while source + 64 <= input.len() {
+        let (first, first_errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+        let (second, second_errors) =
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 16)) };
+        let (third, third_errors) =
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 32)) };
+        let (fourth, fourth_errors) =
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 48)) };
+        let errors = _mm_or_si128(
+            _mm_or_si128(first_errors, second_errors),
+            _mm_or_si128(third_errors, fourth_errors),
+        );
+        if !errors_are_zero_ssse3(errors) {
+            return Err(Base64Error::InvalidInput);
+        }
+        unsafe { S::store_12(output.add(destination), pack_16_indices(first)) };
+        unsafe { S::store_12(output.add(destination + 12), pack_16_indices(second)) };
+        unsafe { S::store_12(output.add(destination + 24), pack_16_indices(third)) };
+        unsafe { S::store_12(output.add(destination + 36), pack_16_indices(fourth)) };
+        source += 64;
+        destination += 48;
+    }
     while source + 16 <= input.len() {
-        let decoded =
-            unsafe { A::decode_16(input.as_ptr().add(source)) }.ok_or(Base64Error::InvalidInput)?;
-        unsafe { S::store_12(output.add(destination), decoded) };
+        let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+        if !errors_are_zero_ssse3(errors) {
+            return Err(Base64Error::InvalidInput);
+        }
+        unsafe { S::store_12(output.add(destination), pack_16_indices(indices)) };
         source += 16;
         destination += 12;
     }
@@ -236,14 +426,13 @@ pub(super) unsafe fn decode_sse41<A: Decoder, S: Store>(
     let mut source = 0;
     let mut destination = 0;
     while source + 64 <= input.len() {
-        let (first, first_errors) =
-            unsafe { A::decode_indices_16_sse41(input.as_ptr().add(source)) };
+        let (first, first_errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         let (second, second_errors) =
-            unsafe { A::decode_indices_16_sse41(input.as_ptr().add(source + 16)) };
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 16)) };
         let (third, third_errors) =
-            unsafe { A::decode_indices_16_sse41(input.as_ptr().add(source + 32)) };
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 32)) };
         let (fourth, fourth_errors) =
-            unsafe { A::decode_indices_16_sse41(input.as_ptr().add(source + 48)) };
+            unsafe { A::decode_indices_16(input.as_ptr().add(source + 48)) };
         let errors = _mm_or_si128(
             _mm_or_si128(first_errors, second_errors),
             _mm_or_si128(third_errors, fourth_errors),
@@ -259,7 +448,7 @@ pub(super) unsafe fn decode_sse41<A: Decoder, S: Store>(
         destination += 48;
     }
     while source + 16 <= input.len() {
-        let (indices, errors) = unsafe { A::decode_indices_16_sse41(input.as_ptr().add(source)) };
+        let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if _mm_testz_si128(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -277,103 +466,103 @@ unsafe fn encode_12<const URLSAFE: bool>(input: *const u8) -> __m128i {
     value = _mm_shuffle_epi8(value, shuffle);
 
     let higher = _mm_and_si128(value, _mm_set1_epi32(0x0fc0_fc00));
-    let higher = _mm_mulhi_epu16(higher, _mm_set1_epi32(0x0400_0040));
+    let higher = unsafe { mulhi_epu16_exact_ssse3(higher, _mm_set1_epi32(0x0400_0040)) };
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
     let lower = _mm_mullo_epi16(lower, _mm_set1_epi32(0x0100_0010));
     ascii_from_indices::<URLSAFE>(_mm_or_si128(higher, lower))
 }
 
+// LLVM can expand this constant multiply into a long widen/shift/pack
+// sequence. Keep the single SSE2 instruction on the SSSE3 fallback path.
+#[inline]
+#[target_feature(enable = "ssse3")]
+unsafe fn mulhi_epu16_exact_ssse3(mut value: __m128i, multiplier: __m128i) -> __m128i {
+    unsafe {
+        asm!(
+            "pmulhuw {value}, {multiplier}",
+            value = inout(xmm_reg) value,
+            multiplier = in(xmm_reg) multiplier,
+            options(pure, nomem, nostack)
+        );
+    }
+    value
+}
+
 #[target_feature(enable = "avx2")]
-unsafe fn encode_24<const URLSAFE: bool>(input: *const u8) -> __m256i {
+unsafe fn encode_24_first<const URLSAFE: bool>(input: *const u8) -> __m256i {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
-    let value = _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 1, 2, 3, 3, 4, 5, 6));
-    let shuffle = _mm256_broadcastsi128_si256(_mm_setr_epi8(
-        1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10,
-    ));
-    let value = _mm256_shuffle_epi8(value, shuffle);
+    let shifted = _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 0, 1, 2, 3, 4, 5, 6));
+    encode_24_shifted_value::<URLSAFE>(shifted)
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn encode_24_shifted<const URLSAFE: bool>(input: *const u8) -> __m256i {
+    let shifted = unsafe { _mm256_loadu_si256(input.cast()) };
+    encode_24_shifted_value::<URLSAFE>(shifted)
+}
+
+#[target_feature(enable = "avx2")]
+fn encode_24_shifted_value<const URLSAFE: bool>(shifted: __m256i) -> __m256i {
+    // The low lane's payload starts four bytes into the vector; the high
+    // lane's payload starts at byte zero. This arrangement lets every block
+    // after the first avoid a cross-lane VPERMD.
+    let shuffle = _mm256_setr_epi8(
+        5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14, 1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7,
+        10, 9, 11, 10,
+    );
+    let value = _mm256_shuffle_epi8(shifted, shuffle);
 
     let higher = _mm256_and_si256(value, _mm256_set1_epi32(0x0fc0_fc00));
-    let higher = _mm256_mulhi_epu16(higher, _mm256_set1_epi32(0x0400_0040));
+    let higher = unsafe { mulhi_epu16_exact(higher, _mm256_set1_epi32(0x0400_0040)) };
     let lower = _mm256_and_si256(value, _mm256_set1_epi32(0x003f_03f0));
-    let lower = _mm256_mullo_epi16(lower, _mm256_set1_epi32(0x0100_0010));
+    let lower = unsafe { mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010)) };
     ascii_from_indices_avx2::<URLSAFE>(_mm256_or_si256(higher, lower))
 }
 
-#[target_feature(enable = "ssse3")]
-unsafe fn decode_16_standard(input: *const u8) -> Option<__m128i> {
-    let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let (indices, valid) = ascii_to_indices_standard(value);
-    decode_16_indices(indices, valid)
+// LLVM can strength-reduce these alternating word multipliers into a much
+// longer widen/shift/pack sequence. Keep the native AVX2 instructions: each
+// operation is one instruction and has exactly the intrinsic's wrapping
+// 16-bit semantics.
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+    unsafe {
+        asm!(
+            "vpmulhuw {value}, {value}, {multiplier}",
+            value = inout(ymm_reg) value,
+            multiplier = in(ymm_reg) multiplier,
+            options(pure, nomem, nostack)
+        );
+    }
+    value
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+    unsafe {
+        asm!(
+            "vpmullw {value}, {value}, {multiplier}",
+            value = inout(ymm_reg) value,
+            multiplier = in(ymm_reg) multiplier,
+            options(pure, nomem, nostack)
+        );
+    }
+    value
 }
 
 #[target_feature(enable = "ssse3")]
-unsafe fn decode_16_urlsafe(input: *const u8) -> Option<__m128i> {
+unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, __m128i) {
     let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let (indices, valid) = ascii_to_indices_urlsafe(value);
-    decode_16_indices(indices, valid)
-}
-
-#[target_feature(enable = "ssse3")]
-unsafe fn decode_16_mixed(input: *const u8) -> Option<__m128i> {
-    let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let (indices, valid) = ascii_to_indices_mixed(value);
-    decode_16_indices(indices, valid)
-}
-
-#[target_feature(enable = "ssse3,sse4.1")]
-unsafe fn decode_indices_16_sse41_standard(input: *const u8) -> (__m128i, __m128i) {
-    let value = unsafe { _mm_loadu_si128(input.cast()) };
-    ascii_to_indices_sse41(value)
-}
-
-#[target_feature(enable = "ssse3,sse4.1")]
-unsafe fn decode_indices_16_sse41_urlsafe(input: *const u8) -> (__m128i, __m128i) {
-    let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let normalized = normalize_urlsafe_sse41(value);
-    let (indices, mut errors) = ascii_to_indices_sse41(normalized);
-    let standard_symbols = _mm_or_si128(
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'+' as i8)),
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8)),
+    let high_classes = _mm_setr_epi8(
+        0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
+        0x10,
     );
-    errors = _mm_or_si128(errors, standard_symbols);
-    (indices, errors)
-}
-
-#[target_feature(enable = "ssse3,sse4.1")]
-unsafe fn decode_indices_16_sse41_mixed(input: *const u8) -> (__m128i, __m128i) {
-    let value = unsafe { _mm_loadu_si128(input.cast()) };
-    ascii_to_indices_sse41(normalize_urlsafe_sse41(value))
-}
-
-#[target_feature(enable = "ssse3,sse4.1")]
-fn normalize_urlsafe_sse41(value: __m128i) -> __m128i {
-    let dash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'-' as i8));
-    let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
-    let value = _mm_blendv_epi8(value, _mm_set1_epi8(b'+' as i8), dash);
-    _mm_blendv_epi8(value, _mm_set1_epi8(b'/' as i8), underscore)
-}
-
-#[target_feature(enable = "ssse3")]
-fn ascii_to_indices_sse41(value: __m128i) -> (__m128i, __m128i) {
-    let mask = _mm_set1_epi8(0x2f);
-    let high_nibbles = _mm_and_si128(_mm_srli_epi32(value, 4), mask);
-    let low_nibbles = _mm_and_si128(value, mask);
-    let high_classes = _mm_shuffle_epi8(
-        _mm_setr_epi8(
-            0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
-            0x10, 0x10,
-        ),
-        high_nibbles,
+    let low_classes = _mm_setr_epi8(
+        0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x13, 0x1a, 0x1b, 0x1b, 0x1b,
+        0x1a,
     );
-    let low_classes = _mm_shuffle_epi8(
-        _mm_setr_epi8(
-            0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x13, 0x1a, 0x1b, 0x1b,
-            0x1b, 0x1a,
-        ),
-        low_nibbles,
-    );
-    let errors = _mm_and_si128(high_classes, low_classes);
-
+    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
     let offsets = _mm_setr_epi8(0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -384,12 +573,67 @@ fn ascii_to_indices_sse41(value: __m128i) -> (__m128i, __m128i) {
 }
 
 #[target_feature(enable = "ssse3")]
-fn decode_16_indices(indices: __m128i, valid: __m128i) -> Option<__m128i> {
-    if _mm_movemask_epi8(valid) != 0xffff {
-        return None;
-    }
+unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __m128i) {
+    let value = unsafe { _mm_loadu_si128(input.cast()) };
+    let high_classes = _mm_setr_epi8(
+        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+        0x20,
+    );
+    let low_classes = _mm_setr_epi8(
+        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3b, 0x3b, 0x3a, 0x3b,
+        0x33,
+    );
+    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+    let offsets = _mm_setr_epi8(0, 0, 17, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
+    let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, high_nibbles));
+    let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
+    let correction = _mm_and_si128(underscore, _mm_set1_epi8(33));
+    (_mm_add_epi8(indices, correction), errors)
+}
 
-    Some(pack_16_indices(indices))
+#[target_feature(enable = "ssse3")]
+unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m128i) {
+    let value = unsafe { _mm_loadu_si128(input.cast()) };
+    let high_classes = _mm_setr_epi8(
+        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+        0x20,
+    );
+    let low_classes = _mm_setr_epi8(
+        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b,
+        0x32,
+    );
+    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+    let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
+    let offset_indices = _mm_add_epi8(high_nibbles, slash);
+    let offsets = _mm_setr_epi8(0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
+    let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices));
+    let dash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'-' as i8));
+    let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
+    let corrections = _mm_or_si128(
+        _mm_and_si128(dash, _mm_set1_epi8(-2)),
+        _mm_and_si128(underscore, _mm_set1_epi8(33)),
+    );
+    (_mm_add_epi8(indices, corrections), errors)
+}
+
+#[target_feature(enable = "ssse3")]
+fn classify_ascii_ssse3(
+    value: __m128i,
+    high_classes: __m128i,
+    low_classes: __m128i,
+) -> (__m128i, __m128i) {
+    // Invalid high/low nibble pairs share a class bit; valid pairs produce zero.
+    let mask = _mm_set1_epi8(0x0f);
+    let high_nibbles = _mm_and_si128(_mm_srli_epi16(value, 4), mask);
+    let low_nibbles = _mm_and_si128(value, mask);
+    let high_matches = _mm_shuffle_epi8(high_classes, high_nibbles);
+    let low_matches = _mm_shuffle_epi8(low_classes, low_nibbles);
+    (high_nibbles, _mm_and_si128(high_matches, low_matches))
+}
+
+#[target_feature(enable = "ssse3")]
+fn errors_are_zero_ssse3(errors: __m128i) -> bool {
+    _mm_movemask_epi8(_mm_cmpeq_epi8(errors, _mm_setzero_si128())) == 0xffff
 }
 
 #[target_feature(enable = "ssse3")]
@@ -499,10 +743,11 @@ fn pack_32(indices: __m256i) -> __m256i {
 #[target_feature(enable = "ssse3")]
 fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
-    let upper = _mm_cmpgt_epi8(_mm_set1_epi8(26), indices);
-    let reduced = _mm_or_si128(reduced, _mm_and_si128(upper, _mm_set1_epi8(13)));
+    let lower = _mm_cmpgt_epi8(indices, _mm_set1_epi8(25));
+    let reduced = _mm_sub_epi8(reduced, lower);
     let offsets = _mm_setr_epi8(
-        b'G' as i8,
+        b'A' as i8,
+        (b'a' - 26) as i8,
         -4,
         -4,
         -4,
@@ -515,7 +760,6 @@ fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
         -4,
         if URLSAFE { -17 } else { -19 },
         if URLSAFE { 32 } else { -16 },
-        b'A' as i8,
         0,
         0,
     );
@@ -525,10 +769,11 @@ fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
 #[target_feature(enable = "avx2")]
 fn ascii_from_indices_avx2<const URLSAFE: bool>(indices: __m256i) -> __m256i {
     let reduced = _mm256_subs_epu8(indices, _mm256_set1_epi8(51));
-    let less = _mm256_cmpgt_epi8(_mm256_set1_epi8(26), indices);
-    let reduced = _mm256_or_si256(reduced, _mm256_and_si256(less, _mm256_set1_epi8(13)));
+    let lower = _mm256_cmpgt_epi8(indices, _mm256_set1_epi8(25));
+    let reduced = _mm256_sub_epi8(reduced, lower);
     let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
-        b'G' as i8,
+        b'A' as i8,
+        (b'a' - 26) as i8,
         -4,
         -4,
         -4,
@@ -541,84 +786,10 @@ fn ascii_from_indices_avx2<const URLSAFE: bool>(indices: __m256i) -> __m256i {
         -4,
         if URLSAFE { -17 } else { -19 },
         if URLSAFE { 32 } else { -16 },
-        b'A' as i8,
         0,
         0,
     ));
     _mm256_add_epi8(_mm256_shuffle_epi8(offsets, reduced), indices)
-}
-
-#[target_feature(enable = "ssse3")]
-fn ascii_to_indices_standard(value: __m128i) -> (__m128i, __m128i) {
-    ascii_to_indices_with_symbols(
-        value,
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'+' as i8)),
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8)),
-    )
-}
-
-#[target_feature(enable = "ssse3")]
-fn ascii_to_indices_urlsafe(value: __m128i) -> (__m128i, __m128i) {
-    ascii_to_indices_with_symbols(
-        value,
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'-' as i8)),
-        _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8)),
-    )
-}
-
-#[target_feature(enable = "ssse3")]
-fn ascii_to_indices_mixed(value: __m128i) -> (__m128i, __m128i) {
-    ascii_to_indices_with_symbols(
-        value,
-        _mm_or_si128(
-            _mm_cmpeq_epi8(value, _mm_set1_epi8(b'+' as i8)),
-            _mm_cmpeq_epi8(value, _mm_set1_epi8(b'-' as i8)),
-        ),
-        _mm_or_si128(
-            _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8)),
-            _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8)),
-        ),
-    )
-}
-
-#[target_feature(enable = "ssse3")]
-fn ascii_to_indices_with_symbols(
-    value: __m128i,
-    special_62: __m128i,
-    special_63: __m128i,
-) -> (__m128i, __m128i) {
-    let upper = between(value, b'A', b'Z');
-    let lower = between(value, b'a', b'z');
-    let digit = between(value, b'0', b'9');
-
-    let mut indices = _mm_sub_epi8(value, _mm_set1_epi8(b'A' as i8));
-    indices = select(
-        lower,
-        _mm_sub_epi8(value, _mm_set1_epi8((b'a' - 26) as i8)),
-        indices,
-    );
-    indices = select(digit, _mm_add_epi8(value, _mm_set1_epi8(4)), indices);
-    indices = select(special_62, _mm_set1_epi8(62), indices);
-    indices = select(special_63, _mm_set1_epi8(63), indices);
-    (
-        indices,
-        _mm_or_si128(
-            _mm_or_si128(upper, lower),
-            _mm_or_si128(digit, _mm_or_si128(special_62, special_63)),
-        ),
-    )
-}
-
-#[target_feature(enable = "ssse3")]
-fn between(value: __m128i, lower: u8, upper: u8) -> __m128i {
-    let above_lower = _mm_cmpgt_epi8(value, _mm_set1_epi8((lower - 1) as i8));
-    let below_upper = _mm_cmpgt_epi8(_mm_set1_epi8((upper + 1) as i8), value);
-    _mm_and_si128(above_lower, below_upper)
-}
-
-#[target_feature(enable = "ssse3")]
-fn select(mask: __m128i, yes: __m128i, no: __m128i) -> __m128i {
-    _mm_or_si128(_mm_and_si128(mask, yes), _mm_andnot_si128(mask, no))
 }
 
 #[target_feature(enable = "ssse3")]

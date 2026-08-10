@@ -279,6 +279,81 @@ fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(scalar_mixed, [0xfb, 0xff, 0xff]);
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
+    if !std::is_x86_feature_detected!("avx2") {
+        return;
+    }
+
+    const GUARD: usize = 32;
+    const CANARY: u8 = 0xa5;
+
+    // 32 activates the special first load, 52 activates the first shifted
+    // load, and 124 activates the four-block unrolled shifted loop.
+    for length in (0..=160).chain([191, 192, 195, 196, 219, 220, 255, 256]) {
+        let mut guarded_input = vec![CANARY; GUARD + length + GUARD];
+        for (index, byte) in guarded_input[GUARD..GUARD + length].iter_mut().enumerate() {
+            *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
+        }
+        let input = &guarded_input[GUARD..GUARD + length];
+
+        for urlsafe in [false, true] {
+            let expected = if urlsafe {
+                base64::engine::general_purpose::URL_SAFE.encode(input)
+            } else {
+                base64::engine::general_purpose::STANDARD.encode(input)
+            };
+            let mut guarded_output = vec![CANARY; GUARD + expected.len() + GUARD];
+            let output = &mut guarded_output[GUARD..GUARD + expected.len()];
+            let consumed = encode_with_backend(input, output, Backend::Avx2, urlsafe);
+            let simd_output_len = consumed / 3 * 4;
+            let avx2_blocks = if length >= 32 { (length - 4) / 24 } else { 0 };
+            let remaining = length - avx2_blocks * 24;
+            let ssse3_blocks = if remaining >= 16 {
+                (remaining - 4) / 12
+            } else {
+                0
+            };
+
+            assert_eq!(
+                consumed,
+                avx2_blocks * 24 + ssse3_blocks * 12,
+                "consumed length={length} urlsafe={urlsafe}"
+            );
+
+            assert_eq!(
+                &output[..simd_output_len],
+                &expected.as_bytes()[..simd_output_len],
+                "SIMD prefix length={length} urlsafe={urlsafe}"
+            );
+            assert!(
+                output[simd_output_len..].iter().all(|&byte| byte == CANARY),
+                "SIMD suffix length={length} urlsafe={urlsafe}"
+            );
+
+            encode_scalar(&input[consumed..], &mut output[simd_output_len..], urlsafe);
+            assert_eq!(
+                output,
+                expected.as_bytes(),
+                "length={length} urlsafe={urlsafe}"
+            );
+            assert!(guarded_output[..GUARD].iter().all(|&byte| byte == CANARY));
+            assert!(
+                guarded_output[GUARD + expected.len()..]
+                    .iter()
+                    .all(|&byte| byte == CANARY)
+            );
+            assert!(guarded_input[..GUARD].iter().all(|&byte| byte == CANARY));
+            assert!(
+                guarded_input[GUARD + length..]
+                    .iter()
+                    .all(|&byte| byte == CANARY)
+            );
+        }
+    }
+}
+
 #[test]
 fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     for backend in [
@@ -297,22 +372,26 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
             (DecodeAlphabet::Mixed, &MIXED_DECODE),
         ] {
             for byte in 0..=u8::MAX {
-                let encoded = [byte; 16];
-                let mut decoded = [0xa5; 16];
-                let result = decode_with_backend(&encoded, &mut decoded[..12], backend, alphabet);
+                // AVX-512 falls through to AVX2 unless it receives a complete 64-byte block.
+                let encoded_len = if backend == Backend::Avx512 { 64 } else { 16 };
+                let decoded_len = encoded_len / 4 * 3;
+                let encoded = vec![byte; encoded_len];
+                let mut decoded = vec![0xa5; decoded_len + DECODE_STORE_PADDING];
+                let result =
+                    decode_with_backend(&encoded, &mut decoded[..decoded_len], backend, alphabet);
                 let value = table[byte as usize];
                 if value == INVALID_VALUE {
                     assert_eq!(result, Err(Base64Error::InvalidInput));
                     continue;
                 }
 
-                assert_eq!(result, Ok((16, 12)));
+                assert_eq!(result, Ok((encoded_len, decoded_len)));
                 let expected = [
                     (value << 2) | (value >> 4),
                     (value << 4) | (value >> 2),
                     (value << 6) | value,
                 ];
-                assert_eq!(&decoded[..12], expected.repeat(4));
+                assert_eq!(&decoded[..decoded_len], expected.repeat(encoded_len / 4));
 
                 if !matches!(alphabet, DecodeAlphabet::Mixed) {
                     let padded = unsafe {
@@ -324,8 +403,8 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
                             true,
                         )
                     };
-                    assert_eq!(padded, Ok((16, 12)));
-                    assert_eq!(&decoded[..12], expected.repeat(4));
+                    assert_eq!(padded, Ok((encoded_len, decoded_len)));
+                    assert_eq!(&decoded[..decoded_len], expected.repeat(encoded_len / 4));
                 }
             }
         }
@@ -367,23 +446,23 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
     }
     assert_eq!(indices, expected);
 
-    let mut lane_packed = [0_u8; 64];
+    let packed = core::array::from_fn::<_, 64, _>(|index| index as u8);
+    let mut expected_decoded = Vec::with_capacity(48);
     for lane in 0..4 {
-        for byte in 0..12 {
-            lane_packed[lane * 16 + byte] = (lane * 12 + byte) as u8;
+        for group in 0..4 {
+            let source = lane * 16 + group * 4;
+            expected_decoded.extend_from_slice(&[
+                packed[source + 2],
+                packed[source + 1],
+                packed[source],
+            ]);
         }
-        assert_eq!(
-            &x86_avx512::PACK_SHUFFLE[lane * 16..lane * 16 + 16],
-            &[
-                2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, 0x80, 0x80, 0x80, 0x80
-            ]
-        );
     }
-    let compacted: Vec<u8> = x86_avx512::COMPACT_SHUFFLE[..48]
+    let decoded: Vec<u8> = x86_avx512::DECODE_SHUFFLE[..48]
         .iter()
-        .map(|&index| lane_packed[index as usize])
+        .map(|&index| packed[index as usize])
         .collect();
-    assert_eq!(compacted, (0..48).collect::<Vec<u8>>());
+    assert_eq!(decoded, expected_decoded);
 }
 
 #[test]
@@ -507,6 +586,38 @@ fn buffer_apis_respect_exact_slice_boundaries() {
             assert!(decoded[..GUARD].iter().all(|&byte| byte == CANARY));
             assert!(decoded[GUARD + length..].iter().all(|&byte| byte == CANARY));
         }
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_interior_stores_respect_exact_slice_boundaries() {
+    if !backend_supported(Backend::Avx2) {
+        return;
+    }
+
+    const GUARD: usize = 32;
+    const CANARY: u8 = 0xa5;
+
+    for length in (24..=384).step_by(24) {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&input);
+        let mut output = vec![CANARY; GUARD + length + GUARD];
+
+        let offsets = decode_with_backend(
+            encoded.as_bytes(),
+            &mut output[GUARD..GUARD + length],
+            Backend::Avx2,
+            DecodeAlphabet::Standard,
+        )
+        .unwrap();
+
+        assert_eq!(offsets, (encoded.len(), length), "length={length}");
+        assert_eq!(&output[GUARD..GUARD + length], input);
+        assert!(output[..GUARD].iter().all(|&byte| byte == CANARY));
+        assert!(output[GUARD + length..].iter().all(|&byte| byte == CANARY));
     }
 }
 

@@ -19,6 +19,7 @@ const MIXED_LOW_CLASSES: [u8; 16] = [
 ];
 const STANDARD_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
 const URLSAFE_OFFSETS: [u8; 16] = [0, 0, 17, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
+const MIXED_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 17, 224, 0, 0, 0, 0, 0, 0];
 
 #[derive(Clone, Copy)]
 struct DecodeTables {
@@ -113,45 +114,47 @@ pub(super) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
     let mut source = 0;
     let mut destination = 0;
     while source + 256 <= input.len() {
-        unsafe {
-            decode_64::<URLSAFE, MIXED>(
-                input.as_ptr().add(source),
-                output.add(destination),
-                tables,
-            )?
+        let first_errors = unsafe {
+            decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination), tables)
         };
-        unsafe {
+        let second_errors = unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 64),
                 output.add(destination + 48),
                 tables,
-            )?
+            )
         };
-        unsafe {
+        let third_errors = unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 128),
                 output.add(destination + 96),
                 tables,
-            )?
+            )
         };
-        unsafe {
+        let fourth_errors = unsafe {
             decode_64::<URLSAFE, MIXED>(
                 input.as_ptr().add(source + 192),
                 output.add(destination + 144),
                 tables,
-            )?
+            )
         };
+        let errors = vorrq_u8(
+            vorrq_u8(first_errors, second_errors),
+            vorrq_u8(third_errors, fourth_errors),
+        );
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
         source += 256;
         destination += 192;
     }
     while source + 64 <= input.len() {
-        unsafe {
-            decode_64::<URLSAFE, MIXED>(
-                input.as_ptr().add(source),
-                output.add(destination),
-                tables,
-            )?
+        let errors = unsafe {
+            decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), output.add(destination), tables)
         };
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
         source += 64;
         destination += 48;
     }
@@ -177,8 +180,8 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     tables: DecodeTables,
 ) -> Result<(), Base64Error> {
     let input = unsafe { vld1q_u8(input) };
-    let (indices, valid) = decode_indices::<URLSAFE, MIXED>(input, tables);
-    if vminvq_u8(valid) != u8::MAX {
+    let (indices, errors) = decode_indices::<URLSAFE, MIXED>(input, tables);
+    if vmaxvq_u8(errors) != 0 {
         return Err(Base64Error::InvalidInput);
     }
 
@@ -208,19 +211,16 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
     input: *const u8,
     output: *mut u8,
     tables: DecodeTables,
-) -> Result<(), Base64Error> {
+) -> uint8x16_t {
     let input = unsafe { vld4q_u8(input) };
-    let (first, first_valid) = decode_indices::<URLSAFE, MIXED>(input.0, tables);
-    let (second, second_valid) = decode_indices::<URLSAFE, MIXED>(input.1, tables);
-    let (third, third_valid) = decode_indices::<URLSAFE, MIXED>(input.2, tables);
-    let (fourth, fourth_valid) = decode_indices::<URLSAFE, MIXED>(input.3, tables);
-    let valid = vandq_u8(
-        vandq_u8(first_valid, second_valid),
-        vandq_u8(third_valid, fourth_valid),
+    let (first, first_errors) = decode_indices::<URLSAFE, MIXED>(input.0, tables);
+    let (second, second_errors) = decode_indices::<URLSAFE, MIXED>(input.1, tables);
+    let (third, third_errors) = decode_indices::<URLSAFE, MIXED>(input.2, tables);
+    let (fourth, fourth_errors) = decode_indices::<URLSAFE, MIXED>(input.3, tables);
+    let errors = vorrq_u8(
+        vorrq_u8(first_errors, second_errors),
+        vorrq_u8(third_errors, fourth_errors),
     );
-    if vminvq_u8(valid) != u8::MAX {
-        return Err(Base64Error::InvalidInput);
-    }
 
     let decoded = uint8x16x3_t(
         vorrq_u8(vshlq_n_u8::<2>(first), vshrq_n_u8::<4>(second)),
@@ -228,7 +228,7 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
         vorrq_u8(vshlq_n_u8::<6>(third), fourth),
     );
     unsafe { vst3q_u8(output, decoded) };
-    Ok(())
+    errors
 }
 
 #[target_feature(enable = "neon")]
@@ -243,33 +243,32 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
         vqtbl1q_u8(tables.high_classes, high_nibbles),
         vqtbl1q_u8(tables.low_classes, low_nibbles),
     );
-    let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
-    let offset_indices = if MIXED || !URLSAFE {
+    let offset_indices = if MIXED {
+        let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
+        let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
+        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
+        let offset_indices = vaddq_u8(high_nibbles, slash);
+        let offset_indices = vbslq_u8(dash, vdupq_n_u8(8), offset_indices);
+        vbslq_u8(underscore, vdupq_n_u8(9), offset_indices)
+    } else if !URLSAFE {
+        let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
         vaddq_u8(high_nibbles, slash)
     } else {
         high_nibbles
     };
     let mut indices = vaddq_u8(value, vqtbl1q_u8(tables.offsets, offset_indices));
-    if MIXED {
-        let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
-        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
-        let corrections = vorrq_u8(
-            vandq_u8(dash, vdupq_n_u8(254)),
-            vandq_u8(underscore, vdupq_n_u8(33)),
-        );
-        indices = vaddq_u8(indices, corrections);
-    } else if URLSAFE {
+    if URLSAFE && !MIXED {
         let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
         indices = vaddq_u8(indices, vandq_u8(underscore, vdupq_n_u8(33)));
     }
-    (indices, vceqq_u8(errors, vdupq_n_u8(0)))
+    (indices, errors)
 }
 
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
     let (high_classes, low_classes, offsets) = if MIXED {
-        (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &STANDARD_OFFSETS)
+        (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &MIXED_OFFSETS)
     } else if URLSAFE {
         (
             &URLSAFE_HIGH_CLASSES,

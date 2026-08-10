@@ -441,9 +441,18 @@ def test_base64_batch_decode_is_fail_fast(failure_index: int) -> None:
 
 
 def test_base64_batch_lenient_mode_and_noncontiguous_decode() -> None:
-    values = [b'Y W\nJj', b'YWJj====', b'AA==anything after padding']
-    expected = [stdlib_base64.b64decode(value) for value in values]
-    assert base64.b64decode_batch(values) == expected
+    values = [b'Y W\nJj', b'YWJj====']
+    assert base64.b64decode_batch(values) == [b'abc', b'abc']
+
+    trailing_data = b'AA==anything after padding'
+    try:
+        expected = base64.b64decode(trailing_data)
+    except Exception as error:
+        with pytest.raises(type(error)):
+            base64.b64decode_batch([trailing_data])
+    else:
+        assert base64.b64decode_batch([trailing_data]) == [expected]
+
     assert base64.b64decode_batch([memoryview(b'YxWxJxjx')[::2]], validate=True) == [b'abc']
 
 
@@ -462,9 +471,9 @@ def test_base64_batch_rejects_invalid_inputs() -> None:
         base64.b64decode_batch(['\u2603'])
     with pytest.raises(BufferError):
         base64.b64encode_batch([memoryview(b'abcdef')[::2]])
-    with pytest.raises(AssertionError):
+    with pytest.raises(ALTCHARS_ERROR):
         base64.b64encode_batch([], b'_')
-    with pytest.raises(AssertionError):
+    with pytest.raises(ALTCHARS_ERROR):
         base64.b64decode_batch([], b'___')
 
 

@@ -4,18 +4,117 @@ run-name: Release / ${{ github.ref_name }}
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to increment
+        required: true
+        type: choice
+        options: [major, minor, patch]
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Prepare / version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      ref: ${{ steps.version.outputs.ref }}
+    steps:
+      - name: Checkout main
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Rust
+        if: github.event_name == 'workflow_dispatch'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Bump version, commit, and tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current="$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)"
+          IFS=. read -r major minor patch <<< "$current"
+          case "${{ inputs.bump }}" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            patch) next="$major.$minor.$((patch + 1))" ;;
+          esac
+          tag="v$next"
+
+          if [[ -z "$current" || ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Cargo.toml does not contain a valid release version" >&2
+            exit 1
+          fi
+          if ! grep -qx "version = \"$current\"" pyproject.toml; then
+            echo "pyproject.toml version does not match Cargo.toml" >&2
+            exit 1
+          fi
+          if git rev-parse --verify --quiet "refs/tags/$tag"; then
+            echo "Tag $tag already exists" >&2
+            exit 1
+          fi
+
+          sed -i "0,/^version = \"$current\"$/s//version = \"$next\"/" Cargo.toml
+          sed -i "0,/^version = \"$current\"$/s//version = \"$next\"/" pyproject.toml
+          cargo check --quiet
+
+          git config user.name 'hashcodecs-github-actions[bot]'
+          git config user.email 'hashcodecs-github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml Cargo.lock pyproject.toml
+          git commit -m "release: version $next"
+          git push origin HEAD:main
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate
+    needs: prepare
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+
+  tag:
+    name: Tag / version
+    needs: [prepare, validate]
+    if: always() && needs.prepare.result == 'success' && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Create and push tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name 'hashcodecs-github-actions[bot]'
+          git config user.email 'hashcodecs-github-actions[bot]@users.noreply.github.com'
+          git tag -a "${{ needs.prepare.outputs.tag }}" -m "hashcodecs ${{ needs.prepare.outputs.tag }}"
+          git push origin "${{ needs.prepare.outputs.tag }}"
 
   wheels:
     name: Wheel / ${{ matrix.os }}
-    needs: validate
+    needs: [prepare, tag]
     strategy:
       fail-fast: true
       matrix:
@@ -24,6 +123,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Set up Rust
         if: runner.os != 'Linux'
@@ -47,11 +148,13 @@ jobs:
 
   source:
     name: Source Distribution
-    needs: validate
+    needs: [prepare, tag]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -67,7 +170,7 @@ jobs:
 
   publish:
     name: Publish / PyPI
-    needs: [wheels, source]
+    needs: [prepare, wheels, source]
     runs-on: ubuntu-latest
     environment: pypi
     steps:
@@ -94,7 +197,7 @@ jobs:
 
   github_release:
     name: Publish / GitHub Release
-    needs: publish
+    needs: [prepare, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,7 +216,7 @@ jobs:
           path: dist
 
       - name: Create release, changelog, and assets
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag --title "hashcodecs $GITHUB_REF_NAME"
+        run: gh release create "${{ needs.prepare.outputs.tag }}" dist/* --generate-notes --verify-tag --title "hashcodecs ${{ needs.prepare.outputs.tag }}"
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}

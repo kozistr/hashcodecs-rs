@@ -39,9 +39,7 @@ def standard_b64decode_into(s, output: bytearray) -> int:
 
 def urlsafe_b64encode(s, *, padded: bool = True) -> bytes:
     """Encode *s* with the URL-safe Base64 alphabet."""
-    if padded:
-        return b64encode(s, b'-_')
-    return b64encode(s, b'-_', padded=False)
+    return b64encode(s, b'-_', padded=padded)
 
 
 def urlsafe_b64encode_batch(items) -> list[bytes]:
@@ -51,16 +49,12 @@ def urlsafe_b64encode_batch(items) -> list[bytes]:
 
 def urlsafe_b64encode_into(s, output: bytearray, *, padded: bool = True) -> int:
     """Encode *s* with the URL-safe Base64 alphabet into *output*."""
-    if padded:
-        return b64encode_into(s, output, b'-_')
-    return b64encode_into(s, output, b'-_', padded=False)
+    return b64encode_into(s, output, b'-_', padded=padded)
 
 
 def urlsafe_b64decode(s, *, padded: bool = _URLSAFE_PADDED_DEFAULT) -> bytes:
     """Decode *s* with the URL-safe Base64 alphabet."""
-    if padded:
-        return b64decode(s, b'-_')
-    return b64decode(s, b'-_', padded=False)
+    return b64decode(s, b'-_', padded=padded)
 
 
 def urlsafe_b64decode_batch(items) -> list[bytes]:
@@ -70,9 +64,7 @@ def urlsafe_b64decode_batch(items) -> list[bytes]:
 
 def urlsafe_b64decode_into(s, output: bytearray, *, padded: bool = _URLSAFE_PADDED_DEFAULT) -> int:
     """Decode URL-safe Base64 *s* into *output*."""
-    if padded:
-        return b64decode_into(s, output, b'-_')
-    return b64decode_into(s, output, b'-_', padded=False)
+    return b64decode_into(s, output, b'-_', padded=padded)
 
 
 __all__ = [

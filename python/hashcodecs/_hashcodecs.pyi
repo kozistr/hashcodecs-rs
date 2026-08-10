@@ -1,17 +1,38 @@
 from _typeshed import ReadableBuffer
 
-def b64encode(s: ReadableBuffer, altchars: ReadableBuffer | None = None) -> bytes: ...
-def b64encode_into(s: ReadableBuffer, output: bytearray, altchars: ReadableBuffer | None = None) -> int: ...
+def b64encode(
+    s: ReadableBuffer,
+    altchars: ReadableBuffer | None = None,
+    *,
+    padded: bool = True,
+    wrapcol: int = 0,
+) -> bytes: ...
+def b64encode_into(
+    s: ReadableBuffer,
+    output: bytearray,
+    altchars: ReadableBuffer | None = None,
+    *,
+    padded: bool = True,
+    wrapcol: int = 0,
+) -> int: ...
 def b64decode(
     s: str | ReadableBuffer,
     altchars: str | ReadableBuffer | None = None,
-    validate: bool = False,
+    validate: bool = ...,
+    *,
+    padded: bool = True,
+    ignorechars: ReadableBuffer = ...,
+    canonical: bool = False,
 ) -> bytes: ...
 def b64decode_into(
     s: str | ReadableBuffer,
     output: bytearray,
     altchars: str | ReadableBuffer | None = None,
-    validate: bool = False,
+    validate: bool = ...,
+    *,
+    padded: bool = True,
+    ignorechars: ReadableBuffer = ...,
+    canonical: bool = False,
 ) -> int: ...
 def murmur3_32(s: ReadableBuffer, seed: int = 0) -> int: ...
 def murmur3_x86_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes: ...

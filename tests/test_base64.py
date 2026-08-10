@@ -1,11 +1,16 @@
 import base64 as stdlib_base64
 import binascii
+import sys
+import warnings
 from collections.abc import Callable
 from typing import Any
 
 import hashcodecs
 import hashcodecs.base64 as base64
 import pytest
+
+PYTHON_315 = sys.version_info >= (3, 15)
+ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 
 
 @pytest.mark.parametrize('payload', [b'', b'a', b'ab', b'abc', bytes(range(256))])
@@ -34,9 +39,13 @@ def test_base64_variants_and_lenient_mode() -> None:
         stdlib_base64.b64decode, trailing_data, None, False
     )
     assert base64.b64decode(b'AA=\n=') == b'\x00'
-    assert base64.b64decode(b'++8=', b'-_', validate=True) == b'\xfb\xef'
-    assert base64.b64decode(b'//8=', b'-_', validate=True) == b'\xff\xff'
-    assert base64.b64decode(b'+-8=', b'-_', validate=True) == stdlib_base64.b64decode(b'+-8=', b'-_', validate=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert base64.b64decode(b'++8=', b'-_', validate=True) == b'\xfb\xef'
+        assert base64.b64decode(b'//8=', b'-_', validate=True) == b'\xff\xff'
+        assert base64.b64decode(b'+-8=', b'-_', validate=True) == stdlib_base64.b64decode(
+            b'+-8=', b'-_', validate=True
+        )
     assert base64.b64decode(b'-_8=', '-_', validate=True) == b'\xfb\xff'
     assert base64.b64decode(b'++8=', b'++') == stdlib_base64.b64decode(b'++8=', b'++')
     assert base64.b64decode(b'++8=', b'++', validate=True) == stdlib_base64.b64decode(b'++8=', b'++', validate=True)
@@ -123,7 +132,7 @@ def test_base64_into_handles_aliases_and_every_short_length() -> None:
         (b'YWJj!', {'validate': True}, binascii.Error),
         (b'abc', {}, binascii.Error),
         ('\u2603', {}, ValueError),
-        (b'abc', {'altchars': b'x'}, AssertionError),
+        (b'abc', {'altchars': b'x'}, ALTCHARS_ERROR),
         ([65, 66], {}, TypeError),
     ],
 )
@@ -138,13 +147,15 @@ def test_encode_requires_contiguous_buffers() -> None:
         base64.b64encode(noncontiguous)
     with pytest.raises(BufferError):
         base64.b64encode(b'abc', memoryview(b'_-x_')[::2])
-    with pytest.raises(AssertionError):
+    with pytest.raises(ALTCHARS_ERROR):
         base64.b64encode(b'abc', b'_')
 
 
 def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
     try:
-        return function(value, altchars, validate=validate)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return function(value, altchars, validate=validate)
     except Exception as error:
         return type(error)
 
@@ -152,7 +163,9 @@ def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars:
 def _into_outcome(value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
     output = bytearray(len(value))
     try:
-        written = base64.b64decode_into(value, output, altchars, validate=validate)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            written = base64.b64decode_into(value, output, altchars, validate=validate)
         return bytes(output[:written])
     except Exception as error:
         return type(error)
@@ -231,3 +244,136 @@ def test_large_base64_calls_cross_the_gil_release_threshold() -> None:
     encoded = stdlib_base64.b64encode(payload)
     assert base64.b64encode(payload) == encoded
     assert base64.b64decode(encoded) == payload
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_encode_options_match_cpython() -> None:
+    for length in range(129):
+        payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
+        for altchars in (None, b'-_', b'@#'):
+            for padded in (False, True):
+                for wrapcol in (0, 1, 3, 4, 5, 7, 8, 11, 12, 76, 80, 1000):
+                    expected = stdlib_base64.b64encode(
+                        payload,
+                        altchars,
+                        padded=padded,
+                        wrapcol=wrapcol,
+                    )
+                    assert base64.b64encode(payload, altchars, padded=padded, wrapcol=wrapcol) == expected
+                    output = bytearray([0xA5] * (len(expected) + 1))
+                    written = base64.b64encode_into(
+                        payload,
+                        output,
+                        altchars,
+                        padded=padded,
+                        wrapcol=wrapcol,
+                    )
+                    assert bytes(output[:written]) == expected
+                    assert output[written] == 0xA5
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_encode_option_errors_match_cpython() -> None:
+    for kwargs in ({'wrapcol': -1}, {'wrapcol': 1.5}, {'wrapcol': None}, {'wrapcol': 2**1000}):
+        expected = _keyword_outcome(stdlib_base64.b64encode, b'abc', kwargs)
+        assert _keyword_outcome(base64.b64encode, b'abc', kwargs) == expected
+    assert base64.b64encode(b'a', padded=[]) == stdlib_base64.b64encode(b'a', padded=[])
+
+
+def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[str, object]) -> Any:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return function(value, **kwargs)
+    except Exception as error:
+        return type(error)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+@pytest.mark.parametrize(
+    ('value', 'altchars', 'kwargs'),
+    [
+        (b'AA', None, {'padded': False}),
+        (b'AAA', None, {'padded': False, 'validate': True}),
+        (b'AA=', None, {'padded': False}),
+        (b'AA=', None, {'padded': False, 'validate': True}),
+        (b'Y WJj', None, {'ignorechars': b' '}),
+        (b'Y WJj', None, {'ignorechars': b' ', 'validate': False}),
+        (b'Y WJj', None, {'ignorechars': b''}),
+        (b'AB==', None, {'canonical': True}),
+        (b'AA==', None, {'canonical': True}),
+        (b'AP', None, {'padded': False, 'canonical': True}),
+        (b'@#8', b'@#', {'padded': False, 'ignorechars': b''}),
+        (b'++8=', b'-_', {'ignorechars': b''}),
+    ],
+)
+def test_python_315_decode_options_match_cpython(
+    value: bytes,
+    altchars: bytes | None,
+    kwargs: dict[str, object],
+) -> None:
+    expected = _decode_keyword_outcome(stdlib_base64.b64decode, value, altchars, kwargs)
+    actual = _decode_keyword_outcome(base64.b64decode, value, altchars, kwargs)
+    assert actual == expected
+
+    output = bytearray(len(value) + 1)
+    try:
+        written = base64.b64decode_into(value, output, altchars, **kwargs)
+        into = bytes(output[:written])
+    except Exception as error:
+        into = type(error)
+    assert into == expected
+
+
+def _decode_keyword_outcome(
+    function: Callable[..., bytes],
+    value: bytes,
+    altchars: bytes | None,
+    kwargs: dict[str, object],
+) -> Any:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return function(value, altchars, **kwargs)
+    except Exception as error:
+        return type(error)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_ignorechars_and_altchar_warnings() -> None:
+    assert base64.b64decode(b'Y WJj', ignorechars=memoryview(b' ')) == b'abc'
+    with pytest.raises(TypeError):
+        base64.b64decode(b'YWJj', ignorechars=None)
+    with pytest.warns(FutureWarning, match="invalid character '\\+'"):
+        assert base64.b64decode(b'++8=', b'-_') == b'\xfb\xef'
+    with pytest.warns(DeprecationWarning, match="invalid character '/'"):
+        assert base64.b64decode(b'//8=', b'-_', validate=True) == b'\xff\xff'
+
+
+def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
+    assert base64.urlsafe_b64encode(b'\xfb\xff', padded=False) == b'-_8'
+    assert base64.urlsafe_b64decode(b'-_8', padded=False) == b'\xfb\xff'
+    assert base64.urlsafe_b64decode(b'-_8=', padded=True) == b'\xfb\xff'
+
+    encoded = bytearray(4)
+    assert base64.urlsafe_b64encode_into(b'\xfb\xff', encoded, padded=False) == 3
+    assert encoded[:3] == b'-_8'
+    decoded = bytearray(2)
+    assert base64.urlsafe_b64decode_into(b'-_8', decoded, padded=False) == 2
+    assert decoded == b'\xfb\xff'
+    assert base64.urlsafe_b64decode_into(b'-_8=', decoded, padded=True) == 2
+    assert decoded == b'\xfb\xff'
+
+    if PYTHON_315:
+        assert base64.urlsafe_b64decode(b'-_8') == b'\xfb\xff'
+    else:
+        with pytest.raises(binascii.Error):
+            base64.urlsafe_b64decode(b'-_8')
+
+
+def test_python_315_decode_options_are_backported() -> None:
+    assert base64.b64decode(b'Y WJj', ignorechars=b' ') == b'abc'
+    assert base64.b64decode(b'@#8', b'@#', padded=False, ignorechars=b'') == b'\xfb\xff'
+    assert base64.b64decode(b'AA', padded=False, canonical=True) == b'\x00'
+    with pytest.raises(binascii.Error):
+        base64.b64decode(b'AB', padded=False, canonical=True)

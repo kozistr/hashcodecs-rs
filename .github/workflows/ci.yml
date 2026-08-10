@@ -121,7 +121,7 @@ jobs:
       - name: Test Base64 with AddressSanitizer
         env:
           RUSTFLAGS: "-Zsanitizer=address"
-        run: cargo test -Zbuild-std --target x86_64-unknown-linux-gnu base64::tests::
+        run: "cargo test -Zbuild-std --target x86_64-unknown-linux-gnu base64::tests::"
 
   python_quality:
     name: Python / Quality

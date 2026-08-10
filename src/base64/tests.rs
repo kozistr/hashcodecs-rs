@@ -354,6 +354,55 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     }
 }
 
+#[cfg(all(not(coverage), target_arch = "x86_64"))]
+#[test]
+fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
+    if !backend_supported(Backend::Avx2) {
+        return;
+    }
+
+    const GUARD: usize = 32;
+    const CANARY: u8 = 0xa5;
+
+    for length in [64 * 1024, 64 * 1024 + 1, 64 * 1024 + 95, 64 * 1024 + 96] {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
+
+        for urlsafe in [false, true] {
+            let expected = if urlsafe {
+                base64::engine::general_purpose::URL_SAFE.encode(&input)
+            } else {
+                base64::engine::general_purpose::STANDARD.encode(&input)
+            };
+            let mut guarded_output = vec![CANARY; GUARD + expected.len() + GUARD];
+            let output = &mut guarded_output[GUARD..GUARD + expected.len()];
+            let consumed = encode_with_backend(&input, output, Backend::Avx2, urlsafe);
+            let simd_output_len = consumed / 3 * 4;
+
+            assert!(consumed >= 64 * 1024 - 40, "length={length}");
+            assert_eq!(
+                &output[..simd_output_len],
+                &expected.as_bytes()[..simd_output_len],
+                "SIMD prefix length={length} urlsafe={urlsafe}"
+            );
+
+            encode_scalar(&input[consumed..], &mut output[simd_output_len..], urlsafe);
+            assert_eq!(
+                output,
+                expected.as_bytes(),
+                "length={length} urlsafe={urlsafe}"
+            );
+            assert!(guarded_output[..GUARD].iter().all(|&byte| byte == CANARY));
+            assert!(
+                guarded_output[GUARD + expected.len()..]
+                    .iter()
+                    .all(|&byte| byte == CANARY)
+            );
+        }
+    }
+}
+
 #[test]
 fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     for backend in [

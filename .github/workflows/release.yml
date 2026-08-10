@@ -96,6 +96,8 @@ jobs:
     needs: [prepare, validate]
     if: always() && needs.prepare.result == 'success' && needs.validate.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout release commit
         if: github.event_name == 'workflow_dispatch'

@@ -10,16 +10,10 @@
 
 ## Design
 
-- Base64 is implemented in this crate with runtime AVX-512 VBMI, AVX2, SSE4.1, SSSE3, and AArch64 NEON dispatch. Portable wheels select the best available SIMD backend and fall back to scalar code otherwise.
-- Rust callers can reuse their own output buffers through the `*_into` APIs. Every backend writes exactly the documented prefix; it never depends on spare capacity after the destination slice.
-- Rust-owned results use the `mimalloc` global allocator.
-- Every MurmurHash3 variant uses runtime-dispatched AVX2 or SSE4.1 pre-mixing where its measured crossover beats the scalar loop. The x64 128-bit AVX2 kernel also selects BMI2 rotations when available. Ordered state transitions remain reference-compatible, and every variant has a portable scalar fallback.
-- The Python Base64 surface follows the familiar `base64` names. Use `import hashcodecs.base64 as base64` when replacing standard Base64 calls.
-- Python 3.15 Base64 options are supported, including unpadded and wrapped encoding plus configurable padding, ignored characters, and canonical decoding.
-- Python callers can encode or decode an ordered list of independent values in one native call through the `*_batch` APIs. A batch uses one alphabet and validation setting, stops at the first error, and returns `list[bytes]` in input order.
-- Python callers can reuse a `bytearray` through the `*_into` APIs when returned `bytes` ownership is unnecessary. Mutable inputs are borrowed without a copy and keep the GIL to prevent concurrent mutation.
-- Large immutable Python inputs release the GIL. Strict decoding and valid default-mode decoding write directly into the returned `bytes`; malformed default-mode input uses a CPython-compatible lenient fallback.
-- Batch processing is single-threaded and uses memory proportional to its results. Items below 64 KiB retain the GIL; each larger immutable item releases and reacquires it independently. Callers must not mutate the input list concurrently.
+- Runtime-dispatched SIMD Base64 with portable scalar fallbacks.
+- Reference-compatible MurmurHash3 with SIMD acceleration.
+- Rust and Python `*_into` APIs for caller-managed output buffers.
+- A familiar Python Base64 API, including native batch encode and decode operations.
 
 ## Install
 

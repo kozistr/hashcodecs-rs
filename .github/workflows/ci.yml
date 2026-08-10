@@ -13,6 +13,10 @@ on:
       - '**.md'
       - 'docs/**'
   workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -28,6 +32,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -64,6 +70,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -80,6 +88,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -96,6 +106,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -112,6 +124,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up nightly Rust with source
         uses: dtolnay/rust-toolchain@nightly
@@ -129,6 +143,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -155,6 +171,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -190,6 +208,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v9.0.0

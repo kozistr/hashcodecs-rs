@@ -241,10 +241,13 @@ jobs:
         run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100 --cov-report=xml:coverage.xml
 
       - name: Upload Python coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
           flags: python
+          name: python-${{ matrix.os }}-py${{ matrix.python-version }}
+          env_vars: RUNNER_OS,PYTHON_VERSION
           fail_ci_if_error: true
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}

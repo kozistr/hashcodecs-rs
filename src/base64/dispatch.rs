@@ -13,9 +13,25 @@ pub(super) enum Backend {
     Scalar,
     #[cfg_attr(not(any(test, target_arch = "aarch64")), allow(dead_code))]
     Neon,
+    #[cfg_attr(
+        not(any(test, target_arch = "x86", target_arch = "x86_64")),
+        allow(dead_code)
+    )]
     Ssse3,
+    #[cfg_attr(
+        not(any(test, target_arch = "x86", target_arch = "x86_64")),
+        allow(dead_code)
+    )]
     Sse41,
+    #[cfg_attr(
+        not(any(test, target_arch = "x86", target_arch = "x86_64")),
+        allow(dead_code)
+    )]
     Avx2,
+    #[cfg_attr(
+        not(any(test, target_arch = "x86", target_arch = "x86_64")),
+        allow(dead_code)
+    )]
     Avx512,
 }
 
@@ -32,8 +48,18 @@ pub(super) unsafe fn decode_simd_ptr(
     output: *mut u8,
     alphabet: DecodeAlphabet,
     padded_stores: bool,
+    transactional_errors: bool,
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_with_backend_ptr(input, output, selected_backend(), alphabet, padded_stores) }
+    unsafe {
+        decode_with_backend_ptr_mode(
+            input,
+            output,
+            selected_backend(),
+            alphabet,
+            padded_stores,
+            transactional_errors,
+        )
+    }
 }
 
 #[inline]
@@ -187,6 +213,7 @@ pub(super) fn decode_with_backend(
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) unsafe fn decode_with_backend_ptr(
     input: &[u8],
     output: *mut u8,
@@ -194,8 +221,21 @@ pub(super) unsafe fn decode_with_backend_ptr(
     alphabet: DecodeAlphabet,
     padded_stores: bool,
 ) -> Result<(usize, usize), Base64Error> {
+    unsafe { decode_with_backend_ptr_mode(input, output, backend, alphabet, padded_stores, false) }
+}
+
+#[inline]
+unsafe fn decode_with_backend_ptr_mode(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+    alphabet: DecodeAlphabet,
+    padded_stores: bool,
+    transactional_errors: bool,
+) -> Result<(usize, usize), Base64Error> {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
+        let _ = transactional_errors;
         unsafe { decode_x86_alphabet(input, output, backend, alphabet, padded_stores) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -205,19 +245,42 @@ pub(super) unsafe fn decode_with_backend_ptr(
             let _ = padded_stores;
             return std::arch::is_aarch64_feature_detected!("neon")
                 .then(|| unsafe {
-                    match alphabet {
-                        DecodeAlphabet::Standard => {
-                            aarch64::decode_neon::<false, false>(input, output)
+                    if transactional_errors {
+                        match alphabet {
+                            DecodeAlphabet::Standard => {
+                                aarch64::decode_neon_transactional::<false, false>(input, output)
+                            }
+                            DecodeAlphabet::UrlSafe => {
+                                aarch64::decode_neon_transactional::<true, false>(input, output)
+                            }
+                            DecodeAlphabet::Mixed => {
+                                aarch64::decode_neon_transactional::<false, true>(input, output)
+                            }
                         }
-                        DecodeAlphabet::UrlSafe => {
-                            aarch64::decode_neon::<true, false>(input, output)
+                    } else {
+                        match alphabet {
+                            DecodeAlphabet::Standard => {
+                                aarch64::decode_neon::<false, false>(input, output)
+                            }
+                            DecodeAlphabet::UrlSafe => {
+                                aarch64::decode_neon::<true, false>(input, output)
+                            }
+                            DecodeAlphabet::Mixed => {
+                                aarch64::decode_neon::<false, true>(input, output)
+                            }
                         }
-                        DecodeAlphabet::Mixed => aarch64::decode_neon::<false, true>(input, output),
                     }
                 })
                 .unwrap_or(Ok((0, 0)));
         }
-        let _ = (input, output, backend, alphabet, padded_stores);
+        let _ = (
+            input,
+            output,
+            backend,
+            alphabet,
+            padded_stores,
+            transactional_errors,
+        );
         Ok((0, 0))
     }
 }

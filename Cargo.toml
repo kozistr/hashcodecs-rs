@@ -16,10 +16,11 @@ name = "hashcodecs"
 crate-type = ["rlib", "cdylib"]
 
 [features]
-python = ["dep:pyo3"]
+python = ["dep:memchr", "dep:pyo3"]
 extension-module = ["python", "pyo3/extension-module"]
 
 [dependencies]
+memchr = { version = "2.8.0", optional = true }
 mimalloc = "0.1.52"
 pyo3 = { version = "0.29.2", features = ["abi3-py310"], optional = true }
 

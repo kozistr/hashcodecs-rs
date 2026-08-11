@@ -200,6 +200,7 @@ dependencies = [
  "base64-turbo",
  "criterion",
  "fastmurmur3",
+ "memchr",
  "mimalloc",
  "mm3h",
  "murmur3",

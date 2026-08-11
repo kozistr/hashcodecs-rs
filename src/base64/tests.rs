@@ -409,7 +409,7 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     }
 }
 
-#[cfg(all(not(coverage), target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
     if !backend_supported(Backend::Avx2) {

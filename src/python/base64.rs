@@ -265,11 +265,18 @@ fn padded_input(input: &BytesLike<'_, '_>) -> Option<BytesLike<'static, 'static>
     }
 }
 
+fn is_aligned_unpadded(input: &BytesLike<'_, '_>) -> bool {
+    unsafe { input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"=")) }
+}
+
 fn decode_unpadded_with_altchars<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    if is_aligned_unpadded(input) {
+        return decode_strict_with_altchars(py, input, altchars);
+    }
     let Some(input) = padded_input(input) else {
         return Err(decoding_error(py, "Incorrect padding"));
     };
@@ -281,10 +288,7 @@ fn decode_unpadded<'py>(
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let aligned_without_padding = unsafe {
-        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
-    };
-    if aligned_without_padding {
+    if is_aligned_unpadded(input) {
         return decode_strict(py, input, alphabet);
     }
     let Some(input) = padded_input(input) else {
@@ -293,20 +297,17 @@ fn decode_unpadded<'py>(
     decode_strict(py, &input, alphabet)
 }
 
-fn decode_unpadded_into_with_altchars(
+fn decode_strict_into_with_altchars(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    let Some(input) = padded_input(input) else {
-        return Err(Base64Error::InvalidInput);
-    };
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
         .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
     let translated = translated.map(BytesLike::Owned);
-    let direct_input = translated.as_ref().unwrap_or(&input);
+    let direct_input = translated.as_ref().unwrap_or(input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
     } else {
@@ -315,16 +316,28 @@ fn decode_unpadded_into_with_altchars(
     decode_strict_into(direct_input, output, alphabet, transactional_errors)
 }
 
+fn decode_unpadded_into_with_altchars(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if is_aligned_unpadded(input) {
+        return decode_strict_into_with_altchars(input, output, altchars, transactional_errors);
+    }
+    let Some(input) = padded_input(input) else {
+        return Err(Base64Error::InvalidInput);
+    };
+    decode_strict_into_with_altchars(&input, output, altchars, transactional_errors)
+}
+
 fn decode_unpadded_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    let aligned_without_padding = unsafe {
-        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
-    };
-    if aligned_without_padding {
+    if is_aligned_unpadded(input) {
         return decode_strict_into(input, output, alphabet, transactional_errors);
     }
     let Some(input) = padded_input(input) else {
@@ -916,19 +929,8 @@ fn decode_parsed_into(
     }
 
     warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
-    let translated = altchars
-        .filter(|altchars| *altchars != *b"-_")
-        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
-    let translated = translated.map(BytesLike::Owned);
-    let direct_input = translated.as_ref().unwrap_or(input);
-    let alphabet = if altchars == Some(*b"-_") {
-        DecodeAlphabet::Mixed
-    } else {
-        DecodeAlphabet::Standard
-    };
-
     let direct = if ignorechars.is_none() && !canonical && (padded || !strict_mode) {
-        decode_strict_into(direct_input, output, alphabet, transactional_errors)
+        decode_strict_into_with_altchars(input, output, altchars, transactional_errors)
     } else {
         Err(Base64Error::InvalidInput)
     };

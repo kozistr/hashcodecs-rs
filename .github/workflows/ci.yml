@@ -58,7 +58,15 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Check Rust line coverage
-        run: cargo llvm-cov --no-default-features --fail-under-lines 100
+        run: cargo llvm-cov --no-default-features --fail-under-lines 100 --cobertura --output-path coverage.xml
+
+      - name: Upload Rust coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: rust
+          fail_ci_if_error: true
 
   rust_test:
     name: Rust / Test / ${{ matrix.os }}
@@ -230,4 +238,13 @@ jobs:
         run: uv pip install --python .venv --reinstall --no-index --find-links dist hashcodecs
 
       - name: Test Python API and coverage
-        run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
+        run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100 --cov-report=xml:coverage.xml
+
+      - name: Upload Python coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: python
+          fail_ci_if_error: true

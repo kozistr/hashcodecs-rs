@@ -87,6 +87,7 @@ uv run --no-project --with . python benchmarks/python_base64.py
 uv run --no-project --with . python benchmarks/python_base64.py --into
 uv run --no-project --with . python benchmarks/python_base64.py --bytearray-input
 uv run --no-project --with . python benchmarks/python_base64_batch.py
+uv run --no-project --with . python benchmarks/python_base64_batch.py --large
 uv run --no-project --with . python benchmarks/python_murmur3.py
 uv run --no-project --with . python benchmarks/python_murmur3.py --incremental
 ```
@@ -128,18 +129,18 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 | Alphabet | Input | Operation | hashcodecs | CPython `base64` | `pybase64` |
 | --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | 13.57 GiB/s | 0.48 GiB/s | **14.06 GiB/s** |
-|  | 4 KiB | decode | **16.70 GiB/s** | 1.13 GiB/s | 8.47 GiB/s |
-|  | 1 MiB | encode | **3.28 GiB/s** | 0.44 GiB/s | 3.02 GiB/s |
-|  | 1 MiB | decode | **4.02 GiB/s** | 0.95 GiB/s | 3.68 GiB/s |
-|  | 32 MiB | encode | **2.92 GiB/s** | 0.43 GiB/s | 2.84 GiB/s |
-|  | 32 MiB | decode | 3.40 GiB/s | 0.94 GiB/s | **3.69 GiB/s** |
-| URL-safe | 4 KiB | encode | **12.63 GiB/s** | 0.41 GiB/s | 1.19 GiB/s |
-|  | 4 KiB | decode | **11.34 GiB/s** | 0.76 GiB/s | 1.56 GiB/s |
-|  | 1 MiB | encode | **3.24 GiB/s** | 0.36 GiB/s | 0.91 GiB/s |
-|  | 1 MiB | decode | **4.15 GiB/s** | 0.63 GiB/s | 1.45 GiB/s |
-|  | 32 MiB | encode | **3.03 GiB/s** | 0.36 GiB/s | 0.90 GiB/s |
-|  | 32 MiB | decode | **3.40 GiB/s** | 0.61 GiB/s | 1.48 GiB/s |
+| Standard | 4 KiB | encode | 12.71 GiB/s | 0.46 GiB/s | **13.27 GiB/s** |
+|  | 4 KiB | decode | **15.76 GiB/s** | 1.07 GiB/s | 8.07 GiB/s |
+|  | 1 MiB | encode | **3.72 GiB/s** | 0.43 GiB/s | 3.60 GiB/s |
+|  | 1 MiB | decode | **4.60 GiB/s** | 0.94 GiB/s | 4.47 GiB/s |
+|  | 32 MiB | encode | **3.10 GiB/s** | 0.45 GiB/s | 2.83 GiB/s |
+|  | 32 MiB | decode | 3.58 GiB/s | 0.96 GiB/s | **3.64 GiB/s** |
+| URL-safe | 4 KiB | encode | **12.13 GiB/s** | 0.39 GiB/s | 1.12 GiB/s |
+|  | 4 KiB | decode | **10.89 GiB/s** | 0.70 GiB/s | 1.48 GiB/s |
+|  | 1 MiB | encode | **3.43 GiB/s** | 0.36 GiB/s | 0.92 GiB/s |
+|  | 1 MiB | decode | **4.14 GiB/s** | 0.63 GiB/s | 1.49 GiB/s |
+|  | 32 MiB | encode | **2.93 GiB/s** | 0.36 GiB/s | 0.91 GiB/s |
+|  | 32 MiB | decode | **3.57 GiB/s** | 0.60 GiB/s | 1.50 GiB/s |
 
 ## MurmurHash3: Python
 

@@ -409,7 +409,7 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     }
 }
 
-#[cfg(all(not(coverage), target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
     if !backend_supported(Backend::Avx2) {
@@ -650,6 +650,26 @@ fn decode_tables_cover_both_alphabets() {
         }
         assert_eq!(table[b'!' as usize], INVALID_VALUE);
     }
+}
+
+#[test]
+fn transactional_decoder_matches_regular_decoder() {
+    let input: Vec<u8> = (0..96)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect();
+    let encoded = b64encode(&input);
+    let layout = decode_layout(encoded.as_bytes()).unwrap();
+    let mut decoded = vec![0xa5; layout.output_len];
+
+    decode_to_slice_with_layout_and_alphabet_transactional(
+        encoded.as_bytes(),
+        &mut decoded,
+        layout,
+        DecodeAlphabet::Standard,
+    )
+    .unwrap();
+
+    assert_eq!(decoded, input);
 }
 
 #[test]

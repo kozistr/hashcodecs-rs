@@ -702,8 +702,9 @@ def _assert_batch_releases_the_gil(operation: Callable[[], list[bytes]], expecte
 def test_large_base64_batch_crosses_the_gil_release_threshold() -> None:
     payload = bytes(range(256)) * 256
     encoded_item = stdlib_base64.b64encode(payload)
-    payloads = [payload] * 1024
-    encoded = [encoded_item] * 1024
+    # Keep both operations well beyond the scheduler delay on fast SIMD hosts.
+    payloads = [payload] * 2048
+    encoded = [encoded_item] * 2048
 
     _assert_batch_releases_the_gil(lambda: base64.b64encode_batch(payloads), encoded)
     _assert_batch_releases_the_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads)

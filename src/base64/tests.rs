@@ -653,6 +653,26 @@ fn decode_tables_cover_both_alphabets() {
 }
 
 #[test]
+fn transactional_decoder_matches_regular_decoder() {
+    let input: Vec<u8> = (0..96)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect();
+    let encoded = b64encode(&input);
+    let layout = decode_layout(encoded.as_bytes()).unwrap();
+    let mut decoded = vec![0xa5; layout.output_len];
+
+    decode_to_slice_with_layout_and_alphabet_transactional(
+        encoded.as_bytes(),
+        &mut decoded,
+        layout,
+        DecodeAlphabet::Standard,
+    )
+    .unwrap();
+
+    assert_eq!(decoded, input);
+}
+
+#[test]
 fn buffer_apis_respect_exact_slice_boundaries() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;

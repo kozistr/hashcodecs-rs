@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::{output_ptr, pybytes_with_len};
-use crate::base64::{encode_to_slice, encoded_len};
+use crate::base64::{encode_to_ptr, encoded_len};
 use crate::python::DETACH_THRESHOLD;
 use crate::python::buffer::BytesLike;
 
@@ -18,28 +18,30 @@ pub(super) fn encode<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
     let output_len = encoded_output_len(input.len(), padded, wrapcol);
-    let (output, ()) = pybytes_with_len(py, output_len, |output| unsafe {
-        input.with_bytes(|input| {
-            let encode = || {
-                let urlsafe = altchars == Some(*b"-_");
-                encode_configured(input, output, urlsafe, padded, wrapcol);
-                if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
-                    for byte in output {
-                        if *byte == b'+' {
-                            *byte = plus;
-                        } else if *byte == b'/' {
-                            *byte = slash;
+    let (output, ()) = unsafe {
+        pybytes_with_len(py, output_len, |output| {
+            input.with_bytes(|input| {
+                let output_address = output as usize;
+                let encode = move || {
+                    let output = output_address as *mut u8;
+                    let urlsafe = altchars == Some(*b"-_");
+                    encode_configured_ptr(input, output, urlsafe, padded, wrapcol);
+                    if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
+                        // `encode_configured_ptr` initialized the complete allocation.
+                        let output = slice::from_raw_parts_mut(output, output_len);
+                        for byte in output {
+                            if *byte == b'+' {
+                                *byte = plus;
+                            } else if *byte == b'/' {
+                                *byte = slash;
+                            }
                         }
                     }
-                }
-            };
-            if detach {
-                py.detach(encode);
-            } else {
-                encode();
-            }
+                };
+                if detach { py.detach(encode) } else { encode() }
+            })
         })
-    })?;
+    }?;
     Ok(output)
 }
 
@@ -101,10 +103,11 @@ fn encode_slice_into(
     wrapcol: Option<usize>,
 ) -> PyResult<usize> {
     let required = encoded_output_len(input.len(), padded, wrapcol);
-    let output = unsafe { slice::from_raw_parts_mut(output_ptr(output, required)?, required) };
+    let output = output_ptr(output, required)?;
     let urlsafe = altchars == Some(*b"-_");
-    encode_configured(input, output, urlsafe, padded, wrapcol);
+    unsafe { encode_configured_ptr(input, output, urlsafe, padded, wrapcol) };
     if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
+        let output = unsafe { slice::from_raw_parts_mut(output, required) };
         for byte in output {
             if *byte == b'+' {
                 *byte = plus;
@@ -117,47 +120,48 @@ fn encode_slice_into(
 }
 
 #[inline]
-fn encode_unwrapped(input: &[u8], output: &mut [u8], urlsafe: bool, padded: bool) {
+unsafe fn encode_unwrapped_ptr(input: &[u8], output: *mut u8, urlsafe: bool, padded: bool) {
     if padded {
-        encode_to_slice(input, output, urlsafe);
+        unsafe { encode_to_ptr(input, output, urlsafe) };
         return;
     }
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
-    encode_to_slice(
-        &input[..complete_input_len],
-        &mut output[..complete_output_len],
-        urlsafe,
-    );
+    unsafe { encode_to_ptr(&input[..complete_input_len], output, urlsafe) };
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
-        encode_to_slice(tail, &mut encoded_tail, urlsafe);
-        output[complete_output_len..]
-            .copy_from_slice(&encoded_tail[..unpadded_encoded_len(tail.len())]);
+        unsafe { encode_to_ptr(tail, encoded_tail.as_mut_ptr(), urlsafe) };
+        let tail_len = unpadded_encoded_len(tail.len());
+        unsafe {
+            output
+                .add(complete_output_len)
+                .copy_from_nonoverlapping(encoded_tail.as_ptr(), tail_len)
+        };
     }
 }
 
-fn encode_configured(
+unsafe fn encode_configured_ptr(
     mut input: &[u8],
-    mut output: &mut [u8],
+    output: *mut u8,
     urlsafe: bool,
     padded: bool,
     wrapcol: Option<usize>,
 ) {
     let Some(width) = wrapcol else {
-        encode_unwrapped(input, output, urlsafe, padded);
+        unsafe { encode_unwrapped_ptr(input, output, urlsafe, padded) };
         return;
     };
     let input_per_line = width / 4 * 3;
+    let mut destination = 0;
     while encoded_data_len(input.len(), padded) > width {
         let (line_input, rest_input) = input.split_at(input_per_line);
-        let (line_output, rest_output) = output.split_at_mut(width);
-        encode_to_slice(line_input, line_output, urlsafe);
-        rest_output[0] = b'\n';
+        unsafe { encode_to_ptr(line_input, output.add(destination), urlsafe) };
+        destination += width;
+        unsafe { output.add(destination).write(b'\n') };
+        destination += 1;
         input = rest_input;
-        output = &mut rest_output[1..];
     }
-    encode_unwrapped(input, output, urlsafe, padded);
+    unsafe { encode_unwrapped_ptr(input, output.add(destination), urlsafe, padded) };
 }

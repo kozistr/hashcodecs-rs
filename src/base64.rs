@@ -173,7 +173,7 @@ pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
 }
 
 #[inline]
-unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
+pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
     let input_offset = unsafe { encode_simd_ptr(input, output, urlsafe) };
     unsafe {
         encode_scalar_ptr(
@@ -300,12 +300,39 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet(
 }
 
 #[inline]
-unsafe fn decode_to_ptr_with_layout(
+pub(crate) unsafe fn decode_to_ptr_with_layout(
     input: &[u8],
     output: *mut u8,
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
     padded_stores: bool,
+) -> Result<(), Base64Error> {
+    unsafe { decode_to_ptr_with_layout_mode(input, output, layout, alphabet, padded_stores, false) }
+}
+
+#[inline]
+pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
+    input: &[u8],
+    output: &mut [u8],
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+) -> Result<(), Base64Error> {
+    debug_assert_eq!(output.len(), layout.output_len);
+    // Transactional SIMD error handling writes only complete, validated blocks,
+    // so a lenient caller can safely fall back without modifying the suffix.
+    unsafe {
+        decode_to_ptr_with_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false, true)
+    }
+}
+
+#[inline]
+unsafe fn decode_to_ptr_with_layout_mode(
+    input: &[u8],
+    output: *mut u8,
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+    padded_stores: bool,
+    transactional_errors: bool,
 ) -> Result<(), Base64Error> {
     let padding = layout.padding;
     let simd_len = if padding == 0 {
@@ -313,8 +340,15 @@ unsafe fn decode_to_ptr_with_layout(
     } else {
         input.len() - 4
     };
-    let (input_offset, output_offset) =
-        unsafe { decode_simd_ptr(&input[..simd_len], output, alphabet, padded_stores) }?;
+    let (input_offset, output_offset) = unsafe {
+        decode_simd_ptr(
+            &input[..simd_len],
+            output,
+            alphabet,
+            padded_stores,
+            transactional_errors,
+        )
+    }?;
 
     let mut source = input_offset;
     let mut destination = output_offset;

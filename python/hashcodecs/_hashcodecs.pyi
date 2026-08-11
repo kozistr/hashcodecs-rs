@@ -8,6 +8,11 @@ def b64encode(
     wrapcol: int = 0,
 ) -> bytes: ...
 def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None = None) -> list[bytes]: ...
+def b64encode_batch_into(
+    items: list[ReadableBuffer],
+    outputs: list[bytearray],
+    altchars: ReadableBuffer | None = None,
+) -> list[int]: ...
 def b64encode_into(
     s: ReadableBuffer,
     output: bytearray,
@@ -30,6 +35,12 @@ def b64decode_batch(
     altchars: str | ReadableBuffer | None = None,
     validate: bool = False,
 ) -> list[bytes]: ...
+def b64decode_batch_into(
+    items: list[str | ReadableBuffer],
+    outputs: list[bytearray],
+    altchars: str | ReadableBuffer | None = None,
+    validate: bool = False,
+) -> list[int]: ...
 def b64decode_into(
     s: str | ReadableBuffer,
     output: bytearray,

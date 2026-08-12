@@ -8,18 +8,31 @@ Conditions: clean builds, one pinned logical CPU, single-threaded execution, and
 
 | Alphabet | Input | Operation | hashcodecs |
 | --- | --- | --- | ---: |
-| Standard | 4 KiB | encode | **15.02 GiB/s** |
-|  | 4 KiB | decode | **18.15 GiB/s** |
-|  | 1 MiB | encode | **39.76 GiB/s** |
-|  | 1 MiB | decode | **29.26 GiB/s** |
-|  | 32 MiB | encode | **11.34 GiB/s** |
-|  | 32 MiB | decode | **10.72 GiB/s** |
-| URL-safe | 4 KiB | encode | **14.87 GiB/s** |
-|  | 4 KiB | decode | **12.54 GiB/s** |
-|  | 1 MiB | encode | **39.71 GiB/s** |
-|  | 1 MiB | decode | **20.79 GiB/s** |
-|  | 32 MiB | encode | **11.24 GiB/s** |
-|  | 32 MiB | decode | **10.70 GiB/s** |
+| Standard | 4 KiB | encode | **15.52 GiB/s** |
+|  | 4 KiB | decode | **18.66 GiB/s** |
+|  | 1 MiB | encode | **39.91 GiB/s** |
+|  | 1 MiB | decode | **29.32 GiB/s** |
+|  | 32 MiB | encode | **10.92 GiB/s** |
+|  | 32 MiB | decode | **10.40 GiB/s** |
+| URL-safe | 4 KiB | encode | **15.11 GiB/s** |
+|  | 4 KiB | decode | **14.43 GiB/s** |
+|  | 1 MiB | encode | **39.90 GiB/s** |
+|  | 1 MiB | decode | **20.69 GiB/s** |
+|  | 32 MiB | encode | **10.89 GiB/s** |
+|  | 32 MiB | decode | **10.46 GiB/s** |
+
+## Python Memoryview Inputs
+
+Full immutable memoryviews reuse their underlying bytes for inputs of at least 64 KiB.
+
+| Input | Operation | Returned `bytes` | Reusable `bytearray` |
+| --- | --- | ---: | ---: |
+| 4 KiB | encode | 8.20 GiB/s | **8.66 GiB/s** |
+|  | decode | 9.77 GiB/s | **10.30 GiB/s** |
+| 1 MiB | encode | 3.48 GiB/s | **39.67 GiB/s** |
+|  | decode | 4.28 GiB/s | **29.21 GiB/s** |
+| 32 MiB | encode | 2.98 GiB/s | **11.18 GiB/s** |
+|  | decode | 3.50 GiB/s | **10.49 GiB/s** |
 
 ## Python Base64 Batches
 

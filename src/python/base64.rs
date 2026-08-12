@@ -28,7 +28,7 @@ const STANDARD_ALPHABET: &[u8; 64] =
 static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
 
 #[inline]
-fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
+pub(super) fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
     *PYTHON_VERSION.get_or_init(|| {
         let version_info = py.version_info();
         (version_info.major, version_info.minor)
@@ -668,6 +668,48 @@ fn encode_parsed_into(
     encode::encode_into(input, output, altchars, padded, wrapcol)
 }
 
+/// Encode with the standard Base64 alphabet.
+#[pyfunction]
+pub(super) fn standard_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, None, true, None)
+}
+
+/// Encode with the standard Base64 alphabet into a reusable output.
+#[pyfunction]
+pub(super) fn standard_b64encode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(py, s, "s")?;
+    encode_parsed_into(&input, output, None, true, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet.
+#[pyfunction(signature = (s, *, padded=true))]
+pub(super) fn urlsafe_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, Some(*b"-_"), padded, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet into a reusable output.
+#[pyfunction(signature = (s, output, *, padded=true))]
+pub(super) fn urlsafe_b64encode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(py, s, "s")?;
+    encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
+}
+
 #[pyfunction(signature = (s, altchars=None, *, padded=true, wrapcol=0))]
 pub(super) fn b64encode<'py>(
     py: Python<'py>,
@@ -890,6 +932,46 @@ pub(super) fn b64decode<'py>(
     )
 }
 
+/// Decode with the standard Base64 alphabet.
+#[pyfunction]
+pub(super) fn standard_b64decode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed(py, &input, None, false, true, None, false)
+}
+
+/// Decode standard Base64 into a reusable output.
+#[pyfunction]
+pub(super) fn standard_b64decode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+) -> PyResult<usize> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed_into(py, &input, output, None, false, true, None, false)
+}
+
+fn urlsafe_b64decode_impl<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed(py, &input, Some(*b"-_"), false, padded, None, false)
+}
+
+fn urlsafe_b64decode_into_impl(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    padded: bool,
+) -> PyResult<usize> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed_into(py, &input, output, Some(*b"-_"), false, padded, None, false)
+}
+
 /// Decode each ASCII string or bytes-like item and return results in input order.
 ///
 /// ``items`` must be a list. ``altchars`` and ``validate`` apply to every item.
@@ -1058,6 +1140,48 @@ pub(super) fn b64decode_into(
         ignorechars,
         canonical,
     )
+}
+
+#[pyfunction(name = "urlsafe_b64decode", signature = (s, *, padded=true))]
+/// Decode with the URL-safe Base64 alphabet.
+pub(super) fn urlsafe_b64decode_pre_315<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    urlsafe_b64decode_impl(py, s, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode", signature = (s, *, padded=false))]
+/// Decode with the URL-safe Base64 alphabet.
+pub(super) fn urlsafe_b64decode_315<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    urlsafe_b64decode_impl(py, s, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode_into", signature = (s, output, *, padded=true))]
+/// Decode URL-safe Base64 into a reusable output.
+pub(super) fn urlsafe_b64decode_into_pre_315(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    urlsafe_b64decode_into_impl(py, s, output, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode_into", signature = (s, output, *, padded=false))]
+/// Decode URL-safe Base64 into a reusable output.
+pub(super) fn urlsafe_b64decode_into_315(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    urlsafe_b64decode_into_impl(py, s, output, padded)
 }
 
 #[cfg(test)]

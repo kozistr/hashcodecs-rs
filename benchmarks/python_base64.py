@@ -66,6 +66,11 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs with mutable bytearray inputs',
     )
+    mode.add_argument(
+        '--memoryview-input',
+        action='store_true',
+        help='time hashcodecs with full immutable memoryview inputs',
+    )
     args = parser.parse_args()
 
     pin_to_one_cpu()
@@ -106,6 +111,43 @@ def main() -> None:
                     'bytearray decode into',
                     size,
                     lambda standard=mutable_standard, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        standard, output, validate=True
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                continue
+
+            if args.memoryview_input:
+                payload_view = memoryview(payload)
+                standard_view = memoryview(standard)
+                encoded_output = bytearray(len(standard))
+                decoded_output = bytearray(size)
+                benchmark_ours(
+                    'memoryview encode',
+                    size,
+                    lambda payload=payload_view: hashcodecs_base64.b64encode(payload),
+                    standard,
+                )
+                benchmark_ours(
+                    'memoryview decode',
+                    size,
+                    lambda standard=standard_view: hashcodecs_base64.b64decode(standard, validate=True),
+                    payload,
+                )
+                benchmark_into(
+                    'memoryview encode into',
+                    size,
+                    lambda payload=payload_view, output=encoded_output: hashcodecs_base64.b64encode_into(
+                        payload, output
+                    ),
+                    encoded_output,
+                    standard,
+                )
+                benchmark_into(
+                    'memoryview decode into',
+                    size,
+                    lambda standard=standard_view, output=decoded_output: hashcodecs_base64.b64decode_into(
                         standard, output, validate=True
                     ),
                     decoded_output,

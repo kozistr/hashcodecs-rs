@@ -1,14 +1,15 @@
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{
-    PyByteArray, PyByteArrayMethods, PyBytes, PyList, PyMemoryView, PyString, PyTuple,
-};
+use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyMemoryView, PyString};
+
+use super::DETACH_THRESHOLD;
 
 pub(super) enum BytesLike<'a, 'py> {
-    Bytes(&'a Bound<'py, PyBytes>),
+    Bytes(&'a [u8]),
     ByteArray(&'a Bound<'py, PyByteArray>),
-    Copied(Bound<'py, PyBytes>),
+    OwnedBytes(Bound<'py, PyBytes>),
+    OwnedByteArray(Bound<'py, PyByteArray>),
     Text(&'a str),
     Owned(Vec<u8>),
 }
@@ -16,28 +17,36 @@ pub(super) enum BytesLike<'a, 'py> {
 impl BytesLike<'_, '_> {
     pub(super) fn len(&self) -> usize {
         match self {
-            Self::Bytes(bytes) => bytes.as_bytes().len(),
-            Self::ByteArray(bytes) => bytes.len(),
-            Self::Copied(bytes) => bytes.as_bytes().len(),
+            Self::Bytes(bytes) => bytes.len(),
+            Self::ByteArray(value) => value.len(),
+            Self::OwnedBytes(bytes) => bytes.as_bytes().len(),
+            Self::OwnedByteArray(value) => value.len(),
             Self::Text(text) => text.len(),
             Self::Owned(bytes) => bytes.len(),
         }
     }
 
     pub(super) fn detach_safe(&self) -> bool {
-        !matches!(self, Self::ByteArray(_))
+        !matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_))
     }
 
     pub(super) fn aliases(&self, output: &Bound<'_, PyByteArray>) -> bool {
-        matches!(self, Self::ByteArray(input) if input.as_ptr() == output.as_ptr())
+        matches!(
+            self,
+            Self::ByteArray(value) if value.as_ptr() == output.as_ptr()
+        ) || matches!(
+            self,
+            Self::OwnedByteArray(value) if value.as_ptr() == output.as_ptr()
+        )
     }
 
     /// The callback must not run arbitrary Python or release the GIL when the input is mutable.
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
-            Self::Bytes(bytes) => callback(bytes.as_bytes()),
-            Self::ByteArray(bytes) => callback(unsafe { bytes.as_bytes() }),
-            Self::Copied(bytes) => callback(bytes.as_bytes()),
+            Self::Bytes(bytes) => callback(bytes),
+            Self::ByteArray(value) => callback(unsafe { value.as_bytes() }),
+            Self::OwnedBytes(bytes) => callback(bytes.as_bytes()),
+            Self::OwnedByteArray(value) => callback(unsafe { value.as_bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::Owned(bytes) => callback(bytes),
         }
@@ -49,18 +58,10 @@ pub(super) fn bytes_like<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
-        return Err(type_error(argument));
+    if let Some(bytes) = exact_bytes_like(value) {
+        return Ok(bytes);
     }
-    if PyBytes::is_exact_type_of(value) {
-        let bytes = value.cast::<PyBytes>()?;
-        return Ok(BytesLike::Bytes(bytes));
-    }
-    if PyByteArray::is_exact_type_of(value) {
-        let bytes = value.cast::<PyByteArray>()?;
-        return Ok(BytesLike::ByteArray(bytes));
-    }
-    copied_memoryview(value, argument, false).map(BytesLike::Copied)
+    buffer_bytes_like(value, argument, false)
 }
 
 pub(super) fn contiguous_bytes_like<'a, 'py>(
@@ -68,15 +69,10 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    if PyBytes::is_exact_type_of(value) {
-        let bytes = value.cast::<PyBytes>()?;
-        return Ok(BytesLike::Bytes(bytes));
+    if let Some(bytes) = exact_bytes_like(value) {
+        return Ok(bytes);
     }
-    if PyByteArray::is_exact_type_of(value) {
-        let bytes = value.cast::<PyByteArray>()?;
-        return Ok(BytesLike::ByteArray(bytes));
-    }
-    copied_memoryview(value, argument, true).map(BytesLike::Copied)
+    buffer_bytes_like(value, argument, true)
 }
 
 pub(super) fn ascii_or_bytes<'a, 'py>(
@@ -84,8 +80,12 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
+    if let Some(bytes) = exact_bytes_like(value) {
+        return Ok(bytes);
+    }
     if PyString::is_exact_type_of(value) {
-        let text = value.cast::<PyString>()?;
+        // The exact-type check above establishes the unchecked cast's invariant.
+        let text = unsafe { value.cast_unchecked::<PyString>() };
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
         if !text.is_ascii() {
             return Err(ascii_error(argument));
@@ -94,17 +94,75 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     }
     if value.is_instance_of::<PyString>() {
         let encoded = value.call_method1("encode", ("ascii",))?;
-        return copied_memoryview(&encoded, argument, false).map(BytesLike::Copied);
+        return buffer_bytes_like(&encoded, argument, false);
     }
     bytes_like(py, value, argument)
 }
 
-fn copied_memoryview<'py>(
+#[inline]
+fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'a, 'py>> {
+    if PyBytes::is_exact_type_of(value) {
+        // Exact builtins cannot override their storage behavior.
+        let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+        return Some(BytesLike::Bytes(bytes.as_bytes()));
+    }
+    if PyByteArray::is_exact_type_of(value) {
+        let value = unsafe { value.cast_unchecked::<PyByteArray>() };
+        return Some(BytesLike::ByteArray(value));
+    }
+    None
+}
+
+fn buffer_bytes_like<'a, 'py>(
     value: &Bound<'py, PyAny>,
     argument: &str,
     require_contiguous: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
+) -> PyResult<BytesLike<'a, 'py>> {
+    if PyMemoryView::is_exact_type_of(value) {
+        let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
+        return exact_memoryview_bytes_like(memoryview, require_contiguous);
+    }
     let memoryview = PyMemoryView::from(value).map_err(|_| type_error(argument))?;
+    copy_memoryview(&memoryview, require_contiguous).map(BytesLike::OwnedBytes)
+}
+
+fn exact_memoryview_bytes_like<'a, 'py>(
+    memoryview: &Bound<'py, PyMemoryView>,
+    require_contiguous: bool,
+) -> PyResult<BytesLike<'a, 'py>> {
+    let nbytes = memoryview.getattr("nbytes")?.extract::<usize>()?;
+    let try_owner = nbytes >= DETACH_THRESHOLD;
+    let contiguous = if require_contiguous || try_owner {
+        memoryview.getattr("c_contiguous")?.is_truthy()?
+    } else {
+        false
+    };
+    if require_contiguous && !contiguous {
+        return Err(PyBufferError::new_err(
+            "memoryview: underlying buffer is not C-contiguous",
+        ));
+    }
+    if contiguous && try_owner {
+        let owner = memoryview.getattr("obj")?;
+        if PyBytes::is_exact_type_of(&owner) {
+            let owner = owner.cast_into::<PyBytes>()?;
+            if owner.as_bytes().len() == nbytes {
+                return Ok(BytesLike::OwnedBytes(owner));
+            }
+        } else if PyByteArray::is_exact_type_of(&owner) {
+            let owner = owner.cast_into::<PyByteArray>()?;
+            if owner.len() == nbytes {
+                return Ok(BytesLike::OwnedByteArray(owner));
+            }
+        }
+    }
+    copy_memoryview(memoryview, false).map(BytesLike::OwnedBytes)
+}
+
+fn copy_memoryview<'py>(
+    memoryview: &Bound<'py, PyMemoryView>,
+    require_contiguous: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
     if require_contiguous && !memoryview.getattr("c_contiguous")?.is_truthy()? {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",

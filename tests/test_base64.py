@@ -118,6 +118,13 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64decode_into(memoryview(shared)[:4], shared, validate=True) == 3
     assert shared[:3] == b'abc'
 
+    shared = bytearray(b'YWJj')
+    assert base64.b64decode_into(memoryview(shared), shared, validate=True) == 3
+    assert shared == b'abcj'
+    assert base64.b64decode(memoryview(b'xYWJj')[1:], validate=True) == b'abc'
+    assert base64.b64encode(memoryview(b'abcd').cast('I', shape=[])) == b'YWJjZA=='
+    assert base64.b64decode(memoryview(b'YWJj').cast('I', shape=[]), validate=True) == b'abc'
+
 
 def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
     class BytesSubclass(bytes):
@@ -166,6 +173,12 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         assert base64.b64encode(payload) == b'YWJj'
         assert encoded.calls == 1
         assert payload.calls == 1
+
+        class BufferList(list):
+            def __buffer__(self, flags: int) -> memoryview:
+                return memoryview(b'abc')
+
+        assert base64.b64encode(BufferList()) == b'YWJj'
 
 
 def test_large_ascii_string_decode() -> None:
@@ -499,6 +512,9 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
 
 
 def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
+    expected_default = not PYTHON_315
+    assert inspect.signature(base64.urlsafe_b64decode).parameters['padded'].default is expected_default
+    assert inspect.signature(base64.urlsafe_b64decode_into).parameters['padded'].default is expected_default
     assert base64.urlsafe_b64encode(b'\xfb\xff', padded=False) == b'-_8'
     assert base64.urlsafe_b64decode(b'-_8', padded=False) == b'\xfb\xff'
     assert base64.urlsafe_b64decode(b'-_8=', padded=True) == b'\xfb\xff'
@@ -517,6 +533,23 @@ def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
     else:
         with pytest.raises(binascii.Error):
             base64.urlsafe_b64decode(b'-_8')
+
+
+def test_single_alphabet_helpers_are_native_and_keep_public_metadata() -> None:
+    for name in (
+        'standard_b64decode',
+        'standard_b64decode_into',
+        'standard_b64encode',
+        'standard_b64encode_into',
+        'urlsafe_b64decode',
+        'urlsafe_b64decode_into',
+        'urlsafe_b64encode',
+        'urlsafe_b64encode_into',
+    ):
+        function = getattr(base64, name)
+        assert inspect.isbuiltin(function)
+        assert function.__module__ == 'hashcodecs.base64'
+        assert function.__doc__
 
 
 def test_python_315_decode_options_are_backported() -> None:

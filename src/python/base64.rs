@@ -1,5 +1,6 @@
 use core::slice;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use pyo3::exceptions::{
     PyAssertionError, PyDeprecationWarning, PyFutureWarning, PyMemoryError, PyTypeError,
@@ -13,14 +14,26 @@ use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
 use crate::base64::{
     Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_layout,
-    decode_to_slice_with_layout_and_alphabet,
+    decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_transactional,
+    decode_to_slice_with_unpadded_layout_and_alphabet,
+    decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
 
 mod encode;
 
 const STANDARD_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
+
+#[inline]
+fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
+    *PYTHON_VERSION.get_or_init(|| {
+        let version_info = py.version_info();
+        (version_info.major, version_info.minor)
+    }) >= version
+}
 
 fn extract_truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     value.is_truthy()
@@ -48,7 +61,7 @@ fn parse_altchars(
         contiguous_bytes_like(py, value, "altchars")?
     };
     if bytes.len() != 2 {
-        if py.version_info() >= (3, 15) {
+        if python_at_least(py, (3, 15)) {
             let value = if allow_text {
                 unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).repr()) }?.to_string()
             } else {
@@ -181,6 +194,84 @@ fn decode_strict_slice_into(
     Ok(layout.output_len)
 }
 
+fn decode_unpadded<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    alphabet: DecodeAlphabet,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
+        .map_err(|_| decoding_error(py, "Incorrect padding"))?;
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let (output, result) = unsafe {
+        pybytes_with_len(py, layout.output_len, |output| {
+            input.with_bytes(|input| {
+                let output_address = output as usize;
+                let decode = move || {
+                    decode_to_ptr_with_unpadded_layout(
+                        input,
+                        output_address as *mut u8,
+                        layout,
+                        alphabet,
+                    )
+                };
+                if detach { py.detach(decode) } else { decode() }
+            })
+        })
+    }?;
+    result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))?;
+    Ok(output)
+}
+
+fn decode_unpadded_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if input.aliases(output) {
+        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+        return decode_unpadded_slice_into(&input, output, alphabet, transactional_errors);
+    }
+    unsafe {
+        input.with_bytes(|input| {
+            decode_unpadded_slice_into(input, output, alphabet, transactional_errors)
+        })
+    }
+}
+
+fn decode_unpadded_slice_into(
+    input: &[u8],
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if input.contains(&b'=') {
+        return Err(Base64Error::InvalidInput);
+    }
+    let layout = decode_unpadded_layout(input)?;
+    let provided = output.len();
+    if provided < layout.output_len {
+        return Err(Base64Error::OutputTooSmall {
+            required: layout.output_len,
+            provided,
+        });
+    }
+    let output = unsafe {
+        slice::from_raw_parts_mut(
+            ffi::PyByteArray_AsString(output.as_ptr()).cast(),
+            layout.output_len,
+        )
+    };
+    if transactional_errors {
+        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+            input, output, layout, alphabet,
+        )?;
+    } else {
+        decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
+    }
+    Ok(layout.output_len)
+}
+
 fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
     match py
         .import("binascii")
@@ -247,50 +338,20 @@ fn decode_strict_with_altchars<'py>(
     }
 }
 
-fn padded_input(input: &BytesLike<'_, '_>) -> Option<BytesLike<'static, 'static>> {
-    unsafe {
-        input.with_bytes(|input| {
-            if input.contains(&b'=') {
-                return None;
-            }
-            let padding = (4 - input.len() % 4) % 4;
-            if padding == 3 {
-                return None;
-            }
-            let mut padded = Vec::with_capacity(input.len() + padding);
-            padded.extend_from_slice(input);
-            padded.resize(input.len() + padding, b'=');
-            Some(BytesLike::Owned(padded))
-        })
-    }
-}
-
 fn decode_unpadded_with_altchars<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let Some(input) = padded_input(input) else {
-        return Err(decoding_error(py, "Incorrect padding"));
-    };
-    decode_strict_with_altchars(py, &input, altchars)
-}
-
-fn decode_unpadded<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    alphabet: DecodeAlphabet,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let aligned_without_padding = unsafe {
-        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
-    };
-    if aligned_without_padding {
-        return decode_strict(py, input, alphabet);
+    match altchars {
+        None => decode_unpadded(py, input, DecodeAlphabet::Standard),
+        Some([b'-', b'_']) => decode_unpadded(py, input, DecodeAlphabet::Mixed),
+        Some(altchars) => {
+            let translated =
+                unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
+            decode_unpadded(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+        }
     }
-    let Some(input) = padded_input(input) else {
-        return Err(decoding_error(py, "Incorrect padding"));
-    };
-    decode_strict(py, &input, alphabet)
 }
 
 fn decode_unpadded_into_with_altchars(
@@ -299,38 +360,17 @@ fn decode_unpadded_into_with_altchars(
     altchars: Option<[u8; 2]>,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    let Some(input) = padded_input(input) else {
-        return Err(Base64Error::InvalidInput);
-    };
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
         .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
     let translated = translated.map(BytesLike::Owned);
-    let direct_input = translated.as_ref().unwrap_or(&input);
+    let direct_input = translated.as_ref().unwrap_or(input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
     } else {
         DecodeAlphabet::Standard
     };
-    decode_strict_into(direct_input, output, alphabet, transactional_errors)
-}
-
-fn decode_unpadded_into(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    alphabet: DecodeAlphabet,
-    transactional_errors: bool,
-) -> Result<usize, Base64Error> {
-    let aligned_without_padding = unsafe {
-        input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"="))
-    };
-    if aligned_without_padding {
-        return decode_strict_into(input, output, alphabet, transactional_errors);
-    }
-    let Some(input) = padded_input(input) else {
-        return Err(Base64Error::InvalidInput);
-    };
-    decode_strict_into(&input, output, alphabet, transactional_errors)
+    decode_unpadded_into(direct_input, output, alphabet, transactional_errors)
 }
 
 #[inline]
@@ -347,7 +387,7 @@ fn warn_legacy_altchars(
     let Some(altchars) = altchars else {
         return Ok(());
     };
-    if py.version_info() < (3, 15) {
+    if !python_at_least(py, (3, 15)) {
         return Ok(());
     }
     let badchar = unsafe {
@@ -391,7 +431,7 @@ fn decode_with_binascii<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    if py.version_info() < (3, 15) && (!padded || ignorechars.is_some() || canonical) {
+    if !python_at_least(py, (3, 15)) && (!padded || ignorechars.is_some() || canonical) {
         return decode_advanced_legacy(
             py,
             input,
@@ -417,7 +457,7 @@ fn decode_with_binascii<'py>(
     };
     let input = data.as_bytes();
     let decode = py.import("binascii")?.getattr("a2b_base64")?;
-    let output = if py.version_info() >= (3, 15) {
+    let output = if python_at_least(py, (3, 15)) {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
         kwargs.set_item("padded", padded)?;
@@ -434,7 +474,7 @@ fn decode_with_binascii<'py>(
             kwargs.set_item("alphabet", PyBytes::new(py, &alphabet))?;
         }
         decode.call((data,), Some(&kwargs))?
-    } else if py.version_info() < (3, 11) {
+    } else if !python_at_least(py, (3, 11)) {
         if strict_mode && !strict_base64_310(input) {
             return Err(decoding_error(py, "Non-base64 digit found"));
         }
@@ -752,7 +792,7 @@ fn decode_parsed<'py>(
     if ignorechars.is_none()
         && !canonical
         && altchars == Some(*b"-_")
-        && py.version_info() >= (3, 15)
+        && python_at_least(py, (3, 15))
     {
         if padded || !strict_mode {
             match decode_strict(py, input, DecodeAlphabet::UrlSafe) {
@@ -890,7 +930,7 @@ fn decode_parsed_into(
     if ignorechars.is_none()
         && !canonical
         && altchars == Some(*b"-_")
-        && py.version_info() >= (3, 15)
+        && python_at_least(py, (3, 15))
     {
         if padded || !strict_mode {
             match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {

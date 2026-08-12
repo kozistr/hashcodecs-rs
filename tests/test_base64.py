@@ -58,6 +58,32 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.b64decode(b'+/8=', b'+/', validate=True) == b'\xfb\xff'
 
 
+def test_unpadded_decoding_uses_direct_tail_path() -> None:
+    for length in range(1025):
+        payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
+        standard = stdlib_base64.b64encode(payload).rstrip(b'=')
+        urlsafe = stdlib_base64.urlsafe_b64encode(payload).rstrip(b'=')
+        assert base64.b64decode(standard, padded=False, validate=True) == payload
+        assert base64.b64decode(urlsafe, b'-_', padded=False, validate=True) == payload
+
+        output = bytearray([0xA5] * (length + 16))
+        assert base64.b64decode_into(standard, output, padded=False, validate=True) == length
+        assert output[:length] == payload
+        assert output[length:] == bytes([0xA5] * 16)
+
+    # '=' is a valid custom-alphabet data character, not padding, after it is
+    # translated to the standard alphabet.
+    assert base64.b64decode(b'=w', b'=_', padded=False, validate=True) == b'\xfb'
+
+
+def test_unpadded_decode_into_rejects_invalid_tails_without_writing_them() -> None:
+    for encoded in (b'A!', b'AA!', b'A=', b'AA='):
+        output = bytearray([0xA5] * 8)
+        with pytest.raises(binascii.Error):
+            base64.b64decode_into(encoded, output, padded=False, validate=True)
+        assert output == bytes([0xA5] * 8)
+
+
 def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded = memoryview(b'YWJj')
     payload = memoryview(b'abc')

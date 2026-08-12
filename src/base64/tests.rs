@@ -653,6 +653,119 @@ fn decode_tables_cover_both_alphabets() {
 }
 
 #[test]
+fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
+    const GUARD: usize = 32;
+    const CANARY: u8 = 0xa5;
+
+    for length in 0..=1024 {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
+        for (encoded, alphabet) in [
+            (
+                base64::engine::general_purpose::STANDARD
+                    .encode(&input)
+                    .trim_end_matches('=')
+                    .as_bytes()
+                    .to_vec(),
+                DecodeAlphabet::Standard,
+            ),
+            (
+                base64::engine::general_purpose::URL_SAFE
+                    .encode(&input)
+                    .trim_end_matches('=')
+                    .as_bytes()
+                    .to_vec(),
+                DecodeAlphabet::UrlSafe,
+            ),
+        ] {
+            let layout = decode_unpadded_layout(&encoded).unwrap();
+            assert_eq!(layout.output_len, input.len(), "length={length}");
+            let mut guarded = vec![CANARY; GUARD + layout.output_len + GUARD];
+            let output = &mut guarded[GUARD..GUARD + layout.output_len];
+            decode_to_slice_with_unpadded_layout_and_alphabet(&encoded, output, layout, alphabet)
+                .unwrap();
+            assert_eq!(output, input, "length={length} alphabet={alphabet:?}");
+            let mut transactional = vec![CANARY; layout.output_len];
+            decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+                &encoded,
+                &mut transactional,
+                layout,
+                alphabet,
+            )
+            .unwrap();
+            assert_eq!(
+                transactional, input,
+                "length={length} alphabet={alphabet:?}"
+            );
+            let mut direct = vec![CANARY; layout.output_len];
+            unsafe {
+                decode_to_ptr_with_unpadded_layout(&encoded, direct.as_mut_ptr(), layout, alphabet)
+            }
+            .unwrap();
+            assert_eq!(direct, input, "length={length} alphabet={alphabet:?}");
+            assert!(guarded[..GUARD].iter().all(|&byte| byte == CANARY));
+            assert!(
+                guarded[GUARD + layout.output_len..]
+                    .iter()
+                    .all(|&byte| byte == CANARY)
+            );
+        }
+    }
+
+    assert!(matches!(
+        decode_unpadded_layout(b"A"),
+        Err(Base64Error::InvalidInput)
+    ));
+}
+
+#[test]
+fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
+    const CANARY: u8 = 0xa5;
+    for alphabet in [
+        (DecodeAlphabet::Standard, &STANDARD_DECODE),
+        (DecodeAlphabet::UrlSafe, &URLSAFE_DECODE),
+        (DecodeAlphabet::Mixed, &MIXED_DECODE),
+    ] {
+        for tail_len in [2, 3] {
+            for position in 0..tail_len {
+                for byte in 0..=u8::MAX {
+                    if alphabet.1[byte as usize] != INVALID_VALUE {
+                        continue;
+                    }
+                    let mut encoded = vec![b'A'; tail_len];
+                    encoded[position] = byte;
+                    let layout = decode_unpadded_layout(&encoded).unwrap();
+                    let mut output = [CANARY; 2];
+                    assert_eq!(
+                        decode_to_slice_with_unpadded_layout_and_alphabet(
+                            &encoded,
+                            &mut output[..layout.output_len],
+                            layout,
+                            alphabet.0,
+                        ),
+                        Err(Base64Error::InvalidInput),
+                        "tail_len={tail_len} position={position} byte={byte} alphabet={:?}",
+                        alphabet.0,
+                    );
+                    assert_eq!(output, [CANARY; 2]);
+                    assert_eq!(
+                        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+                            &encoded,
+                            &mut output[..layout.output_len],
+                            layout,
+                            alphabet.0,
+                        ),
+                        Err(Base64Error::InvalidInput),
+                    );
+                    assert_eq!(output, [CANARY; 2]);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn buffer_apis_respect_exact_slice_boundaries() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;

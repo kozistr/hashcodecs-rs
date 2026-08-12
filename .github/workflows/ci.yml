@@ -17,6 +17,10 @@ on:
       ref:
         required: false
         type: string
+      skip_coverage_upload:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,6 +65,7 @@ jobs:
         run: cargo llvm-cov --no-default-features --fail-under-lines 100 --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov
+        if: ${{ !inputs.skip_coverage_upload }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -241,6 +246,7 @@ jobs:
         run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100 --cov-report=xml:coverage.xml
 
       - name: Upload Python coverage to Codecov
+        if: ${{ !inputs.skip_coverage_upload }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

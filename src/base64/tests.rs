@@ -766,6 +766,24 @@ fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
 }
 
 #[test]
+fn unpadded_decoder_propagates_invalid_prefix_errors() {
+    let encoded = b"!AAAaa";
+    let layout = decode_unpadded_layout(encoded).unwrap();
+    let mut output = [0xa5; 4];
+
+    assert_eq!(
+        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+            encoded,
+            &mut output,
+            layout,
+            DecodeAlphabet::Standard,
+        ),
+        Err(Base64Error::InvalidInput),
+    );
+    assert_eq!(output, [0xa5; 4]);
+}
+
+#[test]
 fn buffer_apis_respect_exact_slice_boundaries() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;

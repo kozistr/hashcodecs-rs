@@ -1,3 +1,4 @@
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{
@@ -51,10 +52,12 @@ pub(super) fn bytes_like<'a, 'py>(
     if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
         return Err(type_error(argument));
     }
-    if let Ok(bytes) = value.cast::<PyBytes>() {
+    if PyBytes::is_exact_type_of(value) {
+        let bytes = value.cast::<PyBytes>()?;
         return Ok(BytesLike::Bytes(bytes));
     }
-    if let Ok(bytes) = value.cast::<PyByteArray>() {
+    if PyByteArray::is_exact_type_of(value) {
+        let bytes = value.cast::<PyByteArray>()?;
         return Ok(BytesLike::ByteArray(bytes));
     }
     copied_memoryview(value, argument, false).map(BytesLike::Copied)
@@ -65,10 +68,12 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    if let Ok(bytes) = value.cast::<PyBytes>() {
+    if PyBytes::is_exact_type_of(value) {
+        let bytes = value.cast::<PyBytes>()?;
         return Ok(BytesLike::Bytes(bytes));
     }
-    if let Ok(bytes) = value.cast::<PyByteArray>() {
+    if PyByteArray::is_exact_type_of(value) {
+        let bytes = value.cast::<PyByteArray>()?;
         return Ok(BytesLike::ByteArray(bytes));
     }
     copied_memoryview(value, argument, true).map(BytesLike::Copied)
@@ -79,12 +84,17 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    if let Ok(text) = value.cast::<PyString>() {
+    if PyString::is_exact_type_of(value) {
+        let text = value.cast::<PyString>()?;
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
         if !text.is_ascii() {
             return Err(ascii_error(argument));
         }
         return Ok(BytesLike::Text(text));
+    }
+    if value.is_instance_of::<PyString>() {
+        let encoded = value.call_method1("encode", ("ascii",))?;
+        return copied_memoryview(&encoded, argument, false).map(BytesLike::Copied);
     }
     bytes_like(py, value, argument)
 }

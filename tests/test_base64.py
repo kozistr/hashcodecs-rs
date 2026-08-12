@@ -103,6 +103,70 @@ def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.Mon
         base64.b64encode(object())
 
 
+def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
+    payload = b'abc'
+    encoded = b'YWJj'
+    for value in (payload, bytearray(payload), memoryview(payload)):
+        assert base64.b64encode(value) == encoded
+    for value in (encoded, bytearray(encoded), memoryview(encoded), encoded.decode('ascii')):
+        assert base64.b64decode(value, validate=True) == payload
+
+    # A memoryview can overlap a reusable destination. The native path must
+    # snapshot it before writing, just as the previous copied path did.
+    shared = bytearray(b'YWJj....')
+    assert base64.b64decode_into(memoryview(shared)[:4], shared, validate=True) == 3
+    assert shared[:3] == b'abc'
+
+
+def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
+    class BytesSubclass(bytes):
+        pass
+
+    class ByteArraySubclass(bytearray):
+        pass
+
+    class StringSubclass(str):
+        def __new__(cls, value: str):
+            instance = super().__new__(cls, value)
+            instance.encode_calls = 0
+            return instance
+
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
+            self.encode_calls += 1
+            return super().encode(encoding, errors)
+
+    assert base64.b64encode(BytesSubclass(b'abc')) == b'YWJj'
+    assert base64.b64encode(ByteArraySubclass(b'abc')) == b'YWJj'
+    text = StringSubclass('YWJj')
+    assert base64.b64decode(text, validate=True) == b'abc'
+    assert text.encode_calls == 1
+
+    class RaisingString(str):
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
+            raise RuntimeError('custom encode failure')
+
+    with pytest.raises(RuntimeError, match='custom encode failure'):
+        base64.b64decode(RaisingString('YWJj'))
+
+    if sys.version_info >= (3, 12):  # noqa: UP036 - package supports Python 3.10.
+
+        class BufferHook:
+            def __init__(self, value: bytes) -> None:
+                self.value = value
+                self.calls = 0
+
+            def __buffer__(self, flags: int) -> memoryview:
+                self.calls += 1
+                return memoryview(self.value)
+
+        encoded = BufferHook(b'YWJj')
+        payload = BufferHook(b'abc')
+        assert base64.b64decode(encoded, validate=True) == b'abc'
+        assert base64.b64encode(payload) == b'YWJj'
+        assert encoded.calls == 1
+        assert payload.calls == 1
+
+
 def test_large_ascii_string_decode() -> None:
     payload = bytes(range(256)) * 512
     encoded = stdlib_base64.b64encode(payload).decode('ascii')

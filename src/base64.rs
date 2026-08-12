@@ -376,7 +376,6 @@ pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
 
 #[inline]
 #[cfg_attr(not(feature = "python"), allow(dead_code))]
-#[cfg(not(coverage))]
 pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
     input: &[u8],
     output: &mut [u8],

@@ -143,7 +143,7 @@ pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
     // actual load offset avoids forming a pointer before the start of `input`.
     let mut load_offset = 20;
     let mut destination = 32;
-    #[cfg(all(target_arch = "x86_64", not(coverage)))]
+    #[cfg(target_arch = "x86_64")]
     if input.len() >= 64 * 1024 {
         // A group needs four 32-byte shifted loads for 96 logical input bytes.
         // `input.len() - load_offset - 8` is an equivalent division form of
@@ -188,7 +188,7 @@ pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
     source + unsafe { encode_ssse3::<URLSAFE>(&input[source..], output.add(destination)) }
 }
 
-#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(

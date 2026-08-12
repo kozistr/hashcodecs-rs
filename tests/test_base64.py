@@ -32,6 +32,7 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.urlsafe_b64encode(b'\xfb\xff') == b'-_8='
     assert base64.urlsafe_b64decode(b'-_8=') == b'\xfb\xff'
     assert base64.b64decode(b'-_8=', b'-_', validate=True) == b'\xfb\xff'
+    assert base64.b64decode(b'YWJj', padded=False) == b'abc'
     assert base64.b64encode(bytearray(b'abc')) == b'YWJj'
     assert base64.b64decode(bytearray(b'YWJj'), validate=True) == b'abc'
     assert base64.b64encode(b'\xfb\xff', bytearray(b'@#')) == b'@#8='
@@ -200,6 +201,8 @@ def test_base64_into_variants_and_errors() -> None:
     assert decoded[:2] == b'\xfb\xff'
     assert base64.urlsafe_b64decode_into(b'-_8=', decoded) == 2
     assert decoded[:2] == b'\xfb\xff'
+    assert base64.b64decode_into(b'YWJj', decoded, b'-_', padded=False) == 3
+    assert decoded[:3] == b'abc'
 
     with pytest.raises(ValueError, match='requires 4 bytes'):
         base64.b64encode_into(b'abc', bytearray(3))

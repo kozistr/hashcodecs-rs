@@ -1,6 +1,8 @@
 use core::slice;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{
     PyAssertionError, PyDeprecationWarning, PyFutureWarning, PyMemoryError, PyTypeError,
     PyValueError,
@@ -13,14 +15,26 @@ use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
 use crate::base64::{
     Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_layout,
-    decode_to_slice_with_layout_and_alphabet,
+    decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_transactional,
+    decode_to_slice_with_unpadded_layout_and_alphabet,
+    decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
 
 mod encode;
 
 const STANDARD_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
+
+#[inline]
+pub(super) fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
+    *PYTHON_VERSION.get_or_init(|| {
+        let version_info = py.version_info();
+        (version_info.major, version_info.minor)
+    }) >= version
+}
 
 fn extract_truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     value.is_truthy()
@@ -48,7 +62,7 @@ fn parse_altchars(
         contiguous_bytes_like(py, value, "altchars")?
     };
     if bytes.len() != 2 {
-        if py.version_info() >= (3, 15) {
+        if python_at_least(py, (3, 15)) {
             let value = if allow_text {
                 unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).repr()) }?.to_string()
             } else {
@@ -62,6 +76,58 @@ fn parse_altchars(
     }
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
     Ok((altchars != *b"+/").then_some(altchars))
+}
+
+type PreparedAltchars = Result<Option<[u8; 2]>, PyErr>;
+
+// Python 3.15 constructs a custom alphabet before consuming the input, but
+// binascii validates its byte length afterward. The inner result preserves
+// that otherwise-observable error ordering without sending valid calls back
+// through Python's encoder.
+fn prepare_b64encode_altchars(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<PreparedAltchars> {
+    let length = value.len()?;
+    if length != 2 {
+        let value = value.repr()?.to_string();
+        if python_at_least(py, (3, 15)) {
+            return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
+        }
+        return Err(PyAssertionError::new_err(value));
+    }
+
+    if python_at_least(py, (3, 15))
+        && !PyBytes::is_exact_type_of(value)
+        && !PyByteArray::is_exact_type_of(value)
+    {
+        let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
+        let alphabet = unsafe {
+            Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr()))?
+        };
+        let alphabet = match alphabet.cast_into::<PyBytes>() {
+            Ok(alphabet) => alphabet,
+            Err(error) => return Ok(Err(error.into())),
+        };
+        if alphabet.as_bytes().len() != STANDARD_ALPHABET.len() {
+            return Ok(Err(PyValueError::new_err("alphabet must have length 64")));
+        }
+        let alphabet = alphabet.as_bytes();
+        let altchars = [alphabet[62], alphabet[63]];
+        return Ok(Ok((altchars != *b"+/").then_some(altchars)));
+    }
+
+    let bytes = contiguous_bytes_like(py, value, "altchars")?;
+    if bytes.len() != 2 {
+        let message = if python_at_least(py, (3, 15)) {
+            "alphabet must have length 64"
+        } else {
+            "maketrans arguments must have same length"
+        };
+        return Err(PyValueError::new_err(message));
+    }
+    let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
+    Ok(Ok((altchars != *b"+/").then_some(altchars)))
 }
 
 /// Allocate an uninitialized Python `bytes` payload for direct initialization.
@@ -181,6 +247,84 @@ fn decode_strict_slice_into(
     Ok(layout.output_len)
 }
 
+fn decode_unpadded<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    alphabet: DecodeAlphabet,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
+        .map_err(|_| decoding_error(py, "Incorrect padding"))?;
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let (output, result) = unsafe {
+        pybytes_with_len(py, layout.output_len, |output| {
+            input.with_bytes(|input| {
+                let output_address = output as usize;
+                let decode = move || {
+                    decode_to_ptr_with_unpadded_layout(
+                        input,
+                        output_address as *mut u8,
+                        layout,
+                        alphabet,
+                    )
+                };
+                if detach { py.detach(decode) } else { decode() }
+            })
+        })
+    }?;
+    result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))?;
+    Ok(output)
+}
+
+fn decode_unpadded_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if input.aliases(output) {
+        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+        return decode_unpadded_slice_into(&input, output, alphabet, transactional_errors);
+    }
+    unsafe {
+        input.with_bytes(|input| {
+            decode_unpadded_slice_into(input, output, alphabet, transactional_errors)
+        })
+    }
+}
+
+fn decode_unpadded_slice_into(
+    input: &[u8],
+    output: &Bound<'_, PyByteArray>,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if input.contains(&b'=') {
+        return Err(Base64Error::InvalidInput);
+    }
+    let layout = decode_unpadded_layout(input)?;
+    let provided = output.len();
+    if provided < layout.output_len {
+        return Err(Base64Error::OutputTooSmall {
+            required: layout.output_len,
+            provided,
+        });
+    }
+    let output = unsafe {
+        slice::from_raw_parts_mut(
+            ffi::PyByteArray_AsString(output.as_ptr()).cast(),
+            layout.output_len,
+        )
+    };
+    if transactional_errors {
+        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+            input, output, layout, alphabet,
+        )?;
+    } else {
+        decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
+    }
+    Ok(layout.output_len)
+}
+
 fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
     match py
         .import("binascii")
@@ -247,57 +391,23 @@ fn decode_strict_with_altchars<'py>(
     }
 }
 
-fn padded_input(input: &BytesLike<'_, '_>) -> Option<BytesLike<'static, 'static>> {
-    unsafe {
-        input.with_bytes(|input| {
-            if input.contains(&b'=') {
-                return None;
-            }
-            let padding = (4 - input.len() % 4) % 4;
-            if padding == 3 {
-                return None;
-            }
-            let mut padded = Vec::with_capacity(input.len() + padding);
-            padded.extend_from_slice(input);
-            padded.resize(input.len() + padding, b'=');
-            Some(BytesLike::Owned(padded))
-        })
-    }
-}
-
-fn is_aligned_unpadded(input: &BytesLike<'_, '_>) -> bool {
-    unsafe { input.with_bytes(|input| input.len().is_multiple_of(4) && !input.ends_with(b"=")) }
-}
-
 fn decode_unpadded_with_altchars<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    if is_aligned_unpadded(input) {
-        return decode_strict_with_altchars(py, input, altchars);
+    match altchars {
+        None => decode_unpadded(py, input, DecodeAlphabet::Standard),
+        Some([b'-', b'_']) => decode_unpadded(py, input, DecodeAlphabet::Mixed),
+        Some(altchars) => {
+            let translated =
+                unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
+            decode_unpadded(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+        }
     }
-    let Some(input) = padded_input(input) else {
-        return Err(decoding_error(py, "Incorrect padding"));
-    };
-    decode_strict_with_altchars(py, &input, altchars)
 }
 
-fn decode_unpadded<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    alphabet: DecodeAlphabet,
-) -> PyResult<Bound<'py, PyBytes>> {
-    if is_aligned_unpadded(input) {
-        return decode_strict(py, input, alphabet);
-    }
-    let Some(input) = padded_input(input) else {
-        return Err(decoding_error(py, "Incorrect padding"));
-    };
-    decode_strict(py, &input, alphabet)
-}
-
-fn decode_strict_into_with_altchars(
+fn decode_unpadded_into_with_altchars(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
@@ -313,37 +423,7 @@ fn decode_strict_into_with_altchars(
     } else {
         DecodeAlphabet::Standard
     };
-    decode_strict_into(direct_input, output, alphabet, transactional_errors)
-}
-
-fn decode_unpadded_into_with_altchars(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    transactional_errors: bool,
-) -> Result<usize, Base64Error> {
-    if is_aligned_unpadded(input) {
-        return decode_strict_into_with_altchars(input, output, altchars, transactional_errors);
-    }
-    let Some(input) = padded_input(input) else {
-        return Err(Base64Error::InvalidInput);
-    };
-    decode_strict_into_with_altchars(&input, output, altchars, transactional_errors)
-}
-
-fn decode_unpadded_into(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    alphabet: DecodeAlphabet,
-    transactional_errors: bool,
-) -> Result<usize, Base64Error> {
-    if is_aligned_unpadded(input) {
-        return decode_strict_into(input, output, alphabet, transactional_errors);
-    }
-    let Some(input) = padded_input(input) else {
-        return Err(Base64Error::InvalidInput);
-    };
-    decode_strict_into(&input, output, alphabet, transactional_errors)
+    decode_unpadded_into(direct_input, output, alphabet, transactional_errors)
 }
 
 #[inline]
@@ -360,7 +440,7 @@ fn warn_legacy_altchars(
     let Some(altchars) = altchars else {
         return Ok(());
     };
-    if py.version_info() < (3, 15) {
+    if !python_at_least(py, (3, 15)) {
         return Ok(());
     }
     let badchar = unsafe {
@@ -404,7 +484,7 @@ fn decode_with_binascii<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    if py.version_info() < (3, 15) && (!padded || ignorechars.is_some() || canonical) {
+    if !python_at_least(py, (3, 15)) && (!padded || ignorechars.is_some() || canonical) {
         return decode_advanced_legacy(
             py,
             input,
@@ -430,7 +510,7 @@ fn decode_with_binascii<'py>(
     };
     let input = data.as_bytes();
     let decode = py.import("binascii")?.getattr("a2b_base64")?;
-    let output = if py.version_info() >= (3, 15) {
+    let output = if python_at_least(py, (3, 15)) {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
         kwargs.set_item("padded", padded)?;
@@ -447,7 +527,7 @@ fn decode_with_binascii<'py>(
             kwargs.set_item("alphabet", PyBytes::new(py, &alphabet))?;
         }
         decode.call((data,), Some(&kwargs))?
-    } else if py.version_info() < (3, 11) {
+    } else if !python_at_least(py, (3, 11)) {
         if strict_mode && !strict_base64_310(input) {
             return Err(decoding_error(py, "Non-base64 digit found"));
         }
@@ -641,6 +721,48 @@ fn encode_parsed_into(
     encode::encode_into(input, output, altchars, padded, wrapcol)
 }
 
+/// Encode with the standard Base64 alphabet.
+#[pyfunction]
+pub(super) fn standard_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, None, true, None)
+}
+
+/// Encode with the standard Base64 alphabet into a reusable output.
+#[pyfunction]
+pub(super) fn standard_b64encode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(py, s, "s")?;
+    encode_parsed_into(&input, output, None, true, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet.
+#[pyfunction(signature = (s, *, padded=true))]
+pub(super) fn urlsafe_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, Some(*b"-_"), padded, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet into a reusable output.
+#[pyfunction(signature = (s, output, *, padded=true))]
+pub(super) fn urlsafe_b64encode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(py, s, "s")?;
+    encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
+}
+
 #[pyfunction(signature = (s, altchars=None, *, padded=true, wrapcol=0))]
 pub(super) fn b64encode<'py>(
     py: Python<'py>,
@@ -649,8 +771,21 @@ pub(super) fn b64encode<'py>(
     #[pyo3(from_py_with = extract_truthy)] padded: bool,
     wrapcol: i128,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let Some(altchars) = altchars else {
+        let input = contiguous_bytes_like(py, s, "s")?;
+        let wrapcol = encode::normalize_wrapcol(wrapcol)?;
+        return encode::encode(py, &input, None, padded, wrapcol);
+    };
+    let parse_altchars_first = python_at_least(py, (3, 15));
+    let parsed_altchars = parse_altchars_first
+        .then(|| prepare_b64encode_altchars(py, altchars))
+        .transpose()?;
     let input = contiguous_bytes_like(py, s, "s")?;
-    let altchars = parse_altchars(py, altchars, false)?;
+    let altchars = if let Some(parsed_altchars) = parsed_altchars {
+        parsed_altchars?
+    } else {
+        prepare_b64encode_altchars(py, altchars)??
+    };
     let wrapcol = encode::normalize_wrapcol(wrapcol)?;
     encode::encode(py, &input, altchars, padded, wrapcol)
 }
@@ -729,6 +864,29 @@ fn decode_parsed<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let output = decode_parsed_inner(
+        py,
+        input,
+        altchars,
+        strict_mode,
+        padded,
+        ignorechars,
+        canonical,
+    )?;
+    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
+    Ok(output)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_parsed_inner<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    altchars: Option<[u8; 2]>,
+    strict_mode: bool,
+    padded: bool,
+    ignorechars: Option<&Bound<'py, PyAny>>,
+    canonical: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
     let empty_ignorechars = ignorechars.is_some_and(|value| {
         value
             .cast::<PyBytes>()
@@ -765,7 +923,7 @@ fn decode_parsed<'py>(
     if ignorechars.is_none()
         && !canonical
         && altchars == Some(*b"-_")
-        && py.version_info() >= (3, 15)
+        && python_at_least(py, (3, 15))
     {
         if padded || !strict_mode {
             match decode_strict(py, input, DecodeAlphabet::UrlSafe) {
@@ -783,7 +941,6 @@ fn decode_parsed<'py>(
         }
     }
 
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
     if ignorechars.is_none() && !canonical && strict_mode {
         if !padded {
             return match decode_unpadded_with_altchars(py, input, altchars) {
@@ -838,7 +995,10 @@ fn decode_parsed<'py>(
     )
 }
 
-#[pyfunction(signature = (s, altchars=None, validate=None, *, padded=true, ignorechars=None, canonical=false))]
+#[pyfunction(
+    signature = (s, altchars=None, validate=None, *, padded=true, ignorechars=None, canonical=false),
+    text_signature = "(s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)"
+)]
 pub(super) fn b64decode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
@@ -861,6 +1021,46 @@ pub(super) fn b64decode<'py>(
         ignorechars,
         canonical,
     )
+}
+
+/// Decode with the standard Base64 alphabet.
+#[pyfunction]
+pub(super) fn standard_b64decode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed(py, &input, None, false, true, None, false)
+}
+
+/// Decode standard Base64 into a reusable output.
+#[pyfunction]
+pub(super) fn standard_b64decode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+) -> PyResult<usize> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed_into(py, &input, output, None, false, true, None, false)
+}
+
+fn urlsafe_b64decode_impl<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed(py, &input, Some(*b"-_"), false, padded, None, false)
+}
+
+fn urlsafe_b64decode_into_impl(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    padded: bool,
+) -> PyResult<usize> {
+    let input = ascii_or_bytes(py, s, "s")?;
+    decode_parsed_into(py, &input, output, Some(*b"-_"), false, padded, None, false)
 }
 
 /// Decode each ASCII string or bytes-like item and return results in input order.
@@ -899,11 +1099,36 @@ fn decode_parsed_into(
     ignorechars: Option<&Bound<'_, PyAny>>,
     canonical: bool,
 ) -> PyResult<usize> {
+    let written = decode_parsed_into_inner(
+        py,
+        input,
+        output,
+        altchars,
+        strict_mode,
+        padded,
+        ignorechars,
+        canonical,
+    )?;
+    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
+    Ok(written)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_parsed_into_inner(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    strict_mode: bool,
+    padded: bool,
+    ignorechars: Option<&Bound<'_, PyAny>>,
+    canonical: bool,
+) -> PyResult<usize> {
     let transactional_errors = !strict_mode;
     if ignorechars.is_none()
         && !canonical
         && altchars == Some(*b"-_")
-        && py.version_info() >= (3, 15)
+        && python_at_least(py, (3, 15))
     {
         if padded || !strict_mode {
             match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
@@ -928,9 +1153,19 @@ fn decode_parsed_into(
         }
     }
 
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
+    let translated = altchars
+        .filter(|altchars| *altchars != *b"-_")
+        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
+    let translated = translated.map(BytesLike::Owned);
+    let direct_input = translated.as_ref().unwrap_or(input);
+    let alphabet = if altchars == Some(*b"-_") {
+        DecodeAlphabet::Mixed
+    } else {
+        DecodeAlphabet::Standard
+    };
+
     let direct = if ignorechars.is_none() && !canonical && (padded || !strict_mode) {
-        decode_strict_into_with_altchars(input, output, altchars, transactional_errors)
+        decode_strict_into(direct_input, output, alphabet, transactional_errors)
     } else {
         Err(Base64Error::InvalidInput)
     };
@@ -1020,6 +1255,48 @@ pub(super) fn b64decode_into(
         ignorechars,
         canonical,
     )
+}
+
+#[pyfunction(name = "urlsafe_b64decode", signature = (s, *, padded=true))]
+/// Decode with the URL-safe Base64 alphabet.
+pub(super) fn urlsafe_b64decode_pre_315<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    urlsafe_b64decode_impl(py, s, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode", signature = (s, *, padded=false))]
+/// Decode with the URL-safe Base64 alphabet.
+pub(super) fn urlsafe_b64decode_315<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    urlsafe_b64decode_impl(py, s, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode_into", signature = (s, output, *, padded=true))]
+/// Decode URL-safe Base64 into a reusable output.
+pub(super) fn urlsafe_b64decode_into_pre_315(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    urlsafe_b64decode_into_impl(py, s, output, padded)
+}
+
+#[pyfunction(name = "urlsafe_b64decode_into", signature = (s, output, *, padded=false))]
+/// Decode URL-safe Base64 into a reusable output.
+pub(super) fn urlsafe_b64decode_into_315(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    #[pyo3(from_py_with = extract_truthy)] padded: bool,
+) -> PyResult<usize> {
+    urlsafe_b64decode_into_impl(py, s, output, padded)
 }
 
 #[cfg(test)]

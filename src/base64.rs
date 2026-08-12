@@ -85,7 +85,7 @@ impl fmt::Display for Base64Error {
 
 impl std::error::Error for Base64Error {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum DecodeAlphabet {
     Standard,
     UrlSafe,
@@ -271,6 +271,31 @@ pub(crate) fn decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
     Ok(decode_layout(input)?.output_len)
 }
 
+/// Returns the layout for Base64 input whose final padding is omitted.
+///
+/// The returned layout models the missing padding without allocating or
+/// inspecting the input bytes. Alphabet validation remains part of decoding.
+#[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) fn decode_unpadded_layout(input: &[u8]) -> Result<DecodeLayout, Base64Error> {
+    let complete_quartets = input.len() / 4;
+    let tail = input.len() % 4;
+    let tail_len = match tail {
+        0 => 0,
+        2 => 1,
+        3 => 2,
+        _ => return Err(Base64Error::InvalidInput),
+    };
+    let output_len = complete_quartets
+        .checked_mul(3)
+        .and_then(|length| length.checked_add(tail_len))
+        .ok_or(Base64Error::InvalidInput)?;
+    Ok(DecodeLayout {
+        padding: 0,
+        output_len,
+    })
+}
+
 #[inline]
 pub(crate) fn decode_to_slice_with_layout(
     input: &[u8],
@@ -300,6 +325,34 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet(
 }
 
 #[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet(
+    input: &[u8],
+    output: &mut [u8],
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+) -> Result<(), Base64Error> {
+    debug_assert_eq!(output.len(), layout.output_len);
+    unsafe {
+        decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false)
+    }
+}
+
+#[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+    input: &[u8],
+    output: &mut [u8],
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+) -> Result<(), Base64Error> {
+    debug_assert_eq!(output.len(), layout.output_len);
+    unsafe {
+        decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, true)
+    }
+}
+
+#[inline]
 pub(crate) unsafe fn decode_to_ptr_with_layout(
     input: &[u8],
     output: *mut u8,
@@ -308,6 +361,17 @@ pub(crate) unsafe fn decode_to_ptr_with_layout(
     padded_stores: bool,
 ) -> Result<(), Base64Error> {
     unsafe { decode_to_ptr_with_layout_mode(input, output, layout, alphabet, padded_stores, false) }
+}
+
+#[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
+    input: &[u8],
+    output: *mut u8,
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+) -> Result<(), Base64Error> {
+    unsafe { decode_to_ptr_with_unpadded_layout_mode(input, output, layout, alphabet, false) }
 }
 
 #[inline]
@@ -385,6 +449,46 @@ unsafe fn decode_to_ptr_with_layout_mode(
             )
         }?;
     }
+    Ok(())
+}
+
+#[inline]
+unsafe fn decode_to_ptr_with_unpadded_layout_mode(
+    input: &[u8],
+    output: *mut u8,
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<(), Base64Error> {
+    let prefix_len = input.len() / 4 * 4;
+    let prefix_layout = DecodeLayout {
+        padding: 0,
+        output_len: prefix_len / 4 * 3,
+    };
+    unsafe {
+        decode_to_ptr_with_layout_mode(
+            &input[..prefix_len],
+            output,
+            prefix_layout,
+            alphabet,
+            false,
+            transactional_errors,
+        )?
+    };
+
+    let tail = &input[prefix_len..];
+    if !tail.is_empty() {
+        let table = match alphabet {
+            DecodeAlphabet::Standard => &STANDARD_DECODE,
+            DecodeAlphabet::UrlSafe => &URLSAFE_DECODE,
+            DecodeAlphabet::Mixed => &MIXED_DECODE,
+        };
+        unsafe { decode_unpadded_tail_ptr(tail, output.add(prefix_layout.output_len), table) }?;
+    }
+    debug_assert_eq!(
+        prefix_layout.output_len + tail.len() - tail.len() / 2,
+        layout.output_len
+    );
     Ok(())
 }
 
@@ -536,6 +640,28 @@ unsafe fn decode_quad_ptr(
     }
     if padding == 0 {
         unsafe { output.add(2).write((third << 6) | fourth) };
+    }
+    Ok(())
+}
+
+#[inline]
+unsafe fn decode_unpadded_tail_ptr(
+    input: &[u8],
+    output: *mut u8,
+    table: &[u8; 256],
+) -> Result<(), Base64Error> {
+    debug_assert!(matches!(input.len(), 2 | 3));
+    let first = decode_value(input[0], table).ok_or(Base64Error::InvalidInput)?;
+    let second = decode_value(input[1], table).ok_or(Base64Error::InvalidInput)?;
+    let third = if input.len() == 3 {
+        decode_value(input[2], table).ok_or(Base64Error::InvalidInput)?
+    } else {
+        0
+    };
+
+    unsafe { output.write((first << 2) | (second >> 4)) };
+    if input.len() == 3 {
+        unsafe { output.add(1).write((second << 4) | (third >> 2)) };
     }
     Ok(())
 }

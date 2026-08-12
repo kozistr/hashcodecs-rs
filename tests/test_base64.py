@@ -59,6 +59,32 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.b64decode(b'+/8=', b'+/', validate=True) == b'\xfb\xff'
 
 
+def test_unpadded_decoding_uses_direct_tail_path() -> None:
+    for length in range(1025):
+        payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
+        standard = stdlib_base64.b64encode(payload).rstrip(b'=')
+        urlsafe = stdlib_base64.urlsafe_b64encode(payload).rstrip(b'=')
+        assert base64.b64decode(standard, padded=False, validate=True) == payload
+        assert base64.b64decode(urlsafe, b'-_', padded=False, validate=True) == payload
+
+        output = bytearray([0xA5] * (length + 16))
+        assert base64.b64decode_into(standard, output, padded=False, validate=True) == length
+        assert output[:length] == payload
+        assert output[length:] == bytes([0xA5] * 16)
+
+    # '=' is a valid custom-alphabet data character, not padding, after it is
+    # translated to the standard alphabet.
+    assert base64.b64decode(b'=w', b'=_', padded=False, validate=True) == b'\xfb'
+
+
+def test_unpadded_decode_into_rejects_invalid_tails_without_writing_them() -> None:
+    for encoded in (b'A!', b'AA!', b'A=', b'AA='):
+        output = bytearray([0xA5] * 8)
+        with pytest.raises(binascii.Error):
+            base64.b64decode_into(encoded, output, padded=False, validate=True)
+        assert output == bytes([0xA5] * 8)
+
+
 def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded = memoryview(b'YWJj')
     payload = memoryview(b'abc')
@@ -76,6 +102,83 @@ def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.Mon
     assert base64.b64decode(encoded, validate=True) == b'abc'
     with pytest.raises(TypeError):
         base64.b64encode(object())
+
+
+def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
+    payload = b'abc'
+    encoded = b'YWJj'
+    for value in (payload, bytearray(payload), memoryview(payload)):
+        assert base64.b64encode(value) == encoded
+    for value in (encoded, bytearray(encoded), memoryview(encoded), encoded.decode('ascii')):
+        assert base64.b64decode(value, validate=True) == payload
+
+    # A memoryview can overlap a reusable destination. The native path must
+    # snapshot it before writing, just as the previous copied path did.
+    shared = bytearray(b'YWJj....')
+    assert base64.b64decode_into(memoryview(shared)[:4], shared, validate=True) == 3
+    assert shared[:3] == b'abc'
+
+    shared = bytearray(b'YWJj')
+    assert base64.b64decode_into(memoryview(shared), shared, validate=True) == 3
+    assert shared == b'abcj'
+    assert base64.b64decode(memoryview(b'xYWJj')[1:], validate=True) == b'abc'
+    assert base64.b64encode(memoryview(b'abcd').cast('I', shape=[])) == b'YWJjZA=='
+    assert base64.b64decode(memoryview(b'YWJj').cast('I', shape=[]), validate=True) == b'abc'
+
+
+def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
+    class BytesSubclass(bytes):
+        pass
+
+    class ByteArraySubclass(bytearray):
+        pass
+
+    class StringSubclass(str):
+        def __new__(cls, value: str):
+            instance = super().__new__(cls, value)
+            instance.encode_calls = 0
+            return instance
+
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
+            self.encode_calls += 1
+            return super().encode(encoding, errors)
+
+    assert base64.b64encode(BytesSubclass(b'abc')) == b'YWJj'
+    assert base64.b64encode(ByteArraySubclass(b'abc')) == b'YWJj'
+    text = StringSubclass('YWJj')
+    assert base64.b64decode(text, validate=True) == b'abc'
+    assert text.encode_calls == 1
+
+    class RaisingString(str):
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
+            raise RuntimeError('custom encode failure')
+
+    with pytest.raises(RuntimeError, match='custom encode failure'):
+        base64.b64decode(RaisingString('YWJj'))
+
+    if sys.version_info >= (3, 12):  # noqa: UP036 - package supports Python 3.10.
+
+        class BufferHook:
+            def __init__(self, value: bytes) -> None:
+                self.value = value
+                self.calls = 0
+
+            def __buffer__(self, flags: int) -> memoryview:
+                self.calls += 1
+                return memoryview(self.value)
+
+        encoded = BufferHook(b'YWJj')
+        payload = BufferHook(b'abc')
+        assert base64.b64decode(encoded, validate=True) == b'abc'
+        assert base64.b64encode(payload) == b'YWJj'
+        assert encoded.calls == 1
+        assert payload.calls == 1
+
+        class BufferList(list):
+            def __buffer__(self, flags: int) -> memoryview:
+                return memoryview(b'abc')
+
+        assert base64.b64encode(BufferList()) == b'YWJj'
 
 
 def test_large_ascii_string_decode() -> None:
@@ -203,10 +306,29 @@ def test_encode_requires_contiguous_buffers() -> None:
     noncontiguous = memoryview(b'abcdef')[::2]
     with pytest.raises(BufferError):
         base64.b64encode(noncontiguous)
-    with pytest.raises(BufferError):
+    with pytest.raises(TypeError if PYTHON_315 else BufferError):
         base64.b64encode(b'abc', memoryview(b'_-x_')[::2])
     with pytest.raises(ALTCHARS_ERROR):
         base64.b64encode(b'abc', b'_')
+
+
+def test_encode_altchars_conversion_and_error_precedence_match_cpython() -> None:
+    def outcome(function: Callable[..., bytes], value: object, altchars: object) -> bytes | type[Exception]:
+        try:
+            return function(value, altchars)  # type: ignore[arg-type]
+        except Exception as error:
+            return type(error)
+
+    cases = (
+        (b'abc', memoryview(b'-_').cast('H')),
+        (b'abc', memoryview(b'----').cast('H')),
+        (b'abc', memoryview(b'_-x_')[::2]),
+        (b'abc', '-_'),
+        (b'abc', object()),
+        (object(), b'x'),
+    )
+    for value, altchars in cases:
+        assert outcome(base64.b64encode, value, altchars) == outcome(stdlib_base64.b64encode, value, altchars)
 
 
 def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
@@ -402,6 +524,11 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
     assert base64.b64decode(b'Y WJj', ignorechars=memoryview(b' ')) == b'abc'
     with pytest.raises(TypeError):
         base64.b64decode(b'YWJj', ignorechars=None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        with pytest.raises(binascii.Error):
+            base64.b64decode(b'/', b'++', validate=True)
+        assert not caught
     with pytest.warns(FutureWarning, match="invalid character '\\+'"):
         assert base64.b64decode(b'++8=', b'-_') == b'\xfb\xef'
     with pytest.warns(DeprecationWarning, match="invalid character '/'"):
@@ -409,6 +536,9 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
 
 
 def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
+    expected_default = not PYTHON_315
+    assert inspect.signature(base64.urlsafe_b64decode).parameters['padded'].default is expected_default
+    assert inspect.signature(base64.urlsafe_b64decode_into).parameters['padded'].default is expected_default
     assert base64.urlsafe_b64encode(b'\xfb\xff', padded=False) == b'-_8'
     assert base64.urlsafe_b64decode(b'-_8', padded=False) == b'\xfb\xff'
     assert base64.urlsafe_b64decode(b'-_8=', padded=True) == b'\xfb\xff'
@@ -429,12 +559,34 @@ def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
             base64.urlsafe_b64decode(b'-_8')
 
 
+def test_single_alphabet_helpers_are_native_and_keep_public_metadata() -> None:
+    for name in (
+        'standard_b64decode',
+        'standard_b64decode_into',
+        'standard_b64encode',
+        'standard_b64encode_into',
+        'urlsafe_b64decode',
+        'urlsafe_b64decode_into',
+        'urlsafe_b64encode',
+        'urlsafe_b64encode_into',
+    ):
+        function = getattr(base64, name)
+        assert inspect.isbuiltin(function)
+        assert function.__module__ == 'hashcodecs.base64'
+        assert function.__doc__
+
+
 def test_python_315_decode_options_are_backported() -> None:
     assert base64.b64decode(b'Y WJj', ignorechars=b' ') == b'abc'
     assert base64.b64decode(b'@#8', b'@#', padded=False, ignorechars=b'') == b'\xfb\xff'
     assert base64.b64decode(b'AA', padded=False, canonical=True) == b'\x00'
     with pytest.raises(binascii.Error):
         base64.b64decode(b'AB', padded=False, canonical=True)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_b64decode_signature_matches_cpython() -> None:
+    assert str(inspect.signature(base64.b64decode)) == str(inspect.signature(stdlib_base64.b64decode))
 
 
 class _BatchList(list[object]):

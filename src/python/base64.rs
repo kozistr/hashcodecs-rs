@@ -2,6 +2,7 @@ use core::slice;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{
     PyAssertionError, PyDeprecationWarning, PyFutureWarning, PyMemoryError, PyTypeError,
     PyValueError,
@@ -75,6 +76,58 @@ fn parse_altchars(
     }
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
     Ok((altchars != *b"+/").then_some(altchars))
+}
+
+type PreparedAltchars = Result<Option<[u8; 2]>, PyErr>;
+
+// Python 3.15 constructs a custom alphabet before consuming the input, but
+// binascii validates its byte length afterward. The inner result preserves
+// that otherwise-observable error ordering without sending valid calls back
+// through Python's encoder.
+fn prepare_b64encode_altchars(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<PreparedAltchars> {
+    let length = value.len()?;
+    if length != 2 {
+        let value = value.repr()?.to_string();
+        if python_at_least(py, (3, 15)) {
+            return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
+        }
+        return Err(PyAssertionError::new_err(value));
+    }
+
+    if python_at_least(py, (3, 15))
+        && !PyBytes::is_exact_type_of(value)
+        && !PyByteArray::is_exact_type_of(value)
+    {
+        let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
+        let alphabet = unsafe {
+            Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr()))?
+        };
+        let alphabet = match alphabet.cast_into::<PyBytes>() {
+            Ok(alphabet) => alphabet,
+            Err(error) => return Ok(Err(error.into())),
+        };
+        if alphabet.as_bytes().len() != STANDARD_ALPHABET.len() {
+            return Ok(Err(PyValueError::new_err("alphabet must have length 64")));
+        }
+        let alphabet = alphabet.as_bytes();
+        let altchars = [alphabet[62], alphabet[63]];
+        return Ok(Ok((altchars != *b"+/").then_some(altchars)));
+    }
+
+    let bytes = contiguous_bytes_like(py, value, "altchars")?;
+    if bytes.len() != 2 {
+        let message = if python_at_least(py, (3, 15)) {
+            "alphabet must have length 64"
+        } else {
+            "maketrans arguments must have same length"
+        };
+        return Err(PyValueError::new_err(message));
+    }
+    let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
+    Ok(Ok((altchars != *b"+/").then_some(altchars)))
 }
 
 /// Allocate an uninitialized Python `bytes` payload for direct initialization.
@@ -718,8 +771,21 @@ pub(super) fn b64encode<'py>(
     #[pyo3(from_py_with = extract_truthy)] padded: bool,
     wrapcol: i128,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let Some(altchars) = altchars else {
+        let input = contiguous_bytes_like(py, s, "s")?;
+        let wrapcol = encode::normalize_wrapcol(wrapcol)?;
+        return encode::encode(py, &input, None, padded, wrapcol);
+    };
+    let parse_altchars_first = python_at_least(py, (3, 15));
+    let parsed_altchars = parse_altchars_first
+        .then(|| prepare_b64encode_altchars(py, altchars))
+        .transpose()?;
     let input = contiguous_bytes_like(py, s, "s")?;
-    let altchars = parse_altchars(py, altchars, false)?;
+    let altchars = if let Some(parsed_altchars) = parsed_altchars {
+        parsed_altchars?
+    } else {
+        prepare_b64encode_altchars(py, altchars)??
+    };
     let wrapcol = encode::normalize_wrapcol(wrapcol)?;
     encode::encode(py, &input, altchars, padded, wrapcol)
 }
@@ -798,6 +864,29 @@ fn decode_parsed<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let output = decode_parsed_inner(
+        py,
+        input,
+        altchars,
+        strict_mode,
+        padded,
+        ignorechars,
+        canonical,
+    )?;
+    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
+    Ok(output)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_parsed_inner<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    altchars: Option<[u8; 2]>,
+    strict_mode: bool,
+    padded: bool,
+    ignorechars: Option<&Bound<'py, PyAny>>,
+    canonical: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
     let empty_ignorechars = ignorechars.is_some_and(|value| {
         value
             .cast::<PyBytes>()
@@ -852,7 +941,6 @@ fn decode_parsed<'py>(
         }
     }
 
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
     if ignorechars.is_none() && !canonical && strict_mode {
         if !padded {
             return match decode_unpadded_with_altchars(py, input, altchars) {
@@ -907,7 +995,10 @@ fn decode_parsed<'py>(
     )
 }
 
-#[pyfunction(signature = (s, altchars=None, validate=None, *, padded=true, ignorechars=None, canonical=false))]
+#[pyfunction(
+    signature = (s, altchars=None, validate=None, *, padded=true, ignorechars=None, canonical=false),
+    text_signature = "(s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)"
+)]
 pub(super) fn b64decode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
@@ -1008,6 +1099,31 @@ fn decode_parsed_into(
     ignorechars: Option<&Bound<'_, PyAny>>,
     canonical: bool,
 ) -> PyResult<usize> {
+    let written = decode_parsed_into_inner(
+        py,
+        input,
+        output,
+        altchars,
+        strict_mode,
+        padded,
+        ignorechars,
+        canonical,
+    )?;
+    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
+    Ok(written)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_parsed_into_inner(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    strict_mode: bool,
+    padded: bool,
+    ignorechars: Option<&Bound<'_, PyAny>>,
+    canonical: bool,
+) -> PyResult<usize> {
     let transactional_errors = !strict_mode;
     if ignorechars.is_none()
         && !canonical
@@ -1037,7 +1153,6 @@ fn decode_parsed_into(
         }
     }
 
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
         .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });

@@ -306,10 +306,29 @@ def test_encode_requires_contiguous_buffers() -> None:
     noncontiguous = memoryview(b'abcdef')[::2]
     with pytest.raises(BufferError):
         base64.b64encode(noncontiguous)
-    with pytest.raises(BufferError):
+    with pytest.raises(TypeError if PYTHON_315 else BufferError):
         base64.b64encode(b'abc', memoryview(b'_-x_')[::2])
     with pytest.raises(ALTCHARS_ERROR):
         base64.b64encode(b'abc', b'_')
+
+
+def test_encode_altchars_conversion_and_error_precedence_match_cpython() -> None:
+    def outcome(function: Callable[..., bytes], value: object, altchars: object) -> bytes | type[Exception]:
+        try:
+            return function(value, altchars)  # type: ignore[arg-type]
+        except Exception as error:
+            return type(error)
+
+    cases = (
+        (b'abc', memoryview(b'-_').cast('H')),
+        (b'abc', memoryview(b'----').cast('H')),
+        (b'abc', memoryview(b'_-x_')[::2]),
+        (b'abc', '-_'),
+        (b'abc', object()),
+        (object(), b'x'),
+    )
+    for value, altchars in cases:
+        assert outcome(base64.b64encode, value, altchars) == outcome(stdlib_base64.b64encode, value, altchars)
 
 
 def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
@@ -505,6 +524,11 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
     assert base64.b64decode(b'Y WJj', ignorechars=memoryview(b' ')) == b'abc'
     with pytest.raises(TypeError):
         base64.b64decode(b'YWJj', ignorechars=None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        with pytest.raises(binascii.Error):
+            base64.b64decode(b'/', b'++', validate=True)
+        assert not caught
     with pytest.warns(FutureWarning, match="invalid character '\\+'"):
         assert base64.b64decode(b'++8=', b'-_') == b'\xfb\xef'
     with pytest.warns(DeprecationWarning, match="invalid character '/'"):
@@ -558,6 +582,11 @@ def test_python_315_decode_options_are_backported() -> None:
     assert base64.b64decode(b'AA', padded=False, canonical=True) == b'\x00'
     with pytest.raises(binascii.Error):
         base64.b64decode(b'AB', padded=False, canonical=True)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_b64decode_signature_matches_cpython() -> None:
+    assert str(inspect.signature(base64.b64decode)) == str(inspect.signature(stdlib_base64.b64decode))
 
 
 class _BatchList(list[object]):

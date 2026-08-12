@@ -8,6 +8,7 @@ use pyo3::exceptions::{
     PyValueError,
 };
 use pyo3::ffi;
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyDict, PyList, PyType};
 
@@ -336,19 +337,20 @@ fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
     }
 }
 
-fn translate_altchars(input: &[u8], [plus, slash]: [u8; 2]) -> Vec<u8> {
-    input
-        .iter()
-        .map(|&byte| {
-            if byte == slash {
-                b'/'
-            } else if byte == plus {
-                b'+'
-            } else {
-                byte
-            }
-        })
-        .collect()
+fn translate_altchars(input: &[u8], [plus, slash]: [u8; 2]) -> Option<Vec<u8>> {
+    let first = memchr::memchr2(plus, slash, input)?;
+    let mut translated = Vec::with_capacity(input.len());
+    translated.extend_from_slice(&input[..first]);
+    translated.extend(input[first..].iter().map(|&byte| {
+        if byte == slash {
+            b'/'
+        } else if byte == plus {
+            b'+'
+        } else {
+            byte
+        }
+    }));
+    Some(translated)
 }
 
 fn normalize_mime_whitespace(input: &BytesLike<'_, '_>) -> PyResult<Option<Vec<u8>>> {
@@ -386,7 +388,11 @@ fn decode_strict_with_altchars<'py>(
         Some(altchars) => {
             let translated =
                 unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
-            decode_strict(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+            if let Some(translated) = translated {
+                decode_strict(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+            } else {
+                decode_strict(py, input, DecodeAlphabet::Standard)
+            }
         }
     }
 }
@@ -402,7 +408,11 @@ fn decode_unpadded_with_altchars<'py>(
         Some(altchars) => {
             let translated =
                 unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
-            decode_unpadded(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+            if let Some(translated) = translated {
+                decode_unpadded(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
+            } else {
+                decode_unpadded(py, input, DecodeAlphabet::Standard)
+            }
         }
     }
 }
@@ -415,8 +425,10 @@ fn decode_unpadded_into_with_altchars(
 ) -> Result<usize, Base64Error> {
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
-        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
-    let translated = translated.map(BytesLike::Owned);
+        .and_then(|altchars| unsafe {
+            input.with_bytes(|input| translate_altchars(input, altchars))
+        })
+        .map(BytesLike::Owned);
     let direct_input = translated.as_ref().unwrap_or(input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
@@ -499,7 +511,7 @@ fn decode_with_binascii<'py>(
     let translated = if custom_alphabet {
         None
     } else {
-        altchars.map(|altchars| unsafe {
+        altchars.and_then(|altchars| unsafe {
             input.with_bytes(|input| translate_altchars(input, altchars))
         })
     };
@@ -509,7 +521,9 @@ fn decode_with_binascii<'py>(
         unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
     };
     let input = data.as_bytes();
-    let decode = py.import("binascii")?.getattr("a2b_base64")?;
+    let decode = py
+        .import(intern!(py, "binascii"))?
+        .getattr(intern!(py, "a2b_base64"))?;
     let output = if python_at_least(py, (3, 15)) {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
@@ -864,6 +878,16 @@ fn decode_parsed<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    if ignorechars.is_none()
+        && !canonical
+        && altchars == Some(*b"-_")
+        && python_at_least(py, (3, 15))
+        && let Some(output) = try_decode_urlsafe_315(py, input, strict_mode, padded)?
+    {
+        // A successful strict URL-safe decode proves that no legacy `+` or
+        // `/` characters were present, so no warning scan is necessary.
+        return Ok(output);
+    }
     let output = decode_parsed_inner(
         py,
         input,
@@ -875,6 +899,29 @@ fn decode_parsed<'py>(
     )?;
     warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
     Ok(output)
+}
+
+fn try_decode_urlsafe_315<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    strict_mode: bool,
+    padded: bool,
+) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    if padded || !strict_mode {
+        match decode_strict(py, input, DecodeAlphabet::UrlSafe) {
+            Ok(output) => return Ok(Some(output)),
+            Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
+            Err(_) => {}
+        }
+    }
+    if !padded {
+        match decode_unpadded(py, input, DecodeAlphabet::UrlSafe) {
+            Ok(output) => return Ok(Some(output)),
+            Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
+            Err(_) => {}
+        }
+    }
+    Ok(None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -917,27 +964,6 @@ fn decode_parsed_inner<'py>(
             }
             Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
             Err(_) => {}
-        }
-    }
-
-    if ignorechars.is_none()
-        && !canonical
-        && altchars == Some(*b"-_")
-        && python_at_least(py, (3, 15))
-    {
-        if padded || !strict_mode {
-            match decode_strict(py, input, DecodeAlphabet::UrlSafe) {
-                Ok(output) => return Ok(output),
-                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                Err(_) => {}
-            }
-        }
-        if !padded {
-            match decode_unpadded(py, input, DecodeAlphabet::UrlSafe) {
-                Ok(output) => return Ok(output),
-                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                Err(_) => {}
-            }
         }
     }
 
@@ -1099,6 +1125,15 @@ fn decode_parsed_into(
     ignorechars: Option<&Bound<'_, PyAny>>,
     canonical: bool,
 ) -> PyResult<usize> {
+    if ignorechars.is_none()
+        && !canonical
+        && altchars == Some(*b"-_")
+        && python_at_least(py, (3, 15))
+        && let Some(written) = try_decode_urlsafe_315_into(input, output, strict_mode, padded)?
+    {
+        // The strict URL-safe decoder rejects legacy standard-alphabet bytes.
+        return Ok(written);
+    }
     let written = decode_parsed_into_inner(
         py,
         input,
@@ -1113,6 +1148,34 @@ fn decode_parsed_into(
     Ok(written)
 }
 
+fn try_decode_urlsafe_315_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    strict_mode: bool,
+    padded: bool,
+) -> PyResult<Option<usize>> {
+    let transactional_errors = !strict_mode;
+    if padded || !strict_mode {
+        match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
+            Ok(written) => return Ok(Some(written)),
+            Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
+                return Err(output_too_small(required, provided));
+            }
+            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
+        }
+    }
+    if !padded {
+        match decode_unpadded_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
+            Ok(written) => return Ok(Some(written)),
+            Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
+                return Err(output_too_small(required, provided));
+            }
+            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
+        }
+    }
+    Ok(None)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn decode_parsed_into_inner(
     py: Python<'_>,
@@ -1125,38 +1188,12 @@ fn decode_parsed_into_inner(
     canonical: bool,
 ) -> PyResult<usize> {
     let transactional_errors = !strict_mode;
-    if ignorechars.is_none()
-        && !canonical
-        && altchars == Some(*b"-_")
-        && python_at_least(py, (3, 15))
-    {
-        if padded || !strict_mode {
-            match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
-                Ok(written) => return Ok(written),
-                Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
-                    return Err(output_too_small(required, provided));
-                }
-                Err(Base64Error::OutputTooSmall { .. }) => {}
-                Err(Base64Error::InvalidInput) => {}
-            }
-        }
-        if !padded {
-            match decode_unpadded_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors)
-            {
-                Ok(written) => return Ok(written),
-                Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
-                    return Err(output_too_small(required, provided));
-                }
-                Err(Base64Error::OutputTooSmall { .. }) => {}
-                Err(Base64Error::InvalidInput) => {}
-            }
-        }
-    }
-
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
-        .map(|altchars| unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) });
-    let translated = translated.map(BytesLike::Owned);
+        .and_then(|altchars| unsafe {
+            input.with_bytes(|input| translate_altchars(input, altchars))
+        })
+        .map(BytesLike::Owned);
     let direct_input = translated.as_ref().unwrap_or(input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
@@ -1176,6 +1213,20 @@ fn decode_parsed_into_inner(
         }
         Err(Base64Error::OutputTooSmall { .. }) => {}
         Err(Base64Error::InvalidInput) => {}
+    }
+
+    if padded
+        && !strict_mode
+        && ignorechars.is_none()
+        && !canonical
+        && matches!(altchars, None | Some([b'-', b'_']))
+        && let Some(normalized) = normalize_mime_whitespace(input)?
+    {
+        let normalized = BytesLike::Owned(normalized);
+        match decode_strict_into(&normalized, output, alphabet, true) {
+            Ok(written) => return Ok(written),
+            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
+        }
     }
 
     if !padded && ignorechars.is_none() && !canonical {

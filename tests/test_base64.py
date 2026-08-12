@@ -55,6 +55,7 @@ def test_base64_variants_and_lenient_mode() -> None:
     assert base64.b64decode(b'++8=', b'++') == stdlib_base64.b64decode(b'++8=', b'++')
     assert base64.b64decode(b'++8=', b'++', validate=True) == stdlib_base64.b64decode(b'++8=', b'++', validate=True)
     assert base64.b64encode(b'\xfb\xff', b'@#') == b'@#8='
+    assert base64.b64encode(b'\xfb\xff', b'/+') == b'/+8='
     assert base64.b64encode(b'\xfb\xff', b'+/') == b'+/8='
     assert base64.b64decode(b'+/8=', b'+/', validate=True) == b'\xfb\xff'
 
@@ -124,6 +125,11 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64decode(memoryview(b'xYWJj')[1:], validate=True) == b'abc'
     assert base64.b64encode(memoryview(b'abcd').cast('I', shape=[])) == b'YWJjZA=='
     assert base64.b64decode(memoryview(b'YWJj').cast('I', shape=[]), validate=True) == b'abc'
+
+    large_payload = bytes(range(256)) * 16
+    large_encoded = stdlib_base64.b64encode(large_payload)
+    assert base64.b64encode(memoryview(large_payload)) == large_encoded
+    assert base64.b64decode(memoryview(large_encoded), validate=True) == large_payload
 
 
 def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
@@ -198,6 +204,8 @@ def test_base64_into_variants_and_errors() -> None:
     assert base64.standard_b64encode_into(b'abc', encoded) == 4
     assert hashcodecs.b64encode_into(b'\xfb\xff', encoded, b'@#') == 4
     assert encoded[:4] == b'@#8='
+    assert hashcodecs.b64encode_into(b'\xfb\xff', encoded, b'/+') == 4
+    assert encoded[:4] == b'/+8='
     assert base64.b64encode_into(b'\xfb\xff', encoded, b'+/') == 4
     assert encoded[:4] == b'+/8='
     assert base64.urlsafe_b64encode_into(b'\xfb\xff', encoded) == 4
@@ -524,6 +532,14 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
     assert base64.b64decode(b'Y WJj', ignorechars=memoryview(b' ')) == b'abc'
     with pytest.raises(TypeError):
         base64.b64decode(b'YWJj', ignorechars=None)
+    output = bytearray(2)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        assert base64.b64decode(b'-_8=', b'-_', validate=True) == b'\xfb\xff'
+        assert base64.b64decode(b'-_8', b'-_', validate=True, padded=False) == b'\xfb\xff'
+        assert base64.b64decode_into(b'-_8=', output, b'-_', validate=True) == 2
+        assert output == b'\xfb\xff'
+        assert not caught
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         with pytest.raises(binascii.Error):
@@ -533,6 +549,9 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
         assert base64.b64decode(b'++8=', b'-_') == b'\xfb\xef'
     with pytest.warns(DeprecationWarning, match="invalid character '/'"):
         assert base64.b64decode(b'//8=', b'-_', validate=True) == b'\xff\xff'
+    with pytest.warns(DeprecationWarning, match="invalid character '/'"):
+        assert base64.b64decode_into(b'//8=', output, b'-_', validate=True) == 2
+    assert output == b'\xff\xff'
 
 
 def test_urlsafe_padding_options_follow_the_running_cpython() -> None:

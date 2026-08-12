@@ -2,7 +2,7 @@ use core::{fmt, mem::ManuallyDrop, mem::MaybeUninit};
 
 #[cfg(test)]
 use dispatch::{
-    Backend, decode_with_backend, decode_with_backend_ptr, encode_with_backend,
+    Backend, backend_supported, decode_with_backend, decode_with_backend_ptr, encode_with_backend,
     select_aarch64_backend, select_x86_backend,
 };
 use dispatch::{decode_simd_ptr, encode_simd_ptr};
@@ -174,6 +174,11 @@ pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
 
 #[inline]
 pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
+    if input.len() < 16 {
+        unsafe { encode_scalar_ptr(input, output, urlsafe) };
+        return;
+    }
+
     let input_offset = unsafe { encode_simd_ptr(input, output, urlsafe) };
     unsafe {
         encode_scalar_ptr(
@@ -247,10 +252,16 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     if layout.output_len == 0 {
         return Ok(Vec::new());
     }
-    let allocation_len = layout
-        .output_len
-        .checked_add(DECODE_STORE_PADDING)
-        .expect("Base64 output is too large");
+    let simd_len = input.len() - usize::from(layout.padding != 0) * 4;
+    let padded_stores = simd_len >= 16;
+    let allocation_len = if padded_stores {
+        layout
+            .output_len
+            .checked_add(DECODE_STORE_PADDING)
+            .expect("Base64 output is too large")
+    } else {
+        layout.output_len
+    };
     let mut output = uninitialized_output(allocation_len);
     let alphabet = if urlsafe {
         DecodeAlphabet::UrlSafe
@@ -260,7 +271,13 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     // The padded store mode may write at most `DECODE_STORE_PADDING` bytes past
     // the initialized result, all within this private allocation.
     unsafe {
-        decode_to_ptr_with_layout(input, output.as_mut_ptr().cast(), layout, alphabet, true)?
+        decode_to_ptr_with_layout(
+            input,
+            output.as_mut_ptr().cast(),
+            layout,
+            alphabet,
+            padded_stores,
+        )?
     };
     // The result prefix is fully initialized; the private padding is discarded.
     Ok(unsafe { initialized_output(output, layout.output_len) })
@@ -405,15 +422,19 @@ unsafe fn decode_to_ptr_with_layout_mode(
     } else {
         input.len() - 4
     };
-    let (input_offset, output_offset) = unsafe {
-        decode_simd_ptr(
-            &input[..simd_len],
-            output,
-            alphabet,
-            padded_stores,
-            transactional_errors,
-        )
-    }?;
+    let (input_offset, output_offset) = if simd_len < 16 {
+        (0, 0)
+    } else {
+        unsafe {
+            decode_simd_ptr(
+                &input[..simd_len],
+                output,
+                alphabet,
+                padded_stores,
+                transactional_errors,
+            )
+        }?
+    };
 
     let mut source = input_offset;
     let mut destination = output_offset;
@@ -535,15 +556,24 @@ unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
     } else {
         STANDARD_ALPHABET
     };
+    let input_len = input.len();
+    let input_ptr = input.as_ptr();
     let mut source = 0;
     let mut destination = 0;
-    while source + 6 <= input.len() {
-        let first = ((input[source] as u32) << 16)
-            | ((input[source + 1] as u32) << 8)
-            | input[source + 2] as u32;
-        let second = ((input[source + 3] as u32) << 16)
-            | ((input[source + 4] as u32) << 8)
-            | input[source + 5] as u32;
+    // `input_ptr` comes from the live slice above. Each raw read is guarded by the
+    // loop or tail length check, avoiding a separate slice bounds check per byte.
+    while source + 6 <= input_len {
+        let (first, second) = unsafe {
+            let block = input_ptr.add(source);
+            (
+                ((block.read() as u32) << 16)
+                    | ((block.add(1).read() as u32) << 8)
+                    | block.add(2).read() as u32,
+                ((block.add(3).read() as u32) << 16)
+                    | ((block.add(4).read() as u32) << 8)
+                    | block.add(5).read() as u32,
+            )
+        };
         let encoded = [
             alphabet[((first >> 18) & 0x3f) as usize],
             alphabet[((first >> 12) & 0x3f) as usize],
@@ -562,10 +592,13 @@ unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
         source += 6;
         destination += 8;
     }
-    while source + 3 <= input.len() {
-        let block = ((input[source] as u32) << 16)
-            | ((input[source + 1] as u32) << 8)
-            | input[source + 2] as u32;
+    while source + 3 <= input_len {
+        let block = unsafe {
+            let input = input_ptr.add(source);
+            ((input.read() as u32) << 16)
+                | ((input.add(1).read() as u32) << 8)
+                | input.add(2).read() as u32
+        };
         unsafe {
             output
                 .add(destination)
@@ -584,9 +617,9 @@ unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
         destination += 4;
     }
 
-    let remaining = input.len() - source;
+    let remaining = input_len - source;
     if remaining == 1 {
-        let block = (input[source] as u32) << 16;
+        let block = (unsafe { input_ptr.add(source).read() } as u32) << 16;
         unsafe {
             output
                 .add(destination)
@@ -598,7 +631,10 @@ unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
             output.add(destination + 3).write(b'=');
         }
     } else if remaining == 2 {
-        let block = ((input[source] as u32) << 16) | ((input[source + 1] as u32) << 8);
+        let block = unsafe {
+            ((input_ptr.add(source).read() as u32) << 16)
+                | ((input_ptr.add(source + 1).read() as u32) << 8)
+        };
         unsafe {
             output
                 .add(destination)

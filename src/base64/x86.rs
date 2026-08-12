@@ -184,8 +184,15 @@ pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
 
     // The shifted load is four bytes behind the logical source position.
     let source = load_offset + 4;
-    // The remainder still benefits from the SSSE3 kernel.
-    source + unsafe { encode_ssse3::<URLSAFE>(&input[source..], output.add(destination)) }
+    // Keep the final SIMD block VEX-encoded. Entering the legacy-encoded
+    // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
+    if source + 16 <= input.len() {
+        let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
+        unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
+        source + 12
+    } else {
+        source
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -472,6 +479,19 @@ unsafe fn encode_12<const URLSAFE: bool>(input: *const u8) -> __m128i {
     ascii_from_indices::<URLSAFE>(_mm_or_si128(higher, lower))
 }
 
+#[target_feature(enable = "avx2")]
+unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
+    let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
+    let mut value = unsafe { _mm_loadu_si128(input.cast()) };
+    value = _mm_shuffle_epi8(value, shuffle);
+
+    let higher = _mm_and_si128(value, _mm_set1_epi32(0x0fc0_fc00));
+    let higher = unsafe { mulhi_epu16_exact_avx2_128(higher, _mm_set1_epi32(0x0400_0040)) };
+    let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
+    let lower = unsafe { mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010)) };
+    ascii_from_indices_avx2_128::<URLSAFE>(_mm_or_si128(higher, lower))
+}
+
 // LLVM can expand this constant multiply into a long widen/shift/pack
 // sequence. Keep the single SSE2 instruction on the SSSE3 fallback path.
 #[inline]
@@ -480,6 +500,34 @@ unsafe fn mulhi_epu16_exact_ssse3(mut value: __m128i, multiplier: __m128i) -> __
     unsafe {
         asm!(
             "pmulhuw {value}, {multiplier}",
+            value = inout(xmm_reg) value,
+            multiplier = in(xmm_reg) multiplier,
+            options(pure, nomem, nostack)
+        );
+    }
+    value
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+    unsafe {
+        asm!(
+            "vpmulhuw {value}, {value}, {multiplier}",
+            value = inout(xmm_reg) value,
+            multiplier = in(xmm_reg) multiplier,
+            options(pure, nomem, nostack)
+        );
+    }
+    value
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+    unsafe {
+        asm!(
+            "vpmullw {value}, {value}, {multiplier}",
             value = inout(xmm_reg) value,
             multiplier = in(xmm_reg) multiplier,
             options(pure, nomem, nostack)
@@ -742,6 +790,32 @@ fn pack_32(indices: __m256i) -> __m256i {
 
 #[target_feature(enable = "ssse3")]
 fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
+    let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
+    let lower = _mm_cmpgt_epi8(indices, _mm_set1_epi8(25));
+    let reduced = _mm_sub_epi8(reduced, lower);
+    let offsets = _mm_setr_epi8(
+        b'A' as i8,
+        (b'a' - 26) as i8,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        -4,
+        if URLSAFE { -17 } else { -19 },
+        if URLSAFE { 32 } else { -16 },
+        0,
+        0,
+    );
+    _mm_add_epi8(_mm_shuffle_epi8(offsets, reduced), indices)
+}
+
+#[target_feature(enable = "avx2")]
+fn ascii_from_indices_avx2_128<const URLSAFE: bool>(indices: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
     let lower = _mm_cmpgt_epi8(indices, _mm_set1_epi8(25));
     let reduced = _mm_sub_epi8(reduced, lower);

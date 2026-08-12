@@ -46,6 +46,10 @@ const fn decode_shuffle() -> [u8; 64] {
 
 #[target_feature(enable = "avx512vbmi")]
 pub(super) unsafe fn encode_avx512<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+    if input.len() < 48 {
+        return unsafe { x86::encode_avx2::<URLSAFE>(input, output) };
+    }
+
     let alphabet = if URLSAFE {
         URLSAFE_ALPHABET
     } else {
@@ -111,7 +115,11 @@ pub(super) unsafe fn encode_avx512<const URLSAFE: bool>(input: &[u8], output: *m
         destination += 64;
     }
 
-    source + unsafe { x86::encode_avx2::<URLSAFE>(&input[source..], output.add(destination)) }
+    if input.len() - source >= 32 {
+        source + unsafe { x86::encode_avx2::<URLSAFE>(&input[source..], output.add(destination)) }
+    } else {
+        source
+    }
 }
 
 #[target_feature(enable = "avx512vbmi")]
@@ -134,6 +142,10 @@ pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
+    if input.len() < 64 {
+        return unsafe { x86::decode_avx2::<A, S>(input, output) };
+    }
+
     let table = A::decode_table();
     let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
     let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
@@ -185,9 +197,13 @@ pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
         destination += 48;
     }
 
-    let (tail_source, tail_destination) =
-        unsafe { x86::decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
-    Ok((source + tail_source, destination + tail_destination))
+    if input.len() - source >= 16 {
+        let (tail_source, tail_destination) =
+            unsafe { x86::decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
+        Ok((source + tail_source, destination + tail_destination))
+    } else {
+        Ok((source, destination))
+    }
 }
 
 #[target_feature(enable = "avx512vbmi")]

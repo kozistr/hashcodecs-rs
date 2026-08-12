@@ -26,16 +26,10 @@ pub(super) fn encode<'py>(
                     let output = output_address as *mut u8;
                     let urlsafe = altchars == Some(*b"-_");
                     encode_configured_ptr(input, output, urlsafe, padded, wrapcol);
-                    if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
+                    if let Some(altchars) = altchars.filter(|_| !urlsafe) {
                         // `encode_configured_ptr` initialized the complete allocation.
                         let output = slice::from_raw_parts_mut(output, output_len);
-                        for byte in output {
-                            if *byte == b'+' {
-                                *byte = plus;
-                            } else if *byte == b'/' {
-                                *byte = slash;
-                            }
-                        }
+                        substitute_altchars(output, altchars);
                     }
                 };
                 if detach { py.detach(encode) } else { encode() }
@@ -106,17 +100,25 @@ fn encode_slice_into(
     let output = output_ptr(output, required)?;
     let urlsafe = altchars == Some(*b"-_");
     unsafe { encode_configured_ptr(input, output, urlsafe, padded, wrapcol) };
-    if let Some([plus, slash]) = altchars.filter(|_| !urlsafe) {
+    if let Some(altchars) = altchars.filter(|_| !urlsafe) {
         let output = unsafe { slice::from_raw_parts_mut(output, required) };
-        for byte in output {
-            if *byte == b'+' {
-                *byte = plus;
-            } else if *byte == b'/' {
-                *byte = slash;
-            }
-        }
+        substitute_altchars(output, altchars);
     }
     Ok(required)
+}
+
+#[inline]
+fn substitute_altchars(output: &mut [u8], [plus, slash]: [u8; 2]) {
+    let Some(first) = memchr::memchr2(b'+', b'/', output) else {
+        return;
+    };
+    for byte in &mut output[first..] {
+        if *byte == b'+' {
+            *byte = plus;
+        } else if *byte == b'/' {
+            *byte = slash;
+        }
+    }
 }
 
 #[inline]

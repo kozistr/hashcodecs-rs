@@ -1,34 +1,6 @@
 use super::*;
 use base64::Engine;
 
-fn backend_supported(backend: Backend) -> bool {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        match backend {
-            Backend::Scalar => true,
-            Backend::Neon => false,
-            Backend::Ssse3 => std::is_x86_feature_detected!("ssse3"),
-            Backend::Sse41 => {
-                std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
-            }
-            Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
-            Backend::Avx512 => dispatch::avx512_supported(),
-        }
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        match backend {
-            Backend::Scalar => true,
-            Backend::Neon => std::arch::is_aarch64_feature_detected!("neon"),
-            _ => false,
-        }
-    }
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
-    {
-        backend == Backend::Scalar
-    }
-}
-
 #[test]
 fn standard_and_url_safe_round_trip() {
     let input = b"the quick brown fox jumps over the lazy dog";
@@ -89,6 +61,51 @@ fn matches_the_standard_engine_for_all_short_lengths() {
             input,
             "url-safe length={length}"
         );
+    }
+}
+
+#[test]
+fn scalar_encoder_handles_every_short_length_and_input_alignment() {
+    const GUARD: usize = 16;
+    const CANARY: u8 = 0xa5;
+
+    for input_offset in 0..16 {
+        for length in 0..=32 {
+            let mut guarded_input = vec![CANARY; input_offset + length + GUARD];
+            for (index, byte) in guarded_input[input_offset..input_offset + length]
+                .iter_mut()
+                .enumerate()
+            {
+                *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
+            }
+            let input = &guarded_input[input_offset..input_offset + length];
+
+            for urlsafe in [false, true] {
+                let expected = if urlsafe {
+                    base64::engine::general_purpose::URL_SAFE.encode(input)
+                } else {
+                    base64::engine::general_purpose::STANDARD.encode(input)
+                };
+                let mut guarded_output = vec![CANARY; GUARD + expected.len() + GUARD];
+                encode_scalar(
+                    input,
+                    &mut guarded_output[GUARD..GUARD + expected.len()],
+                    urlsafe,
+                );
+
+                assert_eq!(
+                    &guarded_output[GUARD..GUARD + expected.len()],
+                    expected.as_bytes(),
+                    "length={length} input_offset={input_offset} urlsafe={urlsafe}"
+                );
+                assert!(guarded_output[..GUARD].iter().all(|&byte| byte == CANARY));
+                assert!(
+                    guarded_output[GUARD + expected.len()..]
+                        .iter()
+                        .all(|&byte| byte == CANARY)
+                );
+            }
+        }
     }
 }
 
@@ -195,32 +212,36 @@ fn backend_selection_and_kernels_match_scalar_output() {
         .unwrap(),
         (0, 0)
     );
-    #[cfg(coverage)]
+    for backend in [
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512,
+    ]
+    .into_iter()
+    .filter(|backend| !backend_supported(*backend))
     {
+        let mut encoded_guard = vec![0xa5; expected.len()];
         assert_eq!(
-            encode_with_backend(&input, &mut scalar, Backend::Avx512, false),
-            0
+            encode_with_backend(&input, &mut encoded_guard, backend, false),
+            0,
+            "backend={backend:?}"
         );
+        assert!(encoded_guard.iter().all(|byte| *byte == 0xa5));
+
+        let mut decoded_guard = vec![0xa5; input.len()];
         assert_eq!(
             decode_with_backend(
                 expected.as_bytes(),
-                &mut scalar_decoded,
-                Backend::Avx512,
+                &mut decoded_guard,
+                backend,
                 DecodeAlphabet::Standard,
             ),
-            Ok((0, 0))
+            Ok((0, 0)),
+            "backend={backend:?}"
         );
-    }
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    unsafe {
-        assert_eq!(
-            dispatch::decode_sse41::<x86::StandardDecoder, x86::ExactStore>(
-                expected.as_bytes(),
-                scalar_decoded.as_mut_ptr(),
-                false,
-            ),
-            Ok((0, 0))
-        );
+        assert!(decoded_guard.iter().all(|byte| *byte == 0xa5));
     }
     let expected_urlsafe = b64encode_urlsafe(&input);
     let mixed = b"-///".repeat(32);
@@ -334,6 +355,34 @@ fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(scalar_mixed, [0xfb, 0xff, 0xff]);
 }
 
+#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+#[test]
+fn avx512_decoder_tail_boundaries_match_scalar_output() {
+    if !backend_supported(Backend::Avx512) {
+        return;
+    }
+
+    for length in [64, 68, 76, 80, 92, 96, 108, 112, 124, 128, 132, 140, 144] {
+        let encoded = vec![b'A'; length];
+        let mut decoded = vec![0xa5; length / 4 * 3];
+        let (consumed, written) = decode_with_backend(
+            &encoded,
+            &mut decoded,
+            Backend::Avx512,
+            DecodeAlphabet::Standard,
+        )
+        .unwrap();
+        let remainder = length % 64;
+        let expected_tail = remainder / 16 * 16;
+        let expected_consumed = length - remainder + expected_tail;
+        let expected_written = expected_consumed / 4 * 3;
+
+        assert_eq!((consumed, written), (expected_consumed, expected_written));
+        assert!(decoded[..written].iter().all(|byte| *byte == 0));
+        assert!(decoded[written..].iter().all(|byte| *byte == 0xa5));
+    }
+}
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
@@ -345,8 +394,9 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     const CANARY: u8 = 0xa5;
 
     // 32 activates the special first load, 52 activates the first shifted
-    // load, and 124 activates the four-block unrolled shifted loop.
-    for length in (0..=160).chain([191, 192, 195, 196, 219, 220, 255, 256]) {
+    // load, and 124 activates the four-block unrolled shifted loop. The other
+    // explicit boundaries exercise the AVX2 and scalar terminal tails.
+    for length in (0..=160).chain([191, 192, 195, 196, 219, 220, 255, 256, 4095, 4096]) {
         let mut guarded_input = vec![CANARY; GUARD + length + GUARD];
         for (index, byte) in guarded_input[GUARD..GUARD + length].iter_mut().enumerate() {
             *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
@@ -364,16 +414,20 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
             let consumed = encode_with_backend(input, output, Backend::Avx2, urlsafe);
             let simd_output_len = consumed / 3 * 4;
             let avx2_blocks = if length >= 32 { (length - 4) / 24 } else { 0 };
-            let remaining = length - avx2_blocks * 24;
-            let ssse3_blocks = if remaining >= 16 {
-                (remaining - 4) / 12
+            let avx2_tail_blocks = if length >= 32 && length - avx2_blocks * 24 >= 16 {
+                1
+            } else {
+                0
+            };
+            let ssse3_blocks = if (16..32).contains(&length) {
+                (length - 4) / 12
             } else {
                 0
             };
 
             assert_eq!(
                 consumed,
-                avx2_blocks * 24 + ssse3_blocks * 12,
+                avx2_blocks * 24 + (avx2_tail_blocks + ssse3_blocks) * 12,
                 "consumed length={length} urlsafe={urlsafe}"
             );
 

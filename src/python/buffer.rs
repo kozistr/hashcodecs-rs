@@ -1,9 +1,10 @@
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyMemoryView, PyString};
 
-use super::DETACH_THRESHOLD;
+const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
 
 pub(super) enum BytesLike<'a, 'py> {
     Bytes(&'a [u8]),
@@ -93,7 +94,7 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
         return Ok(BytesLike::Text(text));
     }
     if value.is_instance_of::<PyString>() {
-        let encoded = value.call_method1("encode", ("ascii",))?;
+        let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
         return buffer_bytes_like(&encoded, argument, false);
     }
     bytes_like(py, value, argument)
@@ -130,10 +131,15 @@ fn exact_memoryview_bytes_like<'a, 'py>(
     memoryview: &Bound<'py, PyMemoryView>,
     require_contiguous: bool,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    let nbytes = memoryview.getattr("nbytes")?.extract::<usize>()?;
-    let try_owner = nbytes >= DETACH_THRESHOLD;
+    let py = memoryview.py();
+    let nbytes = memoryview
+        .getattr(intern!(py, "nbytes"))?
+        .extract::<usize>()?;
+    let try_owner = nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
     let contiguous = if require_contiguous || try_owner {
-        memoryview.getattr("c_contiguous")?.is_truthy()?
+        memoryview
+            .getattr(intern!(py, "c_contiguous"))?
+            .is_truthy()?
     } else {
         false
     };
@@ -143,7 +149,7 @@ fn exact_memoryview_bytes_like<'a, 'py>(
         ));
     }
     if contiguous && try_owner {
-        let owner = memoryview.getattr("obj")?;
+        let owner = memoryview.getattr(intern!(py, "obj"))?;
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
             if owner.as_bytes().len() == nbytes {
@@ -163,13 +169,18 @@ fn copy_memoryview<'py>(
     memoryview: &Bound<'py, PyMemoryView>,
     require_contiguous: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    if require_contiguous && !memoryview.getattr("c_contiguous")?.is_truthy()? {
+    let py = memoryview.py();
+    if require_contiguous
+        && !memoryview
+            .getattr(intern!(py, "c_contiguous"))?
+            .is_truthy()?
+    {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",
         ));
     }
     memoryview
-        .call_method0("tobytes")?
+        .call_method0(intern!(py, "tobytes"))?
         .cast_into::<PyBytes>()
         .map_err(|_| PyTypeError::new_err("memoryview.tobytes() did not return bytes"))
 }

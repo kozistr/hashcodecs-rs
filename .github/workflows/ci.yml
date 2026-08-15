@@ -131,9 +131,17 @@ jobs:
       - name: Test Rust Python feature
         run: cargo test --features python
 
-  rust_asan:
-    name: Rust / AddressSanitizer
+  rust_sanitizers:
+    name: Rust / Safety / ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: AddressSanitizer
+            flags: -Zsanitizer=address
+          - name: MemorySanitizer
+            flags: -Zsanitizer=memory -Zsanitizer-memory-track-origins
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
@@ -145,13 +153,14 @@ jobs:
         with:
           components: rust-src
 
-      - name: Test Base64 with AddressSanitizer
+      - name: Check runtime SIMD paths
         env:
-          RUSTFLAGS: "-Zsanitizer=address"
-        run: "cargo test -Zbuild-std --target x86_64-unknown-linux-gnu base64::tests::"
+          RUSTFLAGS: ${{ matrix.flags }}
+          RUSTDOCFLAGS: ${{ matrix.flags }}
+        run: cargo test -Zbuild-std --target x86_64-unknown-linux-gnu --test sanitizers
 
-  rust_kani:
-    name: Rust / Kani
+  rust_safety_kani:
+    name: Rust / Safety / Kani
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -159,11 +168,11 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Prove xxHash load bounds
+      - name: Prove raw-load and buffer bounds
         uses: model-checking/kani-github-action@v1.1
 
-  rust_miri:
-    name: Rust / Miri
+  rust_safety_miri:
+    name: Rust / Safety / Miri
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -176,35 +185,13 @@ jobs:
         with:
           components: miri
 
-      - name: Interpret xxHash boundary and batch paths
+      - name: Interpret codec and hash boundary paths
         env:
           MIRIFLAGS: -Zmiri-strict-provenance
-        run: cargo miri test --lib miri_tests::every_length_class_and_batch_are_defined
+        run: cargo miri test --lib miri_tests
 
-  rust_msan:
-    name: Rust / MemorySanitizer
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-
-      - name: Set up nightly Rust with source
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rust-src
-
-      - name: Check xxHash SIMD kernels for uninitialized reads
-        env:
-          RUSTFLAGS: -Zsanitizer=memory -Zsanitizer-memory-track-origins
-          RUSTDOCFLAGS: -Zsanitizer=memory -Zsanitizer-memory-track-origins
-        run: |
-          cargo test -Zbuild-std --target x86_64-unknown-linux-gnu --lib xxhash::tests::every_supported_x86_backend_matches_scalar -- --exact
-          cargo test -Zbuild-std --target x86_64-unknown-linux-gnu --lib xxhash::tests::batches_match_one_shot -- --exact
-
-  rust_fuzz:
-    name: Rust / Fuzz
+  rust_safety_fuzz:
+    name: Rust / Safety / Fuzz
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -218,8 +205,11 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
 
-      - name: Fuzz xxHash against xxhash-rust
-        run: cargo fuzz run xxhash -- -max_total_time=30 -rss_limit_mb=2048
+      - name: Differential fuzz codecs and hashes
+        run: |
+          cargo fuzz run base64 -- -max_total_time=30 -rss_limit_mb=2048
+          cargo fuzz run murmur3 -- -max_total_time=30 -rss_limit_mb=2048
+          cargo fuzz run xxhash -- -max_total_time=30 -rss_limit_mb=2048
 
   python_quality:
     name: Python / Quality

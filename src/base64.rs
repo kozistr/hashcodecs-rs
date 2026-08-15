@@ -737,6 +737,123 @@ fn decode_value(byte: u8, table: &[u8; 256]) -> Option<u8> {
     (value != INVALID_VALUE).then_some(value)
 }
 
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    #[kani::proof]
+    #[kani::unwind(13)]
+    fn scalar_encoder_stays_within_the_exact_output_prefix() {
+        let input: [u8; 8] = kani::any();
+        let length: usize = kani::any();
+        let urlsafe: bool = kani::any();
+        kani::assume(length <= input.len());
+        let required = encoded_len(length);
+        let mut output = [0xa5_u8; 12];
+
+        unsafe { encode_scalar_ptr(&input[..length], output.as_mut_ptr(), urlsafe) };
+
+        for byte in &output[required..] {
+            assert_eq!(*byte, 0xa5);
+        }
+    }
+
+    #[kani::proof]
+    fn scalar_decoders_stay_within_exact_destinations() {
+        let quad: [u8; 4] = kani::any();
+        let padding: usize = kani::any();
+        kani::assume(padding <= 2);
+        let mut quad_output = [0xa5_u8; 3];
+        let result =
+            unsafe { decode_quad_ptr(&quad, quad_output.as_mut_ptr(), padding, &STANDARD_DECODE) };
+        if result.is_ok() {
+            if padding >= 1 {
+                assert_eq!(quad_output[2], 0xa5);
+            }
+            if padding == 2 {
+                assert_eq!(quad_output[1], 0xa5);
+            }
+        }
+
+        let octet: [u8; 8] = kani::any();
+        let mut octet_output = [0_u8; 6];
+        let _ = unsafe { decode_eight_ptr(&octet, octet_output.as_mut_ptr(), &STANDARD_DECODE) };
+
+        let tail: [u8; 3] = kani::any();
+        let tail_length: usize = kani::any();
+        kani::assume(matches!(tail_length, 2 | 3));
+        let mut tail_output = [0xa5_u8; 2];
+        let result = unsafe {
+            decode_unpadded_tail_ptr(
+                &tail[..tail_length],
+                tail_output.as_mut_ptr(),
+                &STANDARD_DECODE,
+            )
+        };
+        if result.is_ok() && tail_length == 2 {
+            assert_eq!(tail_output[1], 0xa5);
+        }
+    }
+}
+
+#[cfg(all(test, miri))]
+mod miri_tests {
+    use super::*;
+
+    #[test]
+    fn scalar_allocations_and_exact_buffers_are_defined() {
+        const LENGTHS: &[usize] = &[
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17, 31, 32, 47, 48, 63, 64, 65, 95, 96, 97, 255,
+            256, 257, 1023, 1024, 1025, 4097,
+        ];
+        for &length in LENGTHS {
+            let input = (0..length)
+                .map(|index| (index as u8).wrapping_mul(53).wrapping_add(7))
+                .collect::<Vec<_>>();
+            for urlsafe in [false, true] {
+                let encoded = if urlsafe {
+                    b64encode_urlsafe(&input)
+                } else {
+                    b64encode(&input)
+                };
+                let decoded = if urlsafe {
+                    b64decode_urlsafe(encoded.as_bytes())
+                } else {
+                    b64decode(encoded.as_bytes())
+                };
+                assert_eq!(decoded.as_deref(), Ok(input.as_slice()));
+
+                let mut encoded_into = vec![0xa5; encoded.len() + 8];
+                let written = if urlsafe {
+                    b64encode_urlsafe_into(&input, &mut encoded_into)
+                } else {
+                    b64encode_into(&input, &mut encoded_into)
+                };
+                assert_eq!(written, Ok(encoded.len()));
+                assert_eq!(&encoded_into[..encoded.len()], encoded.as_bytes());
+                assert!(
+                    encoded_into[encoded.len()..]
+                        .iter()
+                        .all(|byte| *byte == 0xa5)
+                );
+
+                let mut decoded_into = vec![0xa5; input.len() + 8];
+                let written = if urlsafe {
+                    b64decode_urlsafe_into(encoded.as_bytes(), &mut decoded_into)
+                } else {
+                    b64decode_into(encoded.as_bytes(), &mut decoded_into)
+                };
+                assert_eq!(written, Ok(input.len()));
+                assert_eq!(&decoded_into[..input.len()], input);
+                assert!(decoded_into[input.len()..].iter().all(|byte| *byte == 0xa5));
+            }
+        }
+
+        assert_eq!(b64decode(b"!!!!"), Err(Base64Error::InvalidInput));
+        assert_eq!(b64decode_urlsafe(b"!!!!"), Err(Base64Error::InvalidInput));
+    }
+}
+
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 

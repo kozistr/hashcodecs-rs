@@ -8,9 +8,25 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
+base64 = "0.23.1"
 hashcodecs = { path = ".." }
 libfuzzer-sys = "0.4"
+murmur3 = "0.5"
 xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
+
+[[bin]]
+name = "base64"
+path = "fuzz_targets/base64.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "murmur3"
+path = "fuzz_targets/murmur3.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "xxhash"

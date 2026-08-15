@@ -6,7 +6,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const SIZES: [usize; 3] = [4 * 1024, 1024 * 1024, 32 * 1024 * 1024];
+const SIZES: [usize; 4] = [1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
 const SAMPLE_SIZE: usize = 50;
 
 fn data(size: usize) -> Vec<u8> {

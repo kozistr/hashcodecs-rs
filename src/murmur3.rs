@@ -151,7 +151,10 @@ pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
 #[inline]
 fn mix_x86_32_body(key: &[u8], hash: &mut u32) {
     debug_assert!(key.len().is_multiple_of(4));
-    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(all(
+        not(any(coverage, kani, miri)),
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
     {
         match dispatch::x86_32(
             key.len(),
@@ -386,7 +389,10 @@ fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
 #[inline]
 fn mix_x64_128_body(key: &[u8], hashes: &mut [u64; 2]) {
     debug_assert!(key.len().is_multiple_of(16));
-    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(all(
+        not(any(coverage, kani, miri)),
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
     {
         match dispatch::x64_128(
             key.len(),
@@ -484,7 +490,10 @@ fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 
 
 #[inline]
 fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
-    #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(all(
+        not(any(coverage, kani, miri)),
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
     {
         match dispatch::x86_128(
             key.len(),
@@ -595,6 +604,101 @@ mod dispatch;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    #[kani::proof]
+    fn little_endian_loads_stay_within_the_slice() {
+        let bytes: [u8; 16] = kani::any();
+        let offset16: usize = kani::any();
+        let offset32: usize = kani::any();
+        let offset64: usize = kani::any();
+        kani::assume(offset16 <= bytes.len() - 2);
+        kani::assume(offset32 <= bytes.len() - 4);
+        kani::assume(offset64 <= bytes.len() - 8);
+
+        assert_eq!(
+            read_u16_le(&bytes, offset16),
+            u16::from_le_bytes([bytes[offset16], bytes[offset16 + 1]])
+        );
+        assert_eq!(
+            read_u32_le(&bytes, offset32),
+            u32::from_le_bytes([
+                bytes[offset32],
+                bytes[offset32 + 1],
+                bytes[offset32 + 2],
+                bytes[offset32 + 3],
+            ])
+        );
+        assert_eq!(
+            read_u64_le(&bytes, offset64),
+            u64::from_le_bytes([
+                bytes[offset64],
+                bytes[offset64 + 1],
+                bytes[offset64 + 2],
+                bytes[offset64 + 3],
+                bytes[offset64 + 4],
+                bytes[offset64 + 5],
+                bytes[offset64 + 6],
+                bytes[offset64 + 7],
+            ])
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(9)]
+    fn scalar_block_loops_and_partial_loads_stay_in_bounds() {
+        let input: [u8; 32] = kani::any();
+        let partial_length: usize = kani::any();
+        kani::assume(partial_length <= 8);
+        let _ = read_partial_u64_le(&input[..partial_length]);
+
+        let mut hash32: u32 = kani::any();
+        mix_x86_32_body_scalar(&input, &mut hash32);
+        let mut hashes_x86: [u32; 4] = kani::any();
+        mix_x86_128_body_scalar(&input, &mut hashes_x86);
+        let mut hashes_x64: [u64; 2] = kani::any();
+        mix_x64_128_body_scalar(&input, &mut hashes_x64);
+    }
+}
+
+#[cfg(all(test, miri))]
+mod miri_tests {
+    use super::*;
+
+    #[test]
+    fn one_shot_and_incremental_boundaries_are_defined() {
+        const LENGTHS: &[usize] = &[
+            0, 1, 2, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256, 257,
+            511, 512, 513, 1025,
+        ];
+        for &length in LENGTHS {
+            let input = (0..length)
+                .map(|index| (index as u8).wrapping_mul(29).wrapping_add(13))
+                .collect::<Vec<_>>();
+            for &seed in &[0, 1, u32::MAX] {
+                let expected32 = murmur3_x86_32(&input, seed);
+                let expected_x86 = murmur3_x86_128(&input, seed);
+                let expected_x64 = murmur3_x64_128(&input, seed);
+                for &chunk_size in &[1, 3, 7, 16, 31, 64] {
+                    let mut hash32 = Murmur3X86Hasher32::new(seed);
+                    let mut hash_x86 = Murmur3X86Hasher128::new(seed);
+                    let mut hash_x64 = Murmur3X64Hasher128::new(seed);
+                    for chunk in input.chunks(chunk_size) {
+                        hash32.update(chunk);
+                        hash_x86.update(chunk);
+                        hash_x64.update(chunk);
+                    }
+                    assert_eq!(hash32.digest(), expected32);
+                    assert_eq!(hash_x86.digest(), expected_x86);
+                    assert_eq!(hash_x64.digest(), expected_x64);
+                }
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

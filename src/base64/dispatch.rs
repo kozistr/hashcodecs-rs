@@ -69,7 +69,11 @@ fn selected_backend() -> Backend {
 
 #[inline]
 fn detect_backend() -> Backend {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(any(kani, miri))]
+    {
+        Backend::Scalar
+    }
+    #[cfg(all(not(any(kani, miri)), any(target_arch = "x86", target_arch = "x86_64")))]
     {
         select_x86_backend(
             avx512_supported(),
@@ -78,11 +82,14 @@ fn detect_backend() -> Backend {
             std::is_x86_feature_detected!("ssse3"),
         )
     }
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(not(any(kani, miri)), target_arch = "aarch64"))]
     {
         select_aarch64_backend(std::arch::is_aarch64_feature_detected!("neon"))
     }
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(all(
+        not(any(kani, miri)),
+        not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))
+    ))]
     {
         Backend::Scalar
     }

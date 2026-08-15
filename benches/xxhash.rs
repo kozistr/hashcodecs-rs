@@ -6,7 +6,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const SIZES: [usize; 4] = [64, 4 * 1024, 1024 * 1024, 32 * 1024 * 1024];
+const SIZES: [usize; 5] = [64, 1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
 
 fn data(size: usize, salt: u8) -> Vec<u8> {
     (0..size)
@@ -56,7 +56,7 @@ fn one_shot(c: &mut Criterion) {
 
 fn batch(c: &mut Criterion) {
     const ITEMS: usize = 32;
-    for size in [64, 4 * 1024, 1024 * 1024] {
+    for size in [64, 1024, 4 * 1024, 1024 * 1024] {
         let owned = (0..ITEMS)
             .map(|index| data(size, index as u8))
             .collect::<Vec<_>>();

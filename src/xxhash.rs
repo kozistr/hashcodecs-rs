@@ -443,14 +443,15 @@ fn finalize_long_128(length: usize, secret: &[u8], acc: [u64; 8]) -> [u64; 2] {
 }
 
 #[inline]
-fn batch4_long_accumulators(chunk: &[&[u8]], _secret: &[u8]) -> Option<[[u64; 8]; 4]> {
+fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8]; 4]> {
+    let _ = (chunk, secret);
     #[cfg(coverage)]
     if chunk[0].len() > 240 && chunk.iter().all(|input| input.len() == chunk[0].len()) {
         return Some([
-            long_accumulate_scalar(chunk[0], _secret),
-            long_accumulate_scalar(chunk[1], _secret),
-            long_accumulate_scalar(chunk[2], _secret),
-            long_accumulate_scalar(chunk[3], _secret),
+            long_accumulate_scalar(chunk[0], secret),
+            long_accumulate_scalar(chunk[1], secret),
+            long_accumulate_scalar(chunk[2], secret),
+            long_accumulate_scalar(chunk[3], secret),
         ]);
     }
     #[cfg(all(
@@ -463,7 +464,7 @@ fn batch4_long_accumulators(chunk: &[&[u8]], _secret: &[u8]) -> Option<[[u64; 8]
         && matches!(x86::backend(), x86::Backend::Avx2 | x86::Backend::Avx512)
     {
         let values = [chunk[0], chunk[1], chunk[2], chunk[3]];
-        return Some(unsafe { x86::long_accumulate_batch4_avx2(values, _secret) });
+        return Some(unsafe { x86::long_accumulate_batch4_avx2(values, secret) });
     }
     None
 }

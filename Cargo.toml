@@ -47,6 +47,11 @@ harness = false
 name = "xxhash"
 harness = false
 
+[[test]]
+name = "sanitizers"
+path = "tests/sanitizers.rs"
+harness = false
+
 [profile.release]
 codegen-units = 1
 lto = "fat"

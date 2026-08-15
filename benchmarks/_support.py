@@ -9,7 +9,7 @@ from collections.abc import Callable
 from statistics import median
 from time import perf_counter
 
-SIZES = (4 * 1024, 1024 * 1024, 32 * 1024 * 1024)
+SIZES = (1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024)
 SAMPLES = 15
 MINIMUM_SAMPLE_SECONDS = 0.2
 

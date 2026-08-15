@@ -42,7 +42,7 @@ def main() -> None:
                 lambda payload=payload: xxhash.xxh3_128_intdigest(payload, 42),
             )
 
-        for size in (64, 4 * 1024, 1024 * 1024):
+        for size in (64, 1024, 4 * 1024, 1024 * 1024):
             items = [data(size) for _ in range(32)]
             total = size * len(items)
             report(

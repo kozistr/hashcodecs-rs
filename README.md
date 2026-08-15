@@ -7,14 +7,16 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-brightgreen?style=for-the-badge)](https://github.com/kozistr/hashcodecs-rs#license)
 [![Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=downloads)](https://pypi.org/project/hashcodecs/)
 
-`hashcodecs` provides runtime-dispatched SIMD Base64 codecs and fast, reference-compatible MurmurHash3 functions for Rust and Python.
+`hashcodecs` provides runtime-dispatched SIMD Base64 codecs and fast, reference-compatible MurmurHash3 and XXH3 functions for Rust and Python.
 
 ## Design
 
 - Runtime-dispatched SIMD Base64 with portable scalar fallbacks.
 - Reference-compatible MurmurHash3 with SIMD acceleration.
+- Bit-for-bit compatible XXH3-64 and XXH3-128 with runtime SIMD dispatch and native batch APIs.
 - Rust and Python `*_into` APIs for caller-managed output buffers.
 - A familiar Python Base64 API, including native batch encode and decode operations.
+- Unsafe paths verified with Kani, strict-provenance Miri, ASan/MSan, and differential fuzzing.
 
 ## Install
 
@@ -34,13 +36,14 @@ let mut output = [0_u8; 8];
 let written = hashcodecs::b64encode_into(b"hello", &mut output).unwrap();
 assert_eq!(&output[..written], b"aGVsbG8=");
 assert_eq!(hashcodecs::murmur3_x86_32(b"hello", 0), 0x248b_fa47);
+assert_eq!(hashcodecs::xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
 ```
 
 ### Python
 
 ```python
 import hashcodecs.base64 as base64
-from hashcodecs import murmur3_32, murmur3_x64_128
+from hashcodecs import murmur3_32, murmur3_x64_128, xxh3_64, xxh3_128_batch
 
 assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
@@ -49,6 +52,11 @@ assert base64.b64decode_batch([b'aGVsbG8=', 'd29ybGQ=']) == [b'hello', b'world']
 assert base64.b64encode(b'hello', padded=False) == b'aGVsbG8'
 assert base64.b64decode(b'aGVsbG8', padded=False, canonical=True) == b'hello'
 assert murmur3_32(b'hello') == 0x248BFA47
+assert xxh3_64(b'') == 0x2D06800538D394C2
+assert xxh3_128_batch([b'hello', b'world']) == [
+    0xB5E9C1AD071B3E7FC779CFAA5E523818,
+    0xFA0D38A9B38280D0891E4985BDB2583E,
+]
 
 payload = b'hello'
 encoded = bytearray(4 * ((len(payload) + 2) // 3))
@@ -82,6 +90,7 @@ Comparison crates are development-only dependencies and are not included in cons
 ```sh
 cargo bench --bench base64
 cargo bench --bench murmur3
+cargo bench --bench xxhash
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py
 uv run --no-project --with . python benchmarks/python_base64.py --into
@@ -91,82 +100,44 @@ uv run --no-project --with . python benchmarks/python_base64_batch.py
 uv run --no-project --with . python benchmarks/python_base64_batch.py --large
 uv run --no-project --with . python benchmarks/python_murmur3.py
 uv run --no-project --with . python benchmarks/python_murmur3.py --incremental
+uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
+
+For the same-ISA Windows comparison reported below, rebuild the C baseline with
+`$env:CFLAGS='/O2 /arch:AVX2'; cargo clean -p xxhash-c-sys; cargo bench --bench xxhash`.
 
 ## Base64: Rust
 
-| Alphabet | Input | Operation | hashcodecs | `base64` | `base64-turbo` |
-| --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | **20.41 GiB/s** | 5.81 GiB/s | 18.29 GiB/s |
-|  | 4 KiB | decode | **27.11 GiB/s** | 4.33 GiB/s | 16.95 GiB/s |
-|  | 1 MiB | encode | **42.38 GiB/s** | 5.16 GiB/s | 19.60 GiB/s |
-|  | 1 MiB | decode | **31.07 GiB/s** | 4.10 GiB/s | 18.17 GiB/s |
-|  | 32 MiB | encode | **11.97 GiB/s** | 3.28 GiB/s | 10.94 GiB/s |
-|  | 32 MiB | decode | **11.51 GiB/s** | 3.35 GiB/s | 10.45 GiB/s |
-| URL-safe | 4 KiB | encode | **20.46 GiB/s** | 5.81 GiB/s | 18.31 GiB/s |
-|  | 4 KiB | decode | **25.65 GiB/s** | 4.35 GiB/s | 16.96 GiB/s |
-|  | 1 MiB | encode | **42.56 GiB/s** | 5.18 GiB/s | 19.66 GiB/s |
-|  | 1 MiB | decode | **29.42 GiB/s** | 4.08 GiB/s | 18.16 GiB/s |
-|  | 32 MiB | encode | **11.86 GiB/s** | 3.29 GiB/s | 11.09 GiB/s |
-|  | 32 MiB | decode | **11.67 GiB/s** | 3.36 GiB/s | 10.62 GiB/s |
+[![Rust Base64 throughput](docs/benchmarks/base64-rust.svg)](docs/benchmarks/base64-rust.svg)
 
 ## MurmurHash3: Rust
 
-| Variant | Input | hashcodecs | `murmur3` | `murmurs` | `fastmurmur3` | `mm3h` |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| x86 32-bit | 4 KiB | **4.30 GiB/s** | 2.60 GiB/s | 4.09 GiB/s | n/a | **4.30 GiB/s** |
-|  | 1 MiB | **4.26 GiB/s** | 2.59 GiB/s | 4.04 GiB/s | n/a | 4.25 GiB/s |
-|  | 32 MiB | **4.21 GiB/s** | 2.54 GiB/s | 3.87 GiB/s | n/a | 4.03 GiB/s |
-| x86 128-bit | 4 KiB | **9.54 GiB/s** | 4.97 GiB/s | 8.64 GiB/s | n/a | n/a |
-|  | 1 MiB | **9.84 GiB/s** | 5.06 GiB/s | 8.77 GiB/s | n/a | n/a |
-|  | 32 MiB | **9.63 GiB/s** | 4.84 GiB/s | 6.05 GiB/s | n/a | n/a |
-| x64 128-bit | 4 KiB | **10.76 GiB/s** | 6.83 GiB/s | 9.45 GiB/s | 10.06 GiB/s | 9.54 GiB/s |
-|  | 1 MiB | **10.84 GiB/s** | 6.89 GiB/s | 9.51 GiB/s | 10.04 GiB/s | 9.51 GiB/s |
-|  | 32 MiB | **10.12 GiB/s** | 6.11 GiB/s | 6.64 GiB/s | 7.25 GiB/s | 6.70 GiB/s |
+[![Rust MurmurHash3 throughput](docs/benchmarks/murmur3-rust.svg)](docs/benchmarks/murmur3-rust.svg)
+
+## XXH3: Rust
+
+`upstream C` is xxHash 0.8.3 built through `xxhash-c-sys` with AVX2 enabled, matching the backend selected by hashcodecs on the benchmark host. Batch results hash 32 equal-size inputs and include result-vector allocation.
+
+[![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
 
 ## Base64: Python
 
 Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly into Rust without an input copy.
 
-| Alphabet | Input | Operation | hashcodecs | CPython `base64` | `pybase64` |
-| --- | --- | --- | ---: | ---: | ---: |
-| Standard | 4 KiB | encode | **14.42 GiB/s** | 0.49 GiB/s | 14.36 GiB/s |
-|  | 4 KiB | decode | **16.72 GiB/s** | 1.12 GiB/s | 8.35 GiB/s |
-|  | 1 MiB | encode | **3.69 GiB/s** | 0.43 GiB/s | 3.51 GiB/s |
-|  | 1 MiB | decode | **4.90 GiB/s** | 0.97 GiB/s | 4.60 GiB/s |
-|  | 32 MiB | encode | **2.81 GiB/s** | 0.44 GiB/s | 2.60 GiB/s |
-|  | 32 MiB | decode | 3.15 GiB/s | 0.93 GiB/s | **3.49 GiB/s** |
-| URL-safe | 4 KiB | encode | **14.48 GiB/s** | 0.40 GiB/s | 1.19 GiB/s |
-|  | 4 KiB | decode | **13.45 GiB/s** | 0.75 GiB/s | 1.56 GiB/s |
-|  | 1 MiB | encode | **3.96 GiB/s** | 0.36 GiB/s | 0.92 GiB/s |
-|  | 1 MiB | decode | **4.53 GiB/s** | 0.61 GiB/s | 1.58 GiB/s |
-|  | 32 MiB | encode | **2.64 GiB/s** | 0.34 GiB/s | 0.83 GiB/s |
-|  | 32 MiB | decode | **3.15 GiB/s** | 0.60 GiB/s | 1.49 GiB/s |
+[![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 
 ## MurmurHash3: Python
 
-| Variant | API | Input | hashcodecs | `mmh3` |
-| --- | --- | --- | ---: | ---: |
-| x86 32-bit | one-shot | 4 KiB | **3.79 GiB/s** | 3.71 GiB/s |
-|  |  | 1 MiB | **3.98 GiB/s** | 3.83 GiB/s |
-|  |  | 32 MiB | **3.97 GiB/s** | 3.66 GiB/s |
-|  | incremental | 4 KiB | **3.58 GiB/s** | **3.58 GiB/s** |
-|  |  | 1 MiB | **3.96 GiB/s** | 3.81 GiB/s |
-|  |  | 32 MiB | **3.92 GiB/s** | 3.74 GiB/s |
-| x86 128-bit | one-shot | 4 KiB | 8.09 GiB/s | **8.21 GiB/s** |
-|  |  | 1 MiB | **9.22 GiB/s** | 8.87 GiB/s |
-|  |  | 32 MiB | **9.12 GiB/s** | 6.15 GiB/s |
-|  | incremental | 4 KiB | **7.02 GiB/s** | 0.77 GiB/s |
-|  |  | 1 MiB | **9.17 GiB/s** | 0.80 GiB/s |
-|  |  | 32 MiB | **9.01 GiB/s** | 0.79 GiB/s |
-| x64 128-bit | one-shot | 4 KiB | 8.68 GiB/s | **9.46 GiB/s** |
-|  |  | 1 MiB | 10.10 GiB/s | **10.24 GiB/s** |
-|  |  | 32 MiB | **9.54 GiB/s** | 6.61 GiB/s |
-|  | incremental | 4 KiB | 7.70 GiB/s | **7.99 GiB/s** |
-|  |  | 1 MiB | **10.01 GiB/s** | 9.28 GiB/s |
-|  |  | 32 MiB | **9.41 GiB/s** | 7.34 GiB/s |
+[![Python MurmurHash3 throughput](docs/benchmarks/murmur3-python.svg)](docs/benchmarks/murmur3-python.svg)
 
-Reusable-buffer and mutable-input results are available in [BENCHMARK.md](https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md).
+## XXH3: Python
+
+The batch comparison uses one native `hashcodecs` call versus a loop over the upstream `xxhash` extension.
+
+[![Python XXH3 throughput](docs/benchmarks/xxh3-python.svg)](docs/benchmarks/xxh3-python.svg)
+
+Reusable-buffer and mutable-input charts are available in [BENCHMARK.md](BENCHMARK.md). Exact chart values are
+available as [CSV](docs/benchmarks/results.csv).
 
 ## SIMD References
 

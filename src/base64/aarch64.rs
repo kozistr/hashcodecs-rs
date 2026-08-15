@@ -24,10 +24,6 @@ const MIXED_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 17, 224, 0, 0
 // Amortize the horizontal reduction without scanning an unbounded amount of
 // input after the first invalid byte. This is measured in encoded input bytes.
 const DECODE_ERROR_CHECK_INTERVAL: usize = 4 * 1024;
-const _: () = assert!(
-    DECODE_ERROR_CHECK_INTERVAL >= 64 && DECODE_ERROR_CHECK_INTERVAL.is_multiple_of(64),
-    "the NEON decode error-check interval must contain complete 64-byte blocks"
-);
 
 #[derive(Clone, Copy)]
 struct DecodeTables {

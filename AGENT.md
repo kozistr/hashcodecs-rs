@@ -42,7 +42,7 @@ Maintain 100% Rust line coverage and 100% Python branch coverage. Cover malforme
 
 - Keep Rust Base64, Rust MurmurHash3, and Python Base64 results grouped by functionality.
 - Pin benchmark processes to one logical CPU and do not run benchmarks in CI.
-- Benchmark only the functionality changed by the branch and refresh only its corresponding README or BENCHMARK tables.
+- Benchmark only the functionality changed by the branch and refresh only its corresponding README or BENCHMARK charts.
 - Use a complete clean benchmark run only for changes that can affect every benchmark group.
 
 ## Delivery

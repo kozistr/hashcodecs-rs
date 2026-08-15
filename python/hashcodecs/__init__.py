@@ -1,4 +1,4 @@
-"""SIMD-accelerated Base64 and MurmurHash3 functions."""
+"""SIMD-accelerated Base64, MurmurHash3, and xxHash functions."""
 
 from .base64 import (
     b64decode,
@@ -34,6 +34,7 @@ from .murmur3 import (
     murmur3_x86_128,
     murmur3_x86_128_digest,
 )
+from .xxhash import xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch
 
 __all__ = [
     'b64decode',
@@ -66,4 +67,8 @@ __all__ = [
     'urlsafe_b64encode_batch',
     'urlsafe_b64encode_batch_into',
     'urlsafe_b64encode_into',
+    'xxh3_64',
+    'xxh3_64_batch',
+    'xxh3_128',
+    'xxh3_128_batch',
 ]

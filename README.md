@@ -7,12 +7,13 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-brightgreen?style=for-the-badge)](https://github.com/kozistr/hashcodecs-rs#license)
 [![Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=downloads)](https://pypi.org/project/hashcodecs/)
 
-`hashcodecs` provides runtime-dispatched SIMD Base64 codecs and fast, reference-compatible MurmurHash3 functions for Rust and Python.
+`hashcodecs` provides runtime-dispatched SIMD Base64 codecs and fast, reference-compatible MurmurHash3 and XXH3 functions for Rust and Python.
 
 ## Design
 
 - Runtime-dispatched SIMD Base64 with portable scalar fallbacks.
 - Reference-compatible MurmurHash3 with SIMD acceleration.
+- Bit-for-bit compatible XXH3-64 and XXH3-128 with runtime SIMD dispatch and native batch APIs.
 - Rust and Python `*_into` APIs for caller-managed output buffers.
 - A familiar Python Base64 API, including native batch encode and decode operations.
 
@@ -34,13 +35,14 @@ let mut output = [0_u8; 8];
 let written = hashcodecs::b64encode_into(b"hello", &mut output).unwrap();
 assert_eq!(&output[..written], b"aGVsbG8=");
 assert_eq!(hashcodecs::murmur3_x86_32(b"hello", 0), 0x248b_fa47);
+assert_eq!(hashcodecs::xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
 ```
 
 ### Python
 
 ```python
 import hashcodecs.base64 as base64
-from hashcodecs import murmur3_32, murmur3_x64_128
+from hashcodecs import murmur3_32, murmur3_x64_128, xxh3_64, xxh3_128_batch
 
 assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
@@ -49,6 +51,11 @@ assert base64.b64decode_batch([b'aGVsbG8=', 'd29ybGQ=']) == [b'hello', b'world']
 assert base64.b64encode(b'hello', padded=False) == b'aGVsbG8'
 assert base64.b64decode(b'aGVsbG8', padded=False, canonical=True) == b'hello'
 assert murmur3_32(b'hello') == 0x248BFA47
+assert xxh3_64(b'') == 0x2D06800538D394C2
+assert xxh3_128_batch([b'hello', b'world']) == [
+    0xB5E9C1AD071B3E7FC779CFAA5E523818,
+    0xFA0D38A9B38280D0891E4985BDB2583E,
+]
 
 payload = b'hello'
 encoded = bytearray(4 * ((len(payload) + 2) // 3))
@@ -82,6 +89,7 @@ Comparison crates are development-only dependencies and are not included in cons
 ```sh
 cargo bench --bench base64
 cargo bench --bench murmur3
+cargo bench --bench xxhash
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py
 uv run --no-project --with . python benchmarks/python_base64.py --into
@@ -91,7 +99,11 @@ uv run --no-project --with . python benchmarks/python_base64_batch.py
 uv run --no-project --with . python benchmarks/python_base64_batch.py --large
 uv run --no-project --with . python benchmarks/python_murmur3.py
 uv run --no-project --with . python benchmarks/python_murmur3.py --incremental
+uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
+
+For the same-ISA Windows comparison reported below, rebuild the C baseline with
+`$env:CFLAGS='/O2 /arch:AVX2'; cargo clean -p xxhash-c-sys; cargo bench --bench xxhash`.
 
 ## Base64: Rust
 
@@ -123,6 +135,30 @@ uv run --no-project --with . python benchmarks/python_murmur3.py --incremental
 | x64 128-bit | 4 KiB | **10.76 GiB/s** | 6.83 GiB/s | 9.45 GiB/s | 10.06 GiB/s | 9.54 GiB/s |
 |  | 1 MiB | **10.84 GiB/s** | 6.89 GiB/s | 9.51 GiB/s | 10.04 GiB/s | 9.51 GiB/s |
 |  | 32 MiB | **10.12 GiB/s** | 6.11 GiB/s | 6.64 GiB/s | 7.25 GiB/s | 6.70 GiB/s |
+
+## XXH3: Rust
+
+`upstream C` is xxHash 0.8.3 built through `xxhash-c-sys` with AVX2 enabled, matching the backend selected by hashcodecs on the benchmark host. Batch results hash 32 equal-size inputs and include result-vector allocation.
+
+| Variant | Input | hashcodecs | upstream C | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| XXH3-64 | 64 B | **33.60 GiB/s** | 28.32 GiB/s | **1.19x** |
+|  | 4 KiB | 54.50 GiB/s | **58.42 GiB/s** | 0.93x |
+|  | 1 MiB | 79.28 GiB/s | **79.40 GiB/s** | 1.00x |
+|  | 32 MiB | 19.14 GiB/s | **19.67 GiB/s** | 0.97x |
+| XXH3-128 | 64 B | **10.08 GiB/s** | 8.39 GiB/s | **1.20x** |
+|  | 4 KiB | **55.44 GiB/s** | 52.32 GiB/s | **1.06x** |
+|  | 1 MiB | **78.84 GiB/s** | 78.61 GiB/s | 1.00x |
+|  | 32 MiB | **18.14 GiB/s** | 16.99 GiB/s | **1.07x** |
+
+| Batch variant | Item | hashcodecs | upstream C loop | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| XXH3-64 | 64 B | **27.68 GiB/s** | 19.48 GiB/s | **1.42x** |
+|  | 4 KiB | **86.82 GiB/s** | 57.21 GiB/s | **1.52x** |
+|  | 1 MiB | **23.29 GiB/s** | 16.95 GiB/s | **1.37x** |
+| XXH3-128 | 64 B | **8.83 GiB/s** | 8.15 GiB/s | **1.08x** |
+|  | 4 KiB | **81.69 GiB/s** | 51.24 GiB/s | **1.59x** |
+|  | 1 MiB | **25.80 GiB/s** | 17.02 GiB/s | **1.52x** |
 
 ## Base64: Python
 
@@ -165,6 +201,28 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 |  | incremental | 4 KiB | 7.70 GiB/s | **7.99 GiB/s** |
 |  |  | 1 MiB | **10.01 GiB/s** | 9.28 GiB/s |
 |  |  | 32 MiB | **9.41 GiB/s** | 7.34 GiB/s |
+
+## XXH3: Python
+
+The batch comparison uses one native `hashcodecs` call versus a loop over the upstream `xxhash` extension.
+
+| Variant | Input | hashcodecs | `xxhash` | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| XXH3-64 | 4 KiB | **32.10 GiB/s** | 27.90 GiB/s | **1.15x** |
+|  | 1 MiB | **74.95 GiB/s** | 45.63 GiB/s | **1.64x** |
+|  | 32 MiB | **18.20 GiB/s** | 12.26 GiB/s | **1.48x** |
+| XXH3-128 | 4 KiB | **25.69 GiB/s** | 21.30 GiB/s | **1.21x** |
+|  | 1 MiB | **75.42 GiB/s** | 45.91 GiB/s | **1.64x** |
+|  | 32 MiB | **18.56 GiB/s** | 12.00 GiB/s | **1.55x** |
+
+| Batch variant | Total input | hashcodecs | `xxhash` loop | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| XXH3-64 | 2 KiB | **2.68 GiB/s** | 2.08 GiB/s | **1.29x** |
+|  | 128 KiB | **54.91 GiB/s** | 29.28 GiB/s | **1.88x** |
+|  | 32 MiB | **28.17 GiB/s** | 12.35 GiB/s | **2.28x** |
+| XXH3-128 | 2 KiB | **1.07 GiB/s** | 1.00 GiB/s | **1.08x** |
+|  | 128 KiB | **38.07 GiB/s** | 22.93 GiB/s | **1.66x** |
+|  | 32 MiB | **28.45 GiB/s** | 12.00 GiB/s | **2.37x** |
 
 Reusable-buffer and mutable-input results are available in [BENCHMARK.md](https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md).
 

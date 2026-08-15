@@ -12,10 +12,12 @@ use self::murmur3::{
     PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128, murmur3_32,
     murmur3_x64_128_digest, murmur3_x86_128_digest,
 };
+use self::xxhash::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
 
 mod base64;
 mod buffer;
 mod murmur3;
+mod xxhash;
 
 pub(super) const DETACH_THRESHOLD: usize = 64 * 1024;
 
@@ -48,5 +50,9 @@ fn python_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyMurmur3X86Hasher32>()?;
     module.add_class::<PyMurmur3X86Hasher128>()?;
     module.add_class::<PyMurmur3X64Hasher128>()?;
+    module.add_function(wrap_pyfunction!(xxh3_64, module)?)?;
+    module.add_function(wrap_pyfunction!(xxh3_128, module)?)?;
+    module.add_function(wrap_pyfunction!(xxh3_64_batch, module)?)?;
+    module.add_function(wrap_pyfunction!(xxh3_128_batch, module)?)?;
     Ok(())
 }

@@ -2,7 +2,26 @@
 
 Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
 
-Conditions: clean builds, one pinned logical CPU, single-threaded execution, and 15 Python samples. Higher is better.
+Conditions: clean builds, one pinned logical CPU, single-threaded execution, and 15 Python samples. The upstream C baseline was compiled explicitly for AVX2, matching the backend selected by hashcodecs on this host. Higher is better.
+
+## XXH3
+
+The Rust comparison calls xxHash 0.8.3 through `xxhash-c-sys`. Python compares with the upstream `xxhash` extension. Batch rows contain 32 equal-size inputs.
+
+| API | Variant | Input | hashcodecs | upstream | Speedup |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Rust one-shot | XXH3-64 | 64 B | **33.60 GiB/s** | 28.32 GiB/s | **1.19x** |
+|  |  | 4 KiB | 54.50 GiB/s | **58.42 GiB/s** | 0.93x |
+|  |  | 1 MiB | 79.28 GiB/s | **79.40 GiB/s** | 1.00x |
+|  | XXH3-128 | 64 B | **10.08 GiB/s** | 8.39 GiB/s | **1.20x** |
+|  |  | 4 KiB | **55.44 GiB/s** | 52.32 GiB/s | **1.06x** |
+|  |  | 1 MiB | **78.84 GiB/s** | 78.61 GiB/s | 1.00x |
+| Rust batch | XXH3-64 | 32 x 4 KiB | **86.82 GiB/s** | 57.21 GiB/s | **1.52x** |
+|  | XXH3-128 | 32 x 4 KiB | **81.69 GiB/s** | 51.24 GiB/s | **1.59x** |
+| Python one-shot | XXH3-64 | 1 MiB | **74.95 GiB/s** | 45.63 GiB/s | **1.64x** |
+|  | XXH3-128 | 1 MiB | **75.42 GiB/s** | 45.91 GiB/s | **1.64x** |
+| Python batch | XXH3-64 | 32 x 1 MiB | **28.17 GiB/s** | 12.35 GiB/s | **2.28x** |
+|  | XXH3-128 | 32 x 1 MiB | **28.45 GiB/s** | 12.00 GiB/s | **2.37x** |
 
 ## Reusable Python Buffers
 

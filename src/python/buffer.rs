@@ -52,6 +52,19 @@ impl BytesLike<'_, '_> {
             Self::Owned(bytes) => callback(bytes),
         }
     }
+
+    /// The returned slice must not outlive this value. Callers must retain the
+    /// GIL whenever `detach_safe()` is false.
+    pub(super) unsafe fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Bytes(bytes) => bytes,
+            Self::ByteArray(value) => unsafe { value.as_bytes() },
+            Self::OwnedBytes(bytes) => bytes.as_bytes(),
+            Self::OwnedByteArray(value) => unsafe { value.as_bytes() },
+            Self::Text(text) => text.as_bytes(),
+            Self::Owned(bytes) => bytes,
+        }
+    }
 }
 
 pub(super) fn bytes_like<'a, 'py>(

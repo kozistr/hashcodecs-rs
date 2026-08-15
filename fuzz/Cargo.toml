@@ -1,0 +1,20 @@
+[package]
+name = "hashcodecs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+hashcodecs = { path = ".." }
+libfuzzer-sys = "0.4"
+xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
+
+[[bin]]
+name = "xxhash"
+path = "fuzz_targets/xxhash.rs"
+test = false
+doc = false
+bench = false

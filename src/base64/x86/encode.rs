@@ -1,17 +1,20 @@
 //! x86 Base64 encoding kernels.
 
+use std::arch::asm;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
-use std::{arch::asm, hint::black_box};
+#[cfg(not(coverage))]
+use std::hint::black_box;
 
 // Streaming stores avoid evicting the caller's input and other hot data when
 // encoding large one-shot buffers. Keep the threshold conservative because
 // write-allocate stores are faster for buffers that are likely to be reused.
+#[cfg(not(coverage))]
 const NT_STORE_MIN_LEN: usize = 4 << 20;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(coverage)))]
 struct EncodeAvx2Constants {
     reshuffle: __m256i,
     align_mul: __m256i,
@@ -65,14 +68,16 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
     // `input.len() - load_offset - 8` is an equivalent division form of the
     // final-load bound `load_offset + 104 <= input.len()`.
     #[cfg(target_arch = "x86_64")]
-    if input.len() >= 32 {
+    {
         let groups = (input.len() - load_offset - 8) / 96;
         if groups != 0 {
+            #[cfg(not(coverage))]
             let use_streaming_stores =
                 input.len() >= NT_STORE_MIN_LEN && output.align_offset(16) == 0;
+            #[cfg(not(coverage))]
             if use_streaming_stores {
                 unsafe {
-                    encode_96_shifted::<URLSAFE, true>(
+                    encode_96_shifted::<URLSAFE>(
                         input.as_ptr().add(load_offset),
                         output.add(destination),
                         groups,
@@ -87,12 +92,21 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
                     )
                 };
             }
+            #[cfg(coverage)]
+            unsafe {
+                encode_96_shifted_asm::<URLSAFE>(
+                    input.as_ptr().add(load_offset),
+                    output.add(destination),
+                    groups,
+                )
+            };
             load_offset += groups * 96;
             destination += groups * 128;
         }
     }
     // The helper's fixed call and register-save costs outweigh its scheduling
     // benefit on small inputs. This loop is also the 32-bit x86 fallback.
+    #[cfg(target_arch = "x86")]
     while load_offset + 104 <= input.len() {
         let first = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
         let second = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 24)) };
@@ -128,7 +142,8 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-unsafe fn encode_96_shifted<const URLSAFE: bool, const STREAMING: bool>(
+#[cfg(not(coverage))]
+unsafe fn encode_96_shifted<const URLSAFE: bool>(
     mut input: *const u8,
     mut output: *mut u8,
     mut groups: usize,
@@ -151,14 +166,14 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, const STREAMING: bool>(
         let eighth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
         unsafe {
-            store_32::<STREAMING>(output, first);
-            store_32::<STREAMING>(output.add(32), second);
-            store_32::<STREAMING>(output.add(64), third);
-            store_32::<STREAMING>(output.add(96), fourth);
-            store_32::<STREAMING>(output.add(128), fifth);
-            store_32::<STREAMING>(output.add(160), sixth);
-            store_32::<STREAMING>(output.add(192), seventh);
-            store_32::<STREAMING>(output.add(224), eighth);
+            store_32(output, first);
+            store_32(output.add(32), second);
+            store_32(output.add(64), third);
+            store_32(output.add(96), fourth);
+            store_32(output.add(128), fifth);
+            store_32(output.add(160), sixth);
+            store_32(output.add(192), seventh);
+            store_32(output.add(224), eighth);
         }
         input = unsafe { input.add(192) };
         output = unsafe { output.add(256) };
@@ -173,19 +188,17 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, const STREAMING: bool>(
         let fourth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
         unsafe {
-            store_32::<STREAMING>(output, first);
-            store_32::<STREAMING>(output.add(32), second);
-            store_32::<STREAMING>(output.add(64), third);
-            store_32::<STREAMING>(output.add(96), fourth);
+            store_32(output, first);
+            store_32(output.add(32), second);
+            store_32(output.add(64), third);
+            store_32(output.add(96), fourth);
         }
     }
-    if STREAMING {
-        // Streaming stores are weakly ordered with respect to later loads/stores.
-        _mm_sfence();
-    }
+    // Streaming stores are weakly ordered with respect to later loads/stores.
+    _mm_sfence();
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(coverage)))]
 #[target_feature(enable = "avx2")]
 fn encode_avx2_constants<const URLSAFE: bool>() -> EncodeAvx2Constants {
     let translate = if URLSAFE {
@@ -213,7 +226,7 @@ fn encode_avx2_constants<const URLSAFE: bool>() -> EncodeAvx2Constants {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(coverage)))]
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i {
@@ -231,17 +244,13 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(coverage)))]
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn store_32<const STREAMING: bool>(output: *mut u8, value: __m256i) {
+unsafe fn store_32(output: *mut u8, value: __m256i) {
     unsafe {
-        if STREAMING {
-            _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
-            _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
-        } else {
-            _mm256_storeu_si256(output.cast(), value);
-        }
+        _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
+        _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
     }
 }
 

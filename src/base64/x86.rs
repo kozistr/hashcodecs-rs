@@ -1,8 +1,8 @@
-use std::arch::asm;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
+use std::{arch::asm, hint::black_box};
 
 use super::Base64Error;
 #[cfg(not(coverage))]
@@ -13,6 +13,22 @@ pub(super) struct UrlSafeDecoder;
 pub(super) struct MixedDecoder;
 pub(super) struct ExactStore;
 pub(super) struct PaddedStore;
+
+// Streaming stores avoid evicting the caller's input and other hot data when
+// encoding large one-shot buffers. Keep the threshold conservative because
+// write-allocate stores are faster for buffers that are likely to be reused.
+const NT_STORE_MIN_LEN: usize = 4 << 20;
+
+#[cfg(target_arch = "x86_64")]
+struct EncodeAvx2Constants {
+    reshuffle: __m256i,
+    align_mul: __m256i,
+    field_mask: __m256i,
+    field_mul: __m256i,
+    translate: __m256i,
+    c51: __m256i,
+    c25: __m256i,
+}
 
 pub(super) trait Decoder {
     #[cfg(not(coverage))]
@@ -150,13 +166,25 @@ pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
         // the final-load bound `load_offset + 104 <= input.len()`.
         let groups = (input.len() - load_offset - 8) / 96;
         if groups != 0 {
-            unsafe {
-                encode_96_shifted_asm::<URLSAFE>(
-                    input.as_ptr().add(load_offset),
-                    output.add(destination),
-                    groups,
-                )
-            };
+            let use_streaming_stores =
+                input.len() >= NT_STORE_MIN_LEN && output.align_offset(16) == 0;
+            if use_streaming_stores {
+                unsafe {
+                    encode_96_shifted_nt::<URLSAFE>(
+                        input.as_ptr().add(load_offset),
+                        output.add(destination),
+                        groups,
+                    )
+                };
+            } else {
+                unsafe {
+                    encode_96_shifted_asm::<URLSAFE>(
+                        input.as_ptr().add(load_offset),
+                        output.add(destination),
+                        groups,
+                    )
+                };
+            }
             load_offset += groups * 96;
             destination += groups * 128;
         }
@@ -192,6 +220,123 @@ pub(super) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
         source + 12
     } else {
         source
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2")]
+unsafe fn encode_96_shifted_nt<const URLSAFE: bool>(
+    mut input: *const u8,
+    mut output: *mut u8,
+    mut groups: usize,
+) {
+    let constants = encode_avx2_constants::<URLSAFE>();
+    while groups >= 2 {
+        // Load the whole unrolled group before doing any arithmetic. This
+        // keeps the independent multiply/shuffle chains in flight together.
+        let first = unsafe { _mm256_loadu_si256(input.cast()) };
+        let second = unsafe { _mm256_loadu_si256(input.add(24).cast()) };
+        let third = unsafe { _mm256_loadu_si256(input.add(48).cast()) };
+        let fourth = unsafe { _mm256_loadu_si256(input.add(72).cast()) };
+        let fifth = unsafe { _mm256_loadu_si256(input.add(96).cast()) };
+        let sixth = unsafe { _mm256_loadu_si256(input.add(120).cast()) };
+        let seventh = unsafe { _mm256_loadu_si256(input.add(144).cast()) };
+        let eighth = unsafe { _mm256_loadu_si256(input.add(168).cast()) };
+        let first = encode_avx2_value(first, &constants);
+        let second = encode_avx2_value(second, &constants);
+        let third = encode_avx2_value(third, &constants);
+        let fourth = encode_avx2_value(fourth, &constants);
+        let fifth = encode_avx2_value(fifth, &constants);
+        let sixth = encode_avx2_value(sixth, &constants);
+        let seventh = encode_avx2_value(seventh, &constants);
+        let eighth = encode_avx2_value(eighth, &constants);
+        unsafe {
+            store_32_nt(output, first);
+            store_32_nt(output.add(32), second);
+            store_32_nt(output.add(64), third);
+            store_32_nt(output.add(96), fourth);
+            store_32_nt(output.add(128), fifth);
+            store_32_nt(output.add(160), sixth);
+            store_32_nt(output.add(192), seventh);
+            store_32_nt(output.add(224), eighth);
+        }
+        input = unsafe { input.add(192) };
+        output = unsafe { output.add(256) };
+        groups -= 2;
+    }
+    if groups != 0 {
+        let first = unsafe { _mm256_loadu_si256(input.cast()) };
+        let second = unsafe { _mm256_loadu_si256(input.add(24).cast()) };
+        let third = unsafe { _mm256_loadu_si256(input.add(48).cast()) };
+        let fourth = unsafe { _mm256_loadu_si256(input.add(72).cast()) };
+        let first = encode_avx2_value(first, &constants);
+        let second = encode_avx2_value(second, &constants);
+        let third = encode_avx2_value(third, &constants);
+        let fourth = encode_avx2_value(fourth, &constants);
+        unsafe {
+            store_32_nt(output, first);
+            store_32_nt(output.add(32), second);
+            store_32_nt(output.add(64), third);
+            store_32_nt(output.add(96), fourth);
+        }
+    }
+    // Streaming stores are weakly ordered with respect to later loads/stores.
+    _mm_sfence();
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+fn encode_avx2_constants<const URLSAFE: bool>() -> EncodeAvx2Constants {
+    let translate = if URLSAFE {
+        _mm256_setr_epi8(
+            65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -17, 32, 0, 0, 65, 71, -4, -4, -4, -4,
+            -4, -4, -4, -4, -4, -4, -17, 32, 0, 0,
+        )
+    } else {
+        _mm256_setr_epi8(
+            65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 0, 0, 65, 71, -4, -4, -4, -4,
+            -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
+        )
+    };
+    EncodeAvx2Constants {
+        reshuffle: _mm256_set_epi8(
+            10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
+            9, 7, 8, 5, 6, 4, 5,
+        ),
+        align_mul: black_box(_mm256_set1_epi32(0x0010_0001)),
+        field_mask: _mm256_set1_epi32(0x003f_03f0),
+        field_mul: black_box(_mm256_set1_epi32(0x0100_0010)),
+        translate,
+        c51: _mm256_set1_epi8(51),
+        c25: _mm256_set1_epi8(25),
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline]
+#[target_feature(enable = "avx2")]
+fn encode_avx2_value(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i {
+    let shuffled = _mm256_shuffle_epi8(input, constants.reshuffle);
+    let aligned = _mm256_srli_epi16(_mm256_mullo_epi16(shuffled, constants.align_mul), 10);
+    let fields = _mm256_mullo_epi16(
+        _mm256_and_si256(shuffled, constants.field_mask),
+        constants.field_mul,
+    );
+    let indices = _mm256_or_si256(aligned, fields);
+    let lut_index = _mm256_sub_epi8(
+        _mm256_subs_epu8(indices, constants.c51),
+        _mm256_cmpgt_epi8(indices, constants.c25),
+    );
+    _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn store_32_nt(output: *mut u8, value: __m256i) {
+    unsafe {
+        _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
+        _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
     }
 }
 

@@ -2,7 +2,7 @@ chart,panel,input,implementation,gib_per_second
 Rust Base64 throughput,Standard encode,1 KiB,hashcodecs,24.78
 Rust Base64 throughput,Standard encode,4 KiB,hashcodecs,32.23
 Rust Base64 throughput,Standard encode,1 MiB,hashcodecs,36.40
-Rust Base64 throughput,Standard encode,8 MiB,hashcodecs,16.19
+Rust Base64 throughput,Standard encode,8 MiB,hashcodecs,29.27
 Rust Base64 throughput,Standard encode,1 KiB,base64,4.52
 Rust Base64 throughput,Standard encode,4 KiB,base64,4.81
 Rust Base64 throughput,Standard encode,1 MiB,base64,4.50
@@ -26,7 +26,7 @@ Rust Base64 throughput,Standard decode,8 MiB,base64 turbo,12.52
 Rust Base64 throughput,URL-safe encode,1 KiB,hashcodecs,24.69
 Rust Base64 throughput,URL-safe encode,4 KiB,hashcodecs,31.48
 Rust Base64 throughput,URL-safe encode,1 MiB,hashcodecs,35.83
-Rust Base64 throughput,URL-safe encode,8 MiB,hashcodecs,15.84
+Rust Base64 throughput,URL-safe encode,8 MiB,hashcodecs,29.57
 Rust Base64 throughput,URL-safe encode,1 KiB,base64,4.32
 Rust Base64 throughput,URL-safe encode,4 KiB,base64,5.08
 Rust Base64 throughput,URL-safe encode,1 MiB,base64,4.53

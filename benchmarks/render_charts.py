@@ -69,7 +69,7 @@ CHARTS = (
             panel(
                 'Standard encode',
                 SIZES,
-                hashcodecs=[24.78, 32.23, 36.40, 16.19],
+                hashcodecs=[24.78, 32.23, 36.40, 29.27],
                 base64=[4.52, 4.81, 4.50, 4.81],
                 base64_turbo=[23.53, 30.49, 35.35, 29.01],
             ),
@@ -83,7 +83,7 @@ CHARTS = (
             panel(
                 'URL-safe encode',
                 SIZES,
-                hashcodecs=[24.69, 31.48, 35.83, 15.84],
+                hashcodecs=[24.69, 31.48, 35.83, 29.57],
                 base64=[4.32, 5.08, 4.53, 5.08],
                 base64_turbo=[22.66, 31.52, 35.87, 29.22],
             ),

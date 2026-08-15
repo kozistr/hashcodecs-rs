@@ -5,16 +5,14 @@ use std::arch::asm;
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
-#[cfg(not(coverage))]
 use std::hint::black_box;
 
 // Streaming stores avoid evicting the caller's input and other hot data when
 // encoding large one-shot buffers. Keep the threshold conservative because
 // write-allocate stores are faster for buffers that are likely to be reused.
-#[cfg(not(coverage))]
 const NT_STORE_MIN_LEN: usize = 4 << 20;
 
-#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[cfg(target_arch = "x86_64")]
 struct EncodeAvx2Constants {
     reshuffle: __m256i,
     align_mul: __m256i,
@@ -71,10 +69,8 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
     {
         let groups = (input.len() - load_offset - 8) / 96;
         if groups != 0 {
-            #[cfg(not(coverage))]
             let use_streaming_stores =
                 input.len() >= NT_STORE_MIN_LEN && output.align_offset(16) == 0;
-            #[cfg(not(coverage))]
             if use_streaming_stores {
                 unsafe {
                     encode_96_shifted::<URLSAFE>(
@@ -92,14 +88,6 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
                     )
                 };
             }
-            #[cfg(coverage)]
-            unsafe {
-                encode_96_shifted_asm::<URLSAFE>(
-                    input.as_ptr().add(load_offset),
-                    output.add(destination),
-                    groups,
-                )
-            };
             load_offset += groups * 96;
             destination += groups * 128;
         }
@@ -142,13 +130,12 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-#[cfg(not(coverage))]
 unsafe fn encode_96_shifted<const URLSAFE: bool>(
     mut input: *const u8,
     mut output: *mut u8,
     mut groups: usize,
 ) {
-    let constants = encode_avx2_constants::<URLSAFE>();
+    let constants = encode_avx2_constants(URLSAFE);
     while groups >= 2 {
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =
@@ -198,10 +185,11 @@ unsafe fn encode_96_shifted<const URLSAFE: bool>(
     _mm_sfence();
 }
 
-#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
 #[target_feature(enable = "avx2")]
-fn encode_avx2_constants<const URLSAFE: bool>() -> EncodeAvx2Constants {
-    let translate = if URLSAFE {
+fn encode_avx2_constants(urlsafe: bool) -> EncodeAvx2Constants {
+    let translate = if urlsafe {
         _mm256_setr_epi8(
             65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -17, 32, 0, 0, 65, 71, -4, -4, -4, -4,
             -4, -4, -4, -4, -4, -4, -17, 32, 0, 0,
@@ -226,7 +214,7 @@ fn encode_avx2_constants<const URLSAFE: bool>() -> EncodeAvx2Constants {
     }
 }
 
-#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i {
@@ -244,7 +232,7 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
 }
 
-#[cfg(all(target_arch = "x86_64", not(coverage)))]
+#[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn store_32(output: *mut u8, value: __m256i) {

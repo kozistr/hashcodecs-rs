@@ -584,7 +584,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     }
 }
 
-#[cfg(all(not(coverage), target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn large_avx2_streaming_encoder_matches_scalar() {
     if !backend_supported(Backend::Avx2) {

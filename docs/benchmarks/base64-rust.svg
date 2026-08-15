@@ -26,21 +26,21 @@
 <text x="272.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,244.7 272.0,198.0 436.0,172.6 600.0,226.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="244.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 25.77 GiB/s</title></circle>
-<circle cx="272.0" cy="198.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 34.66 GiB/s</title></circle>
-<circle cx="436.0" cy="172.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 39.50 GiB/s</title></circle>
-<circle cx="600.0" cy="226.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 29.17 GiB/s</title></circle>
-<polyline points="108.0,356.3 272.0,354.7 436.0,356.4 600.0,354.7" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="356.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 KiB, 4.52 GiB/s</title></circle>
-<circle cx="272.0" cy="354.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 4 KiB, 4.81 GiB/s</title></circle>
-<circle cx="436.0" cy="356.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 MiB, 4.50 GiB/s</title></circle>
-<circle cx="600.0" cy="354.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 8 MiB, 4.81 GiB/s</title></circle>
-<polyline points="108.0,256.5 272.0,219.9 436.0,194.4 600.0,227.7" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="256.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 KiB, 23.53 GiB/s</title></circle>
-<circle cx="272.0" cy="219.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 4 KiB, 30.49 GiB/s</title></circle>
-<circle cx="436.0" cy="194.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 MiB, 35.35 GiB/s</title></circle>
-<circle cx="600.0" cy="227.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 8 MiB, 29.01 GiB/s</title></circle>
+<polyline points="108.0,247.8 272.0,196.1 436.0,179.1 600.0,226.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="247.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 25.19 GiB/s</title></circle>
+<circle cx="272.0" cy="196.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 35.02 GiB/s</title></circle>
+<circle cx="436.0" cy="179.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 38.27 GiB/s</title></circle>
+<circle cx="600.0" cy="226.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 29.24 GiB/s</title></circle>
+<polyline points="108.0,355.0 272.0,351.6 436.0,354.6 600.0,358.7" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="355.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 KiB, 4.77 GiB/s</title></circle>
+<circle cx="272.0" cy="351.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 4 KiB, 5.40 GiB/s</title></circle>
+<circle cx="436.0" cy="354.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 MiB, 4.83 GiB/s</title></circle>
+<circle cx="600.0" cy="358.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 8 MiB, 4.06 GiB/s</title></circle>
+<polyline points="108.0,248.2 272.0,201.9 436.0,181.5 600.0,217.3" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="248.2" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 KiB, 25.11 GiB/s</title></circle>
+<circle cx="272.0" cy="201.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 4 KiB, 33.92 GiB/s</title></circle>
+<circle cx="436.0" cy="181.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 MiB, 37.81 GiB/s</title></circle>
+<circle cx="600.0" cy="217.3" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 8 MiB, 30.99 GiB/s</title></circle>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">Standard decode</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#007f73" stroke-width="3"/>
@@ -63,21 +63,21 @@
 <text x="882.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,262.6 882.0,220.3 1046.0,190.6 1210.0,268.7" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="262.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 KiB, 16.77 GiB/s</title></circle>
-<circle cx="882.0" cy="220.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 4 KiB, 22.82 GiB/s</title></circle>
-<circle cx="1046.0" cy="190.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 MiB, 27.06 GiB/s</title></circle>
-<circle cx="1210.0" cy="268.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 8 MiB, 15.90 GiB/s</title></circle>
-<polyline points="718.0,355.4 882.0,353.1 1046.0,355.2 1210.0,353.1" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="355.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 1 KiB, 3.51 GiB/s</title></circle>
-<circle cx="882.0" cy="353.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 4 KiB, 3.85 GiB/s</title></circle>
-<circle cx="1046.0" cy="355.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 1 MiB, 3.54 GiB/s</title></circle>
-<circle cx="1210.0" cy="353.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 8 MiB, 3.85 GiB/s</title></circle>
-<polyline points="718.0,301.7 882.0,283.9 1046.0,287.6 1210.0,292.4" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="301.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 1 KiB, 11.19 GiB/s</title></circle>
-<circle cx="882.0" cy="283.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 4 KiB, 13.73 GiB/s</title></circle>
-<circle cx="1046.0" cy="287.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 1 MiB, 13.20 GiB/s</title></circle>
-<circle cx="1210.0" cy="292.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 8 MiB, 12.52 GiB/s</title></circle>
+<polyline points="718.0,254.6 882.0,203.5 1046.0,181.8 1210.0,248.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="254.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 KiB, 17.92 GiB/s</title></circle>
+<circle cx="882.0" cy="203.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 4 KiB, 25.22 GiB/s</title></circle>
+<circle cx="1046.0" cy="181.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 MiB, 28.31 GiB/s</title></circle>
+<circle cx="1210.0" cy="248.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 8 MiB, 18.79 GiB/s</title></circle>
+<polyline points="718.0,353.7 882.0,352.1 1046.0,353.5 1210.0,355.1" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="353.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 1 KiB, 3.76 GiB/s</title></circle>
+<circle cx="882.0" cy="352.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 4 KiB, 3.98 GiB/s</title></circle>
+<circle cx="1046.0" cy="353.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 1 MiB, 3.79 GiB/s</title></circle>
+<circle cx="1210.0" cy="355.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64, 8 MiB, 3.56 GiB/s</title></circle>
+<polyline points="718.0,258.4 882.0,217.0 1046.0,236.5 1210.0,261.9" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="258.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 1 KiB, 17.37 GiB/s</title></circle>
+<circle cx="882.0" cy="217.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 4 KiB, 23.28 GiB/s</title></circle>
+<circle cx="1046.0" cy="236.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 1 MiB, 20.50 GiB/s</title></circle>
+<circle cx="1210.0" cy="261.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard decode: base64 turbo, 8 MiB, 16.87 GiB/s</title></circle>
 <text x="50" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">URL-safe encode</text>
 <line x1="108" y1="710" x2="600" y2="710" stroke="#9aa5b4"/>
 <line x1="50" y1="478" x2="70" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -100,21 +100,21 @@
 <text x="272.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,574.8 272.0,528.1 436.0,502.4 600.0,556.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="574.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 25.75 GiB/s</title></circle>
-<circle cx="272.0" cy="528.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 34.65 GiB/s</title></circle>
-<circle cx="436.0" cy="502.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 39.54 GiB/s</title></circle>
-<circle cx="600.0" cy="556.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 29.26 GiB/s</title></circle>
-<polyline points="108.0,687.3 272.0,683.3 436.0,686.2 600.0,683.3" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="687.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 KiB, 4.32 GiB/s</title></circle>
-<circle cx="272.0" cy="683.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 4 KiB, 5.08 GiB/s</title></circle>
-<circle cx="436.0" cy="686.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 MiB, 4.53 GiB/s</title></circle>
-<circle cx="600.0" cy="683.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 8 MiB, 5.08 GiB/s</title></circle>
-<polyline points="108.0,591.0 272.0,544.5 436.0,521.7 600.0,556.6" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="591.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 KiB, 22.66 GiB/s</title></circle>
-<circle cx="272.0" cy="544.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 4 KiB, 31.52 GiB/s</title></circle>
-<circle cx="436.0" cy="521.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 MiB, 35.87 GiB/s</title></circle>
-<circle cx="600.0" cy="556.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 8 MiB, 29.22 GiB/s</title></circle>
+<polyline points="108.0,574.2 272.0,526.5 436.0,501.7 600.0,553.2" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="574.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 25.87 GiB/s</title></circle>
+<circle cx="272.0" cy="526.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 34.95 GiB/s</title></circle>
+<circle cx="436.0" cy="501.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 39.68 GiB/s</title></circle>
+<circle cx="600.0" cy="553.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 29.86 GiB/s</title></circle>
+<polyline points="108.0,684.9 272.0,681.6 436.0,684.7 600.0,688.6" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="684.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 KiB, 4.79 GiB/s</title></circle>
+<circle cx="272.0" cy="681.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 4 KiB, 5.41 GiB/s</title></circle>
+<circle cx="436.0" cy="684.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 MiB, 4.82 GiB/s</title></circle>
+<circle cx="600.0" cy="688.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 8 MiB, 4.08 GiB/s</title></circle>
+<polyline points="108.0,576.6 272.0,531.8 436.0,509.0 600.0,546.4" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="576.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 KiB, 25.41 GiB/s</title></circle>
+<circle cx="272.0" cy="531.8" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 4 KiB, 33.95 GiB/s</title></circle>
+<circle cx="436.0" cy="509.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 MiB, 38.29 GiB/s</title></circle>
+<circle cx="600.0" cy="546.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 8 MiB, 31.16 GiB/s</title></circle>
 <text x="660" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">URL-safe decode</text>
 <line x1="718" y1="710" x2="1210" y2="710" stroke="#9aa5b4"/>
 <line x1="660" y1="478" x2="680" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -137,19 +137,19 @@
 <text x="882.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,594.4 882.0,556.4 1046.0,542.0 1210.0,596.6" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="594.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 KiB, 16.52 GiB/s</title></circle>
-<circle cx="882.0" cy="556.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 4 KiB, 21.95 GiB/s</title></circle>
-<circle cx="1046.0" cy="542.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 MiB, 24.00 GiB/s</title></circle>
-<circle cx="1210.0" cy="596.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 8 MiB, 16.20 GiB/s</title></circle>
-<polyline points="718.0,685.4 882.0,684.0 1046.0,684.9 1210.0,684.0" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="685.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 1 KiB, 3.51 GiB/s</title></circle>
-<circle cx="882.0" cy="684.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 4 KiB, 3.71 GiB/s</title></circle>
-<circle cx="1046.0" cy="684.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 1 MiB, 3.59 GiB/s</title></circle>
-<circle cx="1210.0" cy="684.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 8 MiB, 3.71 GiB/s</title></circle>
-<polyline points="718.0,629.1 882.0,613.8 1046.0,613.5 1210.0,623.6" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="629.1" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 1 KiB, 11.55 GiB/s</title></circle>
-<circle cx="882.0" cy="613.8" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 4 KiB, 13.74 GiB/s</title></circle>
-<circle cx="1046.0" cy="613.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 1 MiB, 13.78 GiB/s</title></circle>
-<circle cx="1210.0" cy="623.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 8 MiB, 12.34 GiB/s</title></circle>
+<polyline points="718.0,588.3 882.0,543.1 1046.0,520.9 1210.0,577.8" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="588.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 KiB, 17.39 GiB/s</title></circle>
+<circle cx="882.0" cy="543.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 4 KiB, 23.84 GiB/s</title></circle>
+<circle cx="1046.0" cy="520.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 MiB, 27.01 GiB/s</title></circle>
+<circle cx="1210.0" cy="577.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 8 MiB, 18.89 GiB/s</title></circle>
+<polyline points="718.0,683.7 882.0,681.8 1046.0,683.3 1210.0,685.0" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="683.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 1 KiB, 3.76 GiB/s</title></circle>
+<circle cx="882.0" cy="681.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 4 KiB, 4.03 GiB/s</title></circle>
+<circle cx="1046.0" cy="683.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 1 MiB, 3.81 GiB/s</title></circle>
+<circle cx="1210.0" cy="685.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64, 8 MiB, 3.57 GiB/s</title></circle>
+<polyline points="718.0,588.4 882.0,547.9 1046.0,563.9 1210.0,590.3" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="588.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 1 KiB, 17.37 GiB/s</title></circle>
+<circle cx="882.0" cy="547.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 4 KiB, 23.16 GiB/s</title></circle>
+<circle cx="1046.0" cy="563.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 1 MiB, 20.87 GiB/s</title></circle>
+<circle cx="1210.0" cy="590.3" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: base64 turbo, 8 MiB, 17.10 GiB/s</title></circle>
 </svg>

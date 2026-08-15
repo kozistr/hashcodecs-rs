@@ -584,6 +584,34 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     }
 }
 
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn large_avx2_streaming_encoder_matches_scalar() {
+    if !backend_supported(Backend::Avx2) {
+        return;
+    }
+
+    for (input_len, urlsafe) in [(4 << 20) + 96, (4 << 20) + 192]
+        .into_iter()
+        .flat_map(|length| [(length, false), (length, true)])
+    {
+        let input = vec![0x5a_u8; input_len];
+        let expected = if urlsafe {
+            base64::engine::general_purpose::URL_SAFE.encode(&input)
+        } else {
+            base64::engine::general_purpose::STANDARD.encode(&input)
+        };
+        let mut guarded_output = vec![0xa5_u8; expected.len() + 16];
+        let output_offset = guarded_output.as_mut_ptr().align_offset(16);
+        let output = &mut guarded_output[output_offset..output_offset + expected.len()];
+
+        let consumed = encode_with_backend(&input, output, Backend::Avx2, urlsafe);
+        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], urlsafe);
+
+        assert_eq!(output, expected.as_bytes());
+    }
+}
+
 #[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
 #[test]
 fn avx512_control_vectors_describe_the_base64_transforms() {

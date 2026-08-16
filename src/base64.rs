@@ -1,9 +1,13 @@
 use core::{fmt, mem::ManuallyDrop, mem::MaybeUninit};
 
 #[cfg(test)]
+use backend::{
+    Backend, is_supported as backend_supported, select_aarch64 as select_aarch64_backend,
+    select_x86 as select_x86_backend,
+};
+#[cfg(test)]
 use dispatch::{
-    Backend, backend_supported, decode_with_backend, decode_with_backend_ptr, encode_with_backend,
-    select_aarch64_backend, select_x86_backend,
+    decode_with_backend, decode_with_backend_ptr, encode_with_backend,
 };
 const STANDARD_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -92,6 +96,7 @@ pub(crate) enum DecodeAlphabet {
 }
 
 mod decode;
+mod backend;
 mod encode;
 
 pub use decode::{
@@ -247,9 +252,6 @@ mod dispatch;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
-
-#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
-mod x86_avx512;
 
 #[cfg(test)]
 mod tests;

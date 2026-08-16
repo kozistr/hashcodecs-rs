@@ -30,7 +30,7 @@ cargo fmt
 cargo clippy -- -D warnings
 cargo clippy --all-targets --features python -- -D warnings
 cargo test --features python
-cargo llvm-cov --no-default-features --fail-under-lines 100
+cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'base64.*x86.*avx512\.rs$'
 uv run --frozen --no-sync ruff check .
 uv run --frozen --no-sync ruff format --check .
 uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100

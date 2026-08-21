@@ -6,7 +6,7 @@ use pyo3::types::{PyInt, PyList};
 
 use super::buffer::{BytesLike, bytes_like};
 use super::{
-    DETACH_THRESHOLD, METHOD_FLAGS, parse_function_arguments, parse_raw_arguments,
+    DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, parse_raw_arguments,
     return_function_result, seed_u64, with_function_bytes,
 };
 use crate::{xxh3_64, xxh3_128};
@@ -22,7 +22,7 @@ unsafe extern "C" fn xxh3_64_digest(
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
     unsafe {
-        let Some(arguments) = parse_function_arguments(args, nargsf, keywords, c"xxh3_64".as_ptr())
+        let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_64".as_ptr())
         else {
             return ptr::null_mut();
         };
@@ -45,8 +45,7 @@ unsafe extern "C" fn xxh3_128_digest(
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
     unsafe {
-        let Some(arguments) =
-            parse_function_arguments(args, nargsf, keywords, c"xxh3_128".as_ptr())
+        let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_128".as_ptr())
         else {
             return ptr::null_mut();
         };

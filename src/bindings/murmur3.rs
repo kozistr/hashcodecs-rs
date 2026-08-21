@@ -7,7 +7,7 @@ use pyo3::types::PyBytes;
 
 use super::buffer::{BytesLike, bytes_like};
 use super::{
-    DETACH_THRESHOLD, METHOD_FLAGS, parse_function_arguments, return_function_result, seed_u32,
+    DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, return_function_result, seed_u32,
     with_function_bytes,
 };
 use crate::{
@@ -70,8 +70,7 @@ unsafe extern "C" fn murmur3_32(
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
     unsafe {
-        let Some(arguments) =
-            parse_function_arguments(args, nargsf, keywords, c"murmur3_32".as_ptr())
+        let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"murmur3_32".as_ptr())
         else {
             return ptr::null_mut();
         };
@@ -95,7 +94,7 @@ unsafe extern "C" fn murmur3_x86_128_digest(
     let py = unsafe { Python::assume_attached() };
     unsafe {
         let Some(arguments) =
-            parse_function_arguments(args, nargsf, keywords, c"murmur3_x86_128_digest".as_ptr())
+            parse_hash_arguments(args, nargsf, keywords, c"murmur3_x86_128_digest".as_ptr())
         else {
             return ptr::null_mut();
         };
@@ -118,7 +117,7 @@ unsafe extern "C" fn murmur3_x64_128_digest(
     let py = unsafe { Python::assume_attached() };
     unsafe {
         let Some(arguments) =
-            parse_function_arguments(args, nargsf, keywords, c"murmur3_x64_128_digest".as_ptr())
+            parse_hash_arguments(args, nargsf, keywords, c"murmur3_x64_128_digest".as_ptr())
         else {
             return ptr::null_mut();
         };

@@ -17,17 +17,17 @@ pub(super) const DETACH_THRESHOLD: usize = 64 * 1024;
 pub(super) const METHOD_FLAGS: i32 = ffi::METH_FASTCALL | ffi::METH_KEYWORDS;
 
 #[derive(Clone, Copy)]
-pub(super) struct FunctionArguments {
+pub(super) struct HashArguments {
     pub(super) input: *mut ffi::PyObject,
     pub(super) seed: *mut ffi::PyObject,
 }
 
-pub(super) unsafe fn parse_function_arguments(
+pub(super) unsafe fn parse_hash_arguments(
     args: *const *mut ffi::PyObject,
     nargsf: isize,
     keywords: *mut ffi::PyObject,
     name: *const c_char,
-) -> Option<FunctionArguments> {
+) -> Option<HashArguments> {
     let nargs = nargsf as usize;
     if nargs > 2 {
         type_error(name, c"takes at most 2 arguments".as_ptr());
@@ -80,7 +80,7 @@ pub(super) unsafe fn parse_function_arguments(
         type_error(name, c"missing required argument 's'".as_ptr());
         return None;
     }
-    Some(FunctionArguments { input, seed })
+    Some(HashArguments { input, seed })
 }
 
 pub(super) unsafe fn parse_raw_arguments<const N: usize>(

@@ -141,7 +141,7 @@ jobs:
         if: runner.os != 'Linux'
         uses: Swatinem/rust-cache@v2.9.1
 
-      - name: Build wheels
+      - name: Build version-specific wheels
         uses: pypa/cibuildwheel@v4.1.1
         with:
           extras: uv

@@ -206,6 +206,7 @@ dependencies = [
  "murmur3",
  "murmurs",
  "pyo3",
+ "pyo3-build-config",
  "xxhash-c-sys",
  "xxhash-rust",
 ]

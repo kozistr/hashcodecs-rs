@@ -12,7 +12,7 @@ from packaging.tags import sys_tags
 
 
 class CustomBuildHook(BuildHookInterface[Any]):
-    """Build the portable ABI3 extension and give the wheel its native tag."""
+    """Build a version-specific CPython extension wheel."""
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
         if self.target_name != 'wheel':
@@ -53,4 +53,4 @@ class CustomBuildHook(BuildHookInterface[Any]):
 
     @staticmethod
     def _wheel_tag() -> str:
-        return f'cp310-abi3-{next(sys_tags()).platform}'
+        return str(next(sys_tags()))

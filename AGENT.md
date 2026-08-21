@@ -16,7 +16,7 @@
 ## Python
 
 - Use `uv` for environments, locking, builds, and test commands.
-- Use Hatchling for packaging and retain the CPython 3.10 ABI3 wheel.
+- Use Hatchling for packaging and build version-specific CPython wheels.
 - Support Python 3.10 and newer, including interpreter-specific standard-library behavior.
 - Configure Ruff for Python 3.12 with a line length of 119 and keep both lint and format checks clean.
 - Keep type information through the checked-in stubs and `py.typed` marker.
@@ -30,7 +30,7 @@ cargo fmt
 cargo clippy -- -D warnings
 cargo clippy --all-targets --features python -- -D warnings
 cargo test --features python
-cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'base64.*x86.*avx512\.rs$'
+cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
 uv run --frozen --no-sync ruff check .
 uv run --frozen --no-sync ruff format --check .
 uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100

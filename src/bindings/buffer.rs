@@ -2,7 +2,9 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyMemoryView, PyString};
+use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
+
+use super::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
 
@@ -19,9 +21,9 @@ impl BytesLike<'_, '_> {
     pub(super) fn len(&self) -> usize {
         match self {
             Self::Bytes(bytes) => bytes.len(),
-            Self::ByteArray(value) => value.len(),
-            Self::OwnedBytes(bytes) => bytes.as_bytes().len(),
-            Self::OwnedByteArray(value) => value.len(),
+            Self::ByteArray(value) => unsafe { bytearray_size(value.as_ptr()) },
+            Self::OwnedBytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
+            Self::OwnedByteArray(value) => unsafe { bytearray_size(value.as_ptr()) },
             Self::Text(text) => text.len(),
             Self::Owned(bytes) => bytes.len(),
         }
@@ -45,9 +47,9 @@ impl BytesLike<'_, '_> {
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
             Self::Bytes(bytes) => callback(bytes),
-            Self::ByteArray(value) => callback(unsafe { value.as_bytes() }),
-            Self::OwnedBytes(bytes) => callback(bytes.as_bytes()),
-            Self::OwnedByteArray(value) => callback(unsafe { value.as_bytes() }),
+            Self::ByteArray(value) => callback(unsafe { bytearray_bytes(value) }),
+            Self::OwnedBytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
+            Self::OwnedByteArray(value) => callback(unsafe { bytearray_bytes(value) }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::Owned(bytes) => callback(bytes),
         }
@@ -58,9 +60,9 @@ impl BytesLike<'_, '_> {
     pub(super) unsafe fn as_bytes(&self) -> &[u8] {
         match self {
             Self::Bytes(bytes) => bytes,
-            Self::ByteArray(value) => unsafe { value.as_bytes() },
-            Self::OwnedBytes(bytes) => bytes.as_bytes(),
-            Self::OwnedByteArray(value) => unsafe { value.as_bytes() },
+            Self::ByteArray(value) => unsafe { bytearray_bytes(value) },
+            Self::OwnedBytes(bytes) => unsafe { bytes_slice(bytes) },
+            Self::OwnedByteArray(value) => unsafe { bytearray_bytes(value) },
             Self::Text(text) => text.as_bytes(),
             Self::Owned(bytes) => bytes,
         }
@@ -118,13 +120,26 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
     if PyBytes::is_exact_type_of(value) {
         // Exact builtins cannot override their storage behavior.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
-        return Some(BytesLike::Bytes(bytes.as_bytes()));
+        return Some(BytesLike::Bytes(unsafe { bytes_slice(bytes) }));
     }
     if PyByteArray::is_exact_type_of(value) {
         let value = unsafe { value.cast_unchecked::<PyByteArray>() };
         return Some(BytesLike::ByteArray(value));
     }
     None
+}
+
+unsafe fn bytes_slice<'a>(value: &'a Bound<'_, PyBytes>) -> &'a [u8] {
+    unsafe { std::slice::from_raw_parts(bytes_data(value.as_ptr()), bytes_size(value.as_ptr())) }
+}
+
+unsafe fn bytearray_bytes<'a>(value: &'a Bound<'_, PyByteArray>) -> &'a [u8] {
+    unsafe {
+        std::slice::from_raw_parts(
+            bytearray_data(value.as_ptr()),
+            bytearray_size(value.as_ptr()),
+        )
+    }
 }
 
 fn buffer_bytes_like<'a, 'py>(
@@ -165,12 +180,12 @@ fn exact_memoryview_bytes_like<'a, 'py>(
         let owner = memoryview.getattr(intern!(py, "obj"))?;
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
-            if owner.as_bytes().len() == nbytes {
+            if unsafe { bytes_size(owner.as_ptr()) } == nbytes {
                 return Ok(BytesLike::OwnedBytes(owner));
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
-            if owner.len() == nbytes {
+            if unsafe { bytearray_size(owner.as_ptr()) } == nbytes {
                 return Ok(BytesLike::OwnedByteArray(owner));
             }
         }

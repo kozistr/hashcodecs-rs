@@ -142,7 +142,7 @@ jobs:
         uses: Swatinem/rust-cache@v2.9.1
 
       - name: Build version-specific wheels
-        uses: pypa/cibuildwheel@v4.1.1
+        uses: pypa/cibuildwheel@v4.2.0
         with:
           extras: uv
           output-dir: dist

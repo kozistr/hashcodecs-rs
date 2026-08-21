@@ -803,13 +803,20 @@ mod tests {
             x86::select(Capabilities::for_backends(&[SimdBackend::Avx512])),
             x86::Backend::Avx512
         );
-
         for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
             let owned_secret = (seed != 0).then(|| init_secret(seed));
             let secret = owned_secret.as_ref().unwrap_or(&SECRET);
             let expected = long_accumulate_scalar(&input, secret);
             assert_eq!(x86::init_secret(seed, scalar), init_secret_scalar(seed));
             assert_eq!(x86::long_accumulate(&input, secret, scalar), expected);
+            assert_eq!(
+                x86::long_accumulate(
+                    &input,
+                    secret,
+                    Capabilities::for_backends(&[SimdBackend::Avx512]),
+                ),
+                expected
+            );
 
             let supported = [
                 (x86::Backend::Scalar, SimdBackend::Scalar),

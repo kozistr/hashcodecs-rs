@@ -86,11 +86,3 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     };
     acc.0
 }
-
-#[target_feature(enable = "sse4.1,ssse3")]
-/// # Safety
-/// The caller must have detected SSE4.1 and SSSE3 support. `data` must be in
-/// XXH3 long mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate_sse41(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    unsafe { long_accumulate(data, secret) }
-}

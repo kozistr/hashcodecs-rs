@@ -43,9 +43,8 @@ pub(super) fn init_secret(seed: u64, capabilities: Capabilities) -> [u8; 192] {
 pub(super) fn long_accumulate(data: &[u8], secret: &[u8], capabilities: Capabilities) -> [u64; 8] {
     match select(capabilities) {
         Backend::Scalar => long_accumulate_scalar(data, secret),
-        Backend::Ssse3 => unsafe { sse::long_accumulate(data, secret) },
-        Backend::Sse41 => unsafe { sse::long_accumulate_sse41(data, secret) },
+        Backend::Ssse3 | Backend::Sse41 => unsafe { sse::long_accumulate(data, secret) },
         Backend::Avx2 => unsafe { avx2::long_accumulate(data, secret) },
-        Backend::Avx512 => unsafe { avx512::long_accumulate(data, secret) },
+        Backend::Avx512 => avx512::long_accumulate(data, secret),
     }
 }

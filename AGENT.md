@@ -16,7 +16,7 @@
 ## Python
 
 - Use `uv` for environments, locking, builds, and test commands.
-- Use Hatchling for packaging and build version-specific CPython wheels.
+- Use Hatchling for packaging and build CPython wheels.
 - Support Python 3.10 and newer, including interpreter-specific standard-library behavior.
 - Configure Ruff for Python 3.12 with a line length of 119 and keep both lint and format checks clean.
 - Keep type information through the checked-in stubs and `py.typed` marker.

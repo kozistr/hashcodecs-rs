@@ -12,7 +12,7 @@ from packaging.tags import sys_tags
 
 
 class CustomBuildHook(BuildHookInterface[Any]):
-    """Build a version-specific CPython extension wheel."""
+    """Build the CPython extension wheel."""
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
         if self.target_name != 'wheel':

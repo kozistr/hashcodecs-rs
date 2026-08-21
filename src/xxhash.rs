@@ -784,6 +784,9 @@ mod tests {
         let input: Vec<u8> = (0..4161)
             .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
             .collect();
+        let exact_kib: Vec<u8> = (0..1024)
+            .map(|index| (index as u8).wrapping_mul(53).wrapping_add(17))
+            .collect();
         let capabilities = backend::capabilities();
         let scalar = Capabilities::for_backends(&[]);
         assert_eq!(x86::select(scalar), x86::Backend::Scalar);
@@ -833,6 +836,13 @@ mod tests {
                 assert_eq!(x86::select(forced), selected);
                 let actual = x86::long_accumulate(&input, secret, forced);
                 assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
+                if selected == x86::Backend::Avx2 {
+                    assert_eq!(
+                        x86::long_accumulate(&exact_kib, secret, forced),
+                        long_accumulate_scalar(&exact_kib, secret),
+                        "AVX2 1 KiB mismatch for seed {seed:#x}",
+                    );
+                }
             }
         }
     }

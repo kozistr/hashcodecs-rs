@@ -6,7 +6,7 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyAssertionError, PyMemoryError, PyTypeError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyInt, PyList, PyModule};
+use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList, PyModule};
 
 use self::decode::{
     b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
@@ -14,7 +14,10 @@ use self::decode::{
     urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315,
 };
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
-use super::{METHOD_FLAGS, parse_raw_arguments, return_function_result};
+use super::{
+    METHOD_FLAGS, bytearray_data, bytearray_size, bytes_data_mut, list_items, parse_raw_arguments,
+    return_function_result,
+};
 
 mod decode;
 mod encode;
@@ -131,7 +134,7 @@ unsafe fn pybytes_with_len<'py, T>(
         let raw = ffi::PyBytes_FromStringAndSize(core::ptr::null(), length);
         let bytes: Bound<'py, PyBytes> =
             Bound::from_owned_ptr_or_err(py, raw)?.cast_into_unchecked();
-        let buffer = ffi::PyBytes_AsString(raw).cast::<u8>();
+        let buffer = bytes_data_mut(raw);
         debug_assert!(!buffer.is_null());
 
         // CPython leaves the payload uninitialized when passed a null source.
@@ -143,11 +146,11 @@ unsafe fn pybytes_with_len<'py, T>(
 }
 
 fn output_ptr(output: &Bound<'_, PyByteArray>, required: usize) -> PyResult<*mut u8> {
-    let provided = output.len();
+    let provided = unsafe { bytearray_size(output.as_ptr()) };
     if provided < required {
         return Err(output_too_small(required, provided));
     }
-    Ok(unsafe { ffi::PyByteArray_AsString(output.as_ptr()).cast() })
+    Ok(unsafe { bytearray_data(output.as_ptr()) })
 }
 
 fn output_too_small(required: usize, provided: usize) -> PyErr {
@@ -179,7 +182,7 @@ fn batch_outputs<'py>(
     identities
         .try_reserve(outputs.len())
         .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-    for (index, output) in outputs.iter().enumerate() {
+    for (index, output) in list_items(outputs).into_iter().enumerate() {
         let output = output
             .cast_into::<PyByteArray>()
             .map_err(|_| PyTypeError::new_err(format!("outputs[{index}] must be a bytearray")))?;
@@ -292,7 +295,7 @@ pub(super) fn b64encode_batch<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, false)?;
     let mut encoded = batch_results(items.len())?;
-    for item in items.iter() {
+    for item in list_items(items) {
         encoded.push(encode_parsed(py, &item, altchars, true, None)?);
     }
     PyList::new(py, encoded)
@@ -314,7 +317,7 @@ pub(super) fn b64encode_batch_into<'py>(
     let altchars = parse_altchars(py, altchars, false)?;
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut written = batch_results(items.len())?;
-    for (item, output) in items.iter().zip(outputs.iter()) {
+    for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
         let input = contiguous_bytes_like(py, &item, "s")?;
         written.push(encode_parsed_into(&input, output, altchars, true, None)?);
     }

@@ -3,7 +3,7 @@ use std::ptr;
 
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
+use pyo3::types::{PyList, PyModule};
 
 use self::buffer::bytes_like;
 use self::murmur3::{PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128};
@@ -15,6 +15,66 @@ mod xxhash;
 
 pub(super) const DETACH_THRESHOLD: usize = 64 * 1024;
 pub(super) const METHOD_FLAGS: i32 = ffi::METH_FASTCALL | ffi::METH_KEYWORDS;
+
+#[inline]
+unsafe fn tuple_size(tuple: *mut ffi::PyObject) -> usize {
+    unsafe { ffi::PyTuple_GET_SIZE(tuple) as usize }
+}
+
+#[inline]
+unsafe fn tuple_item(tuple: *mut ffi::PyObject, index: usize) -> *mut ffi::PyObject {
+    unsafe { ffi::PyTuple_GET_ITEM(tuple, index as isize) }
+}
+
+pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> Vec<Bound<'py, PyAny>> {
+    #[cfg(Py_GIL_DISABLED)]
+    return items.iter().collect();
+    #[cfg(not(Py_GIL_DISABLED))]
+    unsafe {
+        let length = ffi::PyList_GET_SIZE(items.as_ptr()) as usize;
+        let mut values = Vec::with_capacity(length);
+        for index in 0..length {
+            let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
+            values.push(Bound::from_borrowed_ptr(items.py(), item));
+        }
+        values
+    }
+}
+
+#[inline]
+pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
+    #[cfg(Py_GIL_DISABLED)]
+    return unsafe { ffi::PyByteArray_AsString(value).cast() };
+    #[cfg(not(Py_GIL_DISABLED))]
+    unsafe {
+        ffi::PyByteArray_AS_STRING(value).cast()
+    }
+}
+
+#[inline]
+pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
+    #[cfg(Py_GIL_DISABLED)]
+    return unsafe { ffi::PyByteArray_Size(value) as usize };
+    #[cfg(not(Py_GIL_DISABLED))]
+    unsafe {
+        ffi::PyByteArray_GET_SIZE(value) as usize
+    }
+}
+
+#[inline]
+pub(super) unsafe fn bytes_data(value: *mut ffi::PyObject) -> *const u8 {
+    unsafe { ffi::PyBytes_AS_STRING(value).cast() }
+}
+
+#[inline]
+pub(super) unsafe fn bytes_data_mut(value: *mut ffi::PyObject) -> *mut u8 {
+    unsafe { bytes_data(value).cast_mut() }
+}
+
+#[inline]
+pub(super) unsafe fn bytes_size(value: *mut ffi::PyObject) -> usize {
+    unsafe { ffi::Py_SIZE(value) as usize }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct HashArguments {
@@ -48,7 +108,7 @@ pub(super) unsafe fn parse_hash_arguments(
     let keyword_count = if keywords.is_null() {
         0
     } else {
-        unsafe { ffi::PyTuple_Size(keywords) as usize }
+        unsafe { tuple_size(keywords) }
     };
     if nargs + keyword_count > 2 {
         type_error(name, c"got too many arguments".as_ptr());
@@ -56,7 +116,7 @@ pub(super) unsafe fn parse_hash_arguments(
     }
 
     for index in 0..keyword_count {
-        let keyword = unsafe { ffi::PyTuple_GetItem(keywords, index as isize) };
+        let keyword = unsafe { tuple_item(keywords, index) };
         let value = unsafe { *args.add(nargs + index) };
         if unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, c"s".as_ptr()) } == 0 {
             if !input.is_null() {
@@ -114,10 +174,10 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     let keyword_count = if keywords.is_null() {
         0
     } else {
-        unsafe { ffi::PyTuple_Size(keywords) as usize }
+        unsafe { tuple_size(keywords) }
     };
     for keyword_index in 0..keyword_count {
-        let keyword = unsafe { ffi::PyTuple_GetItem(keywords, keyword_index as isize) };
+        let keyword = unsafe { tuple_item(keywords, keyword_index) };
         let value = unsafe { *args.add(nargs + keyword_index) };
         let parameter_index = parameter_names.iter().position(|parameter| {
             (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, *parameter) }) == 0
@@ -207,9 +267,8 @@ pub(super) fn with_function_bytes<T: Send>(
     operation: impl FnOnce(&[u8]) -> T + Send,
 ) -> PyResult<T> {
     if unsafe { ffi::PyBytes_CheckExact(object) } != 0 {
-        let length = unsafe { ffi::PyBytes_Size(object) } as usize;
-        let bytes =
-            unsafe { std::slice::from_raw_parts(ffi::PyBytes_AsString(object).cast(), length) };
+        let length = unsafe { bytes_size(object) };
+        let bytes = unsafe { std::slice::from_raw_parts(bytes_data(object), length) };
         return if length >= DETACH_THRESHOLD {
             Ok(py.detach(|| operation(bytes)))
         } else {

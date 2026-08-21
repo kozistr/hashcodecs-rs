@@ -1,10 +1,9 @@
 use core::slice;
 
 use pyo3::exceptions::{PyDeprecationWarning, PyFutureWarning, PyMemoryError};
-use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyByteArrayMethods, PyBytes, PyDict, PyList, PyType};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyType};
 
 use super::{
     STANDARD_ALPHABET, batch_outputs, batch_results, output_ptr, output_too_small, parse_altchars,
@@ -17,8 +16,9 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
-use crate::bindings::DETACH_THRESHOLD;
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
+use crate::bindings::{DETACH_THRESHOLD, bytearray_data, bytearray_size, list_items};
+
 fn decode_strict<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
@@ -72,19 +72,15 @@ fn decode_strict_slice_into(
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
     let layout = decode_layout(input)?;
-    let provided = output.len();
+    let provided = unsafe { bytearray_size(output.as_ptr()) };
     if provided < layout.output_len {
         return Err(Base64Error::OutputTooSmall {
             required: layout.output_len,
             provided,
         });
     }
-    let output = unsafe {
-        slice::from_raw_parts_mut(
-            ffi::PyByteArray_AsString(output.as_ptr()).cast(),
-            layout.output_len,
-        )
-    };
+    let output =
+        unsafe { slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len) };
     let output = &mut output[..layout.output_len];
     if transactional_errors {
         decode_to_slice_with_layout_and_alphabet_transactional(input, output, layout, alphabet)?;
@@ -149,19 +145,15 @@ fn decode_unpadded_slice_into(
         return Err(Base64Error::InvalidInput);
     }
     let layout = decode_unpadded_layout(input)?;
-    let provided = output.len();
+    let provided = unsafe { bytearray_size(output.as_ptr()) };
     if provided < layout.output_len {
         return Err(Base64Error::OutputTooSmall {
             required: layout.output_len,
             provided,
         });
     }
-    let output = unsafe {
-        slice::from_raw_parts_mut(
-            ffi::PyByteArray_AsString(output.as_ptr()).cast(),
-            layout.output_len,
-        )
-    };
+    let output =
+        unsafe { slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len) };
     if transactional_errors {
         decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
             input, output, layout, alphabet,
@@ -751,7 +743,7 @@ pub(super) fn b64decode_batch<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, true)?;
     let mut decoded = batch_results(items.len())?;
-    for item in items.iter() {
+    for item in list_items(items) {
         let input = ascii_or_bytes(py, &item, "s")?;
         decoded.push(decode_parsed(
             py, &input, altchars, validate, true, None, false,
@@ -916,7 +908,7 @@ pub(super) fn b64decode_batch_into<'py>(
     let altchars = parse_altchars(py, altchars, true)?;
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut written = batch_results(items.len())?;
-    for (item, output) in items.iter().zip(outputs.iter()) {
+    for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
         let input = ascii_or_bytes(py, &item, "s")?;
         written.push(decode_parsed_into(
             py, &input, output, altchars, validate, true, None, false,

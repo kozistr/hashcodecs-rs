@@ -8,14 +8,12 @@ use self::base64::{
     urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315, urlsafe_b64encode,
     urlsafe_b64encode_into,
 };
-use self::murmur3::{
-    PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128, murmur3_32,
-    murmur3_x64_128_digest, murmur3_x86_128_digest,
-};
-use self::xxhash::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
+use self::murmur3::{PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128};
+use self::xxhash::{xxh3_64_batch, xxh3_128_batch};
 
 mod base64;
 mod buffer;
+mod fast;
 mod murmur3;
 mod xxhash;
 
@@ -44,14 +42,10 @@ fn python_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add_function(wrap_pyfunction!(urlsafe_b64decode_pre_315, module)?)?;
         module.add_function(wrap_pyfunction!(urlsafe_b64decode_into_pre_315, module)?)?;
     }
-    module.add_function(wrap_pyfunction!(murmur3_32, module)?)?;
-    module.add_function(wrap_pyfunction!(murmur3_x86_128_digest, module)?)?;
-    module.add_function(wrap_pyfunction!(murmur3_x64_128_digest, module)?)?;
+    unsafe { fast::add_to_module(module)? };
     module.add_class::<PyMurmur3X86Hasher32>()?;
     module.add_class::<PyMurmur3X86Hasher128>()?;
     module.add_class::<PyMurmur3X64Hasher128>()?;
-    module.add_function(wrap_pyfunction!(xxh3_64, module)?)?;
-    module.add_function(wrap_pyfunction!(xxh3_128, module)?)?;
     module.add_function(wrap_pyfunction!(xxh3_64_batch, module)?)?;
     module.add_function(wrap_pyfunction!(xxh3_128_batch, module)?)?;
     Ok(())

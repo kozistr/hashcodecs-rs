@@ -6,10 +6,6 @@ use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, bytes_like};
 use crate::{Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128};
 
-mod functions;
-
-pub use functions::{murmur3_32, murmur3_x64_128_digest, murmur3_x86_128_digest};
-
 fn x86_128_digest(words: [u32; 4]) -> [u8; 16] {
     let mut digest = [0_u8; 16];
     for (index, word) in words.iter().enumerate() {

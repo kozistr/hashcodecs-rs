@@ -1,3 +1,6 @@
+import inspect
+from collections.abc import Callable
+
 import hashcodecs
 import hashcodecs.xxhash as xxhash
 import pytest
@@ -7,6 +10,28 @@ def test_xxh3_known_empty_digests_and_exports() -> None:
     assert hashcodecs.xxh3_64(b'') == 0x2D06800538D394C2
     assert xxhash.xxh3_64(b'') == 0x2D06800538D394C2
     assert hashcodecs.xxh3_128(b'') == 0x99AA06D3014798D86001C324468D497F
+
+
+@pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
+def test_xxh3_one_shot_argument_compatibility(function: Callable[..., object]) -> None:
+    assert str(inspect.signature(function)) == '(s, seed=0)'
+    expected = function(b'hello', 42)
+    assert function(s=b'hello', seed=42) == expected
+    assert function(bytearray(b'hello'), seed=42) == expected
+    assert function(memoryview(b'hello'), 42) == expected
+
+    with pytest.raises(TypeError):
+        function()
+    with pytest.raises(TypeError):
+        function(b'hello', s=b'hello')
+    with pytest.raises(TypeError):
+        function(b'hello', 42, seed=42)
+    with pytest.raises(TypeError):
+        function(b'hello', unknown=42)
+    with pytest.raises(OverflowError):
+        function(b'hello', -1)
+    with pytest.raises(OverflowError):
+        function(b'hello', 1 << 64)
 
 
 def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:

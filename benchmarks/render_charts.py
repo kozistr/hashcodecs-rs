@@ -199,11 +199,11 @@ CHARTS = (
         tuple(
             panel(title, SIZES, hashcodecs=ours, mmh3=upstream)
             for title, ours, upstream in (
-                ('x86 32-bit one-shot', [3.19, 3.57, 3.61, 3.74], [3.22, 3.50, 3.60, 3.57]),
+                ('x86 32-bit one-shot', [3.56, 3.85, 3.99, 3.99], [3.44, 3.72, 3.84, 3.83]),
                 ('x86 32-bit incremental', [2.65, 3.43, 3.99, 3.99], [2.86, 3.48, 3.84, 3.84]),
-                ('x86 128-bit one-shot', [5.26, 7.62, 8.61, 7.83], [6.16, 7.73, 8.34, 7.99]),
+                ('x86 128-bit one-shot', [6.59, 8.48, 9.42, 9.42], [6.69, 8.22, 8.89, 8.86]),
                 ('x86 128-bit incremental', [4.01, 7.09, 9.27, 9.27], [0.69, 0.78, 0.80, 0.81]),
-                ('x64 128-bit one-shot', [5.36, 8.06, 9.49, 9.45], [7.31, 8.92, 9.64, 9.12]),
+                ('x64 128-bit one-shot', [6.95, 9.13, 10.08, 10.03], [7.79, 9.48, 10.26, 10.26]),
                 ('x64 128-bit incremental', [4.34, 7.79, 10.11, 10.10], [5.32, 8.05, 9.36, 8.20]),
             )
         ),
@@ -213,10 +213,10 @@ CHARTS = (
         'Python XXH3 throughput',
         (
             panel(
-                'XXH3-64 one-shot', SIZES, hashcodecs=[13.41, 33.30, 77.72, 46.24], xxhash=[13.40, 29.06, 46.52, 38.84]
+                'XXH3-64 one-shot', SIZES, hashcodecs=[14.86, 38.05, 77.81, 46.35], xxhash=[13.42, 29.23, 47.10, 38.50]
             ),
             panel(
-                'XXH3-128 one-shot', SIZES, hashcodecs=[8.82, 26.79, 76.94, 46.72], xxhash=[9.27, 22.17, 48.47, 38.27]
+                'XXH3-128 one-shot', SIZES, hashcodecs=[9.31, 27.32, 76.79, 46.15], xxhash=[9.27, 22.42, 46.74, 38.79]
             ),
             panel(
                 'XXH3-64 batch (32 items)',

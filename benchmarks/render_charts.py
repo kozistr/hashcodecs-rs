@@ -166,28 +166,28 @@ CHARTS = (
             panel(
                 'Standard encode',
                 SIZES,
-                hashcodecs=[10.78, 23.43, 3.89, 4.62],
+                hashcodecs=[11.10, 23.76, 3.57, 4.12],
                 CPython=[0.44, 0.46, 0.40, 0.42],
                 pybase64=[5.02, 13.11, 2.68, 2.91],
             ),
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[8.59, 17.93, 4.47, 4.32],
+                hashcodecs=[8.66, 17.85, 4.11, 4.95],
                 CPython=[0.93, 1.08, 0.84, 0.90],
                 pybase64=[3.09, 8.01, 3.26, 3.57],
             ),
             panel(
                 'URL-safe encode',
                 SIZES,
-                hashcodecs=[9.98, 22.26, 3.76, 4.46],
+                hashcodecs=[10.26, 22.64, 3.57, 4.07],
                 CPython=[0.37, 0.39, 0.33, 0.34],
                 pybase64=[0.96, 1.12, 0.84, 0.84],
             ),
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[7.02, 13.75, 4.86, 4.24],
+                hashcodecs=[7.53, 14.05, 4.43, 5.14],
                 CPython=[0.47, 0.69, 0.60, 0.59],
                 pybase64=[1.13, 1.47, 1.34, 1.38],
             ),
@@ -199,12 +199,12 @@ CHARTS = (
         tuple(
             panel(title, SIZES, hashcodecs=ours, mmh3=upstream)
             for title, ours, upstream in (
-                ('x86 32-bit one-shot', [3.56, 3.85, 3.99, 3.99], [3.44, 3.72, 3.84, 3.83]),
-                ('x86 32-bit incremental', [2.65, 3.43, 3.99, 3.99], [2.86, 3.48, 3.84, 3.84]),
-                ('x86 128-bit one-shot', [6.59, 8.48, 9.42, 9.42], [6.69, 8.22, 8.89, 8.86]),
-                ('x86 128-bit incremental', [4.01, 7.09, 9.27, 9.27], [0.69, 0.78, 0.80, 0.81]),
-                ('x64 128-bit one-shot', [6.95, 9.13, 10.08, 10.03], [7.79, 9.48, 10.26, 10.26]),
-                ('x64 128-bit incremental', [4.34, 7.79, 10.11, 10.10], [5.32, 8.05, 9.36, 8.20]),
+                ('x86 32-bit one-shot', [3.53, 3.86, 4.00, 3.99], [3.44, 3.72, 3.84, 3.83]),
+                ('x86 32-bit incremental', [2.84, 3.62, 4.00, 3.99], [2.86, 3.48, 3.84, 3.84]),
+                ('x86 128-bit one-shot', [6.52, 8.45, 9.42, 9.42], [6.69, 8.22, 8.89, 8.86]),
+                ('x86 128-bit incremental', [4.40, 7.20, 9.40, 9.41], [0.69, 0.78, 0.80, 0.81]),
+                ('x64 128-bit one-shot', [6.97, 8.94, 10.07, 10.05], [7.79, 9.48, 10.26, 10.26]),
+                ('x64 128-bit incremental', [4.73, 7.87, 10.07, 10.05], [5.32, 8.05, 9.36, 8.20]),
             )
         ),
     ),
@@ -213,21 +213,21 @@ CHARTS = (
         'Python XXH3 throughput',
         (
             panel(
-                'XXH3-64 one-shot', SIZES, hashcodecs=[16.31, 41.23, 78.41, 46.46], xxhash=[13.42, 29.23, 47.10, 38.50]
+                'XXH3-64 one-shot', SIZES, hashcodecs=[17.26, 41.25, 79.23, 44.82], xxhash=[13.42, 29.23, 47.10, 38.50]
             ),
             panel(
-                'XXH3-128 one-shot', SIZES, hashcodecs=[10.33, 30.28, 78.46, 46.42], xxhash=[9.27, 22.42, 46.74, 38.79]
+                'XXH3-128 one-shot', SIZES, hashcodecs=[14.49, 36.77, 79.18, 44.72], xxhash=[9.27, 22.42, 46.74, 38.79]
             ),
             panel(
                 'XXH3-64 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[2.87, 29.19, 58.57, 37.00],
+                hashcodecs=[5.45, 43.55, 63.49, 37.69],
                 xxhash=[2.15, 14.55, 30.50, 18.39],
             ),
             panel(
                 'XXH3-128 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[1.17, 15.48, 40.49, 37.16],
+                hashcodecs=[2.69, 30.30, 54.43, 37.62],
                 xxhash=[1.01, 9.87, 23.87, 13.75],
             ),
         ),
@@ -236,10 +236,10 @@ CHARTS = (
         'base64-python-reusable.svg',
         'Reusable Python Base64 buffers',
         (
-            panel('Standard encode', SIZES, hashcodecs=[13.70, 26.46, 39.04, 29.24]),
-            panel('Standard decode', SIZES, hashcodecs=[9.76, 19.53, 29.07, 17.45]),
-            panel('URL-safe encode', SIZES, hashcodecs=[12.82, 25.39, 37.25, 29.32]),
-            panel('URL-safe decode', SIZES, hashcodecs=[8.22, 14.83, 19.89, 16.55]),
+            panel('Standard encode', SIZES, hashcodecs=[13.69, 26.58, 39.96, 30.29]),
+            panel('Standard decode', SIZES, hashcodecs=[10.21, 19.54, 29.44, 18.91]),
+            panel('URL-safe encode', SIZES, hashcodecs=[12.97, 25.80, 40.06, 30.25]),
+            panel('URL-safe decode', SIZES, hashcodecs=[8.75, 15.33, 20.81, 17.46]),
         ),
     ),
     Chart(
@@ -249,14 +249,14 @@ CHARTS = (
             panel(
                 'Encode',
                 SIZES,
-                returned_bytes=[5.83, 18.73, 3.02, 4.48],
-                reusable_bytearray=[6.66, 21.77, 39.73, 30.25],
+                returned_bytes=[6.24, 19.96, 3.88, 4.71],
+                reusable_bytearray=[7.16, 22.76, 40.06, 30.37],
             ),
             panel(
                 'Decode',
                 SIZES,
-                returned_bytes=[5.26, 15.04, 3.70, 4.06],
-                reusable_bytearray=[5.70, 16.52, 29.01, 19.08],
+                returned_bytes=[5.60, 15.62, 4.48, 4.11],
+                reusable_bytearray=[6.21, 17.20, 29.38, 19.51],
             ),
         ),
     ),
@@ -268,12 +268,12 @@ CHARTS = (
                 title, ['8', '64', '1,024'], hashcodecs=ours, hashcodecs_loop=loop, pybase64=pybase64, CPython=cpython
             )
             for title, ours, loop, pybase64, cpython in (
-                ('16 B encode', [0.45, 0.60, 0.61], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
-                ('16 B decode', [0.41, 0.55, 0.55], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
-                ('256 B encode', [6.30, 7.34, 7.28], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
-                ('256 B decode', [5.84, 7.12, 6.67], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
-                ('4 KiB encode', [24.62, 18.26, 6.06], [20.55, 15.76, 2.46], [12.23, 8.99, 2.27], [0.46, 0.45, 0.39]),
-                ('4 KiB decode', [19.78, 19.24, 7.71], [16.03, 15.50, 11.21], [7.74, 7.62, 6.66], [1.07, 1.06, 1.05]),
+                ('16 B encode', [0.53, 0.73, 0.74], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
+                ('16 B decode', [0.46, 0.62, 0.62], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
+                ('256 B encode', [7.13, 8.56, 8.46], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
+                ('256 B decode', [6.29, 7.47, 6.98], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
+                ('4 KiB encode', [14.98, 18.67, 2.09], [20.55, 15.76, 2.46], [12.23, 8.99, 2.27], [0.46, 0.45, 0.39]),
+                ('4 KiB decode', [20.34, 19.64, 2.68], [16.03, 15.50, 11.21], [7.74, 7.62, 6.66], [1.07, 1.06, 1.05]),
             )
         ),
     ),
@@ -283,9 +283,9 @@ CHARTS = (
         tuple(
             panel(title, ['8', '64', '1,024'], encode=encode, decode=decode)
             for title, encode, decode in (
-                ('16 B items', [0.37, 0.52, 0.54], [0.33, 0.47, 0.50]),
-                ('256 B items', [4.77, 6.04, 6.07], [4.41, 5.91, 5.90]),
-                ('4 KiB items', [26.13, 26.81, 17.91], [20.30, 22.06, 16.88]),
+                ('16 B items', [0.43, 0.59, 0.58], [0.38, 0.56, 0.56]),
+                ('256 B items', [5.23, 6.57, 6.51], [5.11, 6.67, 6.55]),
+                ('4 KiB items', [26.98, 27.85, 17.96], [21.66, 22.75, 17.31]),
             )
         ),
     ),
@@ -296,10 +296,10 @@ CHARTS = (
             panel(
                 '1 MiB items',
                 ['1', '2', '4', '8', '16', '32'],
-                returned_encode=[3.14, 3.23, 3.11, 3.04, 2.87, 2.85],
-                reusable_encode=[39.83, 20.96, 20.19, 19.46, 13.31, 11.03],
-                returned_decode=[3.74, 3.78, 3.80, 3.80, 3.42, 3.28],
-                reusable_decode=[29.05, 21.64, 21.06, 19.03, 12.18, 10.49],
+                returned_encode=[3.09, 3.17, 3.17, 3.03, 2.94, 2.83],
+                reusable_encode=[39.99, 20.96, 20.21, 19.49, 13.33, 11.03],
+                returned_decode=[4.02, 3.90, 4.01, 3.90, 3.51, 3.38],
+                reusable_decode=[29.32, 21.49, 20.95, 18.96, 12.17, 10.59],
             ),
         ),
     ),
@@ -310,14 +310,14 @@ CHARTS = (
             panel(
                 'Encode',
                 SIZES,
-                returned_bytes=[10.17, 22.44, 3.01, 5.13],
-                reusable_bytearray=[13.77, 26.33, 39.34, 29.80],
+                returned_bytes=[10.40, 22.98, 3.56, 4.72],
+                reusable_bytearray=[13.49, 26.64, 39.97, 30.10],
             ),
             panel(
                 'Decode',
                 SIZES,
-                returned_bytes=[8.52, 17.68, 3.77, 3.93],
-                reusable_bytearray=[9.96, 18.83, 28.95, 18.46],
+                returned_bytes=[8.67, 17.97, 4.12, 4.14],
+                reusable_bytearray=[10.16, 19.57, 29.42, 19.10],
             ),
         ),
     ),
@@ -327,12 +327,12 @@ CHARTS = (
         tuple(
             panel(title, SIZES, hashcodecs=values)
             for title, values in (
-                ('x86 32-bit one-shot', [3.34, 3.71, 3.93, 3.88]),
-                ('x86 32-bit incremental', [2.71, 3.53, 3.85, 3.87]),
-                ('x86 128-bit one-shot', [5.72, 8.01, 8.92, 9.04]),
-                ('x86 128-bit incremental', [4.02, 6.91, 8.76, 8.92]),
-                ('x64 128-bit one-shot', [5.82, 8.39, 9.83, 9.84]),
-                ('x64 128-bit incremental', [4.47, 7.58, 9.82, 9.89]),
+                ('x86 32-bit one-shot', [3.52, 3.85, 4.00, 3.99]),
+                ('x86 32-bit incremental', [2.84, 3.62, 3.98, 3.97]),
+                ('x86 128-bit one-shot', [6.00, 8.30, 9.47, 9.48]),
+                ('x86 128-bit incremental', [4.40, 7.24, 9.36, 9.34]),
+                ('x64 128-bit one-shot', [6.81, 9.05, 10.14, 10.06]),
+                ('x64 128-bit incremental', [4.75, 7.91, 10.08, 10.05]),
             )
         ),
     ),
@@ -492,20 +492,24 @@ def render(chart: Chart) -> str:
                 preferred = -10 if series_index % 2 == 0 else 17
                 offsets = (preferred, -10, 17, -26, 33, -42, 49, -58, 65)
                 label_width = len(label) * 6.6
+                label_x = min(
+                    max(x, plot_x + label_width / 2 + 5),
+                    plot_x + plot_width - label_width / 2 - 5,
+                )
                 candidate_ys = [y + offset for offset in dict.fromkeys(offsets)]
                 candidate_ys.extend(plot_y + 12 + lane * 16 for lane in range(13))
                 label_y = candidate_ys[-1]
                 label_box = (
-                    x - label_width / 2 - 2,
+                    label_x - label_width / 2 - 2,
                     label_y - 11,
-                    x + label_width / 2 + 2,
+                    label_x + label_width / 2 + 2,
                     label_y + 3,
                 )
                 for candidate_y in candidate_ys:
                     candidate = (
-                        x - label_width / 2 - 2,
+                        label_x - label_width / 2 - 2,
                         candidate_y - 11,
-                        x + label_width / 2 + 2,
+                        label_x + label_width / 2 + 2,
                         candidate_y + 3,
                     )
                     if candidate[1] < plot_y or candidate[3] > plot_y + plot_height:
@@ -520,7 +524,7 @@ def render(chart: Chart) -> str:
                     break
                 label_boxes.append(label_box)
                 chunks.append(
-                    f'<text x="{x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
+                    f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
                     f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
                     'font-size="11" font-weight="600" paint-order="stroke" '
                     f'stroke="#ffffff" stroke-width="3" stroke-linejoin="round">{label}</text>'

@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
 use super::x86;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,11 +41,11 @@ pub(super) struct RuntimeBackend {
 impl RuntimeBackend {
     #[inline]
     pub(super) fn use_streaming_stores(self, input_len: usize, output: *mut u8) -> bool {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
         {
             x86::use_streaming_stores(self.cached_input_limit, input_len, output)
         }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(all(target_arch = "x86_64", not(any(kani, miri)))))]
         {
             let _ = (self.cached_input_limit, input_len, output);
             false

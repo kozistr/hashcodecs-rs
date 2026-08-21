@@ -477,8 +477,8 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let owned_secret = (seed != 0).then(|| init_secret(seed));
     let secret = owned_secret.as_ref().unwrap_or(&SECRET);
     let mut output = Vec::with_capacity(inputs.len());
-    let mut chunks = inputs.chunks_exact(4);
-    for chunk in &mut chunks {
+    let (chunks, remainder) = inputs.as_chunks::<4>();
+    for chunk in chunks {
         if let Some(accumulators) = batch4_long_accumulators(chunk, secret) {
             output.extend(accumulators.iter().map(|acc| {
                 merge(
@@ -496,8 +496,7 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
         );
     }
     output.extend(
-        chunks
-            .remainder()
+        remainder
             .iter()
             .map(|input| xxh3_64_with_long_secret(input, seed, secret)),
     );
@@ -511,8 +510,8 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let owned_secret = (seed != 0).then(|| init_secret(seed));
     let secret = owned_secret.as_ref().unwrap_or(&SECRET);
     let mut output = Vec::with_capacity(inputs.len());
-    let mut chunks = inputs.chunks_exact(4);
-    for chunk in &mut chunks {
+    let (chunks, remainder) = inputs.as_chunks::<4>();
+    for chunk in chunks {
         if let Some(accumulators) = batch4_long_accumulators(chunk, secret) {
             let length = chunk[0].len();
             output.extend(
@@ -529,8 +528,7 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
         );
     }
     output.extend(
-        chunks
-            .remainder()
+        remainder
             .iter()
             .map(|input| xxh3_128_with_long_secret(input, seed, secret)),
     );

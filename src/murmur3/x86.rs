@@ -292,7 +292,7 @@ fn mix_x86_128_transposed_group(hashes: &mut [u32; 4], mixed: &[u32]) {
 
 #[inline(always)]
 fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
-    for block in blocks.chunks_exact(4) {
+    for block in blocks.as_chunks::<4>().0 {
         mix_x86_128_hashes(hashes, block[0], block[1], block[2], block[3]);
     }
 }
@@ -450,7 +450,7 @@ fn mullo_epi64_sse41(left: __m128i, right: __m128i) -> __m128i {
 
 #[inline(always)]
 fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
-    for block in blocks.chunks_exact(2) {
+    for block in blocks.as_chunks::<2>().0 {
         mix_x64_128_hashes(hash1, hash2, block[0], block[1]);
     }
 }

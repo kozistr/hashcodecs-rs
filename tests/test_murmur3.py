@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -13,6 +14,31 @@ def test_murmur3_known_answers_and_buffer_inputs() -> None:
     assert hashcodecs.murmur3_32(memoryview(b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_x86_128_digest(bytes([1, 2, 3])) == bytes.fromhex('e16401f6334213b5334213b5334213b5')
     assert hashcodecs.murmur3_x64_128_digest(bytes([1, 2, 3])) == bytes.fromhex('a937130eef3e641a659a233c404a4e49')
+
+
+@pytest.mark.parametrize(
+    'function',
+    [hashcodecs.murmur3_32, hashcodecs.murmur3_x86_128_digest, hashcodecs.murmur3_x64_128_digest],
+)
+def test_murmur3_one_shot_argument_compatibility(function: Callable[..., object]) -> None:
+    assert str(inspect.signature(function)) == '(s, seed=0)'
+    expected = function(b'hello', 42)
+    assert function(s=b'hello', seed=42) == expected
+    assert function(bytearray(b'hello'), seed=42) == expected
+    assert function(memoryview(b'hello'), 42) == expected
+
+    with pytest.raises(TypeError):
+        function()
+    with pytest.raises(TypeError):
+        function(b'hello', s=b'hello')
+    with pytest.raises(TypeError):
+        function(b'hello', 42, seed=42)
+    with pytest.raises(TypeError):
+        function(b'hello', unknown=42)
+    with pytest.raises(OverflowError):
+        function(b'hello', -1)
+    with pytest.raises(OverflowError):
+        function(b'hello', 1 << 32)
 
 
 @pytest.mark.parametrize(

@@ -1,42 +1,175 @@
-use pyo3::prelude::*;
+use std::ptr;
 
-use super::DETACH_THRESHOLD;
+use pyo3::ffi;
+use pyo3::prelude::*;
+use pyo3::types::{PyInt, PyList};
+
 use super::buffer::{BytesLike, bytes_like};
-use crate::{xxh3_64 as xxh3_64_hash, xxh3_128 as xxh3_128_hash};
+use super::{
+    DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, parse_raw_arguments,
+    return_function_result, seed_u64, with_function_bytes,
+};
+use crate::{xxh3_64, xxh3_128};
 
 mod batch;
-mod single;
+use batch::{xxh3_64_batch, xxh3_128_batch};
 
-pub use batch::{xxh3_64_batch, xxh3_128_batch};
-pub use single::{xxh3_64, xxh3_128};
-
-fn hash64(py: Python<'_>, value: &Bound<'_, PyAny>, seed: u64) -> PyResult<u64> {
-    let input = bytes_like(py, value, "s")?;
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
-    Ok(unsafe {
-        input.with_bytes(|bytes| {
-            if detach {
-                py.detach(|| xxh3_64_hash(bytes, seed))
-            } else {
-                xxh3_64_hash(bytes, seed)
-            }
-        })
-    })
+unsafe extern "C" fn xxh3_64_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargsf: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_64".as_ptr())
+        else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u64(arguments.seed) else {
+            return ptr::null_mut();
+        };
+        let result = with_function_bytes(py, arguments.input, |bytes| xxh3_64(bytes, seed));
+        return_function_result(
+            py,
+            result.map(|value| ffi::PyLong_FromUnsignedLongLong(value as _)),
+        )
+    }
 }
 
-fn hash128(py: Python<'_>, value: &Bound<'_, PyAny>, seed: u64) -> PyResult<u128> {
-    let input = bytes_like(py, value, "s")?;
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
-    Ok(unsafe {
-        input.with_bytes(|bytes| {
-            let [low, high] = if detach {
-                py.detach(|| xxh3_128_hash(bytes, seed))
-            } else {
-                xxh3_128_hash(bytes, seed)
-            };
-            (u128::from(high) << 64) | u128::from(low)
-        })
-    })
+unsafe extern "C" fn xxh3_128_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargsf: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_128".as_ptr())
+        else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u64(arguments.seed) else {
+            return ptr::null_mut();
+        };
+        let result = with_function_bytes(py, arguments.input, |bytes| xxh3_128(bytes, seed));
+        match result {
+            Ok([low, high]) => {
+                let value = (u128::from(high) << 64) | u128::from(low);
+                PyInt::new(py, value).into_ptr()
+            }
+            Err(error) => {
+                error.restore(py);
+                ptr::null_mut()
+            }
+        }
+    }
+}
+
+unsafe extern "C" fn xxh3_64_batch_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some([items, seed]) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"xxh3_64_batch".as_ptr(),
+            [c"items".as_ptr(), c"seed".as_ptr()],
+            2,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u64(seed) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = Bound::from_borrowed_ptr(py, items).cast_into::<PyList>()?;
+            xxh3_64_batch(py, &items, seed)
+        })();
+        return_function_result(py, result.map(Bound::into_ptr))
+    }
+}
+
+unsafe extern "C" fn xxh3_128_batch_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some([items, seed]) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"xxh3_128_batch".as_ptr(),
+            [c"items".as_ptr(), c"seed".as_ptr()],
+            2,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u64(seed) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = Bound::from_borrowed_ptr(py, items).cast_into::<PyList>()?;
+            xxh3_128_batch(py, &items, seed)
+        })();
+        return_function_result(py, result.map(Bound::into_ptr))
+    }
+}
+
+static mut METHODS: [ffi::PyMethodDef; 5] = [
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_64".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_64_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"xxh3_64($module, /, s, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_128".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_128_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"xxh3_128($module, /, s, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_64_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_64_batch_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"xxh3_64_batch($module, /, items, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_128_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_128_batch_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"xxh3_128_batch($module, /, items, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef::zeroed(),
+];
+
+pub(super) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
+    let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };
+    if result == -1 {
+        Err(PyErr::fetch(module.py()))
+    } else {
+        Ok(())
+    }
 }
 
 fn parse_batch<'a, 'py>(

@@ -80,6 +80,11 @@ fn deterministic_cache_bytes(ebx: u32, ecx: u32) -> usize {
 mod tests {
     use super::*;
 
+    fn half_mebibyte_cache(leaf: u32) -> Option<usize> {
+        assert_eq!(leaf, 4);
+        Some(512 << 10)
+    }
+
     fn two_mebibyte_cache(leaf: u32) -> Option<usize> {
         assert_eq!(leaf, 0x8000_001d);
         Some(2 << 20)
@@ -98,7 +103,11 @@ mod tests {
     }
 
     #[test]
-    fn extended_topology_is_a_fallback_for_missing_basic_data() {
+    fn basic_topology_is_preferred_and_extended_is_a_fallback() {
+        assert_eq!(
+            private_cache_from_leaves(4, 0x8000_001d, half_mebibyte_cache),
+            Some(512 << 10)
+        );
         assert_eq!(
             private_cache_from_leaves(3, 0x8000_001d, two_mebibyte_cache),
             Some(2 << 20)

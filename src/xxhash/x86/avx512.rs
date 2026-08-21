@@ -3,24 +3,13 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::backend::{Capabilities, SimdBackend};
-
-use super::AlignedAccumulator;
 use crate::xxhash::{P32_1, initial_accumulator, long_schedule};
 
-#[inline]
-pub(super) fn try_long_accumulate(
-    capabilities: Capabilities,
-    data: &[u8],
-    secret: &[u8],
-) -> Option<[u64; 8]> {
-    capabilities
-        .supports(SimdBackend::Avx512)
-        .then(|| unsafe { long_accumulate(data, secret) })
-}
+#[repr(align(64))]
+struct AlignedAccumulator([u64; 8]);
 
 #[target_feature(enable = "avx512f")]
-unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     #[inline]
     #[target_feature(enable = "avx512f")]
     unsafe fn accumulate(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {

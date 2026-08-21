@@ -95,42 +95,42 @@ Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,7.99
 Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,8.01
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,8.19
 Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,7.91
-Rust XXH3 throughput,XXH3-64 one-shot,64 B,hashcodecs,32.00
-Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,25.65
-Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,53.75
-Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,73.91
-Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,44.83
-Rust XXH3 throughput,XXH3-64 one-shot,64 B,upstream C,26.15
-Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,upstream C,24.20
-Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,upstream C,36.57
-Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,upstream C,45.94
-Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,upstream C,36.93
-Rust XXH3 throughput,XXH3-128 one-shot,64 B,hashcodecs,9.26
-Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,27.32
-Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,49.41
-Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,73.72
-Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,42.41
-Rust XXH3 throughput,XXH3-128 one-shot,64 B,upstream C,7.43
-Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,upstream C,20.50
-Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,upstream C,35.34
-Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,upstream C,43.49
-Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,upstream C,36.94
-Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs,24.94
-Rust XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs,65.89
-Rust XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs,82.72
-Rust XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs,24.42
-Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,upstream C,18.93
-Rust XXH3 throughput,XXH3-64 batch (32 items),1 KiB,upstream C,24.84
-Rust XXH3 throughput,XXH3-64 batch (32 items),4 KiB,upstream C,34.80
-Rust XXH3 throughput,XXH3-64 batch (32 items),1 MiB,upstream C,11.99
-Rust XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs,8.71
-Rust XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs,59.47
-Rust XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs,79.72
-Rust XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs,25.11
-Rust XXH3 throughput,XXH3-128 batch (32 items),64 B,upstream C,6.98
-Rust XXH3 throughput,XXH3-128 batch (32 items),1 KiB,upstream C,19.81
-Rust XXH3 throughput,XXH3-128 batch (32 items),4 KiB,upstream C,34.38
-Rust XXH3 throughput,XXH3-128 batch (32 items),1 MiB,upstream C,12.06
+Rust XXH3 throughput,XXH3-64 one-shot,64 B,hashcodecs,33.96
+Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,41.65
+Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,62.57
+Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,79.85
+Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,46.26
+Rust XXH3 throughput,XXH3-64 one-shot,64 B,upstream C,28.49
+Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,upstream C,26.29
+Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,upstream C,39.47
+Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,upstream C,48.42
+Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,upstream C,38.70
+Rust XXH3 throughput,XXH3-128 one-shot,64 B,hashcodecs,11.15
+Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,33.88
+Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,57.55
+Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,79.92
+Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,46.21
+Rust XXH3 throughput,XXH3-128 one-shot,64 B,upstream C,8.55
+Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,upstream C,21.69
+Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,upstream C,37.40
+Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,upstream C,48.74
+Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,upstream C,38.60
+Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs,28.77
+Rust XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs,75.64
+Rust XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs,89.41
+Rust XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs,32.21
+Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,upstream C,20.35
+Rust XXH3 throughput,XXH3-64 batch (32 items),1 KiB,upstream C,25.88
+Rust XXH3 throughput,XXH3-64 batch (32 items),4 KiB,upstream C,39.18
+Rust XXH3 throughput,XXH3-64 batch (32 items),1 MiB,upstream C,16.40
+Rust XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs,10.62
+Rust XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs,64.71
+Rust XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs,86.32
+Rust XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs,32.09
+Rust XXH3 throughput,XXH3-128 batch (32 items),64 B,upstream C,8.18
+Rust XXH3 throughput,XXH3-128 batch (32 items),1 KiB,upstream C,21.49
+Rust XXH3 throughput,XXH3-128 batch (32 items),4 KiB,upstream C,36.41
+Rust XXH3 throughput,XXH3-128 batch (32 items),1 MiB,upstream C,17.70
 Python Base64 throughput,Standard encode,1 KiB,hashcodecs,10.78
 Python Base64 throughput,Standard encode,4 KiB,hashcodecs,23.43
 Python Base64 throughput,Standard encode,1 MiB,hashcodecs,3.89

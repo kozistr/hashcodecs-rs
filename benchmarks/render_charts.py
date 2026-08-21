@@ -354,6 +354,17 @@ def color(name: str, index: int) -> str:
     return COLORS.get(name, FALLBACK_COLORS[index % len(FALLBACK_COLORS)])
 
 
+OFFICIAL_SERIES = {
+    'base64-rust.svg': 'base64',
+    'murmur3-rust.svg': 'murmur3',
+    'xxh3-rust.svg': 'upstream C',
+    'base64-python.svg': 'CPython',
+    'murmur3-python.svg': 'mmh3',
+    'xxh3-python.svg': 'xxhash',
+    'base64-python-batch.svg': 'CPython',
+}
+
+
 def render(chart: Chart) -> str:
     width = 1280
     columns = 1 if len(chart.panels) == 1 else 2
@@ -447,6 +458,10 @@ def render(chart: Chart) -> str:
 
         for series_index, (name, values) in enumerate(spec.series):
             series_color = color(name, series_index)
+            official = OFFICIAL_SERIES.get(chart.filename)
+            official_values = next(
+                (candidate for candidate_name, candidate in spec.series if candidate_name == official), None
+            )
             points = []
             for category_index, value in enumerate(values):
                 if value is None:
@@ -467,13 +482,18 @@ def render(chart: Chart) -> str:
                     f'<title>{esc(spec.title)}: {esc(name)}, {esc(category)}, '
                     f'{value:.2f} GiB/s</title></circle>'
                 )
-                if len(spec.series) <= 2:
-                    offset = -10 if series_index == 0 else 17
-                    chunks.append(
-                        f'<text x="{x:.1f}" y="{y + offset:.1f}" text-anchor="middle" '
-                        f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
-                        f'font-size="11" font-weight="600">{value:.2f}</text>'
-                    )
+                # Label every point, alternating above and below each series.
+                offset = (-10 - 12 * (series_index // 2)) if series_index % 2 == 0 else (17 + 12 * (series_index // 2))
+                label = f'{value:.2f}'
+                if name == 'hashcodecs' and official_values is not None:
+                    official_value = official_values[spec.categories.index(category)]
+                    if official_value is not None and official_value > 0:
+                        label += f' ({value / official_value:.2f}x)'
+                chunks.append(
+                    f'<text x="{x:.1f}" y="{y + offset:.1f}" text-anchor="middle" '
+                    f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
+                    f'font-size="11" font-weight="600">{label}</text>'
+                )
 
     chunks.append('</svg>')
     return '\n'.join(chunks) + '\n'

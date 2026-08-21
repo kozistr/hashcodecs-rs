@@ -29,32 +29,32 @@
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="108.0,261.9 354.0,222.5 600.0,219.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="261.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs, 8, 0.45 GiB/s</title></circle>
-<text x="108.0" y="251.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.45 (2.50x)</text>
+<text x="108.0" y="251.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.45 (2.50x)</text>
 <circle cx="354.0" cy="222.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs, 64, 0.60 GiB/s</title></circle>
-<text x="354.0" y="212.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.60 (3.16x)</text>
+<text x="354.0" y="212.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.60 (3.16x)</text>
 <circle cx="600.0" cy="219.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs, 1,024, 0.61 GiB/s</title></circle>
-<text x="600.0" y="209.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.61 (3.21x)</text>
+<text x="600.0" y="209.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.61 (3.21x)</text>
 <polyline points="108.0,301.2 354.0,293.4 600.0,293.4" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="301.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs loop, 8, 0.30 GiB/s</title></circle>
-<text x="108.0" y="318.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.30</text>
+<text x="108.0" y="318.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.30</text>
 <circle cx="354.0" cy="293.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs loop, 64, 0.33 GiB/s</title></circle>
-<text x="354.0" y="310.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.33</text>
+<text x="354.0" y="310.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.33</text>
 <circle cx="600.0" cy="293.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B encode: hashcodecs loop, 1,024, 0.33 GiB/s</title></circle>
-<text x="600.0" y="310.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.33</text>
+<text x="600.0" y="310.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.33</text>
 <polyline points="108.0,348.5 354.0,345.9 600.0,345.9" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="348.5" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B encode: pybase64, 8, 0.12 GiB/s</title></circle>
-<text x="108.0" y="326.5" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.12</text>
+<text x="108.0" y="338.5" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.12</text>
 <circle cx="354.0" cy="345.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B encode: pybase64, 64, 0.13 GiB/s</title></circle>
-<text x="354.0" y="323.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.13</text>
+<text x="354.0" y="335.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.13</text>
 <circle cx="600.0" cy="345.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B encode: pybase64, 1,024, 0.13 GiB/s</title></circle>
-<text x="600.0" y="323.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.13</text>
+<text x="600.0" y="335.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.13</text>
 <polyline points="108.0,332.8 354.0,330.1 600.0,330.1" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="332.8" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B encode: CPython, 8, 0.18 GiB/s</title></circle>
-<text x="108.0" y="361.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.18</text>
+<text x="108.0" y="365.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.18</text>
 <circle cx="354.0" cy="330.1" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B encode: CPython, 64, 0.19 GiB/s</title></circle>
-<text x="354.0" y="359.1" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.19</text>
+<text x="354.0" y="363.1" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.19</text>
 <circle cx="600.0" cy="330.1" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B encode: CPython, 1,024, 0.19 GiB/s</title></circle>
-<text x="600.0" y="359.1" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.19</text>
+<text x="600.0" y="363.1" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.19</text>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">16 B decode</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#007f73" stroke-width="3"/>
@@ -80,32 +80,32 @@
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="718.0,236.5 964.0,187.5 1210.0,187.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="236.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs, 8, 0.41 GiB/s</title></circle>
-<text x="718.0" y="226.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.41 (3.42x)</text>
+<text x="718.0" y="226.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.41 (3.42x)</text>
 <circle cx="964.0" cy="187.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs, 64, 0.55 GiB/s</title></circle>
-<text x="964.0" y="177.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.55 (4.58x)</text>
+<text x="964.0" y="204.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.55 (4.58x)</text>
 <circle cx="1210.0" cy="187.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs, 1,024, 0.55 GiB/s</title></circle>
-<text x="1210.0" y="177.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.55 (4.23x)</text>
+<text x="1210.0" y="204.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.55 (4.23x)</text>
 <polyline points="718.0,303.0 964.0,296.0 1210.0,296.0" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="303.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs loop, 8, 0.22 GiB/s</title></circle>
-<text x="718.0" y="320.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.22</text>
+<text x="718.0" y="320.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.22</text>
 <circle cx="964.0" cy="296.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs loop, 64, 0.24 GiB/s</title></circle>
-<text x="964.0" y="313.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.24</text>
+<text x="964.0" y="313.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.24</text>
 <circle cx="1210.0" cy="296.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B decode: hashcodecs loop, 1,024, 0.24 GiB/s</title></circle>
-<text x="1210.0" y="313.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.24</text>
+<text x="1210.0" y="313.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.24</text>
 <polyline points="718.0,352.0 964.0,352.0 1210.0,352.0" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="352.0" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B decode: pybase64, 8, 0.08 GiB/s</title></circle>
-<text x="718.0" y="330.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.08</text>
+<text x="718.0" y="342.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.08</text>
 <circle cx="964.0" cy="352.0" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B decode: pybase64, 64, 0.08 GiB/s</title></circle>
-<text x="964.0" y="330.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.08</text>
+<text x="964.0" y="342.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.08</text>
 <circle cx="1210.0" cy="352.0" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>16 B decode: pybase64, 1,024, 0.08 GiB/s</title></circle>
-<text x="1210.0" y="330.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.08</text>
+<text x="1210.0" y="342.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.08</text>
 <polyline points="718.0,338.0 964.0,338.0 1210.0,334.5" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="338.0" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B decode: CPython, 8, 0.12 GiB/s</title></circle>
-<text x="718.0" y="367.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.12</text>
+<text x="718.0" y="371.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.12</text>
 <circle cx="964.0" cy="338.0" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B decode: CPython, 64, 0.12 GiB/s</title></circle>
-<text x="964.0" y="367.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.12</text>
+<text x="964.0" y="328.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.12</text>
 <circle cx="1210.0" cy="334.5" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>16 B decode: CPython, 1,024, 0.13 GiB/s</title></circle>
-<text x="1210.0" y="363.5" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.13</text>
+<text x="1210.0" y="367.5" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.13</text>
 <text x="50" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">256 B encode</text>
 <line x1="108" y1="710" x2="600" y2="710" stroke="#9aa5b4"/>
 <line x1="50" y1="478" x2="70" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -131,32 +131,32 @@
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="108.0,544.6 354.0,517.3 600.0,518.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="544.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs, 8, 6.30 GiB/s</title></circle>
-<text x="108.0" y="534.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">6.30 (16.58x)</text>
+<text x="108.0" y="534.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.30 (16.58x)</text>
 <circle cx="354.0" cy="517.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs, 64, 7.34 GiB/s</title></circle>
-<text x="354.0" y="507.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.34 (18.82x)</text>
+<text x="354.0" y="534.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.34 (18.82x)</text>
 <circle cx="600.0" cy="518.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs, 1,024, 7.28 GiB/s</title></circle>
-<text x="600.0" y="508.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.28 (19.16x)</text>
+<text x="600.0" y="535.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.28 (19.16x)</text>
 <polyline points="108.0,596.3 354.0,594.2 600.0,596.1" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="596.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs loop, 8, 4.33 GiB/s</title></circle>
-<text x="108.0" y="613.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">4.33</text>
+<text x="108.0" y="613.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.33</text>
 <circle cx="354.0" cy="594.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs loop, 64, 4.41 GiB/s</title></circle>
-<text x="354.0" y="611.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">4.41</text>
+<text x="354.0" y="611.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.41</text>
 <circle cx="600.0" cy="596.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B encode: hashcodecs loop, 1,024, 4.34 GiB/s</title></circle>
-<text x="600.0" y="613.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">4.34</text>
+<text x="600.0" y="613.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.34</text>
 <polyline points="108.0,661.2 354.0,662.2 600.0,660.9" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="661.2" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B encode: pybase64, 8, 1.86 GiB/s</title></circle>
-<text x="108.0" y="639.2" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.86</text>
+<text x="108.0" y="651.2" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.86</text>
 <circle cx="354.0" cy="662.2" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B encode: pybase64, 64, 1.82 GiB/s</title></circle>
-<text x="354.0" y="640.2" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.82</text>
+<text x="354.0" y="652.2" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.82</text>
 <circle cx="600.0" cy="660.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B encode: pybase64, 1,024, 1.87 GiB/s</title></circle>
-<text x="600.0" y="638.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.87</text>
+<text x="600.0" y="650.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.87</text>
 <polyline points="108.0,700.0 354.0,699.8 600.0,700.0" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="700.0" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B encode: CPython, 8, 0.38 GiB/s</title></circle>
-<text x="108.0" y="729.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.38</text>
+<text x="108.0" y="690.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.38</text>
 <circle cx="354.0" cy="699.8" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B encode: CPython, 64, 0.39 GiB/s</title></circle>
-<text x="354.0" y="728.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.39</text>
+<text x="354.0" y="689.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.39</text>
 <circle cx="600.0" cy="700.0" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B encode: CPython, 1,024, 0.38 GiB/s</title></circle>
-<text x="600.0" y="729.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.38</text>
+<text x="600.0" y="690.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.38</text>
 <text x="660" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">256 B decode</text>
 <line x1="718" y1="710" x2="1210" y2="710" stroke="#9aa5b4"/>
 <line x1="660" y1="478" x2="680" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -182,32 +182,32 @@
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="718.0,556.7 964.0,523.1 1210.0,534.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="556.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs, 8, 5.84 GiB/s</title></circle>
-<text x="718.0" y="546.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">5.84 (7.89x)</text>
+<text x="718.0" y="546.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.84 (7.89x)</text>
 <circle cx="964.0" cy="523.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs, 64, 7.12 GiB/s</title></circle>
-<text x="964.0" y="513.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.12 (9.49x)</text>
+<text x="964.0" y="513.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.12 (9.49x)</text>
 <circle cx="1210.0" cy="534.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs, 1,024, 6.67 GiB/s</title></circle>
-<text x="1210.0" y="524.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">6.67 (9.26x)</text>
+<text x="1210.0" y="524.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.67 (9.26x)</text>
 <polyline points="718.0,624.4 964.0,621.0 1210.0,624.2" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="624.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs loop, 8, 3.26 GiB/s</title></circle>
-<text x="718.0" y="641.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">3.26</text>
+<text x="718.0" y="641.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.26</text>
 <circle cx="964.0" cy="621.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs loop, 64, 3.39 GiB/s</title></circle>
-<text x="964.0" y="638.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">3.39</text>
+<text x="964.0" y="638.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.39</text>
 <circle cx="1210.0" cy="624.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B decode: hashcodecs loop, 1,024, 3.27 GiB/s</title></circle>
-<text x="1210.0" y="641.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">3.27</text>
+<text x="1210.0" y="641.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.27</text>
 <polyline points="718.0,679.3 964.0,678.0 1210.0,677.7" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="679.3" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B decode: pybase64, 8, 1.17 GiB/s</title></circle>
-<text x="718.0" y="657.3" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.17</text>
+<text x="718.0" y="669.3" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.17</text>
 <circle cx="964.0" cy="678.0" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B decode: pybase64, 64, 1.22 GiB/s</title></circle>
-<text x="964.0" y="656.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.22</text>
+<text x="964.0" y="668.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.22</text>
 <circle cx="1210.0" cy="677.7" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>256 B decode: pybase64, 1,024, 1.23 GiB/s</title></circle>
-<text x="1210.0" y="655.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.23</text>
+<text x="1210.0" y="667.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.23</text>
 <polyline points="718.0,690.6 964.0,690.3 1210.0,691.1" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="690.6" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B decode: CPython, 8, 0.74 GiB/s</title></circle>
-<text x="718.0" y="719.6" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.74</text>
+<text x="718.0" y="512.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.74</text>
 <circle cx="964.0" cy="690.3" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B decode: CPython, 64, 0.75 GiB/s</title></circle>
-<text x="964.0" y="719.3" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.75</text>
+<text x="964.0" y="528.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.75</text>
 <circle cx="1210.0" cy="691.1" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>256 B decode: CPython, 1,024, 0.72 GiB/s</title></circle>
-<text x="1210.0" y="720.1" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.72</text>
+<text x="1210.0" y="544.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.72</text>
 <text x="50" y="784" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">4 KiB encode</text>
 <line x1="108" y1="1040" x2="600" y2="1040" stroke="#9aa5b4"/>
 <line x1="50" y1="808" x2="70" y2="808" stroke="#007f73" stroke-width="3"/>
@@ -233,32 +233,32 @@
 <text x="600.0" y="1064" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="108.0,867.7 354.0,912.2 600.0,997.6" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="867.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs, 8, 24.62 GiB/s</title></circle>
-<text x="108.0" y="857.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">24.62 (53.52x)</text>
+<text x="108.0" y="857.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">24.62 (53.52x)</text>
 <circle cx="354.0" cy="912.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs, 64, 18.26 GiB/s</title></circle>
-<text x="354.0" y="902.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">18.26 (40.58x)</text>
+<text x="354.0" y="902.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">18.26 (40.58x)</text>
 <circle cx="600.0" cy="997.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs, 1,024, 6.06 GiB/s</title></circle>
-<text x="600.0" y="987.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">6.06 (15.54x)</text>
+<text x="600.0" y="987.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.06 (15.54x)</text>
 <polyline points="108.0,896.1 354.0,929.7 600.0,1022.8" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="896.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs loop, 8, 20.55 GiB/s</title></circle>
-<text x="108.0" y="913.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">20.55</text>
+<text x="108.0" y="913.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.55</text>
 <circle cx="354.0" cy="929.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs loop, 64, 15.76 GiB/s</title></circle>
-<text x="354.0" y="946.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">15.76</text>
+<text x="354.0" y="946.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">15.76</text>
 <circle cx="600.0" cy="1022.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: hashcodecs loop, 1,024, 2.46 GiB/s</title></circle>
-<text x="600.0" y="1039.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">2.46</text>
+<text x="600.0" y="1012.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.46</text>
 <polyline points="108.0,954.4 354.0,977.1 600.0,1024.1" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="954.4" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: pybase64, 8, 12.23 GiB/s</title></circle>
-<text x="108.0" y="932.4" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">12.23</text>
+<text x="108.0" y="944.4" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">12.23</text>
 <circle cx="354.0" cy="977.1" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: pybase64, 64, 8.99 GiB/s</title></circle>
-<text x="354.0" y="955.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">8.99</text>
+<text x="354.0" y="967.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">8.99</text>
 <circle cx="600.0" cy="1024.1" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: pybase64, 1,024, 2.27 GiB/s</title></circle>
-<text x="600.0" y="1002.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">2.27</text>
+<text x="600.0" y="966.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.27</text>
 <polyline points="108.0,1036.8 354.0,1036.8 600.0,1037.3" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="1036.8" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: CPython, 8, 0.46 GiB/s</title></circle>
-<text x="108.0" y="1065.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.46</text>
+<text x="108.0" y="1026.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.46</text>
 <circle cx="354.0" cy="1036.8" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: CPython, 64, 0.45 GiB/s</title></circle>
-<text x="354.0" y="1065.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.45</text>
+<text x="354.0" y="1026.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.45</text>
 <circle cx="600.0" cy="1037.3" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB encode: CPython, 1,024, 0.39 GiB/s</title></circle>
-<text x="600.0" y="1066.3" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">0.39</text>
+<text x="600.0" y="1027.3" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.39</text>
 <text x="660" y="784" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">4 KiB decode</text>
 <line x1="718" y1="1040" x2="1210" y2="1040" stroke="#9aa5b4"/>
 <line x1="660" y1="808" x2="680" y2="808" stroke="#007f73" stroke-width="3"/>
@@ -284,30 +284,30 @@
 <text x="1210.0" y="1064" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
 <polyline points="718.0,832.3 964.0,838.0 1210.0,959.0" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="832.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs, 8, 19.78 GiB/s</title></circle>
-<text x="718.0" y="822.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">19.78 (18.49x)</text>
+<text x="718.0" y="849.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.78 (18.49x)</text>
 <circle cx="964.0" cy="838.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs, 64, 19.24 GiB/s</title></circle>
-<text x="964.0" y="828.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">19.24 (18.15x)</text>
+<text x="964.0" y="855.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.24 (18.15x)</text>
 <circle cx="1210.0" cy="959.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs, 1,024, 7.71 GiB/s</title></circle>
-<text x="1210.0" y="949.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.71 (7.34x)</text>
+<text x="1210.0" y="949.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.71 (7.34x)</text>
 <polyline points="718.0,871.7 964.0,877.2 1210.0,922.3" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="871.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs loop, 8, 16.03 GiB/s</title></circle>
-<text x="718.0" y="888.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">16.03</text>
+<text x="718.0" y="888.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">16.03</text>
 <circle cx="964.0" cy="877.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs loop, 64, 15.50 GiB/s</title></circle>
-<text x="964.0" y="894.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">15.50</text>
+<text x="964.0" y="894.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">15.50</text>
 <circle cx="1210.0" cy="922.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: hashcodecs loop, 1,024, 11.21 GiB/s</title></circle>
-<text x="1210.0" y="939.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">11.21</text>
+<text x="1210.0" y="912.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.21</text>
 <polyline points="718.0,958.7 964.0,960.0 1210.0,970.1" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="958.7" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: pybase64, 8, 7.74 GiB/s</title></circle>
-<text x="718.0" y="936.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.74</text>
+<text x="718.0" y="948.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.74</text>
 <circle cx="964.0" cy="960.0" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: pybase64, 64, 7.62 GiB/s</title></circle>
-<text x="964.0" y="938.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">7.62</text>
+<text x="964.0" y="950.0" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.62</text>
 <circle cx="1210.0" cy="970.1" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: pybase64, 1,024, 6.66 GiB/s</title></circle>
-<text x="1210.0" y="948.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">6.66</text>
+<text x="1210.0" y="987.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.66</text>
 <polyline points="718.0,1028.8 964.0,1028.9 1210.0,1029.0" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="1028.8" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: CPython, 8, 1.07 GiB/s</title></circle>
-<text x="718.0" y="1057.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.07</text>
+<text x="718.0" y="1018.8" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.07</text>
 <circle cx="964.0" cy="1028.9" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: CPython, 64, 1.06 GiB/s</title></circle>
-<text x="964.0" y="1057.9" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.06</text>
+<text x="964.0" y="1018.9" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.06</text>
 <circle cx="1210.0" cy="1029.0" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>4 KiB decode: CPython, 1,024, 1.05 GiB/s</title></circle>
-<text x="1210.0" y="1058.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600">1.05</text>
+<text x="1210.0" y="1019.0" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.05</text>
 </svg>

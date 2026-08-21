@@ -51,7 +51,7 @@ unsafe fn scramble_neon(acc: &mut [u64; 8], secret: *const u8) {
 /// # Safety
 /// The caller must have detected NEON support. `data` must be in XXH3 long
 /// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate_neon(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     let schedule = long_schedule(data.len());
     let mut acc = initial_accumulator();
 

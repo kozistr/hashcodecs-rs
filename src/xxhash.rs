@@ -284,7 +284,7 @@ fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
 #[inline]
 fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     if backend::capabilities().supports(SimdBackend::Neon) {
-        unsafe { aarch64::long_accumulate_neon(data, secret) }
+        unsafe { aarch64::long_accumulate(data, secret) }
     } else {
         long_accumulate_scalar(data, secret)
     }
@@ -307,16 +307,25 @@ fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
 pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
     match input.len() {
         0..=16 => xxh3_128_small(input, seed),
+        64 => xxh3_128_len_64(input, seed),
         17..=128 => xxh3_128_medium(input, seed),
         129..=240 => xxh3_128_midsize(input, seed),
         _ => xxh3_128_long(input, seed),
     }
 }
 
+#[inline(always)]
+fn xxh3_128_len_64(data: &[u8], seed: u64) -> [u64; 2] {
+    let acc = [64_u64.wrapping_mul(P64_1), 0];
+    let acc = mix32(acc, data, 16, 32, 32, seed);
+    final128(mix32(acc, data, 0, 48, 0, seed), 64, seed)
+}
+
 #[inline]
 fn xxh3_128_with_long_secret(input: &[u8], seed: u64, long_secret: &[u8]) -> [u64; 2] {
     match input.len() {
         0..=16 => xxh3_128_small(input, seed),
+        64 => xxh3_128_len_64(input, seed),
         17..=128 => xxh3_128_medium(input, seed),
         129..=240 => xxh3_128_midsize(input, seed),
         _ => finalize_long_128(
@@ -451,7 +460,7 @@ fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8];
         && backend::capabilities().supports(SimdBackend::Avx2)
     {
         let values = [chunk[0], chunk[1], chunk[2], chunk[3]];
-        return Some(unsafe { x86::long_accumulate_batch4_avx2(values, secret) });
+        return Some(unsafe { x86::avx2::long_accumulate_batch4(values, secret) });
     }
     None
 }
@@ -790,25 +799,39 @@ mod tests {
             x86::select(Capabilities::for_backends(&[SimdBackend::Avx2])),
             x86::Backend::Avx2
         );
-
+        assert_eq!(
+            x86::select(Capabilities::for_backends(&[SimdBackend::Avx512])),
+            x86::Backend::Avx512
+        );
         for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
             let owned_secret = (seed != 0).then(|| init_secret(seed));
             let secret = owned_secret.as_ref().unwrap_or(&SECRET);
             let expected = long_accumulate_scalar(&input, secret);
             assert_eq!(x86::init_secret(seed, scalar), init_secret_scalar(seed));
             assert_eq!(x86::long_accumulate(&input, secret, scalar), expected);
+            assert_eq!(
+                x86::long_accumulate(
+                    &input,
+                    secret,
+                    Capabilities::for_backends(&[SimdBackend::Avx512]),
+                ),
+                expected
+            );
 
             let supported = [
                 (x86::Backend::Scalar, SimdBackend::Scalar),
                 (x86::Backend::Ssse3, SimdBackend::Ssse3),
                 (x86::Backend::Sse41, SimdBackend::Sse41),
                 (x86::Backend::Avx2, SimdBackend::Avx2),
+                (x86::Backend::Avx512, SimdBackend::Avx512),
             ];
-            for (selected, _) in supported
+            for (selected, required) in supported
                 .into_iter()
                 .filter(|(_, required)| capabilities.supports(*required))
             {
-                let actual = unsafe { x86::long_accumulate_with_backend(&input, secret, selected) };
+                let forced = Capabilities::for_backends(&[required]);
+                assert_eq!(x86::select(forced), selected);
+                let actual = x86::long_accumulate(&input, secret, forced);
                 assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
             }
         }

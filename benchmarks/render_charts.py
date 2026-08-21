@@ -136,26 +136,26 @@ CHARTS = (
             panel(
                 'XXH3-64 one-shot',
                 ['64 B', *SIZES],
-                hashcodecs=[32.00, 25.65, 53.75, 73.91, 44.83],
-                upstream_C=[26.15, 24.20, 36.57, 45.94, 36.93],
+                hashcodecs=[33.90, 41.83, 62.96, 79.74, 46.03],
+                upstream_C=[28.42, 26.27, 39.63, 48.79, 38.62],
             ),
             panel(
                 'XXH3-128 one-shot',
                 ['64 B', *SIZES],
-                hashcodecs=[9.26, 27.32, 49.41, 73.72, 42.41],
-                upstream_C=[7.43, 20.50, 35.34, 43.49, 36.94],
+                hashcodecs=[11.23, 34.06, 57.72, 79.70, 46.13],
+                upstream_C=[8.40, 21.85, 37.36, 48.45, 38.61],
             ),
             panel(
                 'XXH3-64 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[24.94, 65.89, 82.72, 24.42],
-                upstream_C=[18.93, 24.84, 34.80, 11.99],
+                hashcodecs=[28.72, 78.23, 90.86, 32.86],
+                upstream_C=[21.19, 26.12, 38.86, 17.98],
             ),
             panel(
                 'XXH3-128 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[8.71, 59.47, 79.72, 25.11],
-                upstream_C=[6.98, 19.81, 34.38, 12.06],
+                hashcodecs=[10.76, 65.65, 86.06, 32.69],
+                upstream_C=[8.28, 21.84, 37.01, 17.94],
             ),
         ),
     ),
@@ -456,6 +456,7 @@ def render(chart: Chart) -> str:
                 f'font-size="12">{esc(category)}</text>'
             )
 
+        label_boxes: list[tuple[float, float, float, float]] = []
         for series_index, (name, values) in enumerate(spec.series):
             series_color = color(name, series_index)
             official = OFFICIAL_SERIES.get(chart.filename)
@@ -482,17 +483,47 @@ def render(chart: Chart) -> str:
                     f'<title>{esc(spec.title)}: {esc(name)}, {esc(category)}, '
                     f'{value:.2f} GiB/s</title></circle>'
                 )
-                # Label every point, alternating above and below each series.
-                offset = (-10 - 12 * (series_index // 2)) if series_index % 2 == 0 else (17 + 12 * (series_index // 2))
                 label = f'{value:.2f}'
                 if name == 'hashcodecs' and official_values is not None:
                     official_value = official_values[spec.categories.index(category)]
                     if official_value is not None and official_value > 0:
                         label += f' ({value / official_value:.2f}x)'
+
+                preferred = -10 if series_index % 2 == 0 else 17
+                offsets = (preferred, -10, 17, -26, 33, -42, 49, -58, 65)
+                label_width = len(label) * 6.6
+                candidate_ys = [y + offset for offset in dict.fromkeys(offsets)]
+                candidate_ys.extend(plot_y + 12 + lane * 16 for lane in range(13))
+                label_y = candidate_ys[-1]
+                label_box = (
+                    x - label_width / 2 - 2,
+                    label_y - 11,
+                    x + label_width / 2 + 2,
+                    label_y + 3,
+                )
+                for candidate_y in candidate_ys:
+                    candidate = (
+                        x - label_width / 2 - 2,
+                        candidate_y - 11,
+                        x + label_width / 2 + 2,
+                        candidate_y + 3,
+                    )
+                    if candidate[1] < plot_y or candidate[3] > plot_y + plot_height:
+                        continue
+                    if any(
+                        candidate[0] < right and candidate[2] > left and candidate[1] < bottom and candidate[3] > top
+                        for left, top, right, bottom in label_boxes
+                    ):
+                        continue
+                    label_y = candidate_y
+                    label_box = candidate
+                    break
+                label_boxes.append(label_box)
                 chunks.append(
-                    f'<text x="{x:.1f}" y="{y + offset:.1f}" text-anchor="middle" '
+                    f'<text x="{x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
                     f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
-                    f'font-size="11" font-weight="600">{label}</text>'
+                    'font-size="11" font-weight="600" paint-order="stroke" '
+                    f'stroke="#ffffff" stroke-width="3" stroke-linejoin="round">{label}</text>'
                 )
 
     chunks.append('</svg>')

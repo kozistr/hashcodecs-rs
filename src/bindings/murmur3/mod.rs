@@ -1,10 +1,19 @@
+use std::ptr;
+
+use pyo3::ffi;
 use pyo3::marker::Ungil;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, bytes_like};
-use crate::{Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128};
+use super::{
+    DETACH_THRESHOLD, METHOD_FLAGS, parse_function_arguments, return_function_result, seed_u32,
+    with_function_bytes,
+};
+use crate::{
+    Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
+    murmur3_x86_128,
+};
 
 fn x86_128_digest(words: [u32; 4]) -> [u8; 16] {
     let mut digest = [0_u8; 16];
@@ -46,6 +55,118 @@ fn with_input<T: Ungil>(
                 operation(input)
             }
         })
+    }
+}
+
+fn bytes_result(digest: &[u8]) -> *mut ffi::PyObject {
+    unsafe { ffi::PyBytes_FromStringAndSize(digest.as_ptr().cast(), digest.len() as isize) }
+}
+
+unsafe extern "C" fn murmur3_32(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargsf: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(arguments) =
+            parse_function_arguments(args, nargsf, keywords, c"murmur3_32".as_ptr())
+        else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u32(arguments.seed) else {
+            return ptr::null_mut();
+        };
+        let result = with_function_bytes(py, arguments.input, |bytes| murmur3_x86_32(bytes, seed));
+        return_function_result(
+            py,
+            result.map(|value| ffi::PyLong_FromUnsignedLong(value as _)),
+        )
+    }
+}
+
+unsafe extern "C" fn murmur3_x86_128_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargsf: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(arguments) =
+            parse_function_arguments(args, nargsf, keywords, c"murmur3_x86_128_digest".as_ptr())
+        else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u32(arguments.seed) else {
+            return ptr::null_mut();
+        };
+        let result = with_function_bytes(py, arguments.input, |bytes| {
+            x86_128_digest(murmur3_x86_128(bytes, seed))
+        });
+        return_function_result(py, result.map(|digest| bytes_result(&digest)))
+    }
+}
+
+unsafe extern "C" fn murmur3_x64_128_digest(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargsf: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(arguments) =
+            parse_function_arguments(args, nargsf, keywords, c"murmur3_x64_128_digest".as_ptr())
+        else {
+            return ptr::null_mut();
+        };
+        let Some(seed) = seed_u32(arguments.seed) else {
+            return ptr::null_mut();
+        };
+        let result = with_function_bytes(py, arguments.input, |bytes| {
+            x64_128_digest(murmur3_x64_128(bytes, seed))
+        });
+        return_function_result(py, result.map(|digest| bytes_result(&digest)))
+    }
+}
+
+static mut METHODS: [ffi::PyMethodDef; 4] = [
+    ffi::PyMethodDef {
+        ml_name: c"murmur3_32".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: murmur3_32,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"murmur3_32($module, /, s, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"murmur3_x86_128_digest".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: murmur3_x86_128_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"murmur3_x86_128_digest($module, /, s, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"murmur3_x64_128_digest".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: murmur3_x64_128_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: c"murmur3_x64_128_digest($module, /, s, seed=0)\n--\n\n".as_ptr(),
+    },
+    ffi::PyMethodDef::zeroed(),
+];
+
+pub(super) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
+    let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };
+    if result == -1 {
+        Err(PyErr::fetch(module.py()))
+    } else {
+        Ok(())
     }
 }
 

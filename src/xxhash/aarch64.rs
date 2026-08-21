@@ -13,7 +13,7 @@ unsafe fn accumulate_neon(acc: &mut [u64; 8], data: *const u8, secret: *const u8
             let key = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
 
             let keyed = veorq_u64(input, key);
-            let product = vmull_u32(vmovn_u64(keyed),  vshrn_n_u64::<32>(keyed));
+            let product = vmull_u32(vmovn_u64(keyed), vshrn_n_u64::<32>(keyed));
             let swapped = vextq_u64::<1>(input, input);
 
             let acc_offset_ptr = acc.as_mut_ptr().add(acc_offset);
@@ -32,7 +32,7 @@ unsafe fn scramble_neon(acc: &mut [u64; 8], secret: *const u8) {
         let byte_offset = vector * 16;
         let acc_offset = vector * 2;
 
-        unsafe {            
+        unsafe {
             let acc_offset_ptr = acc.as_mut_ptr().add(acc_offset);
 
             let value = vld1q_u64(acc_offset_ptr);

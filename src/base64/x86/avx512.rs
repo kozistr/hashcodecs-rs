@@ -3,8 +3,8 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::{Avx2StoreMode, Decoder, Store, decode_avx2, encode_avx2_with_store};
 use super::super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
+use super::{Avx2StoreMode, Decoder, Store, decode_avx2, encode_avx2_with_store};
 
 const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 

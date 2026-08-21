@@ -285,9 +285,7 @@ mod tests {
             Backend::Ssse3,
         ] {
             assert!(encode_x86_kernel::<false>(backend).is_some());
-            assert!(
-                decode_x86_kernel::<x86::StandardDecoder, x86::ExactStore>(backend).is_some()
-            );
+            assert!(decode_x86_kernel::<x86::StandardDecoder, x86::ExactStore>(backend).is_some());
         }
         assert!(encode_x86_kernel::<true>(Backend::Scalar).is_none());
         assert!(
@@ -310,22 +308,13 @@ mod tests {
         let output = &mut storage[offset..offset + expected.len()];
 
         let consumed = unsafe { x86::encode_avx2::<false>(&input, output.as_mut_ptr()) };
-        encode_scalar(
-            &input[consumed..],
-            &mut output[consumed / 3 * 4..],
-            false,
-        );
+        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
         assert_eq!(output, expected.as_bytes());
 
         output.fill(0xa5);
-        let consumed = unsafe {
-            encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, true)
-        };
-        encode_scalar(
-            &input[consumed..],
-            &mut output[consumed / 3 * 4..],
-            false,
-        );
+        let consumed =
+            unsafe { encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, true) };
+        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
         assert_eq!(output, expected.as_bytes());
     }
 }

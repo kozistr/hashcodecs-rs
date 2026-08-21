@@ -1,9 +1,9 @@
 //! x86 Base64 backend facade.
 
+pub(super) mod avx512;
 mod cache;
 mod decode;
 mod encode;
-pub(super) mod avx512;
 
 pub(super) use decode::{
     Decoder, ExactStore, MixedDecoder, PaddedStore, StandardDecoder, Store, UrlSafeDecoder,

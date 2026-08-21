@@ -135,8 +135,7 @@ pub(super) fn is_supported(backend: Backend) -> bool {
             Backend::Neon => false,
             Backend::Ssse3 => std::is_x86_feature_detected!("ssse3"),
             Backend::Sse41 => {
-                std::is_x86_feature_detected!("ssse3")
-                    && std::is_x86_feature_detected!("sse4.1")
+                std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
             }
             Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
             Backend::Avx512 => std::is_x86_feature_detected!("avx512vbmi"),

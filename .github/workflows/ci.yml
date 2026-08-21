@@ -63,7 +63,8 @@ jobs:
 
       - name: Check Rust line coverage
         run: >-
-          cargo llvm-cov --no-default-features --fail-uncovered-lines 192
+          cargo llvm-cov --no-default-features --fail-under-lines 100
+          --ignore-filename-regex 'base64.*x86.*avx512\.rs$'
           --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov

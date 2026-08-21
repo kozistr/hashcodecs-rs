@@ -467,13 +467,13 @@ def render(chart: Chart) -> str:
                     f'<title>{esc(spec.title)}: {esc(name)}, {esc(category)}, '
                     f'{value:.2f} GiB/s</title></circle>'
                 )
-                if len(spec.series) <= 2:
-                    offset = -10 if series_index == 0 else 17
-                    chunks.append(
-                        f'<text x="{x:.1f}" y="{y + offset:.1f}" text-anchor="middle" '
-                        f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
-                        f'font-size="11" font-weight="600">{value:.2f}</text>'
-                    )
+                # Label every point, alternating above and below each series.
+                offset = (-10 - 12 * (series_index // 2)) if series_index % 2 == 0 else (17 + 12 * (series_index // 2))
+                chunks.append(
+                    f'<text x="{x:.1f}" y="{y + offset:.1f}" text-anchor="middle" '
+                    f'fill="{series_color}" font-family="Segoe UI,Arial,sans-serif" '
+                    f'font-size="11" font-weight="600">{value:.2f}</text>'
+                )
 
     chunks.append('</svg>')
     return '\n'.join(chunks) + '\n'

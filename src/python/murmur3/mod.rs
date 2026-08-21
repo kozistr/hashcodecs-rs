@@ -4,10 +4,11 @@ use pyo3::types::PyBytes;
 
 use super::DETACH_THRESHOLD;
 use super::buffer::{BytesLike, bytes_like};
-use crate::{
-    Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
-    murmur3_x86_128,
-};
+use crate::{Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128};
+
+mod functions;
+
+pub use functions::{murmur3_32, murmur3_x64_128_digest, murmur3_x86_128_digest};
 
 fn x86_128_digest(words: [u32; 4]) -> [u8; 16] {
     let mut digest = [0_u8; 16];
@@ -221,34 +222,4 @@ impl PyMurmur3X64Hasher128 {
     const fn name(&self) -> &'static str {
         "murmur3_x64_128"
     }
-}
-
-#[pyfunction(signature = (s, seed=0))]
-pub(super) fn murmur3_32(py: Python<'_>, s: &Bound<'_, PyAny>, seed: u32) -> PyResult<u32> {
-    let input = bytes_like(py, s, "s")?;
-    Ok(with_input(py, &input, |input| murmur3_x86_32(input, seed)))
-}
-
-#[pyfunction(signature = (s, seed=0))]
-pub(super) fn murmur3_x86_128_digest<'py>(
-    py: Python<'py>,
-    s: &Bound<'py, PyAny>,
-    seed: u32,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let input = bytes_like(py, s, "s")?;
-    let words = with_input(py, &input, |input| murmur3_x86_128(input, seed));
-    let digest = x86_128_digest(words);
-    Ok(PyBytes::new(py, &digest))
-}
-
-#[pyfunction(signature = (s, seed=0))]
-pub(super) fn murmur3_x64_128_digest<'py>(
-    py: Python<'py>,
-    s: &Bound<'py, PyAny>,
-    seed: u32,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let input = bytes_like(py, s, "s")?;
-    let words = with_input(py, &input, |input| murmur3_x64_128(input, seed));
-    let digest = x64_128_digest(words);
-    Ok(PyBytes::new(py, &digest))
 }

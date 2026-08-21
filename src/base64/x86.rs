@@ -14,3 +14,19 @@ pub(super) use encode::{Avx2StoreMode, encode_avx2, encode_avx2_with_store, enco
 
 #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
 pub(in crate::base64) use cache::{cached_input_limit, use_streaming_stores};
+
+#[cfg(all(target_arch = "x86_64", any(kani, miri)))]
+#[inline]
+pub(in crate::base64) const fn cached_input_limit() -> Option<usize> {
+    None
+}
+
+#[cfg(all(target_arch = "x86_64", any(kani, miri)))]
+#[inline]
+pub(in crate::base64) const fn use_streaming_stores(
+    _cached_input_limit: Option<usize>,
+    _input_len: usize,
+    _output: *mut u8,
+) -> bool {
+    false
+}

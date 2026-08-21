@@ -5,12 +5,12 @@
 //! deliberately kept behind dispatch points so unsupported CPUs never execute
 //! instructions they cannot run.
 
-#[cfg(all(not(any(coverage, kani, miri)), target_arch = "aarch64"))]
+#[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
+use crate::backend::{self, SimdBackend};
+
+#[cfg(target_arch = "aarch64")]
 mod aarch64;
-#[cfg(all(
-    not(any(coverage, kani, miri)),
-    any(target_arch = "x86", target_arch = "x86_64")
-))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
 
 const P32_1: u64 = 2_654_435_761;
@@ -189,15 +189,15 @@ fn init_secret_scalar(seed: u64) -> [u8; 192] {
     secret
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
 fn init_secret(seed: u64) -> [u8; 192] {
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
-    if std::is_x86_feature_detected!("avx2") {
-        return unsafe { x86::init_secret_avx2(seed) };
-    }
+    x86::init_secret(seed, backend::capabilities())
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+#[inline]
+fn init_secret(seed: u64) -> [u8; 192] {
     init_secret_scalar(seed)
 }
 #[inline(always)]
@@ -274,25 +274,25 @@ fn long_accumulate_scalar(data: &[u8], secret: &[u8]) -> [u64; 8] {
     acc
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
 fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
-    {
-        match x86::backend() {
-            x86::Backend::Avx512 => return unsafe { x86::long_accumulate_avx512(data, secret) },
-            x86::Backend::Avx2 => return unsafe { x86::long_accumulate_avx2(data, secret) },
-            x86::Backend::Sse41 => return unsafe { x86::long_accumulate_sse41(data, secret) },
-            x86::Backend::Ssse3 => return unsafe { x86::long_accumulate_ssse3(data, secret) },
-            x86::Backend::Scalar => {}
-        }
+    x86::long_accumulate(data, secret, backend::capabilities())
+}
+
+#[cfg(target_arch = "aarch64")]
+#[inline]
+fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
+    if backend::capabilities().supports(SimdBackend::Neon) {
+        unsafe { aarch64::long_accumulate_neon(data, secret) }
+    } else {
+        long_accumulate_scalar(data, secret)
     }
-    #[cfg(all(not(any(coverage, kani, miri)), target_arch = "aarch64"))]
-    if std::arch::is_aarch64_feature_detected!("neon") {
-        return unsafe { aarch64::long_accumulate_neon(data, secret) };
-    }
+}
+
+#[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
+#[inline]
+fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     long_accumulate_scalar(data, secret)
 }
 fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
@@ -445,23 +445,10 @@ fn finalize_long_128(length: usize, secret: &[u8], acc: [u64; 8]) -> [u64; 2] {
 #[inline]
 fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8]; 4]> {
     let _ = (chunk, secret);
-    #[cfg(coverage)]
-    if chunk[0].len() > 240 && chunk.iter().all(|input| input.len() == chunk[0].len()) {
-        return Some([
-            long_accumulate_scalar(chunk[0], secret),
-            long_accumulate_scalar(chunk[1], secret),
-            long_accumulate_scalar(chunk[2], secret),
-            long_accumulate_scalar(chunk[3], secret),
-        ]);
-    }
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     if chunk[0].len() > 240
         && chunk.iter().all(|input| input.len() == chunk[0].len())
-        && std::is_x86_feature_detected!("avx2")
-        && matches!(x86::backend(), x86::Backend::Avx2 | x86::Backend::Avx512)
+        && backend::capabilities().supports(SimdBackend::Avx2)
     {
         let values = [chunk[0], chunk[1], chunk[2], chunk[3]];
         return Some(unsafe { x86::long_accumulate_batch4_avx2(values, secret) });
@@ -681,7 +668,7 @@ mod tests {
 
         let owned = (0..8)
             .map(|item| {
-                (0..4097)
+                (0..4161)
                     .map(|index| (index as u8).wrapping_mul(31).wrapping_add(item))
                     .collect::<Vec<_>>()
             })
@@ -733,7 +720,7 @@ mod tests {
     fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
         const LENGTHS: &[usize] = &[
             0, 1, 2, 3, 4, 8, 9, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129, 159, 160,
-            191, 192, 239, 240, 241, 255, 256, 511, 512, 1023, 1024, 1025, 4097,
+            191, 192, 239, 240, 241, 255, 256, 511, 512, 1023, 1024, 1025, 4161,
         ];
         const SEEDS: &[u64] = &[0, 1, 0x0123_4567_89ab_cdef, u64::MAX];
 
@@ -780,36 +767,49 @@ mod tests {
         }
     }
 
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn every_supported_x86_backend_matches_scalar() {
-        let input: Vec<u8> = (0..4097)
+        use crate::backend::Capabilities;
+
+        let input: Vec<u8> = (0..4161)
             .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
             .collect();
+        let capabilities = backend::capabilities();
+        let scalar = Capabilities::for_backends(&[]);
+        assert_eq!(x86::select(scalar), x86::Backend::Scalar);
+        assert_eq!(
+            x86::select(Capabilities::for_backends(&[SimdBackend::Ssse3])),
+            x86::Backend::Ssse3
+        );
+        assert_eq!(
+            x86::select(Capabilities::for_backends(&[SimdBackend::Sse41])),
+            x86::Backend::Sse41
+        );
+        assert_eq!(
+            x86::select(Capabilities::for_backends(&[SimdBackend::Avx2])),
+            x86::Backend::Avx2
+        );
+
         for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
             let owned_secret = (seed != 0).then(|| init_secret(seed));
             let secret = owned_secret.as_ref().unwrap_or(&SECRET);
             let expected = long_accumulate_scalar(&input, secret);
-            for backend in [
-                x86::Backend::Ssse3,
-                x86::Backend::Sse41,
-                x86::Backend::Avx2,
-                x86::Backend::Avx512,
-            ] {
-                if !x86::backend_supported(backend) {
-                    continue;
-                }
-                let actual = match backend {
-                    x86::Backend::Sse41 => unsafe { x86::long_accumulate_sse41(&input, secret) },
-                    x86::Backend::Ssse3 => unsafe { x86::long_accumulate_ssse3(&input, secret) },
-                    x86::Backend::Avx2 => unsafe { x86::long_accumulate_avx2(&input, secret) },
-                    x86::Backend::Avx512 => unsafe { x86::long_accumulate_avx512(&input, secret) },
-                    x86::Backend::Scalar => unreachable!(),
-                };
-                assert_eq!(actual, expected, "{backend:?} mismatch for seed {seed:#x}");
+            assert_eq!(x86::init_secret(seed, scalar), init_secret_scalar(seed));
+            assert_eq!(x86::long_accumulate(&input, secret, scalar), expected);
+
+            let supported = [
+                (x86::Backend::Scalar, SimdBackend::Scalar),
+                (x86::Backend::Ssse3, SimdBackend::Ssse3),
+                (x86::Backend::Sse41, SimdBackend::Sse41),
+                (x86::Backend::Avx2, SimdBackend::Avx2),
+            ];
+            for (selected, _) in supported
+                .into_iter()
+                .filter(|(_, required)| capabilities.supports(*required))
+            {
+                let actual = unsafe { x86::long_accumulate_with_backend(&input, secret, selected) };
+                assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
             }
         }
     }

@@ -1,12 +1,16 @@
 use core::{fmt, mem::ManuallyDrop, mem::MaybeUninit};
 
 #[cfg(test)]
-use backend::{
-    Backend, is_supported as backend_supported, select_aarch64 as select_aarch64_backend,
-    select_x86 as select_x86_backend,
-};
+use crate::backend::{Capabilities, SimdBackend};
+#[cfg(test)]
+use backend::{Backend, is_supported as backend_supported};
 #[cfg(test)]
 use dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
+
+#[cfg(test)]
+fn select_backend(backend: SimdBackend) -> Backend {
+    backend::select(Capabilities::for_backends(&[backend]))
+}
 const STANDARD_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const URLSAFE_ALPHABET: &[u8; 64] =

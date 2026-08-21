@@ -166,26 +166,13 @@ fn seeded_randomized_inputs_match_the_reference_engine() {
 
 #[test]
 fn backend_selection_and_kernels_match_scalar_output() {
-    assert_eq!(
-        select_x86_backend(false, false, false, false),
-        Backend::Scalar
-    );
-    assert_eq!(
-        select_x86_backend(false, false, false, true),
-        Backend::Ssse3
-    );
-    assert_eq!(select_x86_backend(false, false, true, true), Backend::Sse41);
-    assert_eq!(
-        select_x86_backend(false, false, true, false),
-        Backend::Scalar
-    );
-    assert_eq!(select_x86_backend(false, true, false, false), Backend::Avx2);
-    assert_eq!(
-        select_x86_backend(true, false, false, false),
-        Backend::Avx512
-    );
-    assert_eq!(select_aarch64_backend(false), Backend::Scalar);
-    assert_eq!(select_aarch64_backend(true), Backend::Neon);
+    assert_eq!(select_backend(SimdBackend::Scalar), Backend::Scalar);
+    assert_eq!(select_backend(SimdBackend::Neon), Backend::Neon);
+    assert_eq!(select_backend(SimdBackend::Ssse3), Backend::Ssse3);
+    assert_eq!(select_backend(SimdBackend::Sse41), Backend::Sse41);
+    assert_eq!(select_backend(SimdBackend::Avx2), Backend::Avx2);
+    assert_eq!(select_backend(SimdBackend::Avx512), Backend::Scalar);
+    assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512);
     assert!(backend_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),
@@ -386,7 +373,7 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
-    if !std::is_x86_feature_detected!("avx2") {
+    if !backend_supported(Backend::Avx2) {
         return;
     }
 
@@ -1066,10 +1053,7 @@ fn padded_decoder_stores_stay_within_four_bytes_of_slack() {
         }
     }
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    let has_ssse3 = std::is_x86_feature_detected!("ssse3");
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    let has_ssse3 = false;
+    let has_ssse3 = backend_supported(Backend::Ssse3);
     let input: Vec<u8> = (0..96).map(|value| value as u8).collect();
     for (encoded, alphabet) in [
         (b64encode(&input), DecodeAlphabet::Standard),

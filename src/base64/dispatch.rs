@@ -1,45 +1,22 @@
-use std::sync::OnceLock;
-
 #[cfg(target_arch = "aarch64")]
 use super::aarch64;
+use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::x86;
-#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
-use super::x86_avx512;
 use super::{Base64Error, DecodeAlphabet};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Backend {
-    Scalar,
-    #[cfg_attr(not(any(test, target_arch = "aarch64")), allow(dead_code))]
-    Neon,
-    #[cfg_attr(
-        not(any(test, target_arch = "x86", target_arch = "x86_64")),
-        allow(dead_code)
-    )]
-    Ssse3,
-    #[cfg_attr(
-        not(any(test, target_arch = "x86", target_arch = "x86_64")),
-        allow(dead_code)
-    )]
-    Sse41,
-    #[cfg_attr(
-        not(any(test, target_arch = "x86", target_arch = "x86_64")),
-        allow(dead_code)
-    )]
-    Avx2,
-    #[cfg_attr(
-        not(any(test, target_arch = "x86", target_arch = "x86_64")),
-        allow(dead_code)
-    )]
-    Avx512,
-}
-
-static BACKEND: OnceLock<Backend> = OnceLock::new();
 
 #[inline]
 pub(super) unsafe fn encode_simd_ptr(input: &[u8], output: *mut u8, urlsafe: bool) -> usize {
-    unsafe { encode_with_backend_ptr(input, output, selected_backend(), urlsafe) }
+    let backend = backend::selected();
+    unsafe {
+        encode_with_backend_ptr(
+            input,
+            output,
+            backend.kind,
+            urlsafe,
+            backend.use_streaming_stores(input.len(), output),
+        )
+    }
 }
 
 #[inline]
@@ -54,108 +31,11 @@ pub(super) unsafe fn decode_simd_ptr(
         decode_with_backend_ptr_mode(
             input,
             output,
-            selected_backend(),
+            backend::selected().kind,
             alphabet,
             padded_stores,
             transactional_errors,
         )
-    }
-}
-
-#[inline]
-fn selected_backend() -> Backend {
-    *BACKEND.get_or_init(detect_backend)
-}
-
-#[inline]
-fn detect_backend() -> Backend {
-    #[cfg(any(kani, miri))]
-    {
-        Backend::Scalar
-    }
-    #[cfg(all(not(any(kani, miri)), any(target_arch = "x86", target_arch = "x86_64")))]
-    {
-        select_x86_backend(
-            avx512_supported(),
-            std::is_x86_feature_detected!("avx2"),
-            std::is_x86_feature_detected!("sse4.1"),
-            std::is_x86_feature_detected!("ssse3"),
-        )
-    }
-    #[cfg(all(not(any(kani, miri)), target_arch = "aarch64"))]
-    {
-        select_aarch64_backend(std::arch::is_aarch64_feature_detected!("neon"))
-    }
-    #[cfg(all(
-        not(any(kani, miri)),
-        not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))
-    ))]
-    {
-        Backend::Scalar
-    }
-}
-
-#[inline]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-fn avx512_supported() -> bool {
-    #[cfg(not(coverage))]
-    {
-        std::is_x86_feature_detected!("avx512vbmi")
-    }
-    #[cfg(coverage)]
-    {
-        false
-    }
-}
-
-#[inline]
-#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
-pub(super) fn select_x86_backend(avx512: bool, avx2: bool, sse41: bool, ssse3: bool) -> Backend {
-    if avx512 {
-        Backend::Avx512
-    } else if avx2 {
-        Backend::Avx2
-    } else if sse41 && ssse3 {
-        Backend::Sse41
-    } else if ssse3 {
-        Backend::Ssse3
-    } else {
-        Backend::Scalar
-    }
-}
-
-#[inline]
-#[cfg(any(test, target_arch = "aarch64"))]
-pub(super) fn select_aarch64_backend(neon: bool) -> Backend {
-    if neon { Backend::Neon } else { Backend::Scalar }
-}
-
-#[cfg(test)]
-pub(super) fn backend_supported(backend: Backend) -> bool {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        match backend {
-            Backend::Scalar => true,
-            Backend::Neon => false,
-            Backend::Ssse3 => std::is_x86_feature_detected!("ssse3"),
-            Backend::Sse41 => {
-                std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
-            }
-            Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
-            Backend::Avx512 => avx512_supported(),
-        }
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        match backend {
-            Backend::Scalar => true,
-            Backend::Neon => std::arch::is_aarch64_feature_detected!("neon"),
-            _ => false,
-        }
-    }
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
-    {
-        backend == Backend::Scalar
     }
 }
 
@@ -167,14 +47,10 @@ pub(super) fn encode_with_backend(
     backend: Backend,
     urlsafe: bool,
 ) -> usize {
-    #[cfg(coverage)]
-    if backend == Backend::Avx512 {
-        return unsafe { encode_with_backend_ptr(input, output.as_mut_ptr(), backend, urlsafe) };
-    }
-    if !backend_supported(backend) {
+    if !backend::is_supported(backend) {
         return 0;
     }
-    unsafe { encode_with_backend_ptr(input, output.as_mut_ptr(), backend, urlsafe) }
+    unsafe { encode_with_backend_ptr(input, output.as_mut_ptr(), backend, urlsafe, false) }
 }
 
 #[inline]
@@ -183,13 +59,14 @@ unsafe fn encode_with_backend_ptr(
     output: *mut u8,
     backend: Backend,
     urlsafe: bool,
+    streaming_stores: bool,
 ) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if urlsafe {
-            unsafe { encode_x86::<true>(input, output, backend) }
+            unsafe { encode_x86::<true>(input, output, backend, streaming_stores) }
         } else {
-            unsafe { encode_x86::<false>(input, output, backend) }
+            unsafe { encode_x86::<false>(input, output, backend, streaming_stores) }
         }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -204,7 +81,7 @@ unsafe fn encode_with_backend_ptr(
                 }
             };
         }
-        let _ = (input, output, backend, urlsafe);
+        let _ = (input, output, backend, urlsafe, streaming_stores);
         0
     }
 }
@@ -215,23 +92,34 @@ unsafe fn encode_x86<const URLSAFE: bool>(
     input: &[u8],
     output: *mut u8,
     backend: Backend,
+    streaming_stores: bool,
 ) -> usize {
-    match backend {
-        Backend::Avx512 => {
-            #[cfg(not(coverage))]
-            return unsafe { x86_avx512::encode_avx512::<URLSAFE>(input, output) };
-            #[cfg(coverage)]
-            return 0;
-        }
-        Backend::Avx2 => {
-            return unsafe { x86::encode_avx2::<URLSAFE>(input, output) };
-        }
-        Backend::Sse41 | Backend::Ssse3 => {
-            return unsafe { x86::encode_ssse3::<URLSAFE>(input, output) };
-        }
-        Backend::Scalar | Backend::Neon => {}
+    if backend == Backend::Avx2 {
+        let store_mode = if streaming_stores {
+            x86::Avx2StoreMode::Streaming
+        } else {
+            x86::Avx2StoreMode::Cached
+        };
+        return unsafe { x86::encode_avx2_with_store::<URLSAFE>(input, output, store_mode) };
     }
-    0
+    let Some(kernel) = encode_x86_kernel::<URLSAFE>(backend) else {
+        return 0;
+    };
+    unsafe { kernel(input, output) }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
+    match backend {
+        Backend::Avx512 => Some(x86::avx512::encode::<URLSAFE>),
+        Backend::Avx2 => Some(x86::encode_avx2::<URLSAFE>),
+        Backend::Sse41 | Backend::Ssse3 => Some(x86::encode_ssse3::<URLSAFE>),
+        Backend::Scalar | Backend::Neon => None,
+    }
 }
 
 #[inline]
@@ -255,13 +143,7 @@ pub(super) unsafe fn decode_with_backend_ptr(
     alphabet: DecodeAlphabet,
     padded_stores: bool,
 ) -> Result<(usize, usize), Base64Error> {
-    #[cfg(coverage)]
-    if backend == Backend::Avx512 {
-        return unsafe {
-            decode_with_backend_ptr_mode(input, output, backend, alphabet, padded_stores, false)
-        };
-    }
-    if !backend_supported(backend) {
+    if !backend::is_supported(backend) {
         return Ok((0, 0));
     }
     unsafe { decode_with_backend_ptr_mode(input, output, backend, alphabet, padded_stores, false) }
@@ -368,23 +250,71 @@ unsafe fn decode_x86<A: x86::Decoder, S: x86::Store>(
     output: *mut u8,
     backend: Backend,
 ) -> Result<(usize, usize), Base64Error> {
+    let Some(kernel) = decode_x86_kernel::<A, S>(backend) else {
+        return Ok((0, 0));
+    };
+    unsafe { kernel(input, output) }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+type DecodeKernel = unsafe fn(&[u8], *mut u8) -> Result<(usize, usize), Base64Error>;
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn decode_x86_kernel<A: x86::Decoder, S: x86::Store>(backend: Backend) -> Option<DecodeKernel> {
     match backend {
-        Backend::Avx512 => {
-            #[cfg(not(coverage))]
-            return unsafe { x86_avx512::decode_avx512::<A, S>(input, output) };
-            #[cfg(coverage)]
-            return Ok((0, 0));
-        }
-        Backend::Avx2 => {
-            return unsafe { x86::decode_avx2::<A, S>(input, output) };
-        }
-        Backend::Sse41 => {
-            return unsafe { x86::decode_sse41::<A, S>(input, output) };
-        }
-        Backend::Ssse3 => {
-            return unsafe { x86::decode_ssse3::<A, S>(input, output) };
-        }
-        Backend::Scalar | Backend::Neon => {}
+        Backend::Avx512 => Some(x86::avx512::decode::<A, S>),
+        Backend::Avx2 => Some(x86::decode_avx2::<A, S>),
+        Backend::Sse41 => Some(x86::decode_sse41::<A, S>),
+        Backend::Ssse3 => Some(x86::decode_ssse3::<A, S>),
+        Backend::Scalar | Backend::Neon => None,
     }
-    Ok((0, 0))
+}
+
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+mod tests {
+    use super::*;
+    use crate::base64::{b64encode, encode_scalar};
+
+    #[test]
+    fn every_x86_backend_resolves_without_running_unsupported_instructions() {
+        for backend in [
+            Backend::Avx512,
+            Backend::Avx2,
+            Backend::Sse41,
+            Backend::Ssse3,
+        ] {
+            assert!(encode_x86_kernel::<false>(backend).is_some());
+            assert!(decode_x86_kernel::<x86::StandardDecoder, x86::ExactStore>(backend).is_some());
+        }
+        assert!(encode_x86_kernel::<true>(Backend::Scalar).is_none());
+        assert!(
+            decode_x86_kernel::<x86::UrlSafeDecoder, x86::PaddedStore>(Backend::Neon).is_none()
+        );
+    }
+
+    #[test]
+    fn avx2_cached_wrapper_and_streaming_dispatch_match() {
+        if backend::is_supported(Backend::Avx2) {
+            check_avx2_cached_wrapper_and_streaming_dispatch();
+        }
+    }
+
+    fn check_avx2_cached_wrapper_and_streaming_dispatch() {
+        let input = vec![0x5a_u8; 192];
+        let expected = b64encode(&input);
+        let mut storage = vec![0xa5_u8; expected.len() + 16];
+        let offset = storage.as_mut_ptr().align_offset(16);
+        let output = &mut storage[offset..offset + expected.len()];
+
+        let consumed = unsafe { x86::encode_avx2::<false>(&input, output.as_mut_ptr()) };
+        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
+        assert_eq!(output, expected.as_bytes());
+
+        output.fill(0xa5);
+        let consumed =
+            unsafe { encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, true) };
+        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
+        assert_eq!(output, expected.as_bytes());
+    }
 }

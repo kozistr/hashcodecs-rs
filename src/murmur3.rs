@@ -151,25 +151,12 @@ pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
 #[inline]
 fn mix_x86_32_body(key: &[u8], hash: &mut u32) {
     debug_assert!(key.len().is_multiple_of(4));
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        match dispatch::x86_32(
-            key.len(),
-            std::is_x86_feature_detected!("avx2"),
-            std::is_x86_feature_detected!("sse4.1"),
-        ) {
-            dispatch::Backend::Avx2 => {
-                unsafe { x86::mix_x86_32_body_avx2(key, hash) };
-                return;
-            }
-            dispatch::Backend::Sse41 => {
-                unsafe { x86::mix_x86_32_body_sse41(key, hash) };
-                return;
-            }
-            dispatch::Backend::Scalar => {}
+        let capabilities = crate::backend::capabilities();
+        let selected = dispatch::x86_32(key.len(), capabilities);
+        if unsafe { x86::try_mix_x86_32_body(key, hash, selected) } {
+            return;
         }
     }
     mix_x86_32_body_scalar(key, hash);
@@ -389,29 +376,12 @@ fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
 #[inline]
 fn mix_x64_128_body(key: &[u8], hashes: &mut [u64; 2]) {
     debug_assert!(key.len().is_multiple_of(16));
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        match dispatch::x64_128(
-            key.len(),
-            std::is_x86_feature_detected!("avx2"),
-            std::is_x86_feature_detected!("sse4.1"),
-        ) {
-            dispatch::Backend::Avx2 => {
-                *hashes = if std::is_x86_feature_detected!("bmi2") {
-                    unsafe { x86::mix_x64_128_body_avx2_bmi2(key, *hashes) }
-                } else {
-                    unsafe { x86::mix_x64_128_body_avx2(key, *hashes) }
-                };
-                return;
-            }
-            dispatch::Backend::Sse41 => {
-                *hashes = unsafe { x86::mix_x64_128_body_sse41(key, *hashes) };
-                return;
-            }
-            dispatch::Backend::Scalar => {}
+        let capabilities = crate::backend::capabilities();
+        let selected = dispatch::x64_128(key.len(), capabilities);
+        if unsafe { x86::try_mix_x64_128_body(key, hashes, selected, capabilities.has_bmi2()) } {
+            return;
         }
     }
     mix_x64_128_body_scalar(key, hashes);
@@ -490,25 +460,12 @@ fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 
 
 #[inline]
 fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
-    #[cfg(all(
-        not(any(coverage, kani, miri)),
-        any(target_arch = "x86", target_arch = "x86_64")
-    ))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        match dispatch::x86_128(
-            key.len(),
-            std::is_x86_feature_detected!("avx2"),
-            std::is_x86_feature_detected!("sse4.1"),
-        ) {
-            dispatch::Backend::Avx2 => {
-                unsafe { x86::mix_x86_128_body_avx2(key, hashes) };
-                return;
-            }
-            dispatch::Backend::Sse41 => {
-                unsafe { x86::mix_x86_128_body_sse41(key, hashes) };
-                return;
-            }
-            dispatch::Backend::Scalar => {}
+        let capabilities = crate::backend::capabilities();
+        let selected = dispatch::x86_128(key.len(), capabilities);
+        if unsafe { x86::try_mix_x86_128_body(key, hashes, selected) } {
+            return;
         }
     }
     mix_x86_128_body_scalar(key, hashes);
@@ -703,6 +660,8 @@ mod miri_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    use crate::backend::{self as cpu, SimdBackend};
     use std::io::Cursor;
 
     fn x86_words_as_u128(words: [u32; 4]) -> u128 {
@@ -719,25 +678,36 @@ mod tests {
 
     #[test]
     fn dispatch_thresholds_are_explicit_and_feature_gated() {
+        use crate::backend::{Capabilities, SimdBackend as Simd};
         use dispatch::Backend::{Avx2, Scalar, Sse41};
+        let caps = |backend| Capabilities::for_backends(&[backend]);
 
-        assert_eq!(dispatch::x86_32(15, true, true), Scalar);
-        assert_eq!(dispatch::x86_32(31, true, false), Scalar);
-        assert_eq!(dispatch::x86_32(16, false, true), Sse41);
-        assert_eq!(dispatch::x86_32(32, true, true), Avx2);
-        assert_eq!(dispatch::x86_32(usize::MAX, false, false), Scalar);
+        assert_eq!(dispatch::x86_32(15, caps(Simd::Avx2)), Scalar);
+        assert_eq!(dispatch::x86_32(31, caps(Simd::Avx2)), Scalar);
+        assert_eq!(dispatch::x86_32(16, caps(Simd::Sse41)), Sse41);
+        assert_eq!(dispatch::x86_32(32, caps(Simd::Avx2)), Avx2);
+        assert_eq!(dispatch::x86_32(usize::MAX, caps(Simd::Scalar)), Scalar);
 
-        assert_eq!(dispatch::x86_128(255, true, true), Scalar);
-        assert_eq!(dispatch::x86_128(256, true, true), Avx2);
-        assert_eq!(dispatch::x86_128(16 * 1024 * 1024 - 1, false, true), Scalar);
-        assert_eq!(dispatch::x86_128(16 * 1024 * 1024, false, true), Sse41);
-        assert_eq!(dispatch::x86_128(usize::MAX, false, false), Scalar);
+        assert_eq!(dispatch::x86_128(255, caps(Simd::Avx2)), Scalar);
+        assert_eq!(dispatch::x86_128(256, caps(Simd::Avx2)), Avx2);
+        assert_eq!(
+            dispatch::x86_128(16 * 1024 * 1024 - 1, caps(Simd::Sse41)),
+            Scalar
+        );
+        assert_eq!(
+            dispatch::x86_128(16 * 1024 * 1024, caps(Simd::Sse41)),
+            Sse41
+        );
+        assert_eq!(dispatch::x86_128(usize::MAX, caps(Simd::Scalar)), Scalar);
 
-        assert_eq!(dispatch::x64_128(15, true, true), Scalar);
-        assert_eq!(dispatch::x64_128(16, false, true), Sse41);
-        assert_eq!(dispatch::x64_128(32, true, true), Avx2);
-        assert_eq!(dispatch::x64_128(8 * 1024 * 1024, false, true), Sse41);
-        assert_eq!(dispatch::x64_128(8 * 1024 * 1024 + 1, false, true), Scalar);
+        assert_eq!(dispatch::x64_128(15, caps(Simd::Avx2)), Scalar);
+        assert_eq!(dispatch::x64_128(16, caps(Simd::Sse41)), Sse41);
+        assert_eq!(dispatch::x64_128(32, caps(Simd::Avx2)), Avx2);
+        assert_eq!(dispatch::x64_128(8 * 1024 * 1024, caps(Simd::Sse41)), Sse41);
+        assert_eq!(
+            dispatch::x64_128(8 * 1024 * 1024 + 1, caps(Simd::Sse41)),
+            Scalar
+        );
     }
 
     #[test]
@@ -784,85 +754,72 @@ mod tests {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
         let block_end = input.len() & !15;
-        #[cfg(coverage)]
-        unsafe {
-            let mut sse = [seed; 4];
-            x86::mix_x86_128_body_sse41(&input[..block_end], &mut sse);
+        let capabilities = cpu::capabilities();
+        let supported = [
+            capabilities
+                .supports(SimdBackend::Sse41)
+                .then_some(dispatch::Backend::Sse41),
+            capabilities
+                .supports(SimdBackend::Avx2)
+                .then_some(dispatch::Backend::Avx2),
+        ];
+        for selected in supported.into_iter().flatten() {
+            let mut hashes = [seed; 4];
+            assert!(unsafe {
+                x86::try_mix_x86_128_body(&input[..block_end], &mut hashes, selected)
+            });
             assert_eq!(
-                x86_words_as_u128(finish_x86_128(input, sse, block_end)),
+                x86_words_as_u128(finish_x86_128(input, hashes, block_end)),
                 expected
             );
+        }
 
-            let mut avx = [seed; 4];
-            x86::mix_x86_128_body_avx2(&input[..block_end], &mut avx);
-            assert_eq!(
-                x86_words_as_u128(finish_x86_128(input, avx, block_end)),
-                expected
-            );
-        }
-        #[cfg(not(coverage))]
-        unsafe {
-            if std::is_x86_feature_detected!("sse4.1") {
-                let mut sse = [seed; 4];
-                x86::mix_x86_128_body_sse41(&input[..block_end], &mut sse);
-                assert_eq!(
-                    x86_words_as_u128(finish_x86_128(input, sse, block_end)),
-                    expected
-                );
-            }
-            if std::is_x86_feature_detected!("avx2") {
-                let mut avx = [seed; 4];
-                x86::mix_x86_128_body_avx2(&input[..block_end], &mut avx);
-                assert_eq!(
-                    x86_words_as_u128(finish_x86_128(input, avx, block_end)),
-                    expected
-                );
-            }
-        }
+        let mut unchanged = [seed; 4];
+        assert!(!unsafe {
+            x86::try_mix_x86_128_body(
+                &input[..block_end],
+                &mut unchanged,
+                dispatch::Backend::Scalar,
+            )
+        });
+        assert_eq!(unchanged, [seed; 4]);
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
         let block_end = input.len() & !15;
-        #[cfg(coverage)]
-        unsafe {
-            let sse = x86::mix_x64_128_body_sse41(&input[..block_end], [seed as u64; 2]);
+        let capabilities = cpu::capabilities();
+        let supported = [
+            capabilities
+                .supports(SimdBackend::Sse41)
+                .then_some((dispatch::Backend::Sse41, false)),
+            capabilities
+                .supports(SimdBackend::Avx2)
+                .then_some((dispatch::Backend::Avx2, false)),
+            (capabilities.supports(SimdBackend::Avx2) && capabilities.has_bmi2())
+                .then_some((dispatch::Backend::Avx2, true)),
+        ];
+        for (selected, bmi2) in supported.into_iter().flatten() {
+            let mut hashes = [seed as u64; 2];
+            assert!(unsafe {
+                x86::try_mix_x64_128_body(&input[..block_end], &mut hashes, selected, bmi2)
+            });
             assert_eq!(
-                x64_words_as_u128(finish_x64_128(input, sse, block_end)),
+                x64_words_as_u128(finish_x64_128(input, hashes, block_end)),
                 expected
             );
+        }
 
-            let avx = x86::mix_x64_128_body_avx2(&input[..block_end], [seed as u64; 2]);
-            assert_eq!(
-                x64_words_as_u128(finish_x64_128(input, avx, block_end)),
-                expected
-            );
-        }
-        #[cfg(not(coverage))]
-        unsafe {
-            if std::is_x86_feature_detected!("sse4.1") {
-                let sse = x86::mix_x64_128_body_sse41(&input[..block_end], [seed as u64; 2]);
-                assert_eq!(
-                    x64_words_as_u128(finish_x64_128(input, sse, block_end)),
-                    expected
-                );
-            }
-            if std::is_x86_feature_detected!("avx2") {
-                let avx = x86::mix_x64_128_body_avx2(&input[..block_end], [seed as u64; 2]);
-                assert_eq!(
-                    x64_words_as_u128(finish_x64_128(input, avx, block_end)),
-                    expected
-                );
-                if std::is_x86_feature_detected!("bmi2") {
-                    let bmi2 =
-                        x86::mix_x64_128_body_avx2_bmi2(&input[..block_end], [seed as u64; 2]);
-                    assert_eq!(
-                        x64_words_as_u128(finish_x64_128(input, bmi2, block_end)),
-                        expected
-                    );
-                }
-            }
-        }
+        let mut unchanged = [seed as u64; 2];
+        assert!(!unsafe {
+            x86::try_mix_x64_128_body(
+                &input[..block_end],
+                &mut unchanged,
+                dispatch::Backend::Scalar,
+                false,
+            )
+        });
+        assert_eq!(unchanged, [seed as u64; 2]);
     }
 
     #[test]
@@ -912,47 +869,38 @@ mod tests {
                     "scalar x86_32 length={length} seed={seed}"
                 );
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                unsafe {
-                    #[cfg(coverage)]
-                    {
-                        let block_end = input.len() & !3;
-                        let mut sse_hash = seed;
-                        x86::mix_x86_32_body_sse41(&input[..block_end], &mut sse_hash);
-                        assert_eq!(
-                            finish_x86_32(&input, sse_hash, block_end),
-                            expected_x86_32,
-                            "SSE4.1 x86_32 length={length} seed={seed}"
-                        );
-                        let mut avx_hash = seed;
-                        x86::mix_x86_32_body_avx2(&input[..block_end], &mut avx_hash);
-                        assert_eq!(
-                            finish_x86_32(&input, avx_hash, block_end),
-                            expected_x86_32,
-                            "AVX2 x86_32 length={length} seed={seed}"
-                        );
-                    }
-                    #[cfg(not(coverage))]
-                    if std::is_x86_feature_detected!("sse4.1") {
-                        let block_end = input.len() & !3;
+                {
+                    let capabilities = cpu::capabilities();
+                    let block_end = input.len() & !3;
+                    let supported = [
+                        capabilities
+                            .supports(SimdBackend::Sse41)
+                            .then_some(dispatch::Backend::Sse41),
+                        capabilities
+                            .supports(SimdBackend::Avx2)
+                            .then_some(dispatch::Backend::Avx2),
+                    ];
+                    for selected in supported.into_iter().flatten() {
                         let mut hash = seed;
-                        x86::mix_x86_32_body_sse41(&input[..block_end], &mut hash);
+                        assert!(unsafe {
+                            x86::try_mix_x86_32_body(&input[..block_end], &mut hash, selected)
+                        });
                         assert_eq!(
                             finish_x86_32(&input, hash, block_end),
                             expected_x86_32,
-                            "SSE4.1 x86_32 length={length} seed={seed}"
+                            "{selected:?} x86_32 length={length} seed={seed}"
                         );
                     }
-                    #[cfg(not(coverage))]
-                    if std::is_x86_feature_detected!("avx2") {
-                        let block_end = input.len() & !3;
-                        let mut hash = seed;
-                        x86::mix_x86_32_body_avx2(&input[..block_end], &mut hash);
-                        assert_eq!(
-                            finish_x86_32(&input, hash, block_end),
-                            expected_x86_32,
-                            "AVX2 x86_32 length={length} seed={seed}"
-                        );
-                    }
+
+                    let mut unchanged = seed;
+                    assert!(!unsafe {
+                        x86::try_mix_x86_32_body(
+                            &input[..block_end],
+                            &mut unchanged,
+                            dispatch::Backend::Scalar,
+                        )
+                    });
+                    assert_eq!(unchanged, seed);
                 }
 
                 let expected_x86_128 =

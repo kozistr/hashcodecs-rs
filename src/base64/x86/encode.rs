@@ -7,10 +7,11 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 use std::hint::black_box;
 
-// Streaming stores avoid evicting the caller's input and other hot data when
-// encoding large one-shot buffers. Keep the threshold conservative because
-// write-allocate stores are faster for buffers that are likely to be reused.
-const NT_STORE_MIN_LEN: usize = 4 << 20;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::base64) enum Avx2StoreMode {
+    Cached,
+    Streaming,
+}
 
 #[cfg(target_arch = "x86_64")]
 struct EncodeAvx2Constants {
@@ -51,6 +52,15 @@ pub(crate) unsafe fn encode_ssse3<const URLSAFE: bool>(input: &[u8], output: *mu
 
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+    unsafe { encode_avx2_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) }
+}
+
+#[target_feature(enable = "avx2")]
+pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
+    input: &[u8],
+    output: *mut u8,
+    store_mode: Avx2StoreMode,
+) -> usize {
     if input.len() < 32 {
         return unsafe { encode_ssse3::<URLSAFE>(input, output) };
     }
@@ -69,9 +79,7 @@ pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut
     {
         let groups = (input.len() - load_offset - 8) / 96;
         if groups != 0 {
-            let use_streaming_stores =
-                input.len() >= NT_STORE_MIN_LEN && output.align_offset(16) == 0;
-            if use_streaming_stores {
+            if store_mode == Avx2StoreMode::Streaming {
                 unsafe {
                     encode_96_shifted::<URLSAFE>(
                         input.as_ptr().add(load_offset),

@@ -62,7 +62,11 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Check Rust line coverage
-        run: cargo llvm-cov --no-default-features --fail-under-lines 100 --cobertura --output-path coverage.xml
+        run: |
+          cargo llvm-cov --no-default-features --fail-under-lines 100 \
+            --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
+          cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' \
+            --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}

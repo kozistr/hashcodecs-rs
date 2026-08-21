@@ -166,26 +166,13 @@ fn seeded_randomized_inputs_match_the_reference_engine() {
 
 #[test]
 fn backend_selection_and_kernels_match_scalar_output() {
-    assert_eq!(
-        select_x86_backend(false, false, false, false),
-        Backend::Scalar
-    );
-    assert_eq!(
-        select_x86_backend(false, false, false, true),
-        Backend::Ssse3
-    );
-    assert_eq!(select_x86_backend(false, false, true, true), Backend::Sse41);
-    assert_eq!(
-        select_x86_backend(false, false, true, false),
-        Backend::Scalar
-    );
-    assert_eq!(select_x86_backend(false, true, false, false), Backend::Avx2);
-    assert_eq!(
-        select_x86_backend(true, false, false, false),
-        Backend::Avx512
-    );
-    assert_eq!(select_aarch64_backend(false), Backend::Scalar);
-    assert_eq!(select_aarch64_backend(true), Backend::Neon);
+    assert_eq!(select_backend(SimdBackend::Scalar), Backend::Scalar);
+    assert_eq!(select_backend(SimdBackend::Neon), Backend::Neon);
+    assert_eq!(select_backend(SimdBackend::Ssse3), Backend::Ssse3);
+    assert_eq!(select_backend(SimdBackend::Sse41), Backend::Sse41);
+    assert_eq!(select_backend(SimdBackend::Avx2), Backend::Avx2);
+    assert_eq!(select_backend(SimdBackend::Avx512), Backend::Scalar);
+    assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512);
     assert!(backend_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),
@@ -355,7 +342,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(scalar_mixed, [0xfb, 0xff, 0xff]);
 }
 
-#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx512_decoder_tail_boundaries_match_scalar_output() {
     if !backend_supported(Backend::Avx512) {
@@ -386,7 +373,7 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
-    if !std::is_x86_feature_detected!("avx2") {
+    if !backend_supported(Backend::Avx2) {
         return;
     }
 
@@ -463,7 +450,7 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     }
 }
 
-#[cfg(all(not(coverage), target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
     if !backend_supported(Backend::Avx2) {
@@ -586,12 +573,12 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
 
 #[cfg(target_arch = "x86_64")]
 #[test]
-fn large_avx2_streaming_encoder_matches_scalar() {
+fn avx2_streaming_encoder_matches_scalar() {
     if !backend_supported(Backend::Avx2) {
         return;
     }
 
-    for (input_len, urlsafe) in [(4 << 20) + 96, (4 << 20) + 192]
+    for (input_len, urlsafe) in [(64 << 10) + 96, (64 << 10) + 192]
         .into_iter()
         .flat_map(|length| [(length, false), (length, true)])
     {
@@ -605,21 +592,48 @@ fn large_avx2_streaming_encoder_matches_scalar() {
         let output_offset = guarded_output.as_mut_ptr().align_offset(16);
         let output = &mut guarded_output[output_offset..output_offset + expected.len()];
 
-        let consumed = encode_with_backend(&input, output, Backend::Avx2, urlsafe);
+        let consumed = unsafe {
+            if urlsafe {
+                x86::encode_avx2_with_store::<true>(
+                    &input,
+                    output.as_mut_ptr(),
+                    x86::Avx2StoreMode::Streaming,
+                )
+            } else {
+                x86::encode_avx2_with_store::<false>(
+                    &input,
+                    output.as_mut_ptr(),
+                    x86::Avx2StoreMode::Streaming,
+                )
+            }
+        };
         encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], urlsafe);
 
         assert_eq!(output, expected.as_bytes());
     }
 }
 
-#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx512_control_vectors_describe_the_base64_transforms() {
+    assert_eq!(
+        <x86::StandardDecoder as x86::Decoder>::decode_table(),
+        &STANDARD_DECODE
+    );
+    assert_eq!(
+        <x86::UrlSafeDecoder as x86::Decoder>::decode_table(),
+        &URLSAFE_DECODE
+    );
+    assert_eq!(
+        <x86::MixedDecoder as x86::Decoder>::decode_table(),
+        &MIXED_DECODE
+    );
+
     let input: Vec<u8> = (0..48)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
     let mut shuffled = [0_u8; 64];
-    for (destination, &source) in x86_avx512::ENCODE_SHUFFLE.iter().enumerate() {
+    for (destination, &source) in x86::avx512::ENCODE_SHUFFLE.iter().enumerate() {
         shuffled[destination] = input[source as usize];
     }
 
@@ -628,7 +642,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
         let lane_start = lane * 8;
         let word = u64::from_le_bytes(shuffled[lane_start..lane_start + 8].try_into().unwrap());
         for byte in 0..8 {
-            let shift = x86_avx512::MULTISHIFT_SHIFTS[byte];
+            let shift = x86::avx512::MULTISHIFT_SHIFTS[byte];
             indices[lane_start + byte] = ((word >> shift) & 0x3f) as u8;
         }
     }
@@ -659,7 +673,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
             ]);
         }
     }
-    let decoded: Vec<u8> = x86_avx512::DECODE_SHUFFLE[..48]
+    let decoded: Vec<u8> = x86::avx512::DECODE_SHUFFLE[..48]
         .iter()
         .map(|&index| packed[index as usize])
         .collect();
@@ -1039,10 +1053,7 @@ fn padded_decoder_stores_stay_within_four_bytes_of_slack() {
         }
     }
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    let has_ssse3 = std::is_x86_feature_detected!("ssse3");
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    let has_ssse3 = false;
+    let has_ssse3 = backend_supported(Backend::Ssse3);
     let input: Vec<u8> = (0..96).map(|value| value as u8).collect();
     for (encoded, alphabet) in [
         (b64encode(&input), DecodeAlphabet::Standard),

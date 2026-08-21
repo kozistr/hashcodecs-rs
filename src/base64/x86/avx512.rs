@@ -3,13 +3,14 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET, x86};
+use super::super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
+use super::{Avx2StoreMode, Decoder, Store, decode_avx2, encode_avx2_with_store};
 
 const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 
-pub(super) const ENCODE_SHUFFLE: [u8; 64] = encode_shuffle();
-pub(super) const DECODE_SHUFFLE: [u8; 64] = decode_shuffle();
-pub(super) const MULTISHIFT_SHIFTS: [u8; 8] = [10, 4, 22, 16, 42, 36, 54, 48];
+pub(in crate::base64) const ENCODE_SHUFFLE: [u8; 64] = encode_shuffle();
+pub(in crate::base64) const DECODE_SHUFFLE: [u8; 64] = decode_shuffle();
+pub(in crate::base64) const MULTISHIFT_SHIFTS: [u8; 8] = [10, 4, 22, 16, 42, 36, 54, 48];
 
 const fn encode_shuffle() -> [u8; 64] {
     let mut shuffle = [0; 64];
@@ -45,9 +46,12 @@ const fn decode_shuffle() -> [u8; 64] {
 }
 
 #[target_feature(enable = "avx512vbmi")]
-pub(super) unsafe fn encode_avx512<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
+    input: &[u8],
+    output: *mut u8,
+) -> usize {
     if input.len() < 48 {
-        return unsafe { x86::encode_avx2::<URLSAFE>(input, output) };
+        return unsafe { encode_avx2_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) };
     }
 
     let alphabet = if URLSAFE {
@@ -116,7 +120,14 @@ pub(super) unsafe fn encode_avx512<const URLSAFE: bool>(input: &[u8], output: *m
     }
 
     if input.len() - source >= 32 {
-        source + unsafe { x86::encode_avx2::<URLSAFE>(&input[source..], output.add(destination)) }
+        source
+            + unsafe {
+                encode_avx2_with_store::<URLSAFE>(
+                    &input[source..],
+                    output.add(destination),
+                    Avx2StoreMode::Cached,
+                )
+            }
     } else {
         source
     }
@@ -138,12 +149,12 @@ unsafe fn encode_48(
 }
 
 #[target_feature(enable = "avx512vbmi")]
-pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
+pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
     if input.len() < 64 {
-        return unsafe { x86::decode_avx2::<A, S>(input, output) };
+        return unsafe { decode_avx2::<A, S>(input, output) };
     }
 
     let table = A::decode_table();
@@ -199,7 +210,7 @@ pub(super) unsafe fn decode_avx512<A: x86::Decoder, S: x86::Store>(
 
     if input.len() - source >= 16 {
         let (tail_source, tail_destination) =
-            unsafe { x86::decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
+            unsafe { decode_avx2::<A, S>(&input[source..], output.add(destination)) }?;
         Ok((source + tail_source, destination + tail_destination))
     } else {
         Ok((source, destination))

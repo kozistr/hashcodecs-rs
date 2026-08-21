@@ -1,10 +1,16 @@
 use core::{fmt, mem::ManuallyDrop, mem::MaybeUninit};
 
 #[cfg(test)]
-use dispatch::{
-    Backend, backend_supported, decode_with_backend, decode_with_backend_ptr, encode_with_backend,
-    select_aarch64_backend, select_x86_backend,
-};
+use crate::backend::{Capabilities, SimdBackend};
+#[cfg(test)]
+use backend::{Backend, is_supported as backend_supported};
+#[cfg(test)]
+use dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
+
+#[cfg(test)]
+fn select_backend(backend: SimdBackend) -> Backend {
+    backend::select(Capabilities::for_backends(&[backend]))
+}
 const STANDARD_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const URLSAFE_ALPHABET: &[u8; 64] =
@@ -91,6 +97,7 @@ pub(crate) enum DecodeAlphabet {
     Mixed,
 }
 
+mod backend;
 mod decode;
 mod encode;
 
@@ -247,9 +254,6 @@ mod dispatch;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;
-
-#[cfg(all(not(coverage), any(target_arch = "x86", target_arch = "x86_64")))]
-mod x86_avx512;
 
 #[cfg(test)]
 mod tests;

@@ -2,20 +2,14 @@
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
-use std::sync::OnceLock;
 
-use super::{P32_1, SECRET, initial_accumulator, long_schedule};
+use crate::backend::{Capabilities, SimdBackend};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Backend {
-    Scalar,
-    Ssse3,
-    Sse41,
-    Avx2,
-    Avx512,
-}
+use super::{
+    P32_1, SECRET, init_secret_scalar, initial_accumulator, long_accumulate_scalar, long_schedule,
+};
 
-static BACKEND: OnceLock<Backend> = OnceLock::new();
+mod avx512;
 
 #[repr(align(64))]
 #[derive(Clone, Copy)]
@@ -25,24 +19,6 @@ struct AlignedAccumulator([u64; 8]);
 struct Avx2Accumulator {
     low: __m256i,
     high: __m256i,
-}
-
-#[inline]
-pub(super) fn backend() -> Backend {
-    *BACKEND.get_or_init(|| {
-        if std::is_x86_feature_detected!("avx512f") {
-            Backend::Avx512
-        } else if std::is_x86_feature_detected!("avx2") {
-            Backend::Avx2
-        } else if std::is_x86_feature_detected!("sse4.1") && std::is_x86_feature_detected!("ssse3")
-        {
-            Backend::Sse41
-        } else if std::is_x86_feature_detected!("ssse3") {
-            Backend::Ssse3
-        } else {
-            Backend::Scalar
-        }
-    })
 }
 
 #[target_feature(enable = "avx2")]
@@ -330,83 +306,53 @@ pub(super) unsafe fn long_accumulate_sse41(data: &[u8], secret: &[u8]) -> [u64; 
     unsafe { long_accumulate_ssse3(data, secret) }
 }
 
-#[target_feature(enable = "avx512f")]
-/// # Safety
-/// The caller must have detected AVX-512F support. `data` must be in XXH3 long
-/// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate_avx512(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    #[inline]
-    #[target_feature(enable = "avx512f")]
-    unsafe fn accumulate(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {
-        let input = unsafe { _mm512_loadu_si512(data.cast()) };
-        let key = unsafe { _mm512_loadu_si512(secret.cast()) };
-        let keyed = _mm512_xor_si512(input, key);
-        let product = _mm512_mul_epu32(keyed, _mm512_srli_epi64::<32>(keyed));
-        let swapped = _mm512_shuffle_epi32::<0x4e>(input);
-        let old = unsafe { _mm512_load_si512(acc.0.as_ptr().cast()) };
-        unsafe {
-            _mm512_storeu_si512(
-                acc.0.as_mut_ptr().cast(),
-                _mm512_add_epi64(_mm512_add_epi64(old, swapped), product),
-            )
-        };
-    }
-
-    #[inline]
-    #[target_feature(enable = "avx512f")]
-    unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
-        let value = unsafe { _mm512_load_si512(acc.0.as_ptr().cast()) };
-        let key = unsafe { _mm512_loadu_si512(secret.cast()) };
-        let mixed = _mm512_xor_si512(_mm512_xor_si512(value, _mm512_srli_epi64::<47>(value)), key);
-        let prime = _mm512_set1_epi32(P32_1 as i32);
-        let low = _mm512_mul_epu32(mixed, prime);
-        let high = _mm512_slli_epi64::<32>(_mm512_mul_epu32(_mm512_srli_epi64::<32>(mixed), prime));
-        unsafe { _mm512_store_si512(acc.0.as_mut_ptr().cast(), _mm512_add_epi64(low, high)) };
-    }
-
-    let schedule = long_schedule(data.len());
-    let mut acc = AlignedAccumulator(initial_accumulator());
-    for block in 0..schedule.full_blocks {
-        let offset = block * 1024;
-        for stripe in 0..16 {
-            unsafe {
-                accumulate(
-                    &mut acc,
-                    data.as_ptr().add(offset + stripe * 64),
-                    secret.as_ptr().add(stripe * 8),
-                )
-            };
-        }
-        unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
-    }
-    for stripe in 0..schedule.tail_stripes {
-        unsafe {
-            accumulate(
-                &mut acc,
-                data.as_ptr().add(schedule.tail_offset + stripe * 64),
-                secret.as_ptr().add(stripe * 8),
-            )
-        };
-    }
-    unsafe {
-        accumulate(
-            &mut acc,
-            data.as_ptr().add(schedule.last_offset),
-            secret.as_ptr().add(121),
-        )
-    };
-    acc.0
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Backend {
+    Scalar,
+    Ssse3,
+    Sse41,
+    Avx2,
 }
 
-#[cfg(test)]
-pub(super) fn backend_supported(backend: Backend) -> bool {
-    match backend {
-        Backend::Scalar => true,
-        Backend::Ssse3 => std::is_x86_feature_detected!("ssse3"),
-        Backend::Sse41 => {
-            std::is_x86_feature_detected!("sse4.1") && std::is_x86_feature_detected!("ssse3")
+#[inline]
+pub(super) fn select(capabilities: Capabilities) -> Backend {
+    match capabilities.best(&[SimdBackend::Avx2, SimdBackend::Sse41, SimdBackend::Ssse3]) {
+        SimdBackend::Avx2 => Backend::Avx2,
+        SimdBackend::Sse41 => Backend::Sse41,
+        SimdBackend::Ssse3 => Backend::Ssse3,
+        SimdBackend::Scalar | SimdBackend::Neon | SimdBackend::Avx512 | SimdBackend::Avx512Vbmi => {
+            Backend::Scalar
         }
-        Backend::Avx2 => std::is_x86_feature_detected!("avx2"),
-        Backend::Avx512 => std::is_x86_feature_detected!("avx512f"),
+    }
+}
+
+#[inline]
+pub(super) fn init_secret(seed: u64, capabilities: Capabilities) -> [u8; 192] {
+    if capabilities.supports(SimdBackend::Avx2) {
+        unsafe { init_secret_avx2(seed) }
+    } else {
+        init_secret_scalar(seed)
+    }
+}
+
+#[inline]
+pub(super) fn long_accumulate(data: &[u8], secret: &[u8], capabilities: Capabilities) -> [u64; 8] {
+    avx512::try_long_accumulate(capabilities, data, secret).unwrap_or_else(|| unsafe {
+        long_accumulate_with_backend(data, secret, select(capabilities))
+    })
+}
+
+/// # Safety
+/// The selected backend must be supported by the current CPU.
+pub(super) unsafe fn long_accumulate_with_backend(
+    data: &[u8],
+    secret: &[u8],
+    backend: Backend,
+) -> [u64; 8] {
+    match backend {
+        Backend::Scalar => long_accumulate_scalar(data, secret),
+        Backend::Ssse3 => unsafe { long_accumulate_ssse3(data, secret) },
+        Backend::Sse41 => unsafe { long_accumulate_sse41(data, secret) },
+        Backend::Avx2 => unsafe { long_accumulate_avx2(data, secret) },
     }
 }

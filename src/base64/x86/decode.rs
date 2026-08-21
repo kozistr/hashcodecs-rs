@@ -5,9 +5,7 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::super::Base64Error;
-#[cfg(not(coverage))]
-use super::super::{MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
+use super::super::{Base64Error, MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
 
 pub(crate) struct StandardDecoder;
 pub(crate) struct UrlSafeDecoder;
@@ -16,7 +14,6 @@ pub(crate) struct ExactStore;
 pub(crate) struct PaddedStore;
 
 pub(crate) trait Decoder {
-    #[cfg(not(coverage))]
     fn decode_table() -> &'static [u8; 256];
     unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i);
     unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i);
@@ -52,7 +49,6 @@ impl Store for PaddedStore {
 }
 
 impl Decoder for StandardDecoder {
-    #[cfg(not(coverage))]
     #[inline(always)]
     fn decode_table() -> &'static [u8; 256] {
         &STANDARD_DECODE
@@ -70,7 +66,6 @@ impl Decoder for StandardDecoder {
 }
 
 impl Decoder for UrlSafeDecoder {
-    #[cfg(not(coverage))]
     #[inline(always)]
     fn decode_table() -> &'static [u8; 256] {
         &URLSAFE_DECODE
@@ -88,7 +83,6 @@ impl Decoder for UrlSafeDecoder {
 }
 
 impl Decoder for MixedDecoder {
-    #[cfg(not(coverage))]
     #[inline(always)]
     fn decode_table() -> &'static [u8; 256] {
         &MIXED_DECODE

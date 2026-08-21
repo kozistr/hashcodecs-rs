@@ -292,7 +292,7 @@ fn mix_x86_128_transposed_group(hashes: &mut [u32; 4], mixed: &[u32]) {
 
 #[inline(always)]
 fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
-    for block in blocks.chunks_exact(4) {
+    for block in blocks.as_chunks::<4>().0 {
         mix_x86_128_hashes(hashes, block[0], block[1], block[2], block[3]);
     }
 }
@@ -303,7 +303,6 @@ const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
 macro_rules! define_x64_128_avx2_kernel {
     ($name:ident, $features:literal) => {
         #[target_feature(enable = $features)]
-        #[cfg_attr(coverage, allow(dead_code))]
         pub(super) unsafe fn $name(key: &[u8], hashes: [u64; 2]) -> [u64; 2] {
             debug_assert!(key.len().is_multiple_of(16));
             let c1 = _mm256_setr_epi64x(
@@ -450,7 +449,7 @@ fn mullo_epi64_sse41(left: __m128i, right: __m128i) -> __m128i {
 
 #[inline(always)]
 fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
-    for block in blocks.chunks_exact(2) {
+    for block in blocks.as_chunks::<2>().0 {
         mix_x64_128_hashes(hash1, hash2, block[0], block[1]);
     }
 }
@@ -469,4 +468,71 @@ fn mix_x64_128_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64
         .wrapping_add(*hash1)
         .wrapping_mul(5)
         .wrapping_add(0x3849_5ab5);
+}
+#[inline(always)]
+/// # Safety
+/// The selected backend must be supported by the current CPU.
+pub(super) unsafe fn try_mix_x86_32_body(
+    key: &[u8],
+    hash: &mut u32,
+    backend: super::dispatch::Backend,
+) -> bool {
+    match backend {
+        super::dispatch::Backend::Avx2 => {
+            unsafe { mix_x86_32_body_avx2(key, hash) };
+            true
+        }
+        super::dispatch::Backend::Sse41 => {
+            unsafe { mix_x86_32_body_sse41(key, hash) };
+            true
+        }
+        super::dispatch::Backend::Scalar => false,
+    }
+}
+#[inline(always)]
+/// # Safety
+/// The selected backend and BMI2 flag must describe features available on the
+/// current CPU.
+pub(super) unsafe fn try_mix_x64_128_body(
+    key: &[u8],
+    hashes: &mut [u64; 2],
+    backend: super::dispatch::Backend,
+    bmi2: bool,
+) -> bool {
+    match backend {
+        super::dispatch::Backend::Avx2 => {
+            *hashes = if bmi2 {
+                unsafe { mix_x64_128_body_avx2_bmi2(key, *hashes) }
+            } else {
+                unsafe { mix_x64_128_body_avx2(key, *hashes) }
+            };
+            true
+        }
+        super::dispatch::Backend::Sse41 => {
+            *hashes = unsafe { mix_x64_128_body_sse41(key, *hashes) };
+            true
+        }
+        super::dispatch::Backend::Scalar => false,
+    }
+}
+
+#[inline(always)]
+/// # Safety
+/// The selected backend must be supported by the current CPU.
+pub(super) unsafe fn try_mix_x86_128_body(
+    key: &[u8],
+    hashes: &mut [u32; 4],
+    backend: super::dispatch::Backend,
+) -> bool {
+    match backend {
+        super::dispatch::Backend::Avx2 => {
+            unsafe { mix_x86_128_body_avx2(key, hashes) };
+            true
+        }
+        super::dispatch::Backend::Sse41 => {
+            unsafe { mix_x86_128_body_sse41(key, hashes) };
+            true
+        }
+        super::dispatch::Backend::Scalar => false,
+    }
 }

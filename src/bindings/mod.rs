@@ -5,16 +5,8 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
-use self::base64::{
-    b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, b64encode, b64encode_batch,
-    b64encode_batch_into, b64encode_into, standard_b64decode, standard_b64decode_into,
-    standard_b64encode, standard_b64encode_into, urlsafe_b64decode_315, urlsafe_b64decode_into_315,
-    urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315, urlsafe_b64encode,
-    urlsafe_b64encode_into,
-};
 use self::buffer::bytes_like;
 use self::murmur3::{PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Hasher128};
-use self::xxhash::{xxh3_64_batch, xxh3_128_batch};
 
 mod base64;
 mod buffer;
@@ -89,6 +81,86 @@ pub(super) unsafe fn parse_function_arguments(
         return None;
     }
     Some(FunctionArguments { input, seed })
+}
+
+pub(super) unsafe fn parse_raw_arguments<const N: usize>(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    function_name: *const c_char,
+    parameter_names: [*const c_char; N],
+    max_positional: usize,
+    required: usize,
+) -> Option<[*mut ffi::PyObject; N]> {
+    let nargs = nargs as usize;
+    if nargs > max_positional {
+        unsafe {
+            ffi::PyErr_Format(
+                ffi::PyExc_TypeError,
+                c"%s() takes at most %zu positional arguments (%zu given)".as_ptr(),
+                function_name,
+                max_positional,
+                nargs,
+            );
+        }
+        return None;
+    }
+
+    let mut values = [ptr::null_mut(); N];
+    for (index, value) in values.iter_mut().take(nargs).enumerate() {
+        *value = unsafe { *args.add(index) };
+    }
+
+    let keyword_count = if keywords.is_null() {
+        0
+    } else {
+        unsafe { ffi::PyTuple_Size(keywords) as usize }
+    };
+    for keyword_index in 0..keyword_count {
+        let keyword = unsafe { ffi::PyTuple_GetItem(keywords, keyword_index as isize) };
+        let value = unsafe { *args.add(nargs + keyword_index) };
+        let parameter_index = parameter_names.iter().position(|parameter| {
+            (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, *parameter) }) == 0
+        });
+        let Some(parameter_index) = parameter_index else {
+            unsafe {
+                ffi::PyErr_Format(
+                    ffi::PyExc_TypeError,
+                    c"%s() got an unexpected keyword argument '%U'".as_ptr(),
+                    function_name,
+                    keyword,
+                );
+            }
+            return None;
+        };
+        if !values[parameter_index].is_null() {
+            unsafe {
+                ffi::PyErr_Format(
+                    ffi::PyExc_TypeError,
+                    c"%s() got multiple values for argument '%s'".as_ptr(),
+                    function_name,
+                    parameter_names[parameter_index],
+                );
+            }
+            return None;
+        }
+        values[parameter_index] = value;
+    }
+
+    for index in 0..required {
+        if values[index].is_null() {
+            unsafe {
+                ffi::PyErr_Format(
+                    ffi::PyExc_TypeError,
+                    c"%s() missing required argument '%s'".as_ptr(),
+                    function_name,
+                    parameter_names[index],
+                );
+            }
+            return None;
+        }
+    }
+    Some(values)
 }
 
 fn type_error(name: *const c_char, detail: *const c_char) {
@@ -173,33 +245,11 @@ pub(super) unsafe fn return_function_result(
 
 #[pymodule(name = "_hashcodecs")]
 fn python_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(b64encode, module)?)?;
-    module.add_function(wrap_pyfunction!(b64encode_batch, module)?)?;
-    module.add_function(wrap_pyfunction!(b64encode_batch_into, module)?)?;
-    module.add_function(wrap_pyfunction!(b64encode_into, module)?)?;
-    module.add_function(wrap_pyfunction!(b64decode, module)?)?;
-    module.add_function(wrap_pyfunction!(b64decode_batch, module)?)?;
-    module.add_function(wrap_pyfunction!(b64decode_batch_into, module)?)?;
-    module.add_function(wrap_pyfunction!(b64decode_into, module)?)?;
-    module.add_function(wrap_pyfunction!(standard_b64encode, module)?)?;
-    module.add_function(wrap_pyfunction!(standard_b64encode_into, module)?)?;
-    module.add_function(wrap_pyfunction!(standard_b64decode, module)?)?;
-    module.add_function(wrap_pyfunction!(standard_b64decode_into, module)?)?;
-    module.add_function(wrap_pyfunction!(urlsafe_b64encode, module)?)?;
-    module.add_function(wrap_pyfunction!(urlsafe_b64encode_into, module)?)?;
-    if base64::python_at_least(module.py(), (3, 15)) {
-        module.add_function(wrap_pyfunction!(urlsafe_b64decode_315, module)?)?;
-        module.add_function(wrap_pyfunction!(urlsafe_b64decode_into_315, module)?)?;
-    } else {
-        module.add_function(wrap_pyfunction!(urlsafe_b64decode_pre_315, module)?)?;
-        module.add_function(wrap_pyfunction!(urlsafe_b64decode_into_pre_315, module)?)?;
-    }
+    unsafe { base64::add_to_module(module)? };
     unsafe { murmur3::add_to_module(module)? };
     module.add_class::<PyMurmur3X86Hasher32>()?;
     module.add_class::<PyMurmur3X86Hasher128>()?;
     module.add_class::<PyMurmur3X64Hasher128>()?;
     unsafe { xxhash::add_to_module(module)? };
-    module.add_function(wrap_pyfunction!(xxh3_64_batch, module)?)?;
-    module.add_function(wrap_pyfunction!(xxh3_128_batch, module)?)?;
     Ok(())
 }

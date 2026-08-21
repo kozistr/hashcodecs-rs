@@ -64,7 +64,7 @@ def benchmark_into(
     print(f'{name:6} item={item_size:7} B  batch={batch_size:4}  {"  ".join(measurements)}')
 
 
-def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> None:
+def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...], hashcodecs_only: bool) -> None:
     for item_size in item_sizes:
         payloads = [data(item_size) for _ in range(max(batch_sizes))]
         encoded = [stdlib_base64.b64encode(payload) for payload in payloads]
@@ -76,7 +76,9 @@ def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> Non
                 item_size,
                 batch_size,
                 lambda batch=batch: hashcodecs_base64.b64encode_batch(batch),
-                (
+                ()
+                if hashcodecs_only
+                else (
                     ('hash-loop', lambda batch=batch: [hashcodecs_base64.b64encode(item) for item in batch]),
                     ('pybase64', lambda batch=batch: [pybase64.b64encode(item) for item in batch]),
                     ('stdlib', lambda batch=batch: [stdlib_base64.b64encode(item) for item in batch]),
@@ -90,7 +92,9 @@ def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> Non
                 lambda batch=batch, outputs=encoded_outputs: hashcodecs_base64.b64encode_batch_into(batch, outputs),
                 encoded_outputs,
                 encoded_batch,
-                (
+                ()
+                if hashcodecs_only
+                else (
                     (
                         'into-loop',
                         lambda batch=batch, outputs=encoded_outputs: [
@@ -106,7 +110,9 @@ def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> Non
                 item_size,
                 batch_size,
                 lambda encoded_batch=encoded_batch: hashcodecs_base64.b64decode_batch(encoded_batch, validate=True),
-                (
+                ()
+                if hashcodecs_only
+                else (
                     (
                         'hash-loop',
                         lambda encoded_batch=encoded_batch: [
@@ -137,7 +143,9 @@ def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> Non
                 ),
                 decoded_outputs,
                 batch,
-                (
+                ()
+                if hashcodecs_only
+                else (
                     (
                         'into-loop',
                         lambda inputs=encoded_batch, outputs=decoded_outputs: [
@@ -156,15 +164,20 @@ def run_matrix(item_sizes: tuple[int, ...], batch_sizes: tuple[int, ...]) -> Non
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--large', action='store_true', help='benchmark 1 MiB items with batches up to 32')
+    parser.add_argument(
+        '--hashcodecs-only',
+        action='store_true',
+        help='time hashcodecs without timing reference implementations',
+    )
     arguments = parser.parse_args()
 
     pin_to_one_cpu()
     gc.disable()
     try:
         if arguments.large:
-            run_matrix(LARGE_ITEM_SIZES, LARGE_BATCH_SIZES)
+            run_matrix(LARGE_ITEM_SIZES, LARGE_BATCH_SIZES, arguments.hashcodecs_only)
         else:
-            run_matrix(ITEM_SIZES, BATCH_SIZES)
+            run_matrix(ITEM_SIZES, BATCH_SIZES, arguments.hashcodecs_only)
     finally:
         gc.enable()
 

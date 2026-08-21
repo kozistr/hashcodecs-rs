@@ -4,8 +4,7 @@ use pyo3::types::{PyInt, PyList};
 use super::{batch_detach_safe, borrow_batch, parse_batch};
 use crate::{xxh3_64_batch as xxh3_64_batch_hash, xxh3_128_batch as xxh3_128_batch_hash};
 
-#[pyfunction(signature = (items, seed=0))]
-pub fn xxh3_64_batch<'py>(
+pub(super) fn xxh3_64_batch<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     seed: u64,
@@ -22,8 +21,7 @@ pub fn xxh3_64_batch<'py>(
     PyList::new(py, hashes)
 }
 
-#[pyfunction(signature = (items, seed=0))]
-pub fn xxh3_128_batch<'py>(
+pub(super) fn xxh3_128_batch<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     seed: u64,

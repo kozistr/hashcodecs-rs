@@ -103,6 +103,9 @@ uv run --no-project --with . python benchmarks/python_murmur3.py --incremental
 uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
 
+For regression checks that do not need fresh competitor measurements, pass
+`--hashcodecs-only` to any Python benchmark command.
+
 For the same-ISA Windows comparison reported below, rebuild the C baseline with
 `$env:CFLAGS='/O2 /arch:AVX2'; cargo clean -p xxhash-c-sys; cargo bench --bench xxhash`.
 

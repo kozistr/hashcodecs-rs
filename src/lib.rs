@@ -25,4 +25,4 @@ pub use murmur3::{
 pub use xxhash::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
 
 #[cfg(feature = "python")]
-mod python;
+mod bindings;

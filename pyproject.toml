@@ -40,6 +40,7 @@ packages = ["hashcodecs"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "/CITATION.cff",
     "/BENCHMARK.md",
     "/Cargo.lock",
     "/Cargo.toml",

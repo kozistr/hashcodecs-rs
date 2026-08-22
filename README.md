@@ -1,31 +1,43 @@
 # hashcodecs
 
 [![CI](https://img.shields.io/github/actions/workflow/status/kozistr/hashcodecs-rs/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/kozistr/hashcodecs-rs/actions/workflows/ci.yml)
-[![Documentation](https://readthedocs.org/projects/hashcodecs-rs/badge/?version=latest&style=for-the-badge)](https://hashcodecs-rs.readthedocs.io/en/latest/)
-[![Codecov](https://codecov.io/gh/kozistr/hashcodecs-rs/graph/badge.svg)](https://app.codecov.io/gh/kozistr/hashcodecs-rs)
+[![Docs](https://img.shields.io/readthedocs/hashcodecs-rs?style=for-the-badge&logo=readthedocs)](https://hashcodecs-rs.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/hashcodecs?style=for-the-badge&logo=pypi)](https://pypi.org/project/hashcodecs/)
 [![Python](https://img.shields.io/pypi/pyversions/hashcodecs?style=for-the-badge&logo=python)](https://pypi.org/project/hashcodecs/)
+[![Codecov](https://img.shields.io/codecov/c/github/kozistr/hashcodecs-rs?style=for-the-badge&logo=codecov)](https://codecov.io/gh/kozistr/hashcodecs-rs)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-brightgreen?style=for-the-badge)](https://github.com/kozistr/hashcodecs-rs#license)
-[![Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=downloads)](https://pypi.org/project/hashcodecs/)
+![Total Downloads](https://img.shields.io/pepy/dt/hashcodecs?style=for-the-badge&label=Total%20Downloads)
+![Monthly Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=Monthly%20downloads)
 
-Fast, reference-compatible Base64, MurmurHash3, and XXH3 for Python and Rust. `hashcodecs` uses runtime CPU
-dispatch, portable scalar fallbacks, native batch operations, and reusable output buffers.
+SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust.
+
+Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs` accepts `bytes`, `bytearray`, and
+`memoryview`, selects the best available SIMD backend, and exposes batch and reusable-buffer APIs.
 
 ## Features
-
 - Base64 encode and decode with standard, URL-safe, padded, unpadded, wrapped, and canonical modes.
 - MurmurHash3 x86-32, x86-128, and x64-128 with one-shot and incremental APIs.
 - Bit-for-bit compatible XXH3-64 and XXH3-128 with one-shot and native batch APIs.
 - Caller-managed `*_into` outputs for allocation-sensitive workloads.
 - Runtime dispatch across AVX-512, AVX2, SSE4.1, SSSE3, NEON, and scalar implementations where applicable.
 - Direct CPython buffer handling for `bytes`, `bytearray`, and `memoryview` inputs.
-- Python 3.10 through 3.15 support on Linux, macOS, and Windows.
+- Install wheels for CPython 3.10 through 3.15 and free-threaded CPython
+  3.14t and 3.15t on Linux, macOS, and Windows.
+
+## Citation
+
+If you use `hashcodecs`, cite [CITATION.cff](CITATION.cff).
 
 ## Installation
 
 ```sh
 pip3 install hashcodecs
 ```
+
+## Performance snapshot
+
+On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 78.83 GiB/s. The operator pinned one logical
+CPU and measured hashcodecs alone. At 256 B items in batches of 64, the Base64 batch API reaches 8.56 GiB/s for encode and 7.60 GiB/s for decode. The per-item loop reaches 4.41 and 3.39 GiB/s. Read the [benchmark details](BENCHMARK.md) and [raw results](docs/benchmarks/results.csv).
 
 ## Python
 
@@ -108,10 +120,8 @@ CPython boundary, and safety invariants.
 
 ## Benchmarks
 
-Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
-
-Conditions: clean builds, one pinned logical CPU, single-threaded execution, 50 Rust samples, and 15 Python
-samples. Returned-output allocation is included except in the reusable-buffer table. Higher is better.
+Run the suite on Windows 10 x64 with an Intel Core Ultra 7 265K. Pin one logical CPU and run each case in one thread.
+Collect 50 Rust samples and 15 Python samples. Higher throughput wins.
 
 ### Base64: Rust
 
@@ -123,14 +133,14 @@ samples. Returned-output allocation is included except in the reusable-buffer ta
 
 ### XXH3: Rust
 
-`upstream C` is xxHash 0.8.3 built through `xxhash-c-sys` with AVX2 enabled, matching the backend selected by
-`hashcodecs` on the benchmark host. Batch results hash 32 equal-size inputs and include result-vector allocation.
+Link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2. Batch cases pass 32
+equal-size inputs and include result-vector allocation.
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
 
 ### Base64: Python
 
-Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly into Rust without an input copy.
+Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`.
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 
@@ -140,12 +150,13 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 ### XXH3: Python
 
-The batch comparison uses one native `hashcodecs` call versus a loop over the upstream `xxhash` extension.
+Pass 32 equal-size inputs to each batch case. Compare one native hashcodecs call with a loop over the upstream
+`xxhash` extension.
 
 [![Python XXH3 throughput](docs/benchmarks/xxh3-python.svg)](docs/benchmarks/xxh3-python.svg)
 
-Reusable-buffer and mutable-input charts, exact conditions, and interpretation notes are available in
-[BENCHMARK.md](BENCHMARK.md). Raw chart values are available as [CSV](docs/benchmarks/results.csv).
+Read the focused cases, commands, and values in [BENCHMARK.md](BENCHMARK.md). Read raw chart values in
+[docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
 ### Reproduce
 

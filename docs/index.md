@@ -9,8 +9,9 @@ buffer-oriented APIs while providing native batch operations and reusable output
 python -m pip install hashcodecs
 ```
 
-The package supports CPython 3.10 through 3.15 on Linux, macOS, and Windows. The wheel selects the fastest
-available implementation at runtime and falls back to portable scalar code when a SIMD feature is unavailable.
+Install wheels for CPython 3.10 through 3.15 and free-threaded CPython 3.14t and
+3.15t on Linux, macOS, and Windows. At runtime, the extension uses the fastest available
+implementation and portable scalar code when the CPU lacks a SIMD feature.
 
 ## Quick Start
 

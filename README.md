@@ -43,7 +43,7 @@ assert_eq!(hashcodecs::xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
 
 ```python
 import hashcodecs.base64 as base64
-from hashcodecs import murmur3_32, murmur3_x64_128, xxh3_64, xxh3_128_batch
+from hashcodecs import murmur3_32, murmur3_x64_128, xxh3_64, xxh3_64_batch_into, xxh3_128_batch
 
 assert base64.b64encode(b'hello') == b'aGVsbG8='
 assert base64.b64decode(b'aGVsbG8=') == b'hello'
@@ -57,6 +57,8 @@ assert xxh3_128_batch([b'hello', b'world']) == [
     0xB5E9C1AD071B3E7FC779CFAA5E523818,
     0xFA0D38A9B38280D0891E4985BDB2583E,
 ]
+packed_hashes = bytearray(16)
+assert xxh3_64_batch_into([b'hello', b'world'], packed_hashes) == 16
 
 payload = b'hello'
 encoded = bytearray(4 * ((len(payload) + 2) // 3))
@@ -139,8 +141,7 @@ The batch comparison uses one native `hashcodecs` call versus a loop over the up
 
 [![Python XXH3 throughput](docs/benchmarks/xxh3-python.svg)](docs/benchmarks/xxh3-python.svg)
 
-Reusable-buffer and mutable-input charts are available in [BENCHMARK.md](BENCHMARK.md). Exact chart values are
-available as [CSV](docs/benchmarks/results.csv).
+Reusable-buffer and mutable-input charts are available in [BENCHMARK.md](BENCHMARK.md), and performance policies and experiment decisions are tracked in [docs/PERFORMANCE.md](docs/PERFORMANCE.md). Exact chart values are available as [CSV](docs/benchmarks/results.csv).
 
 ## SIMD References
 

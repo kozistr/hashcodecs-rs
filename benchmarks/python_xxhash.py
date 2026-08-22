@@ -6,9 +6,9 @@ import argparse
 import gc
 from collections.abc import Callable
 
-import hashcodecs.xxhash as hashcodecs_xxhash
 from _support import SIZES, data, pin_to_one_cpu, throughput
 
+import hashcodecs.xxhash as hashcodecs_xxhash
 import xxhash
 
 
@@ -23,15 +23,20 @@ def report(
         assert ours() == upstream()
     ours_rate = throughput(ours, input_size)
     if hashcodecs_only:
-        print(f'{name:14} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
+        print(f'{name:20} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
         return
     upstream_rate = throughput(upstream, input_size)
     print(
-        f'{name:14} {input_size // 1024:>6} KiB  '
+        f'{name:20} {input_size // 1024:>6} KiB  '
         f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  '
         f'xxhash={upstream_rate / 1024**3:6.2f} GiB/s  '
         f'({ours_rate / upstream_rate:4.2f}x)'
     )
+
+
+def report_hashcodecs(name: str, input_size: int, operation: Callable[[], object]) -> None:
+    rate = throughput(operation, input_size)
+    print(f'{name:20} {input_size // 1024:>6} KiB  hashcodecs={rate / 1024**3:6.2f} GiB/s')
 
 
 def main() -> None:
@@ -66,6 +71,11 @@ def main() -> None:
         for size in (64, 1024, 4 * 1024, 1024 * 1024):
             items = [data(size) for _ in range(32)]
             total = size * len(items)
+
+            output64 = bytearray(8 * len(items))
+            expected64 = hashcodecs_xxhash.xxh3_64_batch(items, 42)
+            assert hashcodecs_xxhash.xxh3_64_batch_into(items, output64, 42) == len(output64)
+            assert output64 == b''.join(value.to_bytes(8, 'little') for value in expected64)
             report(
                 'XXH3-64 batch',
                 total,
@@ -73,12 +83,27 @@ def main() -> None:
                 lambda items=items: [xxhash.xxh3_64_intdigest(item, 42) for item in items],
                 arguments.hashcodecs_only,
             )
+            report_hashcodecs(
+                'XXH3-64 batch_into',
+                total,
+                lambda items=items, output=output64: hashcodecs_xxhash.xxh3_64_batch_into(items, output, 42),
+            )
+
+            output128 = bytearray(16 * len(items))
+            expected128 = hashcodecs_xxhash.xxh3_128_batch(items, 42)
+            assert hashcodecs_xxhash.xxh3_128_batch_into(items, output128, 42) == len(output128)
+            assert output128 == b''.join(value.to_bytes(16, 'little') for value in expected128)
             report(
                 'XXH3-128 batch',
                 total,
                 lambda items=items: hashcodecs_xxhash.xxh3_128_batch(items, 42),
                 lambda items=items: [xxhash.xxh3_128_intdigest(item, 42) for item in items],
                 arguments.hashcodecs_only,
+            )
+            report_hashcodecs(
+                'XXH3-128 batch_into',
+                total,
+                lambda items=items, output=output128: hashcodecs_xxhash.xxh3_128_batch_into(items, output, 42),
             )
     finally:
         gc.enable()

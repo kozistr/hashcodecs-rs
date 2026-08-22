@@ -1,12 +1,13 @@
+use pyo3::exceptions::{PyMemoryError, PyValueError};
 #[cfg(not(Py_GIL_DISABLED))]
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyInt, PyList};
+use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use super::{batch_detach_safe, borrow_batch, parse_batch};
-use crate::bindings::list_items;
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::{DETACH_THRESHOLD, bytes_data};
+use crate::bindings::{bytearray_data, bytearray_size, list_items};
 use crate::{xxh3_64_batch as xxh3_64_batch_hash, xxh3_128_batch as xxh3_128_batch_hash};
 
 #[cfg(not(Py_GIL_DISABLED))]
@@ -33,25 +34,86 @@ fn exact_small_bytes<'a>(items: &'a Bound<'_, PyList>) -> Option<Vec<&'a [u8]>> 
     }
 }
 
-pub(super) fn xxh3_64_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    seed: u64,
-) -> PyResult<Bound<'py, PyList>> {
+fn xxh3_64_hashes(py: Python<'_>, items: &Bound<'_, PyList>, seed: u64) -> PyResult<Vec<u64>> {
     #[cfg(not(Py_GIL_DISABLED))]
     if let Some(inputs) = exact_small_bytes(items) {
-        return PyList::new(py, xxh3_64_batch_hash(&inputs, seed));
+        return Ok(xxh3_64_batch_hash(&inputs, seed));
     }
     let items = list_items(items);
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
     let inputs = borrow_batch(&parsed);
-    let hashes = if detach {
+    Ok(if detach {
         py.detach(|| xxh3_64_batch_hash(&inputs, seed))
     } else {
         xxh3_64_batch_hash(&inputs, seed)
-    };
-    PyList::new(py, hashes)
+    })
+}
+
+fn xxh3_128_hashes(
+    py: Python<'_>,
+    items: &Bound<'_, PyList>,
+    seed: u64,
+) -> PyResult<Vec<[u64; 2]>> {
+    #[cfg(not(Py_GIL_DISABLED))]
+    if let Some(inputs) = exact_small_bytes(items) {
+        return Ok(xxh3_128_batch_hash(&inputs, seed));
+    }
+    let items = list_items(items);
+    let parsed = parse_batch(py, &items)?;
+    let detach = batch_detach_safe(&parsed);
+    let inputs = borrow_batch(&parsed);
+    Ok(if detach {
+        py.detach(|| xxh3_128_batch_hash(&inputs, seed))
+    } else {
+        xxh3_128_batch_hash(&inputs, seed)
+    })
+}
+
+fn packed_output_len(
+    output: &Bound<'_, PyByteArray>,
+    items: usize,
+    digest_size: usize,
+) -> PyResult<usize> {
+    let required = items
+        .checked_mul(digest_size)
+        .ok_or_else(|| PyMemoryError::new_err("XXH3 batch output is too large"))?;
+    let provided = unsafe { bytearray_size(output.as_ptr()) };
+    if provided < required {
+        return Err(PyValueError::new_err(format!(
+            "XXH3 batch output requires {required} bytes but the destination has {provided}"
+        )));
+    }
+    Ok(required)
+}
+
+fn write_packed_64(output: &Bound<'_, PyByteArray>, hashes: &[u64]) {
+    let output = unsafe { bytearray_data(output.as_ptr()) };
+    for (index, hash) in hashes.iter().enumerate() {
+        let bytes = hash.to_le_bytes();
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output.add(index * 8), 8) };
+    }
+}
+
+fn write_packed_128(output: &Bound<'_, PyByteArray>, hashes: &[[u64; 2]]) {
+    let output = unsafe { bytearray_data(output.as_ptr()) };
+    for (index, [low, high]) in hashes.iter().enumerate() {
+        let offset = index * 16;
+        let low = low.to_le_bytes();
+        let high = high.to_le_bytes();
+        unsafe {
+            std::ptr::copy_nonoverlapping(low.as_ptr(), output.add(offset), 8);
+            std::ptr::copy_nonoverlapping(high.as_ptr(), output.add(offset + 8), 8);
+        }
+    }
+}
+
+pub(super) fn xxh3_64_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    seed: u64,
+) -> PyResult<Bound<'py, PyList>> {
+    PyList::new(py, xxh3_64_hashes(py, items, seed)?)
 }
 
 pub(super) fn xxh3_128_batch<'py>(
@@ -59,24 +121,32 @@ pub(super) fn xxh3_128_batch<'py>(
     items: &Bound<'py, PyList>,
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_bytes(items) {
-        let hashes = xxh3_128_batch_hash(&inputs, seed)
-            .into_iter()
-            .map(|[low, high]| PyInt::new(py, (u128::from(high) << 64) | u128::from(low)));
-        return PyList::new(py, hashes);
-    }
-    let items = list_items(items);
-    let parsed = parse_batch(py, &items)?;
-    let detach = batch_detach_safe(&parsed);
-    let inputs = borrow_batch(&parsed);
-    let hashes = if detach {
-        py.detach(|| xxh3_128_batch_hash(&inputs, seed))
-    } else {
-        xxh3_128_batch_hash(&inputs, seed)
-    };
-    let hashes = hashes
+    let hashes = xxh3_128_hashes(py, items, seed)?
         .into_iter()
         .map(|[low, high]| PyInt::new(py, (u128::from(high) << 64) | u128::from(low)));
     PyList::new(py, hashes)
+}
+
+pub(super) fn xxh3_64_batch_into(
+    py: Python<'_>,
+    items: &Bound<'_, PyList>,
+    output: &Bound<'_, PyByteArray>,
+    seed: u64,
+) -> PyResult<usize> {
+    let written = packed_output_len(output, items.len(), 8)?;
+    let hashes = xxh3_64_hashes(py, items, seed)?;
+    write_packed_64(output, &hashes);
+    Ok(written)
+}
+
+pub(super) fn xxh3_128_batch_into(
+    py: Python<'_>,
+    items: &Bound<'_, PyList>,
+    output: &Bound<'_, PyByteArray>,
+    seed: u64,
+) -> PyResult<usize> {
+    let written = packed_output_len(output, items.len(), 16)?;
+    let hashes = xxh3_128_hashes(py, items, seed)?;
+    write_packed_128(output, &hashes);
+    Ok(written)
 }

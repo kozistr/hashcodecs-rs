@@ -119,6 +119,13 @@ select = [
     "SIM",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"hashcodecs/_hashcodecs.pyi" = ["PIE790", "PYI021", "PYI048"]
+"hashcodecs/base64.pyi" = ["PIE790", "PYI021", "PYI048"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 inline-quotes = "single"
@@ -130,6 +137,8 @@ force-sort-within-sections = false
 
 [tool.ruff.format]
 quote-style = "single"
+docstring-code-format = true
+docstring-code-line-length = 80
 
 [tool.coverage.run]
 branch = true

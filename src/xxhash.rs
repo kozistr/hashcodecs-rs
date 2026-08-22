@@ -85,7 +85,27 @@ fn mix16(data: &[u8], doff: usize, secret: &[u8], soff: usize, seed: u64) -> u64
     mulfold(lo, hi)
 }
 
-/// Computes the canonical XXH3 64-bit digest.
+/// Computes the canonical XXH3 64-bit hash in one call.
+///
+/// Runtime CPU dispatch accelerates long inputs where supported while retaining
+/// the exact result of the public xxHash algorithm. XXH3 is non-cryptographic.
+///
+/// # Arguments
+///
+/// * input - The bytes to hash.
+/// * seed - The initial unsigned 64-bit seed.
+///
+/// # Returns
+///
+/// The canonical unsigned 64-bit XXH3 value.
+///
+/// # Examples
+///
+///     use hashcodecs::xxh3_64;
+///
+///     assert_eq!(xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
+///     assert_ne!(xxh3_64(b"hello", 0), xxh3_64(b"hello", 1));
+///
 #[inline]
 pub fn xxh3_64(input: &[u8], seed: u64) -> u64 {
     match input.len() {
@@ -302,7 +322,29 @@ fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
     merge(&acc, &secret[11..], (data.len() as u64).wrapping_mul(P64_1))
 }
 
-/// Computes the canonical XXH3 128-bit digest as `[low64, high64]`.
+/// Computes the canonical XXH3 128-bit hash in one call.
+///
+/// Runtime CPU dispatch accelerates long inputs where supported while retaining
+/// the exact result of the public xxHash algorithm. XXH3 is non-cryptographic.
+///
+/// # Arguments
+///
+/// * input - The bytes to hash.
+/// * seed - The initial unsigned 64-bit seed.
+///
+/// # Returns
+///
+/// Two 64-bit words ordered as [low64, high64]. Convert them to one u128 with
+/// (high64 as u128) << 64 | low64 as u128.
+///
+/// # Examples
+///
+///     use hashcodecs::xxh3_128;
+///
+///     let [low, high] = xxh3_128(b"", 0);
+///     let value = (u128::from(high) << 64) | u128::from(low);
+///     assert_eq!(value, 0x99aa_06d3_0147_98d8_6001_c324_468d_497f);
+///
 #[inline]
 pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
     match input.len() {
@@ -465,9 +507,30 @@ fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8];
     None
 }
 
-/// Hashes a batch without input copies. The caller owns output allocation.
-/// Equal-size long inputs are processed four-way on AVX2 to overlap independent
-/// multiply and load latency.
+/// Computes canonical XXH3 64-bit hashes for a batch without copying inputs.
+///
+/// Results preserve input order. Seed-derived setup is shared by the batch, and
+/// equal-size long inputs may be processed four at a time on AVX2.
+///
+/// # Arguments
+///
+/// * inputs - Borrowed byte slices to hash in order.
+/// * seed - The initial unsigned 64-bit seed shared by every input.
+///
+/// # Returns
+///
+/// One canonical 64-bit hash per input.
+///
+/// # Examples
+///
+///     use hashcodecs::{xxh3_64, xxh3_64_batch};
+///
+///     let inputs: &[&[u8]] = &[b"one", b"two"];
+///     assert_eq!(
+///         xxh3_64_batch(inputs, 7),
+///         inputs.iter().map(|input| xxh3_64(input, 7)).collect::<Vec<_>>(),
+///     );
+///
 #[inline]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let owned_secret = (seed != 0).then(|| init_secret(seed));
@@ -498,9 +561,30 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     );
     output
 }
-/// Hashes a batch without input copies. Words are ordered `[low64, high64]`.
-/// Equal-size long inputs are processed four-way on AVX2 to overlap independent
-/// multiply and load latency.
+/// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
+///
+/// Results preserve input order. Seed-derived setup is shared by the batch, and
+/// equal-size long inputs may be processed four at a time on AVX2.
+///
+/// # Arguments
+///
+/// * inputs - Borrowed byte slices to hash in order.
+/// * seed - The initial unsigned 64-bit seed shared by every input.
+///
+/// # Returns
+///
+/// One [low64, high64] word pair per input.
+///
+/// # Examples
+///
+///     use hashcodecs::{xxh3_128, xxh3_128_batch};
+///
+///     let inputs: &[&[u8]] = &[b"one", b"two"];
+///     assert_eq!(
+///         xxh3_128_batch(inputs, 7),
+///         inputs.iter().map(|input| xxh3_128(input, 7)).collect::<Vec<_>>(),
+///     );
+///
 #[inline]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let owned_secret = (seed != 0).then(|| init_secret(seed));

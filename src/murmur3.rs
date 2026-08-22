@@ -95,7 +95,23 @@ fn consume_blocks<const BLOCK_SIZE: usize>(
     *tail_len = remaining.len();
 }
 
-/// Incremental MurmurHash3 x86 32-bit state.
+/// Incremental state for the canonical MurmurHash3 x86 32-bit algorithm.
+///
+/// Data can be supplied in any chunk sizes. Cloning the value creates an
+/// independent checkpoint, and digest does not consume or reset the state.
+/// MurmurHash3 is non-cryptographic and must not be used where collision or
+/// preimage resistance is required.
+///
+/// # Examples
+///
+///     use hashcodecs::Murmur3X86Hasher32;
+///
+///     let mut hasher = Murmur3X86Hasher32::new(7);
+///     hasher.update(b"hello");
+///     let checkpoint = hasher.clone();
+///     hasher.update(b" world");
+///     assert_ne!(hasher.digest(), checkpoint.digest());
+///
 #[derive(Clone, Debug)]
 pub struct Murmur3X86Hasher32 {
     hash: u32,
@@ -105,7 +121,23 @@ pub struct Murmur3X86Hasher32 {
 }
 
 impl Murmur3X86Hasher32 {
-    /// Creates an empty hasher with the supplied seed.
+    /// Creates an empty x86 32-bit hasher with the supplied seed.
+    ///
+    /// # Arguments
+    ///
+    /// * seed - The initial unsigned 32-bit hash seed.
+    ///
+    /// # Returns
+    ///
+    /// A hasher ready to receive bytes through update.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X86Hasher32, murmur3_x86_32};
+    ///
+    ///     let hasher = Murmur3X86Hasher32::new(42);
+    ///     assert_eq!(hasher.digest(), murmur3_x86_32(b"", 42));
+    ///
     #[inline]
     pub const fn new(seed: u32) -> Self {
         Self {
@@ -116,7 +148,28 @@ impl Murmur3X86Hasher32 {
         }
     }
 
-    /// Adds bytes to the hash state.
+    /// Appends bytes to the hash state.
+    ///
+    /// Calling update multiple times is equivalent to hashing the concatenated
+    /// input in one call.
+    ///
+    /// # Arguments
+    ///
+    /// * input - The next bytes in the message.
+    ///
+    /// # Returns
+    ///
+    /// This method returns unit and leaves the hasher ready for more input.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X86Hasher32, murmur3_x86_32};
+    ///
+    ///     let mut hasher = Murmur3X86Hasher32::new(7);
+    ///     hasher.update(b"hel");
+    ///     hasher.update(b"lo");
+    ///     assert_eq!(hasher.digest(), murmur3_x86_32(b"hello", 7));
+    ///
     #[inline]
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u32);
@@ -126,7 +179,23 @@ impl Murmur3X86Hasher32 {
         });
     }
 
-    /// Returns the current digest without consuming the state.
+    /// Computes the current 32-bit digest without consuming the state.
+    ///
+    /// More data may be appended after this call.
+    ///
+    /// # Returns
+    ///
+    /// The canonical unsigned x86 32-bit MurmurHash3 value.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::Murmur3X86Hasher32;
+    ///
+    ///     let mut hasher = Murmur3X86Hasher32::default();
+    ///     hasher.update(b"hello");
+    ///     assert_eq!(hasher.digest(), 0x248b_fa47);
+    ///     assert_eq!(hasher.digest(), 0x248b_fa47);
+    ///
     #[inline]
     pub fn digest(&self) -> u32 {
         finish_x86_32_tail(&self.tail[..self.tail_len], self.hash, self.length)
@@ -139,7 +208,27 @@ impl Default for Murmur3X86Hasher32 {
     }
 }
 
-/// Computes the canonical MurmurHash3 x86 32-bit hash.
+/// Computes the canonical MurmurHash3 x86 32-bit hash in one call.
+///
+/// MurmurHash3 is designed for fast hash tables and data processing, not for
+/// cryptographic security.
+///
+/// # Arguments
+///
+/// * key - The bytes to hash.
+/// * seed - The initial unsigned 32-bit seed.
+///
+/// # Returns
+///
+/// The canonical unsigned 32-bit result from the original x86 algorithm.
+///
+/// # Examples
+///
+///     use hashcodecs::murmur3_x86_32;
+///
+///     assert_eq!(murmur3_x86_32(b"hello", 0), 0x248b_fa47);
+///     assert_ne!(murmur3_x86_32(b"hello", 1), murmur3_x86_32(b"hello", 0));
+///
 #[inline]
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
     let block_end = key.len() & !3;
@@ -222,7 +311,22 @@ fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
     fmix32(hash ^ length)
 }
 
-/// Incremental MurmurHash3 x86 128-bit state.
+/// Incremental state for the canonical MurmurHash3 x86 128-bit algorithm.
+///
+/// Input may be split at arbitrary byte boundaries. The four digest words are
+/// ordered exactly like the original reference implementation. MurmurHash3 is
+/// non-cryptographic.
+///
+/// # Examples
+///
+///     use hashcodecs::Murmur3X86Hasher128;
+///
+///     let mut hasher = Murmur3X86Hasher128::new(7);
+///     hasher.update(b"hello");
+///     let checkpoint = hasher.clone();
+///     hasher.update(b" world");
+///     assert_ne!(hasher.digest(), checkpoint.digest());
+///
 #[derive(Clone, Debug)]
 pub struct Murmur3X86Hasher128 {
     hashes: [u32; 4],
@@ -232,7 +336,23 @@ pub struct Murmur3X86Hasher128 {
 }
 
 impl Murmur3X86Hasher128 {
-    /// Creates an empty hasher with the supplied seed.
+    /// Creates an empty x86 128-bit hasher with the supplied seed.
+    ///
+    /// # Arguments
+    ///
+    /// * seed - The initial unsigned 32-bit seed applied to all four lanes.
+    ///
+    /// # Returns
+    ///
+    /// A hasher ready to receive bytes through update.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X86Hasher128, murmur3_x86_128};
+    ///
+    ///     let hasher = Murmur3X86Hasher128::new(42);
+    ///     assert_eq!(hasher.digest(), murmur3_x86_128(b"", 42));
+    ///
     #[inline]
     pub const fn new(seed: u32) -> Self {
         Self {
@@ -243,7 +363,28 @@ impl Murmur3X86Hasher128 {
         }
     }
 
-    /// Adds bytes to the hash state.
+    /// Appends bytes to the hash state.
+    ///
+    /// Calling update multiple times is equivalent to hashing the concatenated
+    /// input in one call.
+    ///
+    /// # Arguments
+    ///
+    /// * input - The next bytes in the message.
+    ///
+    /// # Returns
+    ///
+    /// This method returns unit and leaves the hasher ready for more input.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X86Hasher128, murmur3_x86_128};
+    ///
+    ///     let mut hasher = Murmur3X86Hasher128::new(7);
+    ///     hasher.update(b"hel");
+    ///     hasher.update(b"lo");
+    ///     assert_eq!(hasher.digest(), murmur3_x86_128(b"hello", 7));
+    ///
     #[inline]
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u32);
@@ -253,7 +394,21 @@ impl Murmur3X86Hasher128 {
         });
     }
 
-    /// Returns the current digest without consuming the state.
+    /// Computes the current 128-bit digest without consuming the state.
+    ///
+    /// # Returns
+    ///
+    /// Four 32-bit words in canonical low-to-high reference order.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::Murmur3X86Hasher128;
+    ///
+    ///     let mut hasher = Murmur3X86Hasher128::default();
+    ///     hasher.update(b"hello");
+    ///     let first = hasher.digest();
+    ///     assert_eq!(first, hasher.digest());
+    ///
     #[inline]
     pub fn digest(&self) -> [u32; 4] {
         finish_x86_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
@@ -266,7 +421,33 @@ impl Default for Murmur3X86Hasher128 {
     }
 }
 
-/// Computes the canonical MurmurHash3 x86 128-bit hash as four `u32` words.
+/// Computes the canonical MurmurHash3 x86 128-bit hash in one call.
+///
+/// # Arguments
+///
+/// * key - The bytes to hash.
+/// * seed - The initial unsigned 32-bit seed applied to all four lanes.
+///
+/// # Returns
+///
+/// Four unsigned 32-bit words in canonical low-to-high reference order. To
+/// serialize the digest used by the Python API, concatenate each word's
+/// little-endian bytes.
+///
+/// # Examples
+///
+///     use hashcodecs::murmur3_x86_128;
+///
+///     let words = murmur3_x86_128(&[1, 2, 3], 0);
+///     let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+///     assert_eq!(
+///         bytes,
+///         [
+///             0xe1, 0x64, 0x01, 0xf6, 0x33, 0x42, 0x13, 0xb5,
+///             0x33, 0x42, 0x13, 0xb5, 0x33, 0x42, 0x13, 0xb5,
+///         ],
+///     );
+///
 #[inline]
 pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
     let mut hashes = [seed; 4];
@@ -315,7 +496,22 @@ fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 
     finalize_x86_128(hashes, length)
 }
 
-/// Incremental MurmurHash3 x64 128-bit state.
+/// Incremental state for the canonical MurmurHash3 x64 128-bit algorithm.
+///
+/// Input may be split at arbitrary byte boundaries. The two digest words are
+/// ordered exactly like the original reference implementation. MurmurHash3 is
+/// non-cryptographic.
+///
+/// # Examples
+///
+///     use hashcodecs::Murmur3X64Hasher128;
+///
+///     let mut hasher = Murmur3X64Hasher128::new(7);
+///     hasher.update(b"hello");
+///     let checkpoint = hasher.clone();
+///     hasher.update(b" world");
+///     assert_ne!(hasher.digest(), checkpoint.digest());
+///
 #[derive(Clone, Debug)]
 pub struct Murmur3X64Hasher128 {
     hashes: [u64; 2],
@@ -325,7 +521,23 @@ pub struct Murmur3X64Hasher128 {
 }
 
 impl Murmur3X64Hasher128 {
-    /// Creates an empty hasher with the supplied seed.
+    /// Creates an empty x64 128-bit hasher with the supplied seed.
+    ///
+    /// # Arguments
+    ///
+    /// * seed - The initial unsigned 32-bit seed applied to both lanes.
+    ///
+    /// # Returns
+    ///
+    /// A hasher ready to receive bytes through update.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X64Hasher128, murmur3_x64_128};
+    ///
+    ///     let hasher = Murmur3X64Hasher128::new(42);
+    ///     assert_eq!(hasher.digest(), murmur3_x64_128(b"", 42));
+    ///
     #[inline]
     pub const fn new(seed: u32) -> Self {
         Self {
@@ -336,7 +548,28 @@ impl Murmur3X64Hasher128 {
         }
     }
 
-    /// Adds bytes to the hash state.
+    /// Appends bytes to the hash state.
+    ///
+    /// Calling update multiple times is equivalent to hashing the concatenated
+    /// input in one call.
+    ///
+    /// # Arguments
+    ///
+    /// * input - The next bytes in the message.
+    ///
+    /// # Returns
+    ///
+    /// This method returns unit and leaves the hasher ready for more input.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::{Murmur3X64Hasher128, murmur3_x64_128};
+    ///
+    ///     let mut hasher = Murmur3X64Hasher128::new(7);
+    ///     hasher.update(b"hel");
+    ///     hasher.update(b"lo");
+    ///     assert_eq!(hasher.digest(), murmur3_x64_128(b"hello", 7));
+    ///
     #[inline]
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u64);
@@ -346,7 +579,21 @@ impl Murmur3X64Hasher128 {
         });
     }
 
-    /// Returns the current digest without consuming the state.
+    /// Computes the current 128-bit digest without consuming the state.
+    ///
+    /// # Returns
+    ///
+    /// Two 64-bit words in canonical low-to-high reference order.
+    ///
+    /// # Examples
+    ///
+    ///     use hashcodecs::Murmur3X64Hasher128;
+    ///
+    ///     let mut hasher = Murmur3X64Hasher128::default();
+    ///     hasher.update(b"hello");
+    ///     let first = hasher.digest();
+    ///     assert_eq!(first, hasher.digest());
+    ///
     #[inline]
     pub fn digest(&self) -> [u64; 2] {
         finish_x64_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
@@ -359,7 +606,33 @@ impl Default for Murmur3X64Hasher128 {
     }
 }
 
-/// Computes the canonical MurmurHash3 x64 128-bit hash as two `u64` words.
+/// Computes the canonical MurmurHash3 x64 128-bit hash in one call.
+///
+/// # Arguments
+///
+/// * key - The bytes to hash.
+/// * seed - The initial unsigned 32-bit seed applied to both lanes.
+///
+/// # Returns
+///
+/// Two unsigned 64-bit words in canonical low-to-high reference order. To
+/// serialize the digest used by the Python API, concatenate each word's
+/// little-endian bytes.
+///
+/// # Examples
+///
+///     use hashcodecs::murmur3_x64_128;
+///
+///     let words = murmur3_x64_128(&[1, 2, 3], 0);
+///     let bytes: Vec<_> = words.into_iter().flat_map(u64::to_le_bytes).collect();
+///     assert_eq!(
+///         bytes,
+///         [
+///             0xa9, 0x37, 0x13, 0x0e, 0xef, 0x3e, 0x64, 0x1a,
+///             0x65, 0x9a, 0x23, 0x3c, 0x40, 0x4a, 0x4e, 0x49,
+///         ],
+///     );
+///
 #[inline(always)]
 pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
     murmur3_x64_128_inner(key, seed as u64)

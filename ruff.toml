@@ -5,6 +5,7 @@ convention = "google"
 
 [lint.per-file-ignores]
 "hashcodecs/_hashcodecs.pyi" = ["PIE790", "PYI021", "PYI048"]
+"hashcodecs/base64.pyi" = ["PIE790", "PYI021", "PYI048"]
 
 [format]
 docstring-code-format = true

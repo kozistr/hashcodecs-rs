@@ -114,8 +114,8 @@ jobs:
             echo "Tag $tag already exists" >&2
             exit 1
           fi
-          if ! grep -Fqx "## [$next] - Unreleased" CHANGELOG.md; then
-            echo "CHANGELOG.md does not contain an unreleased $next entry" >&2
+          if ! grep -Fqx "## [Unreleased]" CHANGELOG.md; then
+            echo "CHANGELOG.md does not contain an Unreleased section" >&2
             exit 1
           fi
 
@@ -132,17 +132,27 @@ jobs:
           sed -i "0,/^version = \"$current\"$/s//version = \"$next\"/" pyproject.toml
           sed -i "0,/^version: $current$/s//version: $next/" CITATION.cff
           sed -i "0,/^date-released: .*$/s//date-released: $release_date/" CITATION.cff
-          python - "$next" "$release_date" "$notes_file" <<'PY'
-          from pathlib import Path
+          python - "$next" "$release_date" "$notes_file" "$previous_tag" <<'PY'
+          import re
           import sys
+          from pathlib import Path
 
-          version, release_date, notes_path = sys.argv[1:]
+          version, release_date, notes_path, previous_tag = sys.argv[1:]
           changelog = Path('CHANGELOG.md')
-          marker = f'## [{version}] - Unreleased'
+          marker = '## [Unreleased]'
           notes = Path(notes_path).read_text(encoding='utf-8').strip()
           notes = '\n'.join(f'#{line}' if line.startswith('## ') else line for line in notes.splitlines())
-          replacement = f'## [{version}] - {release_date}\n\n{notes}'
-          changelog.write_text(changelog.read_text(encoding='utf-8').replace(marker, replacement, 1), encoding='utf-8')
+          replacement = f'{marker}\n\n## [{version}] - {release_date}\n\n{notes}'
+          text = changelog.read_text(encoding='utf-8').replace(marker, replacement, 1)
+          compare_url = 'https://github.com/kozistr/hashcodecs-rs/compare'
+          links = (
+              f'[Unreleased]: {compare_url}/v{version}...HEAD\n'
+              f'[{version}]: {compare_url}/{previous_tag}...v{version}'
+          )
+          text, count = re.subn(r'^\[Unreleased\]: .+$', links, text, count=1, flags=re.MULTILINE)
+          if count != 1:
+              raise RuntimeError('CHANGELOG.md does not contain an Unreleased comparison link')
+          changelog.write_text(text, encoding='utf-8')
           PY
           cargo check --quiet
           uv lock

@@ -4,19 +4,6 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
-## [1.0.0] - Unreleased
-
-### Added
-
-- CPython 3.14t and 3.15t wheel support on Linux, macOS, and Windows.
-- Complete API references for the Python and Rust interfaces.
-- A compatibility policy for the stable Python API.
-
-### Changed
-
-- Base64 batch aliases now resolve through the native extension without Python wrappers.
-- Runtime support and benchmark documentation now match the release artifacts.
-
 ## [0.6.1] - 2026-08-22
 
 ### Added
@@ -87,8 +74,7 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...v1.0.0
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...HEAD
 [0.6.1]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.4.0...v0.5.0

@@ -1,0 +1,11 @@
+extend = "pyproject.toml"
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.per-file-ignores]
+"hashcodecs/_hashcodecs.pyi" = ["PIE790", "PYI021", "PYI048"]
+
+[format]
+docstring-code-format = true
+docstring-code-line-length = 80

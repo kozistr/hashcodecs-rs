@@ -934,7 +934,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: standard_b64encode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"standard_b64encode($module, /, s)\n--\n\nEncode with the standard Base64 alphabet.".as_ptr(),
+        ml_doc: c"standard_b64encode($module, /, s)\n--\n\nEncode a bytes-like object with the standard Base64 alphabet.\n\nReturns newly allocated, padded bytes.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"standard_b64encode_into".as_ptr(),
@@ -942,7 +942,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: standard_b64encode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"standard_b64encode_into($module, /, s, output)\n--\n\nEncode into a reusable output.".as_ptr(),
+        ml_doc: c"standard_b64encode_into($module, /, s, output)\n--\n\nEncode a bytes-like object with the standard alphabet into output.\n\noutput must be a sufficiently large bytearray. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"urlsafe_b64encode".as_ptr(),
@@ -950,7 +950,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: urlsafe_b64encode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"urlsafe_b64encode($module, /, s, *, padded=True)\n--\n\nEncode with the URL-safe Base64 alphabet.".as_ptr(),
+        ml_doc: c"urlsafe_b64encode($module, /, s, *, padded=True)\n--\n\nEncode a bytes-like object with the URL-safe Base64 alphabet.\n\nSet padded to False to omit trailing '=' padding.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"urlsafe_b64encode_into".as_ptr(),
@@ -958,7 +958,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: urlsafe_b64encode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"urlsafe_b64encode_into($module, /, s, output, *, padded=True)\n--\n\nEncode URL-safe Base64 into a reusable output.".as_ptr(),
+        ml_doc: c"urlsafe_b64encode_into($module, /, s, output, *, padded=True)\n--\n\nEncode a bytes-like object with the URL-safe alphabet into output.\n\noutput must be a sufficiently large bytearray. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64encode".as_ptr(),
@@ -966,7 +966,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64encode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64encode($module, /, s, altchars=None, *, padded=True, wrapcol=0)\n--\n\n".as_ptr(),
+        ml_doc: c"b64encode($module, /, s, altchars=None, *, padded=True, wrapcol=0)\n--\n\nEncode a bytes-like object as Base64.\n\naltchars is an optional two-byte replacement for '+' and '/'. Set padded to False to omit trailing '=' padding. A positive wrapcol inserts newlines at that width.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64encode_batch".as_ptr(),
@@ -974,7 +974,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64encode_batch_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64encode_batch($module, /, items, altchars=None)\n--\n\nEncode each bytes-like item.".as_ptr(),
+        ml_doc: c"b64encode_batch($module, /, items, altchars=None)\n--\n\nEncode each bytes-like item in a list.\n\naltchars is an optional two-byte replacement for '+' and '/'. Returns encoded bytes in input order.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64encode_batch_into".as_ptr(),
@@ -982,7 +982,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64encode_batch_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64encode_batch_into($module, /, items, outputs, altchars=None)\n--\n\nEncode each item into its matching output.".as_ptr(),
+        ml_doc: c"b64encode_batch_into($module, /, items, outputs, altchars=None)\n--\n\nEncode each item into its matching bytearray output.\n\nitems and outputs must be equally sized lists, and every output must be distinct and large enough. Returns one written length per item.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64encode_into".as_ptr(),
@@ -990,7 +990,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64encode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64encode_into($module, /, s, output, altchars=None, *, padded=True, wrapcol=0)\n--\n\n".as_ptr(),
+        ml_doc: c"b64encode_into($module, /, s, output, altchars=None, *, padded=True, wrapcol=0)\n--\n\nEncode a bytes-like object as Base64 into output.\n\noutput must be a sufficiently large bytearray. altchars, padded, and wrapcol have the same meaning as b64encode. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64decode".as_ptr(),
@@ -998,7 +998,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64decode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64decode($module, /, s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)\n--\n\n".as_ptr(),
+        ml_doc: c"b64decode($module, /, s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)\n--\n\nDecode an ASCII string or bytes-like Base64 value.\n\nSet validate to True to reject non-alphabet data, padded to False to accept an unpadded tail, and canonical to reject non-zero unused tail bits. ignorechars controls lenient decoding.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"standard_b64decode".as_ptr(),
@@ -1006,7 +1006,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: standard_b64decode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"standard_b64decode($module, /, s)\n--\n\nDecode with the standard Base64 alphabet.".as_ptr(),
+        ml_doc: c"standard_b64decode($module, /, s)\n--\n\nDecode an ASCII string or bytes-like Base64 value using the standard alphabet.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"standard_b64decode_into".as_ptr(),
@@ -1014,7 +1014,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: standard_b64decode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"standard_b64decode_into($module, /, s, output)\n--\n\nDecode into a reusable output.".as_ptr(),
+        ml_doc: c"standard_b64decode_into($module, /, s, output)\n--\n\nDecode a standard Base64 value into output.\n\noutput must be a sufficiently large bytearray. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64decode_batch".as_ptr(),
@@ -1022,7 +1022,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64decode_batch_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64decode_batch($module, /, items, altchars=None, validate=False)\n--\n\nDecode each item.".as_ptr(),
+        ml_doc: c"b64decode_batch($module, /, items, altchars=None, validate=False)\n--\n\nDecode each ASCII string or bytes-like item in a list.\n\nSet validate to True to reject non-alphabet data. Returns decoded bytes in input order.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64decode_batch_into".as_ptr(),
@@ -1030,7 +1030,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64decode_batch_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64decode_batch_into($module, /, items, outputs, altchars=None, validate=False)\n--\n\nDecode each item into its matching output.".as_ptr(),
+        ml_doc: c"b64decode_batch_into($module, /, items, outputs, altchars=None, validate=False)\n--\n\nDecode each item into its matching bytearray output.\n\nitems and outputs must be equally sized lists, and every output must be distinct and large enough. Returns one written length per item.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"b64decode_into".as_ptr(),
@@ -1038,7 +1038,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: b64decode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"b64decode_into($module, /, s, output, altchars=None, validate=None, *, padded=True, ignorechars=None, canonical=False)\n--\n\n".as_ptr(),
+        ml_doc: c"b64decode_into($module, /, s, output, altchars=None, validate=None, *, padded=True, ignorechars=None, canonical=False)\n--\n\nDecode an ASCII string or bytes-like Base64 value into output.\n\noutput must be a sufficiently large bytearray. altchars, validate, padded, ignorechars, and canonical have the same meaning as b64decode. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"urlsafe_b64decode".as_ptr(),
@@ -1046,7 +1046,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: urlsafe_b64decode_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"urlsafe_b64decode($module, /, s, *, padded=True)\n--\n\nDecode with the URL-safe Base64 alphabet.".as_ptr(),
+        ml_doc: c"urlsafe_b64decode($module, /, s, *, padded=True)\n--\n\nDecode an ASCII string or bytes-like Base64 value using the URL-safe alphabet.\n\nSet padded to False to accept an unpadded final quantum.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"urlsafe_b64decode_into".as_ptr(),
@@ -1054,7 +1054,7 @@ static mut METHODS: [ffi::PyMethodDef; 17] = [
             PyCFunctionFastWithKeywords: urlsafe_b64decode_into_callback,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"urlsafe_b64decode_into($module, /, s, output, *, padded=True)\n--\n\nDecode URL-safe Base64 into a reusable output.".as_ptr(),
+        ml_doc: c"urlsafe_b64decode_into($module, /, s, output, *, padded=True)\n--\n\nDecode a URL-safe Base64 value into output.\n\noutput must be a sufficiently large bytearray. Returns the number of bytes written.".as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),
 ];
@@ -1063,8 +1063,8 @@ pub(super) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()>
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
     if python_at_least(module.py(), (3, 15)) {
         unsafe {
-            (*methods.add(14)).ml_doc = c"urlsafe_b64decode($module, /, s, *, padded=False)\n--\n\nDecode with the URL-safe Base64 alphabet.".as_ptr();
-            (*methods.add(15)).ml_doc = c"urlsafe_b64decode_into($module, /, s, output, *, padded=False)\n--\n\nDecode URL-safe Base64 into a reusable output.".as_ptr();
+            (*methods.add(14)).ml_doc = c"urlsafe_b64decode($module, /, s, *, padded=False)\n--\n\nDecode an ASCII string or bytes-like Base64 value using the URL-safe alphabet.\n\nSet padded to True to require a padded final quantum.".as_ptr();
+            (*methods.add(15)).ml_doc = c"urlsafe_b64decode_into($module, /, s, output, *, padded=False)\n--\n\nDecode a URL-safe Base64 value into output.\n\noutput must be a sufficiently large bytearray. Returns the number of bytes written.".as_ptr();
         }
     }
     let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };

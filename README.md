@@ -34,6 +34,15 @@ If you use `hashcodecs`, cite [CITATION.cff](CITATION.cff).
 pip3 install hashcodecs
 ```
 
+## Compatibility
+
+Version 1.x keeps the documented Python API stable under the
+[compatibility policy](docs/compatibility.md). Release wheels target CPython 3.10 through 3.15 on manylinux x86-64,
+macOS 11+ ARM64, and Windows x86-64. CPython 3.14t and 3.15t receive free-threaded wheels on the same platforms.
+
+The Rust library remains a source dependency and does not share the Python package's 1.x stability guarantee.
+See [Security Policy](SECURITY.md) for vulnerability reporting.
+
 ## Performance snapshot
 
 On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 78.83 GiB/s. The operator pinned one logical

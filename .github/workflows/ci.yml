@@ -44,17 +44,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
+          toolchain: stable
           components: clippy, rustfmt
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Check Rust formatting
         run: cargo fmt --check
@@ -66,7 +67,7 @@ jobs:
         run: cargo clippy --all-targets --features python -- -D warnings
 
       - name: Install Rust coverage tool
-        uses: taiki-e/install-action@v2.85.10
+        uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad # v2.85.10
         with:
           tool: cargo-llvm-cov
 
@@ -79,7 +80,7 @@ jobs:
 
       - name: Upload Rust coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -91,15 +92,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Test Rust Python feature
         run: cargo test --features python
@@ -109,15 +112,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Test optimized Rust library
         run: cargo test --release --features python
@@ -127,15 +132,17 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Test Rust Python feature
         run: cargo test --features python
@@ -154,13 +161,14 @@ jobs:
             flags: -Zsanitizer=memory -Zsanitizer-memory-track-origins
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up nightly Rust with source
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
         with:
+          toolchain: nightly
           components: rust-src
 
       - name: Check runtime SIMD paths
@@ -175,12 +183,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Prove raw-load and buffer bounds
-        uses: model-checking/kani-github-action@v1.1
+        uses: model-checking/kani-github-action@f838096619a707b0f6b2118cf435eaccfa33e51f # v1.1
 
   rust_safety_miri:
     name: Rust / Safety / Miri
@@ -188,13 +196,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up nightly Rust with Miri
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
         with:
+          toolchain: nightly
           components: miri
 
       - name: Interpret codec and hash boundary paths
@@ -212,12 +221,14 @@ jobs:
         target: [base64, murmur3, xxhash]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up nightly Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb # nightly
+        with:
+          toolchain: nightly
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
@@ -230,12 +241,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
           python-version: "3.12"
@@ -268,10 +279,6 @@ jobs:
             os: windows-latest
             python-version: "3.12"
             upload-coverage: true
-          - name: Windows / Python 3.15t
-            os: windows-latest
-            python-version: "3.15t"
-            upload-coverage: false
           - name: macOS ARM64 / Python 3.12
             os: macos-latest
             python-version: "3.12"
@@ -282,20 +289,22 @@ jobs:
       CARGO_PROFILE_RELEASE_LTO: "false"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           save-if: ${{ matrix.python-version == '3.12' }}
 
       - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
           python-version: ${{ matrix.python-version }}
@@ -315,7 +324,7 @@ jobs:
 
       - name: Upload Python coverage to Codecov
         if: ${{ matrix.upload-coverage && !inputs.skip_coverage_upload }}
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml

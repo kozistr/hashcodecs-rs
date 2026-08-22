@@ -13,6 +13,8 @@ Install wheels for CPython 3.10 through 3.15 and free-threaded CPython 3.14t and
 3.15t on Linux, macOS, and Windows. At runtime, the extension uses the fastest available
 implementation and portable scalar code when the CPU lacks a SIMD feature.
 
+See [Compatibility](compatibility.md) for the supported wheel architectures and the Python 1.x API policy.
+
 ## Quick Start
 
 ```python

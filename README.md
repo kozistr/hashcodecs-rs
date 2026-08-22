@@ -113,15 +113,21 @@ cargo add hashcodecs
 ```
 
 ```rust
-let encoded = hashcodecs::b64encode(b"hello");
+let encoded = hashcodecs::base64::b64encode(b"hello");
 assert_eq!(encoded, "aGVsbG8=");
 
 let mut output = [0_u8; 8];
-let written = hashcodecs::b64encode_into(b"hello", &mut output).unwrap();
+let written = hashcodecs::base64::b64encode_into(b"hello", &mut output).unwrap();
 assert_eq!(&output[..written], b"aGVsbG8=");
 
-assert_eq!(hashcodecs::murmur3_x86_32(b"hello", 0), 0x248b_fa47);
-assert_eq!(hashcodecs::xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
+assert_eq!(
+    hashcodecs::murmur3::murmur3_x86_32(b"hello", 0),
+    0x248b_fa47
+);
+assert_eq!(
+    hashcodecs::xxhash::xxh3_64(b"", 0),
+    0x2d06_8005_38d3_94c2
+);
 ```
 
 ## Architecture

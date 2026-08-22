@@ -9,7 +9,7 @@ use crate::bindings::buffer::with_bytearray;
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::{DETACH_THRESHOLD, bytes_data};
 use crate::bindings::{bytearray_data, bytearray_size, list_items};
-use crate::{xxh3_64_batch as xxh3_64_batch_hash, xxh3_128_batch as xxh3_128_batch_hash};
+use crate::xxhash::{xxh3_64_batch as xxh3_64_batch_hash, xxh3_128_batch as xxh3_128_batch_hash};
 
 #[cfg(not(Py_GIL_DISABLED))]
 fn exact_small_bytes<'a>(items: &'a Bound<'_, PyList>) -> Option<Vec<&'a [u8]>> {

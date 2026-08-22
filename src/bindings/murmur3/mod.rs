@@ -10,7 +10,7 @@ use super::{
     DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, return_function_result, seed_u32,
     with_function_bytes,
 };
-use crate::{
+use crate::murmur3::{
     Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
     murmur3_x86_128,
 };

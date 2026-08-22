@@ -2,6 +2,22 @@
 //!
 //! Base64 and XXH3 dispatch among in-crate AVX-512, AVX2, SSE4.1, SSSE3, NEON,
 //! and scalar kernels at runtime.
+//!
+//! # Rust API
+//!
+//! ```
+//! use hashcodecs::{base64, murmur3, xxhash};
+//!
+//! assert_eq!(base64::b64encode(b"hello"), "aGVsbG8=");
+//! assert_eq!(murmur3::murmur3_x86_32(b"hello", 0), 0x248b_fa47);
+//! assert_eq!(xxhash::xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
+//! assert_eq!(
+//!     xxhash::xxh3_128(b"", 0),
+//!     [0x6001_c324_468d_497f, 0x99aa_06d3_0147_98d8],
+//! );
+//! ```
+
+#![deny(missing_docs)]
 
 // Python extension builds use mimalloc without imposing an allocator on Rust consumers.
 // Native allocators and CPU intrinsics are outside Kani's and Miri's interpreters.
@@ -10,20 +26,9 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod backend;
-mod base64;
-mod murmur3;
-mod xxhash;
-
-pub use base64::{
-    Base64Error, b64decode, b64decode_into, b64decode_urlsafe, b64decode_urlsafe_into,
-    b64decoded_len, b64encode, b64encode_into, b64encode_urlsafe, b64encode_urlsafe_into,
-    b64encoded_len,
-};
-pub use murmur3::{
-    Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
-    murmur3_x86_128,
-};
-pub use xxhash::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
+pub mod base64;
+pub mod murmur3;
+pub mod xxhash;
 
 #[cfg(feature = "python")]
 mod bindings;

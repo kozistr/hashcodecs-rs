@@ -9,7 +9,7 @@ use super::{
     DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, parse_raw_arguments,
     return_function_result, seed_u64, with_function_bytes,
 };
-use crate::{xxh3_64, xxh3_128};
+use crate::xxhash::{xxh3_64, xxh3_128};
 
 mod batch;
 mod methods;

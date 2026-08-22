@@ -104,7 +104,7 @@ fn consume_blocks<const BLOCK_SIZE: usize>(
 ///
 /// # Examples
 ///
-///     use hashcodecs::Murmur3X86Hasher32;
+///     use hashcodecs::murmur3::Murmur3X86Hasher32;
 ///
 ///     let mut hasher = Murmur3X86Hasher32::new(7);
 ///     hasher.update(b"hello");
@@ -133,7 +133,7 @@ impl Murmur3X86Hasher32 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X86Hasher32, murmur3_x86_32};
+    ///     use hashcodecs::murmur3::{Murmur3X86Hasher32, murmur3_x86_32};
     ///
     ///     let hasher = Murmur3X86Hasher32::new(42);
     ///     assert_eq!(hasher.digest(), murmur3_x86_32(b"", 42));
@@ -163,7 +163,7 @@ impl Murmur3X86Hasher32 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X86Hasher32, murmur3_x86_32};
+    ///     use hashcodecs::murmur3::{Murmur3X86Hasher32, murmur3_x86_32};
     ///
     ///     let mut hasher = Murmur3X86Hasher32::new(7);
     ///     hasher.update(b"hel");
@@ -189,7 +189,7 @@ impl Murmur3X86Hasher32 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::Murmur3X86Hasher32;
+    ///     use hashcodecs::murmur3::Murmur3X86Hasher32;
     ///
     ///     let mut hasher = Murmur3X86Hasher32::default();
     ///     hasher.update(b"hello");
@@ -224,7 +224,7 @@ impl Default for Murmur3X86Hasher32 {
 ///
 /// # Examples
 ///
-///     use hashcodecs::murmur3_x86_32;
+///     use hashcodecs::murmur3::murmur3_x86_32;
 ///
 ///     assert_eq!(murmur3_x86_32(b"hello", 0), 0x248b_fa47);
 ///     assert_ne!(murmur3_x86_32(b"hello", 1), murmur3_x86_32(b"hello", 0));
@@ -319,7 +319,7 @@ fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
 ///
 /// # Examples
 ///
-///     use hashcodecs::Murmur3X86Hasher128;
+///     use hashcodecs::murmur3::Murmur3X86Hasher128;
 ///
 ///     let mut hasher = Murmur3X86Hasher128::new(7);
 ///     hasher.update(b"hello");
@@ -348,7 +348,7 @@ impl Murmur3X86Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X86Hasher128, murmur3_x86_128};
+    ///     use hashcodecs::murmur3::{Murmur3X86Hasher128, murmur3_x86_128};
     ///
     ///     let hasher = Murmur3X86Hasher128::new(42);
     ///     assert_eq!(hasher.digest(), murmur3_x86_128(b"", 42));
@@ -378,7 +378,7 @@ impl Murmur3X86Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X86Hasher128, murmur3_x86_128};
+    ///     use hashcodecs::murmur3::{Murmur3X86Hasher128, murmur3_x86_128};
     ///
     ///     let mut hasher = Murmur3X86Hasher128::new(7);
     ///     hasher.update(b"hel");
@@ -402,7 +402,7 @@ impl Murmur3X86Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::Murmur3X86Hasher128;
+    ///     use hashcodecs::murmur3::Murmur3X86Hasher128;
     ///
     ///     let mut hasher = Murmur3X86Hasher128::default();
     ///     hasher.update(b"hello");
@@ -436,7 +436,7 @@ impl Default for Murmur3X86Hasher128 {
 ///
 /// # Examples
 ///
-///     use hashcodecs::murmur3_x86_128;
+///     use hashcodecs::murmur3::murmur3_x86_128;
 ///
 ///     let words = murmur3_x86_128(&[1, 2, 3], 0);
 ///     let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
@@ -504,7 +504,7 @@ fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 
 ///
 /// # Examples
 ///
-///     use hashcodecs::Murmur3X64Hasher128;
+///     use hashcodecs::murmur3::Murmur3X64Hasher128;
 ///
 ///     let mut hasher = Murmur3X64Hasher128::new(7);
 ///     hasher.update(b"hello");
@@ -533,7 +533,7 @@ impl Murmur3X64Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X64Hasher128, murmur3_x64_128};
+    ///     use hashcodecs::murmur3::{Murmur3X64Hasher128, murmur3_x64_128};
     ///
     ///     let hasher = Murmur3X64Hasher128::new(42);
     ///     assert_eq!(hasher.digest(), murmur3_x64_128(b"", 42));
@@ -563,7 +563,7 @@ impl Murmur3X64Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::{Murmur3X64Hasher128, murmur3_x64_128};
+    ///     use hashcodecs::murmur3::{Murmur3X64Hasher128, murmur3_x64_128};
     ///
     ///     let mut hasher = Murmur3X64Hasher128::new(7);
     ///     hasher.update(b"hel");
@@ -587,7 +587,7 @@ impl Murmur3X64Hasher128 {
     ///
     /// # Examples
     ///
-    ///     use hashcodecs::Murmur3X64Hasher128;
+    ///     use hashcodecs::murmur3::Murmur3X64Hasher128;
     ///
     ///     let mut hasher = Murmur3X64Hasher128::default();
     ///     hasher.update(b"hello");
@@ -621,7 +621,7 @@ impl Default for Murmur3X64Hasher128 {
 ///
 /// # Examples
 ///
-///     use hashcodecs::murmur3_x64_128;
+///     use hashcodecs::murmur3::murmur3_x64_128;
 ///
 ///     let words = murmur3_x64_128(&[1, 2, 3], 0);
 ///     let bytes: Vec<_> = words.into_iter().flat_map(u64::to_le_bytes).collect();

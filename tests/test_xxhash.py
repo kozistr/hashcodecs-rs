@@ -9,7 +9,6 @@ import pytest
 import hashcodecs
 import hashcodecs.xxhash as xxhash
 
-
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 
 
@@ -76,6 +75,7 @@ def test_xxh3_bytearray_race_is_serialized() -> None:
         mutate_future.result()
 
     assert set(hashes) <= expected
+
 
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
 def test_xxh3_rejects_non_buffers(function: object) -> None:

@@ -256,34 +256,10 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - name: Linux / Python 3.10
-            os: ubuntu-latest
-            python-version: "3.10"
-            upload-coverage: false
-          - name: Linux / Python 3.11
-            os: ubuntu-latest
-            python-version: "3.11"
-            upload-coverage: false
           - name: Linux / Python 3.12
             os: ubuntu-latest
             python-version: "3.12"
             upload-coverage: true
-          - name: Linux / Python 3.13
-            os: ubuntu-latest
-            python-version: "3.13"
-            upload-coverage: false
-          - name: Linux / Python 3.14
-            os: ubuntu-latest
-            python-version: "3.14"
-            upload-coverage: false
-          - name: Linux / Python 3.15
-            os: ubuntu-latest
-            python-version: "3.15"
-            upload-coverage: false
-          - name: Linux / Python 3.14t
-            os: ubuntu-latest
-            python-version: "3.14t"
-            upload-coverage: false
           - name: Linux / Python 3.15t
             os: ubuntu-latest
             python-version: "3.15t"

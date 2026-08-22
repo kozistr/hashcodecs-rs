@@ -225,7 +225,7 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.12.5"
           python-version: "3.12"
@@ -261,7 +261,7 @@ jobs:
         uses: Swatinem/rust-cache@v2.9.1
 
       - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.12.5"
           python-version: ${{ matrix.python-version }}
@@ -293,7 +293,7 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.12.5"
           python-version: ${{ matrix.python-version }}

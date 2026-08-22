@@ -9,9 +9,10 @@ from collections.abc import Callable
 from time import sleep
 from typing import Any
 
+import pytest
+
 import hashcodecs
 import hashcodecs.base64 as base64
-import pytest
 
 PYTHON_315 = sys.version_info >= (3, 15)
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError

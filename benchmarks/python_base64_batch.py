@@ -7,9 +7,10 @@ import base64 as stdlib_base64
 import gc
 from collections.abc import Callable
 
-import hashcodecs.base64 as hashcodecs_base64
 import pybase64
 from _support import data, pin_to_one_cpu, throughput
+
+import hashcodecs.base64 as hashcodecs_base64
 
 BATCH_SIZES = (8, 64, 1024)
 ITEM_SIZES = (16, 256, 4096)

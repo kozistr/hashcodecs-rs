@@ -2,9 +2,10 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
+import pytest
+
 import hashcodecs
 import hashcodecs.murmur3 as murmur3
-import pytest
 
 
 def test_murmur3_known_answers_and_buffer_inputs() -> None:

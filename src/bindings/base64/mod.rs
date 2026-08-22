@@ -10,8 +10,9 @@ use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList, PyModule};
 
 use self::decode::{
     b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
-    standard_b64decode_into, urlsafe_b64decode_315, urlsafe_b64decode_into_315,
-    urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315,
+    standard_b64decode_batch, standard_b64decode_batch_into, standard_b64decode_into,
+    urlsafe_b64decode_315, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
+    urlsafe_b64decode_into_315, urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315,
 };
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
 use super::{
@@ -294,11 +295,33 @@ pub(super) fn b64encode_batch<'py>(
     altchars: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, false)?;
+    b64encode_batch_parsed(py, items, altchars)
+}
+
+fn b64encode_batch_parsed<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    altchars: Option<[u8; 2]>,
+) -> PyResult<Bound<'py, PyList>> {
     let mut encoded = batch_results(items.len())?;
     for item in list_items(items) {
         encoded.push(encode_parsed(py, &item, altchars, true, None)?);
     }
     PyList::new(py, encoded)
+}
+
+pub(super) fn standard_b64encode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64encode_batch_parsed(py, items, None)
+}
+
+pub(super) fn urlsafe_b64encode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64encode_batch_parsed(py, items, Some(*b"-_"))
 }
 
 /// Encode each item into its matching reusable bytearray and return byte counts.
@@ -315,6 +338,15 @@ pub(super) fn b64encode_batch_into<'py>(
     altchars: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, false)?;
+    b64encode_batch_into_parsed(py, items, outputs, altchars)
+}
+
+fn b64encode_batch_into_parsed<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+    altchars: Option<[u8; 2]>,
+) -> PyResult<Bound<'py, PyList>> {
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut written = batch_results(items.len())?;
     for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
@@ -322,6 +354,22 @@ pub(super) fn b64encode_batch_into<'py>(
         written.push(encode_parsed_into(&input, output, altchars, true, None)?);
     }
     PyList::new(py, written)
+}
+
+pub(super) fn standard_b64encode_batch_into<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64encode_batch_into_parsed(py, items, outputs, None)
+}
+
+pub(super) fn urlsafe_b64encode_batch_into<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64encode_batch_into_parsed(py, items, outputs, Some(*b"-_"))
 }
 
 pub(super) fn b64encode_into(
@@ -596,6 +644,116 @@ unsafe extern "C" fn b64encode_batch_into_callback(
     }
 }
 
+unsafe extern "C" fn standard_b64encode_batch_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"standard_b64encode_batch".as_ptr(),
+            [c"items".as_ptr()],
+            1,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            standard_b64encode_batch(py, items)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn standard_b64encode_batch_into_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"standard_b64encode_batch_into".as_ptr(),
+            [c"items".as_ptr(), c"outputs".as_ptr()],
+            2,
+            2,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
+            standard_b64encode_batch_into(py, items, outputs)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn urlsafe_b64encode_batch_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"urlsafe_b64encode_batch".as_ptr(),
+            [c"items".as_ptr()],
+            1,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            urlsafe_b64encode_batch(py, items)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn urlsafe_b64encode_batch_into_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"urlsafe_b64encode_batch_into".as_ptr(),
+            [c"items".as_ptr(), c"outputs".as_ptr()],
+            2,
+            2,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
+            urlsafe_b64encode_batch_into(py, items, outputs)
+        })();
+        return_bound(py, result)
+    }
+}
+
 unsafe extern "C" fn b64encode_into_callback(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
@@ -737,6 +895,116 @@ unsafe extern "C" fn standard_b64decode_into_callback(
             standard_b64decode_into(py, raw_argument(py, &values[0]), output)
         })();
         return_usize(py, result)
+    }
+}
+
+unsafe extern "C" fn standard_b64decode_batch_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"standard_b64decode_batch".as_ptr(),
+            [c"items".as_ptr()],
+            1,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            standard_b64decode_batch(py, items)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn standard_b64decode_batch_into_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"standard_b64decode_batch_into".as_ptr(),
+            [c"items".as_ptr(), c"outputs".as_ptr()],
+            2,
+            2,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
+            standard_b64decode_batch_into(py, items, outputs)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn urlsafe_b64decode_batch_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"urlsafe_b64decode_batch".as_ptr(),
+            [c"items".as_ptr()],
+            1,
+            1,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            urlsafe_b64decode_batch(py, items)
+        })();
+        return_bound(py, result)
+    }
+}
+
+unsafe extern "C" fn urlsafe_b64decode_batch_into_callback(
+    _self: *mut ffi::PyObject,
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    let py = unsafe { Python::assume_attached() };
+    unsafe {
+        let Some(values) = parse_raw_arguments(
+            args,
+            nargs,
+            keywords,
+            c"urlsafe_b64decode_batch_into".as_ptr(),
+            [c"items".as_ptr(), c"outputs".as_ptr()],
+            2,
+            2,
+        ) else {
+            return ptr::null_mut();
+        };
+        let result = (|| {
+            let items = raw_argument(py, &values[0]).cast::<PyList>()?;
+            let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
+            urlsafe_b64decode_batch_into(py, items, outputs)
+        })();
+        return_bound(py, result)
     }
 }
 
@@ -927,7 +1195,7 @@ unsafe extern "C" fn urlsafe_b64decode_into_callback(
     }
 }
 
-static mut METHODS: [ffi::PyMethodDef; 17] = [
+static mut METHODS: [ffi::PyMethodDef; 25] = [
     ffi::PyMethodDef {
         ml_name: c"standard_b64encode".as_ptr(),
         ml_meth: ffi::PyMethodDefPointer {
@@ -1404,6 +1672,102 @@ Examples:
     >>> output = bytearray(2)
     >>> urlsafe_b64decode_into(b'-_8=', output, padded=True)
     2"
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"standard_b64encode_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: standard_b64encode_batch_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"standard_b64encode_batch($module, /, items)
+--
+
+Encode a list of bytes-like objects with the standard Base64 alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"standard_b64encode_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: standard_b64encode_batch_into_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"standard_b64encode_batch_into($module, /, items, outputs)
+--
+
+Encode each item into a matching reusable bytearray with the standard alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"urlsafe_b64encode_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: urlsafe_b64encode_batch_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"urlsafe_b64encode_batch($module, /, items)
+--
+
+Encode a list of bytes-like objects with the URL-safe Base64 alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"urlsafe_b64encode_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: urlsafe_b64encode_batch_into_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"urlsafe_b64encode_batch_into($module, /, items, outputs)
+--
+
+Encode each item into a matching reusable bytearray with the URL-safe alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"standard_b64decode_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: standard_b64decode_batch_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"standard_b64decode_batch($module, /, items)
+--
+
+Decode a list of padded Base64 values with the standard alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"standard_b64decode_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: standard_b64decode_batch_into_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"standard_b64decode_batch_into($module, /, items, outputs)
+--
+
+Decode each item into a matching reusable bytearray with the standard alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"urlsafe_b64decode_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: urlsafe_b64decode_batch_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"urlsafe_b64decode_batch($module, /, items)
+--
+
+Decode a list of padded Base64 values with the URL-safe alphabet."
+            .as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"urlsafe_b64decode_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: urlsafe_b64decode_batch_into_callback,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"urlsafe_b64decode_batch_into($module, /, items, outputs)
+--
+
+Decode each item into a matching reusable bytearray with the URL-safe alphabet."
             .as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),

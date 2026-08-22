@@ -47,8 +47,11 @@ All byte-oriented APIs accept `bytes`, `bytearray`, and `memoryview`. Base64 dec
 
 ## Rust
 
-The repository also contains the Rust library used by the Python extension. It is not published on crates.io; use
-the repository source when integrating it from Rust.
+Install the Rust crate from crates.io:
+
+```sh
+cargo add hashcodecs
+```
 
 ```rust
 let encoded = hashcodecs::b64encode(b"hello");

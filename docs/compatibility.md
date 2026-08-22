@@ -24,8 +24,8 @@ builds and tests these wheels:
 Users on other targets may build the source distribution with Rust 1.89 or newer. The maintainers do not claim wheel
 support for targets outside this table.
 
-## Rust source API
+## Rust API
 
-The repository exposes a Rust library for source-based integration, but `Cargo.toml` sets `publish = false`. The
-Python package version does not guarantee Rust API compatibility. The maintainers may change the Rust API in a minor
-Python release and will document changes that affect source users.
+The crates.io crate and PyPI package share one release version. The Rust API follows Cargo's Semantic Versioning
+conventions. Before 1.0, minor releases may contain breaking Rust API changes; changes that affect Rust users are
+documented in the changelog.

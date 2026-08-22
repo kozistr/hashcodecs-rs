@@ -3,6 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/kozistr/hashcodecs-rs/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/kozistr/hashcodecs-rs/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/readthedocs/hashcodecs-rs?style=for-the-badge&logo=readthedocs)](https://hashcodecs-rs.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/hashcodecs?style=for-the-badge&logo=pypi)](https://pypi.org/project/hashcodecs/)
+[![crates.io](https://img.shields.io/crates/v/hashcodecs?style=for-the-badge&logo=rust)](https://crates.io/crates/hashcodecs)
 [![Python](https://img.shields.io/pypi/pyversions/hashcodecs?style=for-the-badge&logo=python)](https://pypi.org/project/hashcodecs/)
 [![Codecov](https://img.shields.io/codecov/c/github/kozistr/hashcodecs-rs?style=for-the-badge&logo=codecov)](https://codecov.io/gh/kozistr/hashcodecs-rs)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-brightgreen?style=for-the-badge)](https://github.com/kozistr/hashcodecs-rs#license)
@@ -40,7 +41,8 @@ Version 1.x keeps the documented Python API stable under the
 [compatibility policy](docs/compatibility.md). Release wheels target CPython 3.10 through 3.15 on manylinux x86-64,
 macOS 11+ ARM64, and Windows x86-64. CPython 3.14t and 3.15t receive free-threaded wheels on the same platforms.
 
-The Rust library remains a source dependency and does not share the Python package's 1.x stability guarantee.
+The Rust crate and Python package share one release version. Before 1.0, minor releases may contain breaking Rust API
+changes; the documented Python API follows the compatibility policy below.
 See [Security Policy](SECURITY.md) for vulnerability reporting.
 
 ## Performance snapshot
@@ -105,6 +107,10 @@ assert hasher.digest() != snapshot.digest()
 ## Rust
 
 The Rust API exposes the same core algorithms without the Python binding layer.
+
+```sh
+cargo add hashcodecs
+```
 
 ```rust
 let encoded = hashcodecs::b64encode(b"hello");

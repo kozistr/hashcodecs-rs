@@ -2,11 +2,16 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::sync::critical_section::with_critical_section;
 use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 
 use super::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
+
+pub(super) fn with_bytearray<T>(value: &Bound<'_, PyByteArray>, callback: impl FnOnce() -> T) -> T {
+    with_critical_section(value.as_any(), callback)
+}
 
 pub(super) enum BytesLike<'a, 'py> {
     Bytes(&'a [u8]),
@@ -21,9 +26,13 @@ impl BytesLike<'_, '_> {
     pub(super) fn len(&self) -> usize {
         match self {
             Self::Bytes(bytes) => bytes.len(),
-            Self::ByteArray(value) => unsafe { bytearray_size(value.as_ptr()) },
+            Self::ByteArray(value) => {
+                with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
+            }
             Self::OwnedBytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
-            Self::OwnedByteArray(value) => unsafe { bytearray_size(value.as_ptr()) },
+            Self::OwnedByteArray(value) => {
+                with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
+            }
             Self::Text(text) => text.len(),
             Self::Owned(bytes) => bytes.len(),
         }
@@ -47,22 +56,25 @@ impl BytesLike<'_, '_> {
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
             Self::Bytes(bytes) => callback(bytes),
-            Self::ByteArray(value) => callback(unsafe { bytearray_bytes(value) }),
+            Self::ByteArray(value) => with_critical_section(value.as_any(), || {
+                callback(unsafe { bytearray_bytes(value) })
+            }),
             Self::OwnedBytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
-            Self::OwnedByteArray(value) => callback(unsafe { bytearray_bytes(value) }),
+            Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
+                callback(unsafe { bytearray_bytes(value) })
+            }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::Owned(bytes) => callback(bytes),
         }
     }
 
-    /// The returned slice must not outlive this value. Callers must retain the
-    /// GIL whenever `detach_safe()` is false.
-    pub(super) unsafe fn as_bytes(&self) -> &[u8] {
+    pub(super) fn stable_bytes(&self) -> &[u8] {
         match self {
             Self::Bytes(bytes) => bytes,
-            Self::ByteArray(value) => unsafe { bytearray_bytes(value) },
-            Self::OwnedBytes(bytes) => unsafe { bytes_slice(bytes) },
-            Self::OwnedByteArray(value) => unsafe { bytearray_bytes(value) },
+            Self::ByteArray(_) | Self::OwnedByteArray(_) => {
+                unreachable!("mutable bytearrays must be snapshotted before borrowing")
+            }
+            Self::OwnedBytes(bytes) => bytes.as_bytes(),
             Self::Text(text) => text.as_bytes(),
             Self::Owned(bytes) => bytes,
         }
@@ -185,7 +197,7 @@ fn exact_memoryview_bytes_like<'a, 'py>(
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
-            if unsafe { bytearray_size(owner.as_ptr()) } == nbytes {
+            if with_bytearray(&owner, || unsafe { bytearray_size(owner.as_ptr()) }) == nbytes {
                 return Ok(BytesLike::OwnedByteArray(owner));
             }
         }

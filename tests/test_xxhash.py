@@ -1,10 +1,15 @@
 import inspect
+import sys
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
 
 import hashcodecs
 import hashcodecs.xxhash as xxhash
+
+FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 
 
 def test_xxh3_known_empty_digests_and_exports() -> None:
@@ -43,6 +48,33 @@ def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     large = [bytes((index * 31 + item) & 0xFF for index in range(4097)) for item in range(8)]
     assert hashcodecs.xxh3_64_batch(large, 0x12345678) == [hashcodecs.xxh3_64(value, 0x12345678) for value in large]
     assert hashcodecs.xxh3_128_batch(large, 0x12345678) == [hashcodecs.xxh3_128(value, 0x12345678) for value in large]
+
+
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+def test_xxh3_bytearray_race_is_serialized() -> None:
+    size = 1024 * 1024
+    first = b'a' * size
+    second = b'b' * size
+    value = bytearray(first)
+    expected = {hashcodecs.xxh3_64(first), hashcodecs.xxh3_64(second)}
+    start = Barrier(2)
+
+    def hash_value() -> list[int]:
+        start.wait()
+        return [hashcodecs.xxh3_64(value) for _ in range(64)]
+
+    def mutate_value() -> None:
+        start.wait()
+        for index in range(64):
+            value[:] = first if index % 2 else second
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hashes_future = executor.submit(hash_value)
+        mutate_future = executor.submit(mutate_value)
+        hashes = hashes_future.result()
+        mutate_future.result()
+
+    assert set(hashes) <= expected
 
 
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])

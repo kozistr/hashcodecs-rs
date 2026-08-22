@@ -6,8 +6,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyType};
 
 use super::{
-    STANDARD_ALPHABET, batch_outputs, batch_results, output_ptr, output_too_small, parse_altchars,
-    pybytes_with_len, python_at_least,
+    STANDARD_ALPHABET, batch_outputs, batch_results, output_too_small, parse_altchars,
+    pybytes_with_len, python_at_least, with_output_ptr,
 };
 use crate::base64::{
     Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_layout,
@@ -16,7 +16,7 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
-use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like};
+use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 use crate::bindings::{DETACH_THRESHOLD, bytearray_data, bytearray_size, list_items};
 
 fn decode_strict<'py>(
@@ -72,22 +72,27 @@ fn decode_strict_slice_into(
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
     let layout = decode_layout(input)?;
-    let provided = unsafe { bytearray_size(output.as_ptr()) };
-    if provided < layout.output_len {
-        return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len,
-            provided,
-        });
-    }
-    let output =
-        unsafe { slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len) };
-    let output = &mut output[..layout.output_len];
-    if transactional_errors {
-        decode_to_slice_with_layout_and_alphabet_transactional(input, output, layout, alphabet)?;
-    } else {
-        decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
-    }
-    Ok(layout.output_len)
+    with_bytearray(output, || {
+        let provided = unsafe { bytearray_size(output.as_ptr()) };
+        if provided < layout.output_len {
+            return Err(Base64Error::OutputTooSmall {
+                required: layout.output_len,
+                provided,
+            });
+        }
+        let output = unsafe {
+            slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len)
+        };
+        let output = &mut output[..layout.output_len];
+        if transactional_errors {
+            decode_to_slice_with_layout_and_alphabet_transactional(
+                input, output, layout, alphabet,
+            )?;
+        } else {
+            decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
+        }
+        Ok(layout.output_len)
+    })
 }
 
 fn decode_unpadded<'py>(
@@ -145,23 +150,26 @@ fn decode_unpadded_slice_into(
         return Err(Base64Error::InvalidInput);
     }
     let layout = decode_unpadded_layout(input)?;
-    let provided = unsafe { bytearray_size(output.as_ptr()) };
-    if provided < layout.output_len {
-        return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len,
-            provided,
-        });
-    }
-    let output =
-        unsafe { slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len) };
-    if transactional_errors {
-        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
-            input, output, layout, alphabet,
-        )?;
-    } else {
-        decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
-    }
-    Ok(layout.output_len)
+    with_bytearray(output, || {
+        let provided = unsafe { bytearray_size(output.as_ptr()) };
+        if provided < layout.output_len {
+            return Err(Base64Error::OutputTooSmall {
+                required: layout.output_len,
+                provided,
+            });
+        }
+        let output = unsafe {
+            slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len)
+        };
+        if transactional_errors {
+            decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+                input, output, layout, alphabet,
+            )?;
+        } else {
+            decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
+        }
+        Ok(layout.output_len)
+    })
 }
 
 fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
@@ -497,9 +505,10 @@ fn copy_decoded_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let decoded = decoded.as_bytes();
-    let output =
-        unsafe { slice::from_raw_parts_mut(output_ptr(output, decoded.len())?, decoded.len()) };
-    output.copy_from_slice(decoded);
+    with_output_ptr(output, decoded.len(), |output| {
+        let output = unsafe { slice::from_raw_parts_mut(output, decoded.len()) };
+        output.copy_from_slice(decoded);
+    })?;
     Ok(decoded.len())
 }
 

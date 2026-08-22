@@ -1,6 +1,6 @@
 #![no_main]
 
-use hashcodecs::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
+use hashcodecs::xxhash::{xxh3_64, xxh3_64_batch, xxh3_128, xxh3_128_batch};
 use libfuzzer_sys::fuzz_target;
 
 const MAX_INPUT: usize = 1024 * 1024;

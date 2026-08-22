@@ -2,7 +2,7 @@
 
 use std::io::Cursor;
 
-use hashcodecs::{
+use hashcodecs::murmur3::{
     Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128, murmur3_x64_128, murmur3_x86_32,
     murmur3_x86_128,
 };

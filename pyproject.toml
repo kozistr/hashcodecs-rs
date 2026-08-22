@@ -48,6 +48,7 @@ include = [
     "/LICENSE*",
     "/README.md",
     "/benches",
+    "/docs",
     "/hashcodecs",
     "/src",
 ]

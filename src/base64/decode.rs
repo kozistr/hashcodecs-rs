@@ -6,20 +6,92 @@ use super::{
     STANDARD_DECODE, URLSAFE_DECODE, initialized_output, uninitialized_output,
 };
 
+/// Decodes padded RFC 4648 Base64 with the standard alphabet.
+///
+/// The input must be quartet-aligned, use only the standard alphabet, and have
+/// valid trailing padding. Unlike Python's lenient decoder, this Rust API does
+/// not ignore whitespace or other non-alphabet bytes.
+///
+/// # Arguments
+///
+/// * input - The padded standard Base64 bytes to decode.
+///
+/// # Returns
+///
+/// A newly allocated vector containing the decoded bytes.
+///
+/// # Errors
+///
+/// Returns Base64Error::InvalidInput for invalid characters, padding, or
+/// quartet alignment.
+///
+/// # Examples
+///
+///     use hashcodecs::b64decode;
+///
+///     assert_eq!(b64decode(b"aGVsbG8=").unwrap(), b"hello");
+///     assert!(b64decode(b"aGVsbG8").is_err());
+///
 #[inline]
 pub fn b64decode(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
     b64decode_with_alphabet(input, false)
 }
 
-/// Decodes RFC 4648 URL-safe Base64 with required quartet alignment.
+/// Decodes padded RFC 4648 Base64 with the URL-safe alphabet.
+///
+/// The input must be quartet-aligned, use only the URL-safe alphabet, and have
+/// valid trailing padding.
+///
+/// # Arguments
+///
+/// * input - The padded URL-safe Base64 bytes to decode.
+///
+/// # Returns
+///
+/// A newly allocated vector containing the decoded bytes.
+///
+/// # Errors
+///
+/// Returns Base64Error::InvalidInput for invalid characters, padding, or
+/// quartet alignment.
+///
+/// # Examples
+///
+///     use hashcodecs::b64decode_urlsafe;
+///
+///     assert_eq!(b64decode_urlsafe(b"-_8=").unwrap(), [0xfb, 0xff]);
+///
 #[inline]
 pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
     b64decode_with_alphabet(input, true)
 }
 
-/// Returns the decoded length for structurally valid padded Base64.
+/// Calculates the decoded length of structurally valid padded Base64.
 ///
-/// Alphabet validation happens while decoding.
+/// This function validates quartet alignment and the placement and count of
+/// trailing = bytes. It does not validate alphabet characters; that happens
+/// while decoding.
+///
+/// # Arguments
+///
+/// * input - Padded Base64 whose output length is required.
+///
+/// # Returns
+///
+/// The exact decoded byte length.
+///
+/// # Errors
+///
+/// Returns Base64Error::InvalidInput when the length or padding layout is
+/// invalid.
+///
+/// # Examples
+///
+///     use hashcodecs::b64decoded_len;
+///
+///     assert_eq!(b64decoded_len(b"aGVsbG8=").unwrap(), 5);
+///     assert!(b64decoded_len(b"abc").is_err());
+///
 #[inline]
 pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
     decoded_len(input)
@@ -30,6 +102,31 @@ pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
 /// The destination may be larger than necessary. On success, the returned value
 /// is the initialized prefix length; bytes after that prefix are left unchanged.
 /// If the input is invalid, the destination prefix may have been modified.
+///
+/// # Arguments
+///
+/// * input - The padded standard Base64 bytes to decode.
+/// * output - Storage for the complete decoded result.
+///
+/// # Returns
+///
+/// The number of decoded bytes written to the start of output.
+///
+/// # Errors
+///
+/// Returns Base64Error::OutputTooSmall before decoding if output is too short.
+/// Returns Base64Error::InvalidInput for invalid Base64; in that case a prefix
+/// of output may already have changed.
+///
+/// # Examples
+///
+///     use hashcodecs::b64decode_into;
+///
+///     let mut output = [b'.'; 8];
+///     let written = b64decode_into(b"aGVsbG8=", &mut output).unwrap();
+///     assert_eq!(&output[..written], b"hello");
+///     assert_eq!(&output[written..], b"...");
+///
 #[inline]
 pub fn b64decode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Error> {
     b64decode_into_with_alphabet(input, output, false)
@@ -40,6 +137,31 @@ pub fn b64decode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
 /// The destination may be larger than necessary. On success, the returned value
 /// is the initialized prefix length; bytes after that prefix are left unchanged.
 /// If the input is invalid, the destination prefix may have been modified.
+///
+/// # Arguments
+///
+/// * input - The padded URL-safe Base64 bytes to decode.
+/// * output - Storage for the complete decoded result.
+///
+/// # Returns
+///
+/// The number of decoded bytes written to the start of output.
+///
+/// # Errors
+///
+/// Returns Base64Error::OutputTooSmall before decoding if output is too short.
+/// Returns Base64Error::InvalidInput for invalid Base64; in that case a prefix
+/// of output may already have changed.
+///
+/// # Examples
+///
+///     use hashcodecs::b64decode_urlsafe_into;
+///
+///     let mut output = [0; 2];
+///     let written = b64decode_urlsafe_into(b"-_8=", &mut output).unwrap();
+///     assert_eq!(written, 2);
+///     assert_eq!(output, [0xfb, 0xff]);
+///
 #[inline]
 pub fn b64decode_urlsafe_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Error> {
     b64decode_into_with_alphabet(input, output, true)

@@ -1,7 +1,7 @@
 # hashcodecs
 
 [![CI](https://img.shields.io/github/actions/workflow/status/kozistr/hashcodecs-rs/ci.yml?branch=main&style=for-the-badge&logo=github)](https://github.com/kozistr/hashcodecs-rs/actions/workflows/ci.yml)
-[![Documentation](https://readthedocs.org/projects/hashcodecs/badge/?version=latest&style=for-the-badge)](https://hashcodecs.readthedocs.io/en/latest/)
+[![Documentation](https://readthedocs.org/projects/hashcodecs-rs/badge/?version=latest&style=for-the-badge)](https://hashcodecs-rs.readthedocs.io/en/latest/)
 [![Codecov](https://codecov.io/gh/kozistr/hashcodecs-rs/graph/badge.svg)](https://app.codecov.io/gh/kozistr/hashcodecs-rs)
 [![PyPI](https://img.shields.io/pypi/v/hashcodecs?style=for-the-badge&logo=pypi)](https://pypi.org/project/hashcodecs/)
 [![Python](https://img.shields.io/pypi/pyversions/hashcodecs?style=for-the-badge&logo=python)](https://pypi.org/project/hashcodecs/)
@@ -24,7 +24,7 @@ dispatch, portable scalar fallbacks, native batch operations, and reusable outpu
 ## Installation
 
 ```sh
-python -m pip install hashcodecs
+pip3 install hashcodecs
 ```
 
 ## Python

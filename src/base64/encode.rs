@@ -5,18 +5,73 @@ use super::{
     Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET, initialized_output, uninitialized_output,
 };
 
+/// Encodes bytes with the padded RFC 4648 standard Base64 alphabet.
+///
+/// Runtime CPU dispatch selects the fastest supported in-crate backend. The
+/// returned string contains only ASCII characters and always includes the
+/// padding required to complete its final four-character group.
+///
+/// # Arguments
+///
+/// * input - The bytes to encode.
+///
+/// # Returns
+///
+/// A newly allocated Base64 string using + and / for values 62 and 63.
+///
+/// # Examples
+///
+///     use hashcodecs::b64encode;
+///
+///     assert_eq!(b64encode(b"hello"), "aGVsbG8=");
+///
 #[inline]
 pub fn b64encode(input: &[u8]) -> String {
     b64encode_with_alphabet(input, false)
 }
 
-/// Encodes bytes using the RFC 4648 URL-safe alphabet and padding.
+/// Encodes bytes with the padded RFC 4648 URL-safe Base64 alphabet.
+///
+/// The URL-safe alphabet substitutes - and _ for + and /. Runtime CPU dispatch
+/// selects the fastest supported in-crate backend.
+///
+/// # Arguments
+///
+/// * input - The bytes to encode.
+///
+/// # Returns
+///
+/// A newly allocated, padded URL-safe Base64 string.
+///
+/// # Examples
+///
+///     use hashcodecs::b64encode_urlsafe;
+///
+///     assert_eq!(b64encode_urlsafe(&[0xfb, 0xff]), "-_8=");
+///
 #[inline]
 pub fn b64encode_urlsafe(input: &[u8]) -> String {
     b64encode_with_alphabet(input, true)
 }
 
-/// Returns the padded Base64 length, or `None` if the arithmetic overflows.
+/// Calculates the encoded length of padded Base64 without encoding any data.
+///
+/// # Arguments
+///
+/// * input_len - The number of source bytes.
+///
+/// # Returns
+///
+/// Some(length) for the required output size, or None if rounding to complete
+/// four-character groups would overflow usize.
+///
+/// # Examples
+///
+///     use hashcodecs::b64encoded_len;
+///
+///     assert_eq!(b64encoded_len(0), Some(0));
+///     assert_eq!(b64encoded_len(5), Some(8));
+///
 #[inline]
 pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
     let groups = input_len / 3 + if input_len.is_multiple_of(3) { 0 } else { 1 };
@@ -27,6 +82,30 @@ pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
 ///
 /// The destination may be larger than necessary. On success, the returned value
 /// is the initialized prefix length; bytes after that prefix are left unchanged.
+///
+/// # Arguments
+///
+/// * input - The bytes to encode.
+/// * output - Storage for the complete padded Base64 result.
+///
+/// # Returns
+///
+/// The number of bytes written to the start of output.
+///
+/// # Errors
+///
+/// Returns Base64Error::OutputTooSmall before writing when output is shorter
+/// than the value reported by b64encoded_len.
+///
+/// # Examples
+///
+///     use hashcodecs::b64encode_into;
+///
+///     let mut output = [b'.'; 12];
+///     let written = b64encode_into(b"hello", &mut output).unwrap();
+///     assert_eq!(&output[..written], b"aGVsbG8=");
+///     assert_eq!(&output[written..], b"....");
+///
 #[inline]
 pub fn b64encode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Error> {
     b64encode_into_with_alphabet(input, output, false)
@@ -36,6 +115,29 @@ pub fn b64encode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
 ///
 /// The destination may be larger than necessary. On success, the returned value
 /// is the initialized prefix length; bytes after that prefix are left unchanged.
+///
+/// # Arguments
+///
+/// * input - The bytes to encode.
+/// * output - Storage for the complete padded URL-safe Base64 result.
+///
+/// # Returns
+///
+/// The number of bytes written to the start of output.
+///
+/// # Errors
+///
+/// Returns Base64Error::OutputTooSmall before writing when output is too short.
+///
+/// # Examples
+///
+///     use hashcodecs::b64encode_urlsafe_into;
+///
+///     let mut output = [0; 4];
+///     let written = b64encode_urlsafe_into(&[0xfb, 0xff], &mut output).unwrap();
+///     assert_eq!(written, 4);
+///     assert_eq!(&output, b"-_8=");
+///
 #[inline]
 pub fn b64encode_urlsafe_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Error> {
     b64encode_into_with_alphabet(input, output, true)

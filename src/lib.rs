@@ -3,8 +3,9 @@
 //! Base64 and XXH3 dispatch among in-crate AVX-512, AVX2, SSE4.1, SSSE3, NEON,
 //! and scalar kernels at runtime.
 
+// Python extension builds use mimalloc without imposing an allocator on Rust consumers.
 // Native allocators and CPU intrinsics are outside Kani's and Miri's interpreters.
-#[cfg(not(any(kani, miri)))]
+#[cfg(all(feature = "extension-module", not(any(kani, miri))))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

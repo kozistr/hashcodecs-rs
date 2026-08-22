@@ -9,7 +9,7 @@
 - Keep the codec and hash implementations in this repository. Do not replace production code with third-party codec crates.
 - Preserve runtime CPU dispatch: AVX-512 VBMI, AVX2, SSE4.1, SSSE3, then scalar on x86/x86_64; NEON then scalar on AArch64.
 - Keep behavior portable across Intel and AMD CPUs and hosts without SIMD support.
-- Use `mimalloc` as the project's global allocator.
+- Use `mimalloc` for the Python extension and project benchmarks without imposing it on Rust crate consumers.
 - Keep benchmark competitors in development dependencies only.
 - Prefer existing buffer APIs and avoid allocations or input copies on performance-sensitive paths.
 
@@ -48,9 +48,9 @@ Maintain 100% Rust line coverage and 100% Python branch coverage. The hardware-o
 ## Delivery
 
 - Keep CI and release workflows separate.
-- A release must pass CI before publishing to PyPI and creating its GitHub release.
+- A release must pass CI before publishing to PyPI or crates.io and creating its GitHub release.
 - GitHub releases must include generated changelog notes, wheels, and the source distribution.
-- Do not publish the Rust crate to crates.io.
+- Publish the Rust crate and PyPI package with the same version from the release workflow.
 
 ## Commits
 

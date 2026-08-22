@@ -62,6 +62,7 @@ const fn decode_table(urlsafe: bool, mixed: bool) -> [u8; 256] {
 }
 
 /// An error returned by a Base64 operation.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Base64Error {
     /// The input is not valid padded Base64 for the selected alphabet.

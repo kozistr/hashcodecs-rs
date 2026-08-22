@@ -264,6 +264,16 @@ jobs:
     needs: [prepare, wheels, source]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
       - name: Download wheels
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -294,10 +304,13 @@ jobs:
             exit 1
           fi
 
-      - name: Check distribution metadata
+      - name: Check PyPI distribution metadata
         run: uv publish --dry-run --trusted-publishing never --no-attestations dist/*
 
-  publish:
+      - name: Check crates.io package
+        run: cargo package --locked
+
+  publish_pypi:
     name: Publish / PyPI
     needs: [prepare, verify]
     runs-on: ubuntu-latest
@@ -329,9 +342,29 @@ jobs:
       - name: Publish distributions
         run: uv publish --trusted-publishing always
 
+  publish_crate:
+    name: Publish / crates.io
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      - name: Publish crate
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
   github_release:
     name: Publish / GitHub Release
-    needs: [prepare, publish]
+    needs: [prepare, publish_pypi, publish_crate]
     runs-on: ubuntu-latest
     permissions:
       contents: write

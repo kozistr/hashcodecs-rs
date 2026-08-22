@@ -138,6 +138,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
+#[allow(unused_unsafe)]
 unsafe fn encode_96_shifted<const URLSAFE: bool>(
     mut input: *const u8,
     mut output: *mut u8,
@@ -190,7 +191,8 @@ unsafe fn encode_96_shifted<const URLSAFE: bool>(
         }
     }
     // Streaming stores are weakly ordered with respect to later loads/stores.
-    _mm_sfence();
+    // SAFETY: the fence has no memory-safety preconditions.
+    unsafe { _mm_sfence() };
 }
 
 #[cfg(target_arch = "x86_64")]

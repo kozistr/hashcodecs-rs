@@ -23,11 +23,13 @@ pub(in crate::base64) fn use_streaming_stores(
     input_len > limit && output.align_offset(16) == 0
 }
 
+#[allow(unused_unsafe)]
 fn detect_private_cache() -> Option<usize> {
     // Leaf 4 is Intel's deterministic cache topology and is also implemented
     // by modern AMD CPUs. AMD exposes the same format at 0x8000_001d.
-    let basic_max = __cpuid(0).eax;
-    let extended_max = __cpuid(0x8000_0000).eax;
+    // SAFETY: these CPUID leaves have no memory-safety preconditions.
+    let basic_max = unsafe { __cpuid(0) }.eax;
+    let extended_max = unsafe { __cpuid(0x8000_0000) }.eax;
     private_cache_from_leaves(basic_max, extended_max, deterministic_private_cache)
 }
 
@@ -48,10 +50,12 @@ fn private_cache_from_leaves(
     }
 }
 
+#[allow(unused_unsafe)]
 fn deterministic_private_cache(leaf: u32) -> Option<usize> {
     let mut largest = None;
     for index in 0.. {
-        let registers = __cpuid_count(leaf, index);
+        // SAFETY: querying a CPUID leaf and subleaf has no memory-safety preconditions.
+        let registers = unsafe { __cpuid_count(leaf, index) };
         let cache_type = registers.eax & 0x1f;
         if cache_type == 0 {
             break;

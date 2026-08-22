@@ -172,6 +172,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+wheel-test = [
+    { name = "pytest" },
+]
 
 [package.metadata]
 
@@ -182,10 +185,11 @@ benchmark = [
     { name = "xxhash", specifier = ">=3.6,<4" },
 ]
 dev = [
-    { name = "pytest", specifier = ">=9,<10" },
+    { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = ">=7,<8" },
     { name = "ruff", specifier = ">=0.16,<0.17" },
 ]
+wheel-test = [{ name = "pytest", specifier = "==9.1.1" }]
 
 [[package]]
 name = "iniconfig"

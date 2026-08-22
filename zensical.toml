@@ -9,6 +9,7 @@ docs_dir = "docs"
 site_dir = "site"
 nav = [
   { "Overview" = "index.md" },
+  { "Compatibility" = "compatibility.md" },
   { "Base64" = "base64.md" },
   { "MurmurHash3" = "murmur3.md" },
   { "XXH3" = "xxh3.md" },
@@ -18,6 +19,7 @@ nav = [
     { "XXH3" = "api/xxh3.md" },
   ] },
   { "Performance" = "performance.md" },
+  { "Changelog" = "https://github.com/kozistr/hashcodecs-rs/blob/main/CHANGELOG.md" },
   { "Benchmark Details" = "https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md" },
   { "Architecture" = "ARCHITECTURE.md" },
 ]

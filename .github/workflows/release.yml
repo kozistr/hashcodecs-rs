@@ -3,7 +3,7 @@ run-name: Release / ${{ github.ref_name }}
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
     inputs:
       bump:
@@ -21,8 +21,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    name: Guard / release ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main for manual releases
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' && "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo "Run manual releases from main, not $GITHUB_REF" >&2
+            exit 1
+          fi
+
   validate:
     name: Validate
+    needs: guard
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.sha }}
@@ -38,20 +51,21 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       ref: ${{ steps.version.outputs.ref }}
     steps:
-      - name: Checkout main
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v7.0.1
+      - name: Checkout release ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Set up Rust
         if: github.event_name == 'workflow_dispatch'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Set up uv
         if: github.event_name == 'workflow_dispatch'
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
 
@@ -59,21 +73,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ]]; then
-            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           current="$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)"
-          IFS=. read -r major minor patch <<< "$current"
-          case "${{ inputs.bump }}" in
-            major) next="$((major + 1)).0.0" ;;
-            minor) next="$major.$((minor + 1)).0" ;;
-            patch) next="$major.$minor.$((patch + 1))" ;;
-          esac
-          tag="v$next"
-
           if [[ -z "$current" || ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Cargo.toml does not contain a valid release version" >&2
             exit 1
@@ -82,23 +82,90 @@ jobs:
             echo "pyproject.toml version does not match Cargo.toml" >&2
             exit 1
           fi
+          if ! grep -qx "version: $current" CITATION.cff; then
+            echo "CITATION.cff version does not match Cargo.toml" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ]]; then
+            tag="$GITHUB_REF_NAME"
+            if [[ "$tag" != "v$current" ]]; then
+              echo "Tag $tag does not match package version $current" >&2
+              exit 1
+            fi
+            if ! grep -Eq "^## \[$current\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+              echo "CHANGELOG.md does not contain a dated $current release" >&2
+              exit 1
+            fi
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<< "$current"
+          case "${{ inputs.bump }}" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            patch) next="$major.$minor.$((patch + 1))" ;;
+          esac
+          tag="v$next"
+
           if git rev-parse --verify --quiet "refs/tags/$tag"; then
             echo "Tag $tag already exists" >&2
             exit 1
           fi
+          if ! grep -Fqx "## [Unreleased]" CHANGELOG.md; then
+            echo "CHANGELOG.md does not contain an Unreleased section" >&2
+            exit 1
+          fi
+
+          release_date="$(date -u +%F)"
+          previous_tag="$(git describe --tags --abbrev=0)"
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$tag" \
+            -f target_commitish="$GITHUB_SHA" \
+            -f previous_tag_name="$previous_tag" \
+            --jq .body > "$notes_file"
 
           sed -i "0,/^version = \"$current\"$/s//version = \"$next\"/" Cargo.toml
           sed -i "0,/^version = \"$current\"$/s//version = \"$next\"/" pyproject.toml
+          sed -i "0,/^version: $current$/s//version: $next/" CITATION.cff
+          sed -i "0,/^date-released: .*$/s//date-released: $release_date/" CITATION.cff
+          python - "$next" "$release_date" "$notes_file" "$previous_tag" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version, release_date, notes_path, previous_tag = sys.argv[1:]
+          changelog = Path('CHANGELOG.md')
+          marker = '## [Unreleased]'
+          notes = Path(notes_path).read_text(encoding='utf-8').strip()
+          notes = '\n'.join(f'#{line}' if line.startswith('## ') else line for line in notes.splitlines())
+          replacement = f'{marker}\n\n## [{version}] - {release_date}\n\n{notes}'
+          text = changelog.read_text(encoding='utf-8').replace(marker, replacement, 1)
+          compare_url = 'https://github.com/kozistr/hashcodecs-rs/compare'
+          links = (
+              f'[Unreleased]: {compare_url}/v{version}...HEAD\n'
+              f'[{version}]: {compare_url}/{previous_tag}...v{version}'
+          )
+          text, count = re.subn(r'^\[Unreleased\]: .+$', links, text, count=1, flags=re.MULTILINE)
+          if count != 1:
+              raise RuntimeError('CHANGELOG.md does not contain an Unreleased comparison link')
+          changelog.write_text(text, encoding='utf-8')
+          PY
           cargo check --quiet
           uv lock
 
           git config user.name 'hashcodecs-github-actions[bot]'
           git config user.email 'hashcodecs-github-actions[bot]@users.noreply.github.com'
-          git add Cargo.toml Cargo.lock pyproject.toml uv.lock
-          git commit -m "build: [skip ci] prepare version $next"
+          git add CHANGELOG.md CITATION.cff Cargo.toml Cargo.lock pyproject.toml uv.lock
+          git commit -m "[skip ci] build: prepare version $next"
           git push origin HEAD:main
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   tag:
     name: Tag / version
@@ -109,7 +176,7 @@ jobs:
     steps:
       - name: Checkout release commit
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
           fetch-depth: 0
@@ -132,26 +199,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Set up Rust
         if: runner.os != 'Linux'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
         if: runner.os != 'Linux'
-        uses: Swatinem/rust-cache@v2.9.1
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.0
+        uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074 # v4.2.0
         with:
           extras: uv
           output-dir: dist
 
+      - name: Verify wheel count
+        shell: bash
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [[ "${#wheels[@]}" -ne 8 ]]; then
+            echo "Expected 8 wheels for $RUNNER_OS, found ${#wheels[@]}" >&2
+            exit 1
+          fi
+
       - name: Upload wheels
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheels-${{ matrix.os }}
           path: dist
@@ -162,52 +241,93 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
 
       - name: Build source distribution
-        run: uv build --sdist --out-dir dist
+        run: uv build --sdist --no-sources --out-dir dist
 
       - name: Upload source distribution
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: source
           path: dist
 
-  publish:
-    name: Publish / PyPI
+  verify:
+    name: Verify / distributions
     needs: [prepare, wheels, source]
     runs-on: ubuntu-latest
-    environment: pypi
     steps:
       - name: Download wheels
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: wheels-*
           path: dist
           merge-multiple: true
 
       - name: Download source distribution
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: source
           path: dist
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
 
+      - name: Verify distribution set
+        shell: bash
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          sources=(dist/*.tar.gz)
+          if [[ "${#wheels[@]}" -ne 24 || "${#sources[@]}" -ne 1 ]]; then
+            echo "Expected 24 wheels and 1 source distribution" >&2
+            echo "Found ${#wheels[@]} wheels and ${#sources[@]} source distributions" >&2
+            exit 1
+          fi
+
+      - name: Check distribution metadata
+        run: uv publish --dry-run --trusted-publishing never --no-attestations dist/*
+
+  publish:
+    name: Publish / PyPI
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Download source distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: source
+          path: dist
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+
+      - name: Generate distribution attestations
+        uses: astral-sh/attest-action@f589a42a7efb6fe400b4f400de60b4bc90390027 # v0.0.6
+
       - name: Publish distributions
-        run: uv publish dist/*
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.HASHCODECS_PYPI_TOKEN }}
+        run: uv publish --trusted-publishing always
 
   github_release:
     name: Publish / GitHub Release
@@ -217,14 +337,14 @@ jobs:
       contents: write
     steps:
       - name: Download wheels
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: wheels-*
           path: dist
           merge-multiple: true
 
       - name: Download source distribution
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: source
           path: dist

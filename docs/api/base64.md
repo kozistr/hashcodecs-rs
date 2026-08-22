@@ -18,21 +18,14 @@ behavior exposed by `hashcodecs.base64`.
         - standard_b64encode_into
         - standard_b64decode
         - standard_b64decode_into
-        - urlsafe_b64encode
-        - urlsafe_b64encode_into
-        - urlsafe_b64decode
-        - urlsafe_b64decode_into
-      show_root_heading: false
-
-## Standard and URL-safe batch helpers
-
-::: hashcodecs.base64
-    options:
-      members:
         - standard_b64encode_batch
         - standard_b64encode_batch_into
         - standard_b64decode_batch
         - standard_b64decode_batch_into
+        - urlsafe_b64encode
+        - urlsafe_b64encode_into
+        - urlsafe_b64decode
+        - urlsafe_b64decode_into
         - urlsafe_b64encode_batch
         - urlsafe_b64encode_batch_into
         - urlsafe_b64decode_batch

@@ -742,6 +742,15 @@ pub(super) fn b64decode_batch<'py>(
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, true)?;
+    b64decode_batch_parsed(py, items, altchars, validate)
+}
+
+fn b64decode_batch_parsed<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    altchars: Option<[u8; 2]>,
+    validate: bool,
+) -> PyResult<Bound<'py, PyList>> {
     let mut decoded = batch_results(items.len())?;
     for item in list_items(items) {
         let input = ascii_or_bytes(py, &item, "s")?;
@@ -750,6 +759,20 @@ pub(super) fn b64decode_batch<'py>(
         )?);
     }
     PyList::new(py, decoded)
+}
+
+pub(super) fn standard_b64decode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64decode_batch_parsed(py, items, None, false)
+}
+
+pub(super) fn urlsafe_b64decode_batch<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64decode_batch_parsed(py, items, Some(*b"-_"), false)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -906,6 +929,16 @@ pub(super) fn b64decode_batch_into<'py>(
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     let altchars = parse_altchars(py, altchars, true)?;
+    b64decode_batch_into_parsed(py, items, outputs, altchars, validate)
+}
+
+fn b64decode_batch_into_parsed<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+    altchars: Option<[u8; 2]>,
+    validate: bool,
+) -> PyResult<Bound<'py, PyList>> {
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut written = batch_results(items.len())?;
     for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
@@ -915,6 +948,22 @@ pub(super) fn b64decode_batch_into<'py>(
         )?);
     }
     PyList::new(py, written)
+}
+
+pub(super) fn standard_b64decode_batch_into<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64decode_batch_into_parsed(py, items, outputs, None, false)
+}
+
+pub(super) fn urlsafe_b64decode_batch_into<'py>(
+    py: Python<'py>,
+    items: &Bound<'py, PyList>,
+    outputs: &Bound<'py, PyList>,
+) -> PyResult<Bound<'py, PyList>> {
+    b64decode_batch_into_parsed(py, items, outputs, Some(*b"-_"), false)
 }
 
 #[allow(clippy::too_many_arguments)]

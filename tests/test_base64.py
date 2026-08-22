@@ -843,6 +843,7 @@ def test_base64_batch_exports_docstrings_and_signatures() -> None:
     }
     assert names <= set(base64.__all__)
     assert names <= set(hashcodecs.__all__)
+    assert all(inspect.isbuiltin(getattr(base64, name)) for name in names)
     assert base64.b64encode_batch.__doc__
     assert base64.b64decode_batch.__doc__
     assert base64.b64encode_batch_into.__doc__

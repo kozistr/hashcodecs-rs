@@ -227,6 +227,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
+          version: "0.12.5"
           python-version: "3.12"
           cache-dependency-glob: uv.lock
 
@@ -262,6 +263,7 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v9.0.0
         with:
+          version: "0.12.5"
           python-version: ${{ matrix.python-version }}
           cache-dependency-glob: uv.lock
 
@@ -293,6 +295,7 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@v9.0.0
         with:
+          version: "0.12.5"
           python-version: ${{ matrix.python-version }}
           cache-dependency-glob: uv.lock
 

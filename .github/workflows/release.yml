@@ -52,6 +52,8 @@ jobs:
       - name: Set up uv
         if: github.event_name == 'workflow_dispatch'
         uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.12.5"
 
       - name: Bump version, commit, and push
         id: version
@@ -166,6 +168,8 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.12.5"
 
       - name: Build source distribution
         run: uv build --sdist --out-dir dist
@@ -197,6 +201,8 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.12.5"
 
       - name: Publish distributions
         run: uv publish dist/*

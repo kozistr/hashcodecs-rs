@@ -6,9 +6,10 @@ import argparse
 import gc
 from collections.abc import Callable
 
-import hashcodecs.murmur3 as hashcodecs_murmur3
 import mmh3
 from _support import SIZES, data, pin_to_one_cpu, throughput
+
+import hashcodecs.murmur3 as hashcodecs_murmur3
 
 
 def benchmark(

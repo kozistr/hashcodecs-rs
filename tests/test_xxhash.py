@@ -1,9 +1,10 @@
 import inspect
 from collections.abc import Callable
 
+import pytest
+
 import hashcodecs
 import hashcodecs.xxhash as xxhash
-import pytest
 
 
 def test_xxh3_known_empty_digests_and_exports() -> None:
@@ -59,3 +60,83 @@ def test_xxh3_rejects_invalid_batch_and_seed_inputs() -> None:
         hashcodecs.xxh3_64(b'value', -1)
     with pytest.raises(OverflowError):
         hashcodecs.xxh3_128_batch([b'value'], 1 << 64)
+
+
+@pytest.mark.parametrize(
+    ('batch', 'batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64_batch, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128_batch, hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_xxh3_batch_into_packs_little_endian_and_preserves_tail(
+    batch: Callable[..., list[int]],
+    batch_into: Callable[..., int],
+    digest_size: int,
+) -> None:
+    values = [b'', bytearray(b'hello'), memoryview(b'xxhash')]
+    expected = batch(values, 42)
+    tail = b'unchanged'
+    output = bytearray(digest_size * len(values)) + bytearray(tail)
+
+    assert str(inspect.signature(batch_into)) == '(items, output, seed=0)'
+    assert batch_into(items=values, output=output, seed=42) == digest_size * len(values)
+    assert output[: -len(tail)] == b''.join(value.to_bytes(digest_size, 'little') for value in expected)
+    assert output[-len(tail) :] == tail
+
+
+@pytest.mark.parametrize(
+    ('batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_xxh3_batch_into_empty_and_failure_atomicity(
+    batch_into: Callable[..., int],
+    digest_size: int,
+) -> None:
+    assert batch_into([], bytearray()) == 0
+
+    too_small = bytearray(b'preserve')
+    before = too_small[:]
+    with pytest.raises(ValueError, match='destination has 8'):
+        batch_into([b'a', b'b'], too_small)
+    assert too_small == before
+
+    output = bytearray(digest_size * 2)
+    before = output[:]
+    with pytest.raises(TypeError, match='items element must be a bytes-like object'):
+        batch_into([b'valid', object()], output)
+    assert output == before
+
+    with pytest.raises(TypeError):
+        batch_into([b'value'], bytes(digest_size))
+    with pytest.raises(OverflowError):
+        batch_into([b'value'], bytearray(digest_size), -1)
+
+
+@pytest.mark.parametrize(
+    ('one_shot', 'batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_xxh3_batch_into_allows_output_to_alias_an_input(
+    one_shot: Callable[..., int],
+    batch_into: Callable[..., int],
+    digest_size: int,
+) -> None:
+    output = bytearray(b'input also serves as the reusable output')
+    original = bytes(output)
+    expected = one_shot(original, 42).to_bytes(digest_size, 'little')
+
+    assert batch_into([output], output, 42) == digest_size
+    assert output[:digest_size] == expected
+    assert output[digest_size:] == original[digest_size:]
+
+
+def test_xxh3_batch_into_exports() -> None:
+    assert hashcodecs.xxh3_64_batch_into is xxhash.xxh3_64_batch_into
+    assert hashcodecs.xxh3_128_batch_into is xxhash.xxh3_128_batch_into

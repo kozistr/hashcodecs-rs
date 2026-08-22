@@ -27,7 +27,7 @@ use super::{
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64decode;
+///     use hashcodecs::base64::b64decode;
 ///
 ///     assert_eq!(b64decode(b"aGVsbG8=").unwrap(), b"hello");
 ///     assert!(b64decode(b"aGVsbG8").is_err());
@@ -57,7 +57,7 @@ pub fn b64decode(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64decode_urlsafe;
+///     use hashcodecs::base64::b64decode_urlsafe;
 ///
 ///     assert_eq!(b64decode_urlsafe(b"-_8=").unwrap(), [0xfb, 0xff]);
 ///
@@ -87,7 +87,7 @@ pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64decoded_len;
+///     use hashcodecs::base64::b64decoded_len;
 ///
 ///     assert_eq!(b64decoded_len(b"aGVsbG8=").unwrap(), 5);
 ///     assert!(b64decoded_len(b"abc").is_err());
@@ -120,7 +120,7 @@ pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64decode_into;
+///     use hashcodecs::base64::b64decode_into;
 ///
 ///     let mut output = [b'.'; 8];
 ///     let written = b64decode_into(b"aGVsbG8=", &mut output).unwrap();
@@ -155,7 +155,7 @@ pub fn b64decode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64decode_urlsafe_into;
+///     use hashcodecs::base64::b64decode_urlsafe_into;
 ///
 ///     let mut output = [0; 2];
 ///     let written = b64decode_urlsafe_into(b"-_8=", &mut output).unwrap();

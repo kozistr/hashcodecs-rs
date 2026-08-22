@@ -1,3 +1,8 @@
+//! Padded standard and URL-safe Base64 encoding and decoding.
+//!
+//! Allocating functions return owned output, while the `_into` variants write
+//! into caller-provided storage. Decoders reject missing or malformed padding.
+
 use core::{fmt, mem::ManuallyDrop, mem::MaybeUninit};
 
 #[cfg(test)]

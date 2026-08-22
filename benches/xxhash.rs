@@ -32,9 +32,12 @@ fn one_shot(c: &mut Criterion) {
         let input = data(size, 17);
         let mut group = c.benchmark_group(format!("xxh3_64/{size}"));
         group.throughput(Throughput::Bytes(size as u64));
-        assert_eq!(hashcodecs::xxh3_64(&input, 42), c_xxh3_64(&input, 42));
+        assert_eq!(
+            hashcodecs::xxhash::xxh3_64(&input, 42),
+            c_xxh3_64(&input, 42)
+        );
         group.bench_function("hashcodecs", |bench| {
-            bench.iter(|| hashcodecs::xxh3_64(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_64(black_box(&input), 42))
         });
         group.bench_function("upstream_c", |bench| {
             bench.iter(|| c_xxh3_64(black_box(&input), 42))
@@ -43,9 +46,12 @@ fn one_shot(c: &mut Criterion) {
 
         let mut group = c.benchmark_group(format!("xxh3_128/{size}"));
         group.throughput(Throughput::Bytes(size as u64));
-        assert_eq!(hashcodecs::xxh3_128(&input, 42), c_xxh3_128(&input, 42));
+        assert_eq!(
+            hashcodecs::xxhash::xxh3_128(&input, 42),
+            c_xxh3_128(&input, 42)
+        );
         group.bench_function("hashcodecs", |bench| {
-            bench.iter(|| hashcodecs::xxh3_128(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_128(black_box(&input), 42))
         });
         group.bench_function("upstream_c", |bench| {
             bench.iter(|| c_xxh3_128(black_box(&input), 42))
@@ -67,7 +73,7 @@ fn batch(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("hashcodecs_64", ITEMS),
             &inputs,
-            |bench, inputs| bench.iter(|| hashcodecs::xxh3_64_batch(black_box(inputs), 42)),
+            |bench, inputs| bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(inputs), 42)),
         );
         group.bench_with_input(
             BenchmarkId::new("upstream_c_64", ITEMS),
@@ -84,7 +90,9 @@ fn batch(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("hashcodecs_128", ITEMS),
             &inputs,
-            |bench, inputs| bench.iter(|| hashcodecs::xxh3_128_batch(black_box(inputs), 42)),
+            |bench, inputs| {
+                bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(inputs), 42))
+            },
         );
         group.bench_with_input(
             BenchmarkId::new("upstream_c_128", ITEMS),

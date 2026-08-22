@@ -4,6 +4,10 @@
 //! core is the portability baseline; architecture-specific accumulation is
 //! deliberately kept behind dispatch points so unsupported CPUs never execute
 //! instructions they cannot run.
+//!
+//! The 128-bit functions return `[low64, high64]`, matching the field order of
+//! the official xxHash `XXH128_hash_t` result. This pair contains numeric words,
+//! not serialized bytes; choose and document a byte order at protocol boundaries.
 
 #[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::{self, SimdBackend};
@@ -101,7 +105,7 @@ fn mix16(data: &[u8], doff: usize, secret: &[u8], soff: usize, seed: u64) -> u64
 ///
 /// # Examples
 ///
-///     use hashcodecs::xxh3_64;
+///     use hashcodecs::xxhash::xxh3_64;
 ///
 ///     assert_eq!(xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
 ///     assert_ne!(xxh3_64(b"hello", 0), xxh3_64(b"hello", 1));
@@ -334,16 +338,17 @@ fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
 ///
 /// # Returns
 ///
-/// Two 64-bit words ordered as [low64, high64]. Convert them to one u128 with
-/// (high64 as u128) << 64 | low64 as u128.
+/// Two 64-bit words ordered as `[low64, high64]`. The first element is the low
+/// half of the digest and the second element is the high half. The returned pair
+/// is not a byte serialization.
 ///
 /// # Examples
 ///
-///     use hashcodecs::xxh3_128;
+///     use hashcodecs::xxhash::xxh3_128;
 ///
-///     let [low, high] = xxh3_128(b"", 0);
-///     let value = (u128::from(high) << 64) | u128::from(low);
-///     assert_eq!(value, 0x99aa_06d3_0147_98d8_6001_c324_468d_497f);
+///     let [low64, high64] = xxh3_128(b"", 0);
+///     assert_eq!(low64, 0x6001_c324_468d_497f);
+///     assert_eq!(high64, 0x99aa_06d3_0147_98d8);
 ///
 #[inline]
 pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
@@ -523,7 +528,7 @@ fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8];
 ///
 /// # Examples
 ///
-///     use hashcodecs::{xxh3_64, xxh3_64_batch};
+///     use hashcodecs::xxhash::{xxh3_64, xxh3_64_batch};
 ///
 ///     let inputs: &[&[u8]] = &[b"one", b"two"];
 ///     assert_eq!(
@@ -573,11 +578,12 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
 ///
 /// # Returns
 ///
-/// One [low64, high64] word pair per input.
+/// One `[low64, high64]` word pair per input. Each pair follows the same
+/// contract as [`xxh3_128`].
 ///
 /// # Examples
 ///
-///     use hashcodecs::{xxh3_128, xxh3_128_batch};
+///     use hashcodecs::xxhash::{xxh3_128, xxh3_128_batch};
 ///
 ///     let inputs: &[&[u8]] = &[b"one", b"two"];
 ///     assert_eq!(

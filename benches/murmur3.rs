@@ -45,7 +45,7 @@ fn x86_32(c: &mut Criterion) {
     let mut group = c.benchmark_group("x86_32");
     for size in SIZES {
         let input = data(size);
-        let expected = hashcodecs::murmur3_x86_32(&input, 42);
+        let expected = hashcodecs::murmur3::murmur3_x86_32(&input, 42);
         assert_eq!(
             murmur3::murmur3_32(&mut Cursor::new(&input), 42).unwrap(),
             expected
@@ -55,7 +55,7 @@ fn x86_32(c: &mut Criterion) {
         group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
-            hashcodecs::murmur3_x86_32(input, 42)
+            hashcodecs::murmur3::murmur3_x86_32(input, 42)
         });
         benchmark!(group, size, &input, "murmur3", |input: &[u8]| {
             murmur3::murmur3_32(&mut Cursor::new(input), 42).unwrap()
@@ -74,7 +74,7 @@ fn x86_128(c: &mut Criterion) {
     let mut group = c.benchmark_group("x86_128");
     for size in SIZES {
         let input = data(size);
-        let expected = hashcodecs::murmur3_x86_128(&input, 42);
+        let expected = hashcodecs::murmur3::murmur3_x86_128(&input, 42);
         assert_eq!(
             murmur3::murmur3_x86_128(&mut Cursor::new(&input), 42).unwrap(),
             x86_128_as_u128(expected)
@@ -83,7 +83,7 @@ fn x86_128(c: &mut Criterion) {
         group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
-            hashcodecs::murmur3_x86_128(input, 42)
+            hashcodecs::murmur3::murmur3_x86_128(input, 42)
         });
         benchmark!(group, size, &input, "murmur3", |input: &[u8]| {
             murmur3::murmur3_x86_128(&mut Cursor::new(input), 42).unwrap()
@@ -99,7 +99,7 @@ fn x64_128(c: &mut Criterion) {
     let mut group = c.benchmark_group("x64_128");
     for size in SIZES {
         let input = data(size);
-        let expected = hashcodecs::murmur3_x64_128(&input, 42);
+        let expected = hashcodecs::murmur3::murmur3_x64_128(&input, 42);
         let expected_u128 = x64_128_as_u128(expected);
         assert_eq!(
             murmur3::murmur3_x64_128(&mut Cursor::new(&input), 42).unwrap(),
@@ -111,7 +111,7 @@ fn x64_128(c: &mut Criterion) {
         group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
-            hashcodecs::murmur3_x64_128(input, 42)
+            hashcodecs::murmur3::murmur3_x64_128(input, 42)
         });
         benchmark!(group, size, &input, "murmur3", |input: &[u8]| {
             murmur3::murmur3_x64_128(&mut Cursor::new(input), 42).unwrap()

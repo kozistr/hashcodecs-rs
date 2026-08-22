@@ -1,7 +1,7 @@
 #![no_main]
 
 use base64::Engine;
-use hashcodecs::{
+use hashcodecs::base64::{
     b64decode, b64decode_into, b64decode_urlsafe, b64decode_urlsafe_into, b64encode,
     b64encode_into, b64encode_urlsafe, b64encode_urlsafe_into,
 };

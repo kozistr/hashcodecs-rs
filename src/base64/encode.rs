@@ -21,7 +21,7 @@ use super::{
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64encode;
+///     use hashcodecs::base64::b64encode;
 ///
 ///     assert_eq!(b64encode(b"hello"), "aGVsbG8=");
 ///
@@ -45,7 +45,7 @@ pub fn b64encode(input: &[u8]) -> String {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64encode_urlsafe;
+///     use hashcodecs::base64::b64encode_urlsafe;
 ///
 ///     assert_eq!(b64encode_urlsafe(&[0xfb, 0xff]), "-_8=");
 ///
@@ -67,7 +67,7 @@ pub fn b64encode_urlsafe(input: &[u8]) -> String {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64encoded_len;
+///     use hashcodecs::base64::b64encoded_len;
 ///
 ///     assert_eq!(b64encoded_len(0), Some(0));
 ///     assert_eq!(b64encoded_len(5), Some(8));
@@ -99,7 +99,7 @@ pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64encode_into;
+///     use hashcodecs::base64::b64encode_into;
 ///
 ///     let mut output = [b'.'; 12];
 ///     let written = b64encode_into(b"hello", &mut output).unwrap();
@@ -131,7 +131,7 @@ pub fn b64encode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
 ///
 /// # Examples
 ///
-///     use hashcodecs::b64encode_urlsafe_into;
+///     use hashcodecs::base64::b64encode_urlsafe_into;
 ///
 ///     let mut output = [0; 4];
 ///     let written = b64encode_urlsafe_into(&[0xfb, 0xff], &mut output).unwrap();

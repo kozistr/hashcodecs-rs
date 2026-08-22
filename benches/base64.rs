@@ -35,7 +35,7 @@ fn standard_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("standard_encode");
     for size in SIZES {
         let input = data(size);
-        let expected = hashcodecs::b64encode(&input);
+        let expected = hashcodecs::base64::b64encode(&input);
         assert_eq!(
             base64::engine::general_purpose::STANDARD.encode(&input),
             expected
@@ -44,7 +44,13 @@ fn standard_encode(c: &mut Criterion) {
 
         group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
-        benchmark!(group, size, &input, "hashcodecs", hashcodecs::b64encode);
+        benchmark!(
+            group,
+            size,
+            &input,
+            "hashcodecs",
+            hashcodecs::base64::b64encode
+        );
         benchmark!(group, size, &input, "base64", |input: &[u8]| {
             base64::engine::general_purpose::STANDARD.encode(input)
         });
@@ -59,7 +65,7 @@ fn urlsafe_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("urlsafe_encode");
     for size in SIZES {
         let input = data(size);
-        let expected = hashcodecs::b64encode_urlsafe(&input);
+        let expected = hashcodecs::base64::b64encode_urlsafe(&input);
         assert_eq!(
             base64::engine::general_purpose::URL_SAFE.encode(&input),
             expected
@@ -73,7 +79,7 @@ fn urlsafe_encode(c: &mut Criterion) {
             size,
             &input,
             "hashcodecs",
-            hashcodecs::b64encode_urlsafe
+            hashcodecs::base64::b64encode_urlsafe
         );
         benchmark!(group, size, &input, "base64", |input: &[u8]| {
             base64::engine::general_purpose::URL_SAFE.encode(input)
@@ -89,7 +95,7 @@ fn standard_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("standard_decode");
     for size in SIZES {
         let expected = data(size);
-        let input = hashcodecs::b64encode(&expected);
+        let input = hashcodecs::base64::b64encode(&expected);
         assert_eq!(
             base64::engine::general_purpose::STANDARD
                 .decode(&input)
@@ -105,7 +111,7 @@ fn standard_decode(c: &mut Criterion) {
             size,
             input.as_bytes(),
             "hashcodecs",
-            |input: &[u8]| { hashcodecs::b64decode(input).unwrap() }
+            |input: &[u8]| { hashcodecs::base64::b64decode(input).unwrap() }
         );
         benchmark!(group, size, input.as_bytes(), "base64", |input: &[u8]| {
             base64::engine::general_purpose::STANDARD
@@ -127,7 +133,7 @@ fn urlsafe_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("urlsafe_decode");
     for size in SIZES {
         let expected = data(size);
-        let input = hashcodecs::b64encode_urlsafe(&expected);
+        let input = hashcodecs::base64::b64encode_urlsafe(&expected);
         assert_eq!(
             base64::engine::general_purpose::URL_SAFE
                 .decode(&input)
@@ -143,7 +149,7 @@ fn urlsafe_decode(c: &mut Criterion) {
             size,
             input.as_bytes(),
             "hashcodecs",
-            |input: &[u8]| { hashcodecs::b64decode_urlsafe(input).unwrap() }
+            |input: &[u8]| { hashcodecs::base64::b64decode_urlsafe(input).unwrap() }
         );
         benchmark!(group, size, input.as_bytes(), "base64", |input: &[u8]| {
             base64::engine::general_purpose::URL_SAFE

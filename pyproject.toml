@@ -58,7 +58,7 @@ exclude = ["/src/base64/tests.rs"]
 path = "hatch_build.py"
 
 [tool.cibuildwheel]
-build = "cp310-* cp311-* cp312-* cp313-* cp314-* cp315-*"
+build = "cp310-* cp311-* cp312-* cp313-* cp314-* cp315-* cp314t-* cp315t-*"
 build-frontend = "uv"
 skip = "*-musllinux*"
 test-command = "python -c \"import hashcodecs; assert hashcodecs.b64decode(hashcodecs.b64encode(b'hashcodecs')) == b'hashcodecs'\""

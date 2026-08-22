@@ -4,7 +4,7 @@ use pyo3::exceptions::{PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::{output_ptr, pybytes_with_len};
+use super::{pybytes_with_len, with_output_ptr};
 use crate::base64::{encode_to_ptr, encoded_len};
 use crate::bindings::DETACH_THRESHOLD;
 use crate::bindings::buffer::BytesLike;
@@ -97,13 +97,14 @@ fn encode_slice_into(
     wrapcol: Option<usize>,
 ) -> PyResult<usize> {
     let required = encoded_output_len(input.len(), padded, wrapcol);
-    let output = output_ptr(output, required)?;
-    let urlsafe = altchars == Some(*b"-_");
-    unsafe { encode_configured_ptr(input, output, urlsafe, padded, wrapcol) };
-    if let Some(altchars) = altchars.filter(|_| !urlsafe) {
-        let output = unsafe { slice::from_raw_parts_mut(output, required) };
-        substitute_altchars(output, altchars);
-    }
+    with_output_ptr(output, required, |output| {
+        let urlsafe = altchars == Some(*b"-_");
+        unsafe { encode_configured_ptr(input, output, urlsafe, padded, wrapcol) };
+        if let Some(altchars) = altchars.filter(|_| !urlsafe) {
+            let output = unsafe { slice::from_raw_parts_mut(output, required) };
+            substitute_altchars(output, altchars);
+        }
+    })?;
     Ok(required)
 }
 

@@ -1,7 +1,7 @@
 # Base64 API Reference
 
-The functions below are rendered from the installed extension's runtime docstrings. They describe the exact public
-call signatures and behavior exposed by `hashcodecs.base64`.
+The functions below are rendered from the public API declarations. They describe the exact call signatures and
+behavior exposed by `hashcodecs.base64`.
 
 ::: hashcodecs.base64
     options:

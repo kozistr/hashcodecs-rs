@@ -1,6 +1,6 @@
 # XXH3 API Reference
 
-The functions below are rendered from the installed extension's runtime docstrings.
+The functions below are rendered from the public API declarations.
 
 ::: hashcodecs.xxhash
     options:

@@ -1,0 +1,49 @@
+[project]
+site_name = "hashcodecs"
+site_description = "SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust"
+site_url = "https://hashcodecs.readthedocs.io/"
+repo_name = "kozistr/hashcodecs-rs"
+repo_url = "https://github.com/kozistr/hashcodecs-rs"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { "Overview" = "index.md" },
+  { "Base64" = "base64.md" },
+  { "MurmurHash3" = "murmur3.md" },
+  { "XXH3" = "xxh3.md" },
+  { "API Reference" = [
+    { "Base64" = "api/base64.md" },
+    { "MurmurHash3" = "api/murmur3.md" },
+    { "XXH3" = "api/xxh3.md" },
+  ] },
+  { "Performance" = "performance.md" },
+  { "Benchmark Details" = "https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md" },
+  { "Architecture" = "ARCHITECTURE.md" },
+]
+
+[project.theme]
+variant = "classic"
+features = [
+  "content.action.edit",
+  "content.action.view",
+  "content.code.copy",
+  "navigation.footer",
+  "navigation.path",
+  "navigation.tabs.sticky",
+  "navigation.top",
+  "search.highlight",
+  "search.suggest",
+  "toc.follow",
+]
+palette = [
+  { media = "(prefers-color-scheme: light)", scheme = "default", toggle = { icon = "material/brightness-4", name = "Switch to dark mode" } },
+  { media = "(prefers-color-scheme: dark)", scheme = "slate", toggle = { icon = "material/brightness-7", name = "Switch to light mode" } },
+]
+
+[project.plugins.mkdocstrings.handlers.python]
+options.allow_inspection = false
+options.docstring_style = "google"
+options.show_root_full_path = false
+options.show_root_heading = true
+options.show_source = false

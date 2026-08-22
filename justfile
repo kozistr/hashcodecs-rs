@@ -7,11 +7,11 @@ default:
 
 # Start the local documentation server at http://127.0.0.1:8000.
 docs:
-    uv run --no-project --with-requirements {{ docs_requirements }} --with . mkdocs serve
+    uv run --no-project --with-requirements {{ docs_requirements }} zensical serve
 
 # Build the Read the Docs site without serving it.
 docs-build:
-    uv run --no-project --with-requirements {{ docs_requirements }} --with . mkdocs build --strict
+    uv run --no-project --with-requirements {{ docs_requirements }} zensical build --strict
 
 format:
     cargo fmt

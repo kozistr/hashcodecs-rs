@@ -1,6 +1,6 @@
 # MurmurHash3 API Reference
 
-The functions and incremental hashers below are rendered from the installed extension's runtime docstrings.
+The functions and incremental hashers below are rendered from the public API declarations.
 
 ::: hashcodecs.murmur3
     options:

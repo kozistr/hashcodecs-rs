@@ -31,6 +31,7 @@ base64 = "0.23.1"
 base64-turbo = "0.3.0"
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 fastmurmur3 = "0.2.0"
+mimalloc = "0.1.52"
 mm3h = "0.1.3"
 murmur3 = "0.5"
 murmurs = "1.0.5"

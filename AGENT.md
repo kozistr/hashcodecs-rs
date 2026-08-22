@@ -9,7 +9,7 @@
 - Keep the codec and hash implementations in this repository. Do not replace production code with third-party codec crates.
 - Preserve runtime CPU dispatch: AVX-512 VBMI, AVX2, SSE4.1, SSSE3, then scalar on x86/x86_64; NEON then scalar on AArch64.
 - Keep behavior portable across Intel and AMD CPUs and hosts without SIMD support.
-- Use `mimalloc` as the Python extension's global allocator without imposing it on Rust crate consumers.
+- Use `mimalloc` for the Python extension and project benchmarks without imposing it on Rust crate consumers.
 - Keep benchmark competitors in development dependencies only.
 - Prefer existing buffer APIs and avoid allocations or input copies on performance-sensitive paths.
 

@@ -1,3 +1,7 @@
+// Keep benchmark allocation behavior stable without choosing an allocator for crate users.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[cfg(target_os = "windows")]
 pub fn pin_to_one_cpu() {
     use core::ffi::c_void;

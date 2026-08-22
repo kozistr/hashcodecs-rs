@@ -21,7 +21,7 @@ builds and tests these wheels:
 | macOS 11 or newer | ARM64 | macOS 11 ARM64 |
 | Windows | x86-64 | Win32 AMD64 |
 
-Users on other targets may build the source distribution with Rust 1.94 or newer. The maintainers do not claim wheel
+Users on other targets may build the source distribution with Rust 1.89 or newer. The maintainers do not claim wheel
 support for targets outside this table.
 
 ## Rust API

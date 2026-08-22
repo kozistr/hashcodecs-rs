@@ -128,5 +128,6 @@ Rust benchmarks measure the core algorithms; Python benchmarks additionally meas
 allocation, buffer ownership, and GIL decisions. Reusable-buffer results are kept separate from allocating results
 so the API tradeoff remains visible.
 
-Commands, host details, charts, and raw result locations are documented in [BENCHMARK.md](../BENCHMARK.md) and the
-[README](../README.md#run-locally).
+Commands, host details, charts, and raw result locations are documented in
+[BENCHMARK.md](https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md) and the
+[README](https://github.com/kozistr/hashcodecs-rs#development).

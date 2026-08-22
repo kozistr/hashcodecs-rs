@@ -19,7 +19,8 @@ dispatch, portable scalar fallbacks, native batch operations, and reusable outpu
 - Caller-managed `*_into` outputs for allocation-sensitive workloads.
 - Runtime dispatch across AVX-512, AVX2, SSE4.1, SSSE3, NEON, and scalar implementations where applicable.
 - Direct CPython buffer handling for `bytes`, `bytearray`, and `memoryview` inputs.
-- Python 3.10 through 3.15 support on Linux, macOS, and Windows.
+- Install wheels for CPython 3.10 through 3.15 and free-threaded CPython
+  3.14t and 3.15t on Linux, macOS, and Windows.
 
 ## Installation
 
@@ -108,10 +109,8 @@ CPython boundary, and safety invariants.
 
 ## Benchmarks
 
-Environment: Windows 10 x64 and Intel Core Ultra 7 265K.
-
-Conditions: clean builds, one pinned logical CPU, single-threaded execution, 50 Rust samples, and 15 Python
-samples. Returned-output allocation is included except in the reusable-buffer table. Higher is better.
+Run the suite on Windows 10 x64 with an Intel Core Ultra 7 265K. Pin one logical CPU and run each case in one thread.
+Collect 50 Rust samples and 15 Python samples. Higher throughput wins.
 
 ### Base64: Rust
 
@@ -123,14 +122,14 @@ samples. Returned-output allocation is included except in the reusable-buffer ta
 
 ### XXH3: Rust
 
-`upstream C` is xxHash 0.8.3 built through `xxhash-c-sys` with AVX2 enabled, matching the backend selected by
-`hashcodecs` on the benchmark host. Batch results hash 32 equal-size inputs and include result-vector allocation.
+Link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2. Batch cases pass 32
+equal-size inputs and include result-vector allocation.
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
 
 ### Base64: Python
 
-Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly into Rust without an input copy.
+Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`.
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 
@@ -140,12 +139,13 @@ Python decoding uses `validate=True`, and `hashcodecs` passes `bytes` directly i
 
 ### XXH3: Python
 
-The batch comparison uses one native `hashcodecs` call versus a loop over the upstream `xxhash` extension.
+Pass 32 equal-size inputs to each batch case. Compare one native hashcodecs call with a loop over the upstream
+`xxhash` extension.
 
 [![Python XXH3 throughput](docs/benchmarks/xxh3-python.svg)](docs/benchmarks/xxh3-python.svg)
 
-Reusable-buffer and mutable-input charts, exact conditions, and interpretation notes are available in
-[BENCHMARK.md](BENCHMARK.md). Raw chart values are available as [CSV](docs/benchmarks/results.csv).
+Read the focused cases, commands, and values in [BENCHMARK.md](BENCHMARK.md). Read raw chart values in
+[docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
 ### Reproduce
 

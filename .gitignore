@@ -5,6 +5,7 @@ target
 fuzz/artifacts
 dist/
 dist-*/
+site/
 .venv/
 .venv-*/
 .coverage

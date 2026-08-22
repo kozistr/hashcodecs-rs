@@ -29,6 +29,18 @@ theme:
         icon: material/brightness-7
         name: Switch to light mode
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            allow_inspection: false
+            show_root_full_path: false
+            show_root_heading: true
+            show_source: false
+
 markdown_extensions:
   - admonition
   - pymdownx.details
@@ -42,6 +54,10 @@ nav:
   - Base64: base64.md
   - MurmurHash3: murmur3.md
   - XXH3: xxh3.md
+  - API Reference:
+    - Base64: api/base64.md
+    - MurmurHash3: api/murmur3.md
+    - XXH3: api/xxh3.md
   - Performance: performance.md
   - Benchmark Details: https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md
   - Architecture: ARCHITECTURE.md

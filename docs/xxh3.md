@@ -56,3 +56,5 @@ assert output == b''.join(value.to_bytes(8, 'little') for value in xxh3_64_batch
 Use 8 bytes per item for the 64-bit API and 16 bytes per item for the 128-bit API. Packed digests are **little
 endian**. The function validates every input and destination capacity before mutating the output, and it permits the
 output bytearray to also be one of the inputs.
+
+See the [XXH3 API Reference](api/xxh3.md) for the complete runtime signatures and docstrings.

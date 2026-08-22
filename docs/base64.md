@@ -88,3 +88,5 @@ assert [output[:length] for output, length in zip(outputs, lengths)] == [b'b25l'
 
 Batch destinations are checked for count, type, distinctness, and capacity before their own item is written. A
 batch therefore stops at the first invalid item; items completed earlier remain written.
+
+See the [Base64 API Reference](api/base64.md) for the complete runtime signatures and docstrings.

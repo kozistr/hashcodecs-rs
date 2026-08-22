@@ -195,7 +195,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_64_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_64($module, /, s, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"xxh3_64($module, /, s, seed=0)\n--\n\nReturn the canonical unsigned 64-bit XXH3 hash of a bytes-like object.\n\nseed must be an unsigned 64-bit integer. XXH3 is a non-cryptographic hash.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_128".as_ptr(),
@@ -203,7 +203,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_128($module, /, s, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"xxh3_128($module, /, s, seed=0)\n--\n\nReturn the canonical unsigned 128-bit XXH3 hash of a bytes-like object.\n\nseed must be an unsigned 64-bit integer. XXH3 is a non-cryptographic hash.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_64_batch".as_ptr(),
@@ -211,7 +211,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_64_batch_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_64_batch($module, /, items, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"xxh3_64_batch($module, /, items, seed=0)\n--\n\nReturn canonical unsigned 64-bit XXH3 hashes for a list of bytes-like objects.\n\nResults preserve input order. seed must be an unsigned 64-bit integer.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_128_batch".as_ptr(),
@@ -219,7 +219,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_128_batch_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_128_batch($module, /, items, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"xxh3_128_batch($module, /, items, seed=0)\n--\n\nReturn canonical unsigned 128-bit XXH3 hashes for a list of bytes-like objects.\n\nResults preserve input order. seed must be an unsigned 64-bit integer.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_64_batch_into".as_ptr(),
@@ -227,7 +227,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_64_batch_into_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_64_batch_into($module, /, items, output, seed=0)\n--\n\nWrite packed little-endian hashes into a reusable bytearray.".as_ptr(),
+        ml_doc: c"xxh3_64_batch_into($module, /, items, output, seed=0)\n--\n\nWrite 64-bit XXH3 hashes into a reusable bytearray.\n\nEach result occupies 8 little-endian bytes. output must have space for every result. The operation validates all inputs before mutating output and returns the total bytes written.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_128_batch_into".as_ptr(),
@@ -235,7 +235,7 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_128_batch_into_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"xxh3_128_batch_into($module, /, items, output, seed=0)\n--\n\nWrite packed little-endian hashes into a reusable bytearray.".as_ptr(),
+        ml_doc: c"xxh3_128_batch_into($module, /, items, output, seed=0)\n--\n\nWrite 128-bit XXH3 hashes into a reusable bytearray.\n\nEach result occupies 16 little-endian bytes. output must have space for every result. The operation validates all inputs before mutating output and returns the total bytes written.".as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),
 ];

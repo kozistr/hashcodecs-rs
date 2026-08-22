@@ -138,7 +138,7 @@ static mut METHODS: [ffi::PyMethodDef; 4] = [
             PyCFunctionFastWithKeywords: murmur3_32,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"murmur3_32($module, /, s, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"murmur3_32($module, /, s, seed=0)\n--\n\nReturn the unsigned 32-bit x86 MurmurHash3 value for a bytes-like object.\n\nseed must be an unsigned 32-bit integer. MurmurHash3 is non-cryptographic.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"murmur3_x86_128_digest".as_ptr(),
@@ -146,7 +146,7 @@ static mut METHODS: [ffi::PyMethodDef; 4] = [
             PyCFunctionFastWithKeywords: murmur3_x86_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"murmur3_x86_128_digest($module, /, s, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"murmur3_x86_128_digest($module, /, s, seed=0)\n--\n\nReturn the 16-byte x86-128 MurmurHash3 digest for a bytes-like object.\n\nseed must be an unsigned 32-bit integer. MurmurHash3 is non-cryptographic.".as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"murmur3_x64_128_digest".as_ptr(),
@@ -154,7 +154,7 @@ static mut METHODS: [ffi::PyMethodDef; 4] = [
             PyCFunctionFastWithKeywords: murmur3_x64_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: c"murmur3_x64_128_digest($module, /, s, seed=0)\n--\n\n".as_ptr(),
+        ml_doc: c"murmur3_x64_128_digest($module, /, s, seed=0)\n--\n\nReturn the 16-byte x64-128 MurmurHash3 digest for a bytes-like object.\n\nseed must be an unsigned 32-bit integer. MurmurHash3 is non-cryptographic.".as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),
 ];

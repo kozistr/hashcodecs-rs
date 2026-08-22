@@ -52,3 +52,5 @@ Calling `digest()` is non-destructive: more data can be added afterward. Each ha
 | `murmur3_x86_32` | 4 bytes | 4 bytes |
 | `murmur3_x86_128` | 16 bytes | 16 bytes |
 | `murmur3_x64_128` | 16 bytes | 16 bytes |
+
+See the [MurmurHash3 API Reference](api/murmur3.md) for the complete runtime signatures and docstrings.

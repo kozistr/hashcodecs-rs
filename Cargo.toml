@@ -1,6 +1,6 @@
 [package]
 name = "hashcodecs"
-version = "0.6.1"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.89"
 description = "SIMD-accelerated Base64 codecs and fast MurmurHash3 and xxHash implementations"

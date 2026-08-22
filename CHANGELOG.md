@@ -4,6 +4,21 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-22
+
+### What's Changed
+* Expand Python and Rust API documentation by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/36
+* feat: move base64 batch aliases into Rust by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/37
+* feat: support free-threaded Python wheels by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/38
+* Update benchmark and Python support docs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/39
+* chore: reduce CI runner usage and latency by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/40
+* build: prepare 1.0 release by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/41
+* build: publish Rust crate from release workflow by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/42
+* feat: expose namespaced Rust API by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/43
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...v1.0.0
+
 ## [0.6.1] - 2026-08-22
 
 ### Added
@@ -74,7 +89,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...v1.0.0
 [0.6.1]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.4.0...v0.5.0

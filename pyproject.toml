@@ -36,7 +36,7 @@ benchmark = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["python/hashcodecs"]
+packages = ["hashcodecs"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -48,7 +48,7 @@ include = [
     "/LICENSE*",
     "/README.md",
     "/benches",
-    "/python",
+    "/hashcodecs",
     "/src",
 ]
 exclude = ["/src/base64/tests.rs"]
@@ -108,7 +108,13 @@ quote-style = "single"
 
 [tool.coverage.run]
 branch = true
-source = ["hashcodecs"]
+source_pkgs = ["hashcodecs"]
+
+[tool.coverage.paths]
+source = [
+    "hashcodecs",
+    "*/site-packages/hashcodecs",
+]
 
 [tool.coverage.report]
 fail_under = 100

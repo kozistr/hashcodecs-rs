@@ -6,12 +6,18 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - '.readthedocs.yaml'
+      - 'CITATION.cff'
       - 'docs/**'
+      - 'zensical.toml'
   push:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - '.readthedocs.yaml'
+      - 'CITATION.cff'
       - 'docs/**'
+      - 'zensical.toml'
   workflow_call:
     inputs:
       ref:
@@ -24,6 +30,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -70,7 +79,7 @@ jobs:
 
       - name: Upload Rust coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -78,12 +87,8 @@ jobs:
           fail_ci_if_error: true
 
   rust_test:
-    name: Rust / Test / ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    name: Rust / Test
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
@@ -137,6 +142,7 @@ jobs:
 
   rust_sanitizers:
     name: Rust / Safety / ${{ matrix.name }}
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -165,6 +171,7 @@ jobs:
 
   rust_safety_kani:
     name: Rust / Safety / Kani
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -177,6 +184,7 @@ jobs:
 
   rust_safety_miri:
     name: Rust / Safety / Miri
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -196,6 +204,7 @@ jobs:
 
   rust_safety_fuzz:
     name: Rust / Safety / Fuzz
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -240,13 +249,56 @@ jobs:
       - name: Check Python formatting
         run: uv run --frozen --no-sync ruff format --check .
 
-  python_wheel:
-    name: Python / Build / ${{ matrix.os }} / ${{ matrix.python-version }}
+  python_test:
+    name: Python / Test / ${{ matrix.name }}
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15", "3.14t", "3.15t"]
+        include:
+          - name: Linux / Python 3.10
+            os: ubuntu-latest
+            python-version: "3.10"
+            upload-coverage: false
+          - name: Linux / Python 3.11
+            os: ubuntu-latest
+            python-version: "3.11"
+            upload-coverage: false
+          - name: Linux / Python 3.12
+            os: ubuntu-latest
+            python-version: "3.12"
+            upload-coverage: true
+          - name: Linux / Python 3.13
+            os: ubuntu-latest
+            python-version: "3.13"
+            upload-coverage: false
+          - name: Linux / Python 3.14
+            os: ubuntu-latest
+            python-version: "3.14"
+            upload-coverage: false
+          - name: Linux / Python 3.15
+            os: ubuntu-latest
+            python-version: "3.15"
+            upload-coverage: false
+          - name: Linux / Python 3.14t
+            os: ubuntu-latest
+            python-version: "3.14t"
+            upload-coverage: false
+          - name: Linux / Python 3.15t
+            os: ubuntu-latest
+            python-version: "3.15t"
+            upload-coverage: true
+          - name: Windows / Python 3.12
+            os: windows-latest
+            python-version: "3.12"
+            upload-coverage: true
+          - name: Windows / Python 3.15t
+            os: windows-latest
+            python-version: "3.15t"
+            upload-coverage: false
+          - name: macOS ARM64 / Python 3.12
+            os: macos-latest
+            python-version: "3.12"
+            upload-coverage: true
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -267,46 +319,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache-dependency-glob: uv.lock
 
-      - name: Build Python wheel
-        run: uv build --wheel --out-dir dist
-
-      - name: Upload Python wheel
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: python-wheel-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: dist/*.whl
-          retention-days: 1
-
-  python_test:
-    name: Python / Test / ${{ matrix.os }} / ${{ matrix.python-version }}
-    needs: python_wheel
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15", "3.14t", "3.15t"]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: "0.12.5"
-          python-version: ${{ matrix.python-version }}
-          cache-dependency-glob: uv.lock
-
-      - name: Install Python development dependencies
+      - name: Install test dependencies
         run: uv sync --no-install-project --frozen
 
-      - name: Download Python wheel
-        uses: actions/download-artifact@v8.0.1
-        with:
-          name: python-wheel-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: dist
+      - name: Build Python wheel
+        run: uv build --wheel --out-dir dist
 
       - name: Install Python wheel
         run: uv pip install --python .venv --reinstall --no-index --find-links dist hashcodecs
@@ -315,8 +332,8 @@ jobs:
         run: uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100 --cov-report=xml:coverage.xml
 
       - name: Upload Python coverage to Codecov
-        if: ${{ !inputs.skip_coverage_upload }}
-        uses: codecov/codecov-action@v5
+        if: ${{ matrix.upload-coverage && !inputs.skip_coverage_upload }}
+        uses: codecov/codecov-action@v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml

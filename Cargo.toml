@@ -9,6 +9,15 @@ repository = "https://github.com/kozistr/hashcodecs-rs"
 keywords = ["base64", "simd", "murmur3", "xxhash", "python"]
 categories = ["encoding", "algorithms"]
 readme = "README.md"
+include = [
+    "/src/**",
+    "/benches/**",
+    "/tests/sanitizers.rs",
+    "/build.rs",
+    "/README.md",
+    "/LICENSE",
+    "/LICENSE-MIT",
+]
 
 [lib]
 name = "hashcodecs"

@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use hashcodecs, please cite it as below."
+authors:
+  - family-names: Kim
+    given-names: Hyeongchan
+    orcid: https://orcid.org/0000-0002-1729-0580
+title: "hashcodecs: SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust"
+version: 0.6.1
+date-released: 2026-08-22
+license: "MIT OR Apache-2.0"
+repository-code: "https://github.com/kozistr/hashcodecs-rs"
+url: "https://github.com/kozistr/hashcodecs-rs"

@@ -1,7 +1,7 @@
 [project]
 site_name = "hashcodecs"
 site_description = "SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust"
-site_url = "https://hashcodecs.readthedocs.io/"
+site_url = "https://hashcodecs-rs.readthedocs.io/"
 repo_name = "kozistr/hashcodecs-rs"
 repo_url = "https://github.com/kozistr/hashcodecs-rs"
 edit_uri = "edit/main/docs/"

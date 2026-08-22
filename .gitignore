@@ -4,10 +4,10 @@ debug
 target
 fuzz/artifacts
 dist/
-dist-*/
+dist*/
 site/
 .venv/
-.venv-*/
+.venv*/
 .coverage
 coverage.xml
 

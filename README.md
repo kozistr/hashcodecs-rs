@@ -16,39 +16,20 @@ Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs`
 `memoryview`, selects the best available SIMD backend, and exposes batch and reusable-buffer APIs.
 
 ## Features
+
 - Base64 encode and decode with standard, URL-safe, padded, unpadded, wrapped, and canonical modes.
 - MurmurHash3 x86-32, x86-128, and x64-128 with one-shot and incremental APIs.
 - Bit-for-bit compatible XXH3-64 and XXH3-128 with one-shot and native batch APIs.
 - Caller-managed `*_into` outputs for allocation-sensitive workloads.
 - Runtime dispatch across AVX-512, AVX2, SSE4.1, SSSE3, NEON, and scalar implementations where applicable.
 - Direct CPython buffer handling for `bytes`, `bytearray`, and `memoryview` inputs.
-- Install wheels for CPython 3.10 through 3.15 and free-threaded CPython
-  3.14t and 3.15t on Linux, macOS, and Windows.
-
-## Citation
-
-If you use `hashcodecs`, cite [CITATION.cff](CITATION.cff).
+- Install wheels for CPython 3.10 through 3.15 and free-threaded CPython 3.14t and 3.15t on Linux, macOS, and Windows.
 
 ## Installation
 
 ```sh
 pip3 install hashcodecs
 ```
-
-## Compatibility
-
-Version 1.x keeps the documented Python API stable under the
-[compatibility policy](docs/compatibility.md). Release wheels target CPython 3.10 through 3.15 on manylinux x86-64,
-macOS 11+ ARM64, and Windows x86-64. CPython 3.14t and 3.15t receive free-threaded wheels on the same platforms.
-
-The Rust crate and Python package share one release version. Before 1.0, minor releases may contain breaking Rust API
-changes; the documented Python API follows the compatibility policy below.
-See [Security Policy](SECURITY.md) for vulnerability reporting.
-
-## Performance snapshot
-
-On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 78.83 GiB/s. The operator pinned one logical
-CPU and measured hashcodecs alone. At 256 B items in batches of 64, the Base64 batch API reaches 8.56 GiB/s for encode and 7.60 GiB/s for decode. The per-item loop reaches 4.41 and 3.39 GiB/s. Read the [benchmark details](BENCHMARK.md) and [raw results](docs/benchmarks/results.csv).
 
 ## Python
 
@@ -206,6 +187,12 @@ cargo clean -p xxhash-c-sys
 cargo bench --bench xxhash
 ```
 
+## Performance snapshot
+
+On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 78.83 GiB/s. The operator pinned one logical
+CPU and measured hashcodecs alone. At 256 B items in batches of 64, the Base64 batch API reaches 8.56 GiB/s for encode and 7.60 GiB/s for decode.
+The per-item loop reaches 4.41 and 3.39 GiB/s. Read the [benchmark details](BENCHMARK.md) and [raw results](docs/benchmarks/results.csv).
+
 ## Development
 
 Build the Python wheel and source distribution:
@@ -228,15 +215,21 @@ uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-
 Optimized paths are also checked with differential fuzzing, Kani, strict-provenance Miri, AddressSanitizer, and
 MemorySanitizer in CI.
 
+## Compatibility
+
+Version 1.x keeps the documented Python API stable under the
+[compatibility policy](docs/compatibility.md). Release wheels target CPython 3.10 through 3.15 on manylinux x86-64,
+macOS 11+ ARM64, and Windows x86-64. CPython 3.14t and 3.15t receive free-threaded wheels on the same platforms.
+
+The Rust crate and Python package share one release version. The documented Python API follows the compatibility
+policy below. See [Security Policy](SECURITY.md) for vulnerability reporting.
+
 ## References
 
 The Base64 SIMD implementation follows the approach described in
 [Faster Base64 Encoding and Decoding using AVX2 Instructions](https://arxiv.org/abs/1704.00605), extended with
 runtime-selected AVX-512 VBMI and AArch64 NEON backends.
 
-## License
+## Citation
 
-Licensed under either of the following, at your option:
-
-- [Apache License 2.0](LICENSE)
-- [MIT License](LICENSE-MIT)
+If you use `hashcodecs`, cite [CITATION.cff](CITATION.cff).

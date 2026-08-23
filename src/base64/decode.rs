@@ -1,5 +1,18 @@
 //! Base64 decoding API, layout validation, and scalar fallback.
 
+#[cfg(target_arch = "aarch64")]
+pub(super) mod aarch64;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx2;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx512;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod sse41;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod ssse3;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod x86_contracts;
+
 use super::dispatch::decode_simd_ptr;
 use super::output::{initialized_output, uninitialized_output};
 use super::{

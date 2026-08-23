@@ -1,4 +1,8 @@
-use super::*;
+use super::super::Base64Error;
+use super::super::decode::aarch64::{
+    DECODE_ERROR_CHECK_INTERVAL, decode_neon, decode_neon_transactional,
+};
+use super::super::encode::aarch64::encode_neon;
 
 const CANARY: u8 = 0xa5;
 const GUARD: usize = 32;

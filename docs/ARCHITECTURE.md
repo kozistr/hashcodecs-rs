@@ -61,7 +61,7 @@ implementation under `src/<algorithm>/`. The implementation follows the algorith
 
 | Algorithm | Main module boundary | Reason |
 | --- | --- | --- |
-| Base64 | `encode` and `decode` | Encoding and decoding have separate validation, sizing, and kernel flows. |
+| Base64 | `encode` and `decode`, then ISA kernel | Encoding and decoding have separate validation, sizing, and kernel flows; flat ISA files keep hot-path ownership visible. |
 | MurmurHash3 | `x86_32`, `x86_128`, and `x64_128` | Each canonical variant owns one-shot hashing, incremental state, tail handling, and finalization. |
 | XXH3 | `short`, `long`, and `batch` | XXH3-64 and XXH3-128 share primitives and the long-input accumulator. |
 
@@ -88,7 +88,9 @@ checks.
 ### Base64
 
 `base64.rs` reexports the public operations and error type. `alphabet.rs` owns lookup tables, `output.rs` owns
-allocation initialization, and the `encode` and `decode` modules own their operation flows. The runtime backend
+allocation initialization, and the `encode` and `decode` modules own their operation flows. Their architecture
+kernels are flat operation children such as `encode/avx2.rs`, `encode/ssse3.rs`, `decode/sse41.rs`, and
+`decode/aarch64.rs`; `decode/x86_contracts.rs` holds contracts shared by multiple x86 decoders. The runtime backend
 prefers AVX-512 VBMI, AVX2, SSE4.1, SSSE3, NEON, then scalar when supported. Scalar code handles short inputs and
 all tails.
 

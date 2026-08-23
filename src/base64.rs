@@ -10,11 +10,7 @@ mod encode;
 mod error;
 mod output;
 
-#[cfg(target_arch = "aarch64")]
-mod aarch64;
 mod dispatch;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86;
 
 pub use decode::{
     b64decode, b64decode_into, b64decode_urlsafe, b64decode_urlsafe_into, b64decoded_len,

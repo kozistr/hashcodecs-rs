@@ -1,10 +1,13 @@
+//! AVX-512 VBMI decoding kernel.
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::super::super::Base64Error;
-use super::{Decoder, Store, decode_avx2};
+use super::super::Base64Error;
+use super::avx2::decode_avx2;
+use super::x86_contracts::{Decoder, Store};
 
 const OUTPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 

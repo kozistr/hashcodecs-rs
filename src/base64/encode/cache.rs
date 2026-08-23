@@ -1,4 +1,4 @@
-//! x86 cache-topology queries used by memory-bound kernels.
+//! x86-64 cache-topology policy for memory-bound encoding kernels.
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::{__cpuid, __cpuid_count};

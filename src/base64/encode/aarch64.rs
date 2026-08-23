@@ -1,4 +1,4 @@
-//! AArch64 NEON Base64 encoding kernels.
+//! AArch64 NEON encoding kernel.
 
 use std::arch::aarch64::*;
 

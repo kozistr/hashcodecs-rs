@@ -1,10 +1,12 @@
+//! AVX-512 VBMI encoding kernel.
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
-use super::{Avx2StoreMode, encode_avx2_with_store};
+use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
+use super::avx2::{Avx2StoreMode, encode_avx2_with_store};
 
 const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 

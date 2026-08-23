@@ -1,8 +1,12 @@
-#[cfg(target_arch = "aarch64")]
-use super::aarch64;
 use super::backend::{self, Backend};
+#[cfg(target_arch = "aarch64")]
+use super::decode::aarch64 as decode_aarch64;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
+use super::decode::{self as decode_backend, x86_contracts};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::encode as encode_backend;
+#[cfg(target_arch = "aarch64")]
+use super::encode::aarch64 as encode_aarch64;
 use super::{Base64Error, DecodeAlphabet};
 
 #[inline]
@@ -75,9 +79,9 @@ unsafe fn encode_with_backend_ptr(
         if backend == Backend::Neon {
             return unsafe {
                 if urlsafe {
-                    aarch64::encode_neon::<true>(input, output)
+                    encode_aarch64::encode_neon::<true>(input, output)
                 } else {
-                    aarch64::encode_neon::<false>(input, output)
+                    encode_aarch64::encode_neon::<false>(input, output)
                 }
             };
         }
@@ -96,11 +100,13 @@ unsafe fn encode_x86<const URLSAFE: bool>(
 ) -> usize {
     if backend == Backend::Avx2 {
         let store_mode = if streaming_stores {
-            x86::Avx2StoreMode::Streaming
+            encode_backend::avx2::Avx2StoreMode::Streaming
         } else {
-            x86::Avx2StoreMode::Cached
+            encode_backend::avx2::Avx2StoreMode::Cached
         };
-        return unsafe { x86::encode_avx2_with_store::<URLSAFE>(input, output, store_mode) };
+        return unsafe {
+            encode_backend::avx2::encode_avx2_with_store::<URLSAFE>(input, output, store_mode)
+        };
     }
     let Some(kernel) = encode_x86_kernel::<URLSAFE>(backend) else {
         return 0;
@@ -115,9 +121,9 @@ type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
     match backend {
-        Backend::Avx512 => Some(x86::encode_avx512::<URLSAFE>),
-        Backend::Avx2 => Some(x86::encode_avx2::<URLSAFE>),
-        Backend::Sse41 | Backend::Ssse3 => Some(x86::encode_ssse3::<URLSAFE>),
+        Backend::Avx512 => Some(encode_backend::avx512::encode::<URLSAFE>),
+        Backend::Avx2 => Some(encode_backend::avx2::encode_avx2::<URLSAFE>),
+        Backend::Sse41 | Backend::Ssse3 => Some(encode_backend::ssse3::encode_ssse3::<URLSAFE>),
         Backend::Scalar | Backend::Neon => None,
     }
 }
@@ -172,24 +178,26 @@ unsafe fn decode_with_backend_ptr_mode(
                 if transactional_errors {
                     match alphabet {
                         DecodeAlphabet::Standard => {
-                            aarch64::decode_neon_transactional::<false, false>(input, output)
+                            decode_aarch64::decode_neon_transactional::<false, false>(input, output)
                         }
                         DecodeAlphabet::UrlSafe => {
-                            aarch64::decode_neon_transactional::<true, false>(input, output)
+                            decode_aarch64::decode_neon_transactional::<true, false>(input, output)
                         }
                         DecodeAlphabet::Mixed => {
-                            aarch64::decode_neon_transactional::<false, true>(input, output)
+                            decode_aarch64::decode_neon_transactional::<false, true>(input, output)
                         }
                     }
                 } else {
                     match alphabet {
                         DecodeAlphabet::Standard => {
-                            aarch64::decode_neon::<false, false>(input, output)
+                            decode_aarch64::decode_neon::<false, false>(input, output)
                         }
                         DecodeAlphabet::UrlSafe => {
-                            aarch64::decode_neon::<true, false>(input, output)
+                            decode_aarch64::decode_neon::<true, false>(input, output)
                         }
-                        DecodeAlphabet::Mixed => aarch64::decode_neon::<false, true>(input, output),
+                        DecodeAlphabet::Mixed => {
+                            decode_aarch64::decode_neon::<false, true>(input, output)
+                        }
                     }
                 }
             };
@@ -217,35 +225,42 @@ unsafe fn decode_x86_alphabet(
 ) -> Result<(usize, usize), Base64Error> {
     match alphabet {
         DecodeAlphabet::Standard => unsafe {
-            decode_x86_store::<x86::StandardDecoder>(input, output, backend, padded_stores)
+            decode_x86_store::<x86_contracts::StandardDecoder>(
+                input,
+                output,
+                backend,
+                padded_stores,
+            )
         },
         DecodeAlphabet::UrlSafe => unsafe {
-            decode_x86_store::<x86::UrlSafeDecoder>(input, output, backend, padded_stores)
+            decode_x86_store::<x86_contracts::UrlSafeDecoder>(input, output, backend, padded_stores)
         },
         DecodeAlphabet::Mixed => unsafe {
-            decode_x86::<x86::MixedDecoder, x86::ExactStore>(input, output, backend)
+            decode_x86::<x86_contracts::MixedDecoder, x86_contracts::ExactStore>(
+                input, output, backend,
+            )
         },
     }
 }
 
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-unsafe fn decode_x86_store<A: x86::Decoder>(
+unsafe fn decode_x86_store<A: x86_contracts::Decoder>(
     input: &[u8],
     output: *mut u8,
     backend: Backend,
     padded_stores: bool,
 ) -> Result<(usize, usize), Base64Error> {
     if padded_stores {
-        unsafe { decode_x86::<A, x86::PaddedStore>(input, output, backend) }
+        unsafe { decode_x86::<A, x86_contracts::PaddedStore>(input, output, backend) }
     } else {
-        unsafe { decode_x86::<A, x86::ExactStore>(input, output, backend) }
+        unsafe { decode_x86::<A, x86_contracts::ExactStore>(input, output, backend) }
     }
 }
 
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-unsafe fn decode_x86<A: x86::Decoder, S: x86::Store>(
+unsafe fn decode_x86<A: x86_contracts::Decoder, S: x86_contracts::Store>(
     input: &[u8],
     output: *mut u8,
     backend: Backend,
@@ -261,12 +276,14 @@ type DecodeKernel = unsafe fn(&[u8], *mut u8) -> Result<(usize, usize), Base64Er
 
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-fn decode_x86_kernel<A: x86::Decoder, S: x86::Store>(backend: Backend) -> Option<DecodeKernel> {
+fn decode_x86_kernel<A: x86_contracts::Decoder, S: x86_contracts::Store>(
+    backend: Backend,
+) -> Option<DecodeKernel> {
     match backend {
-        Backend::Avx512 => Some(x86::decode_avx512::<A, S>),
-        Backend::Avx2 => Some(x86::decode_avx2::<A, S>),
-        Backend::Sse41 => Some(x86::decode_sse41::<A, S>),
-        Backend::Ssse3 => Some(x86::decode_ssse3::<A, S>),
+        Backend::Avx512 => Some(decode_backend::avx512::decode::<A, S>),
+        Backend::Avx2 => Some(decode_backend::avx2::decode_avx2::<A, S>),
+        Backend::Sse41 => Some(decode_backend::sse41::decode_sse41::<A, S>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::decode_ssse3::<A, S>),
         Backend::Scalar | Backend::Neon => None,
     }
 }
@@ -285,11 +302,19 @@ mod tests {
             Backend::Ssse3,
         ] {
             assert!(encode_x86_kernel::<false>(backend).is_some());
-            assert!(decode_x86_kernel::<x86::StandardDecoder, x86::ExactStore>(backend).is_some());
+            assert!(
+                decode_x86_kernel::<x86_contracts::StandardDecoder, x86_contracts::ExactStore>(
+                    backend
+                )
+                .is_some()
+            );
         }
         assert!(encode_x86_kernel::<true>(Backend::Scalar).is_none());
         assert!(
-            decode_x86_kernel::<x86::UrlSafeDecoder, x86::PaddedStore>(Backend::Neon).is_none()
+            decode_x86_kernel::<x86_contracts::UrlSafeDecoder, x86_contracts::PaddedStore>(
+                Backend::Neon
+            )
+            .is_none()
         );
     }
 
@@ -307,7 +332,8 @@ mod tests {
         let offset = storage.as_mut_ptr().align_offset(16);
         let output = &mut storage[offset..offset + expected.len()];
 
-        let consumed = unsafe { x86::encode_avx2::<false>(&input, output.as_mut_ptr()) };
+        let consumed =
+            unsafe { encode_backend::avx2::encode_avx2::<false>(&input, output.as_mut_ptr()) };
         encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
         assert_eq!(output, expected.as_bytes());
 

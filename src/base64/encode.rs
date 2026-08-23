@@ -1,5 +1,16 @@
 //! Base64 encoding API and scalar fallback.
 
+#[cfg(target_arch = "aarch64")]
+pub(super) mod aarch64;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx2;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx512;
+#[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
+pub(super) mod cache;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod ssse3;
+
 use super::dispatch::encode_simd_ptr;
 use super::output::{initialized_output, uninitialized_output};
 use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};

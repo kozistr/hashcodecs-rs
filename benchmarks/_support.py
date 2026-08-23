@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import ctypes
+import math
 import os
 import sys
 from collections.abc import Callable
@@ -10,8 +12,45 @@ from statistics import median
 from time import perf_counter
 
 SIZES = (1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024)
-SAMPLES = 15
-MINIMUM_SAMPLE_SECONDS = 0.2
+DEFAULT_SAMPLES = 15
+DEFAULT_MINIMUM_SAMPLE_SECONDS = 0.2
+SAMPLES = DEFAULT_SAMPLES
+MINIMUM_SAMPLE_SECONDS = DEFAULT_MINIMUM_SAMPLE_SECONDS
+
+
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError('must be positive')
+    return parsed
+
+
+def positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError('must be a finite positive number')
+    return parsed
+
+
+def add_timing_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        '--samples',
+        type=positive_int,
+        default=DEFAULT_SAMPLES,
+        help=f'median sample count (default: {DEFAULT_SAMPLES})',
+    )
+    parser.add_argument(
+        '--minimum-sample-seconds',
+        type=positive_float,
+        default=DEFAULT_MINIMUM_SAMPLE_SECONDS,
+        help=f'minimum duration of each sample (default: {DEFAULT_MINIMUM_SAMPLE_SECONDS})',
+    )
+
+
+def configure_timing(samples: int, minimum_sample_seconds: float) -> None:
+    global SAMPLES, MINIMUM_SAMPLE_SECONDS
+    SAMPLES = samples
+    MINIMUM_SAMPLE_SECONDS = minimum_sample_seconds
 
 
 def pin_to_one_cpu() -> None:

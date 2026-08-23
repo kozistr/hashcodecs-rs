@@ -9,6 +9,14 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
+## Timing Controls
+
+Every Python benchmark accepts `--samples` (default: 15) and `--minimum-sample-seconds` (default: 0.2). Their
+sampling time per case is at least their product, plus calibration; use lower values only for exploratory runs. For a quicker full
+hashcodecs-only pass, use `--hashcodecs-only --samples 3 --minimum-sample-seconds 0.05` with each Python benchmark
+script.
+
+
 ## XXH3
 
 For the Rust comparison, link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2.

@@ -5,6 +5,7 @@ import inspect
 import sys
 import threading
 import warnings
+from array import array
 from collections.abc import Callable
 from time import sleep
 from typing import Any
@@ -126,6 +127,8 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64decode(memoryview(b'xYWJj')[1:], validate=True) == b'abc'
     assert base64.b64encode(memoryview(b'abcd').cast('I', shape=[])) == b'YWJjZA=='
     assert base64.b64decode(memoryview(b'YWJj').cast('I', shape=[]), validate=True) == b'abc'
+    assert base64.b64encode(array('B', b'abc')) == b'YWJj'
+    assert base64.b64decode(array('B', b'YWJj'), validate=True) == b'abc'
 
     large_payload = bytes(range(256)) * 16
     large_encoded = stdlib_base64.b64encode(large_payload)

@@ -1,5 +1,6 @@
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
+use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::critical_section::with_critical_section;
@@ -8,6 +9,40 @@ use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
+
+/// A contiguous buffer borrowed directly from an arbitrary exporter.
+///
+/// This is only used by GIL-enabled builds. An exporter can expose a
+/// read-only view of storage which remains mutable through another handle, so
+/// the GIL is the synchronization guarantee for unknown exporters. Exact
+/// mutable builtins use critical sections instead.
+pub(super) struct BorrowedBuffer<'py> {
+    view: ffi::Py_buffer,
+    _python: std::marker::PhantomData<Python<'py>>,
+}
+
+impl BorrowedBuffer<'_> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.view.len as usize
+    }
+
+    #[inline]
+    unsafe fn bytes(&self) -> &[u8] {
+        let data = if self.view.len == 0 {
+            std::ptr::NonNull::<u8>::dangling().as_ptr()
+        } else {
+            self.view.buf.cast()
+        };
+        unsafe { std::slice::from_raw_parts(data, self.len()) }
+    }
+}
+
+impl Drop for BorrowedBuffer<'_> {
+    fn drop(&mut self) {
+        unsafe { ffi::PyBuffer_Release(&mut self.view) };
+    }
+}
 
 pub(super) fn with_bytearray<T>(value: &Bound<'_, PyByteArray>, callback: impl FnOnce() -> T) -> T {
     with_critical_section(value.as_any(), callback)
@@ -18,6 +53,8 @@ pub(super) enum BytesLike<'a, 'py> {
     ByteArray(&'a Bound<'py, PyByteArray>),
     OwnedBytes(Bound<'py, PyBytes>),
     OwnedByteArray(Bound<'py, PyByteArray>),
+    #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
+    Buffer(BorrowedBuffer<'py>),
     Text(&'a str),
     Owned(Vec<u8>),
 }
@@ -33,13 +70,21 @@ impl BytesLike<'_, '_> {
             Self::OwnedByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
+            Self::Buffer(buffer) => buffer.len(),
             Self::Text(text) => text.len(),
             Self::Owned(bytes) => bytes.len(),
         }
     }
 
     pub(super) fn detach_safe(&self) -> bool {
-        !matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_))
+        !matches!(
+            self,
+            Self::ByteArray(_) | Self::OwnedByteArray(_) | Self::Buffer(_)
+        )
+    }
+
+    pub(super) fn requires_snapshot_for_output(&self) -> bool {
+        matches!(self, Self::Buffer(_))
     }
 
     pub(super) fn aliases(&self, output: &Bound<'_, PyByteArray>) -> bool {
@@ -63,6 +108,7 @@ impl BytesLike<'_, '_> {
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
+            Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::Owned(bytes) => callback(bytes),
         }
@@ -75,6 +121,7 @@ impl BytesLike<'_, '_> {
                 unreachable!("mutable bytearrays must be snapshotted before borrowing")
             }
             Self::OwnedBytes(bytes) => bytes.as_bytes(),
+            Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
             Self::Owned(bytes) => bytes,
         }
@@ -163,6 +210,10 @@ fn buffer_bytes_like<'a, 'py>(
         let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
         return exact_memoryview_bytes_like(memoryview, require_contiguous);
     }
+    #[cfg(not(Py_GIL_DISABLED))]
+    if let Some(buffer) = borrowed_contiguous_buffer(value) {
+        return Ok(BytesLike::Buffer(buffer));
+    }
     let memoryview = PyMemoryView::from(value).map_err(|_| type_error(argument))?;
     copy_memoryview(&memoryview, require_contiguous).map(BytesLike::OwnedBytes)
 }
@@ -202,7 +253,24 @@ fn exact_memoryview_bytes_like<'a, 'py>(
             }
         }
     }
+    #[cfg(not(Py_GIL_DISABLED))]
+    if let Some(buffer) = borrowed_contiguous_buffer(memoryview.as_any()) {
+        return Ok(BytesLike::Buffer(buffer));
+    }
     copy_memoryview(memoryview, false).map(BytesLike::OwnedBytes)
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> Option<BorrowedBuffer<'py>> {
+    let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+    if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &mut view, ffi::PyBUF_CONTIG_RO) } == 0 {
+        return Some(BorrowedBuffer {
+            view,
+            _python: std::marker::PhantomData,
+        });
+    }
+    unsafe { ffi::PyErr_Clear() };
+    None
 }
 
 fn copy_memoryview<'py>(

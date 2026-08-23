@@ -55,7 +55,7 @@ fn decode_strict_into(
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    if input.aliases(output) {
+    if input.aliases(output) || input.requires_snapshot_for_output() {
         let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
         return decode_strict_slice_into(&input, output, alphabet, transactional_errors);
     }
@@ -130,7 +130,7 @@ fn decode_unpadded_into(
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    if input.aliases(output) {
+    if input.aliases(output) || input.requires_snapshot_for_output() {
         let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
         return decode_unpadded_slice_into(&input, output, alphabet, transactional_errors);
     }

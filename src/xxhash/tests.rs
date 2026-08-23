@@ -3,7 +3,7 @@ use crate::backend::{self, SimdBackend};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::long::{
-    X86Backend, accumulate_x86, init_secret_with_capabilities, select_x86, x86_kernel,
+    X86_BACKEND_PREFERENCE, accumulate_x86, init_secret_with_capabilities, x86_kernel,
 };
 use super::long::{init_secret, init_secret_scalar, long_accumulate_scalar};
 use super::primitives::SECRET;
@@ -160,29 +160,29 @@ fn every_supported_x86_backend_matches_scalar() {
         .collect();
     let capabilities = backend::capabilities();
     let scalar = Capabilities::for_backends(&[]);
-    assert_eq!(select_x86(scalar), X86Backend::Scalar);
+    assert_eq!(scalar.best(&X86_BACKEND_PREFERENCE), SimdBackend::Scalar);
     assert_eq!(
-        select_x86(Capabilities::for_backends(&[SimdBackend::Ssse3])),
-        X86Backend::Ssse3
+        Capabilities::for_backends(&[SimdBackend::Ssse3]).best(&X86_BACKEND_PREFERENCE),
+        SimdBackend::Ssse3
     );
     assert_eq!(
-        select_x86(Capabilities::for_backends(&[SimdBackend::Sse41])),
-        X86Backend::Sse41
+        Capabilities::for_backends(&[SimdBackend::Sse41]).best(&X86_BACKEND_PREFERENCE),
+        SimdBackend::Sse41
     );
     assert_eq!(
-        select_x86(Capabilities::for_backends(&[SimdBackend::Avx2])),
-        X86Backend::Avx2
+        Capabilities::for_backends(&[SimdBackend::Avx2]).best(&X86_BACKEND_PREFERENCE),
+        SimdBackend::Avx2
     );
     assert_eq!(
-        select_x86(Capabilities::for_backends(&[SimdBackend::Avx512])),
-        X86Backend::Avx512
+        Capabilities::for_backends(&[SimdBackend::Avx512]).best(&X86_BACKEND_PREFERENCE),
+        SimdBackend::Avx512
     );
-    assert!(x86_kernel(X86Backend::Scalar).is_none());
+    assert!(x86_kernel(SimdBackend::Scalar).is_none());
     for backend in [
-        X86Backend::Ssse3,
-        X86Backend::Sse41,
-        X86Backend::Avx2,
-        X86Backend::Avx512,
+        SimdBackend::Ssse3,
+        SimdBackend::Sse41,
+        SimdBackend::Avx2,
+        SimdBackend::Avx512,
     ] {
         assert!(x86_kernel(backend).is_some());
     }
@@ -196,26 +196,27 @@ fn every_supported_x86_backend_matches_scalar() {
             init_secret_scalar(seed)
         );
         assert_eq!(
-            unsafe { accumulate_x86(&input, secret, X86Backend::Scalar) },
+            unsafe { accumulate_x86(&input, secret, SimdBackend::Scalar) },
             expected
         );
 
         let supported = [
-            (X86Backend::Scalar, SimdBackend::Scalar),
-            (X86Backend::Ssse3, SimdBackend::Ssse3),
-            (X86Backend::Sse41, SimdBackend::Sse41),
-            (X86Backend::Avx2, SimdBackend::Avx2),
-            (X86Backend::Avx512, SimdBackend::Avx512),
+            SimdBackend::Scalar,
+            SimdBackend::Ssse3,
+            SimdBackend::Sse41,
+            SimdBackend::Avx2,
+            SimdBackend::Avx512,
         ];
-        for (selected, required) in supported
+        for selected in supported
             .into_iter()
-            .filter(|(_, required)| capabilities.supports(*required))
+            .filter(|selected| capabilities.supports(*selected))
         {
+            let required = selected;
             let forced = Capabilities::for_backends(&[required]);
-            assert_eq!(select_x86(forced), selected);
+            assert_eq!(forced.best(&X86_BACKEND_PREFERENCE), selected);
             let actual = unsafe { accumulate_x86(&input, secret, selected) };
             assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
-            if selected == X86Backend::Avx2 {
+            if selected == SimdBackend::Avx2 {
                 assert_eq!(
                     unsafe { accumulate_x86(&exact_kib, secret, selected) },
                     long_accumulate_scalar(&exact_kib, secret),

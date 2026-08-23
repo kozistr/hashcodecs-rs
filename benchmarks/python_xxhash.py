@@ -6,7 +6,7 @@ import argparse
 import gc
 from collections.abc import Callable
 
-from _support import SIZES, data, pin_to_one_cpu, throughput
+from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
 
 import hashcodecs.xxhash as hashcodecs_xxhash
 import xxhash
@@ -46,7 +46,9 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs without timing xxhash',
     )
+    add_timing_arguments(parser)
     arguments = parser.parse_args()
+    configure_timing(arguments.samples, arguments.minimum_sample_seconds)
 
     pin_to_one_cpu()
     gc.disable()

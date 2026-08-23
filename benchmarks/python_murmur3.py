@@ -7,7 +7,7 @@ import gc
 from collections.abc import Callable
 
 import mmh3
-from _support import SIZES, data, pin_to_one_cpu, throughput
+from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
 
 import hashcodecs.murmur3 as hashcodecs_murmur3
 
@@ -56,7 +56,9 @@ def main() -> None:
         action='store_true',
         help='time mutable bytearray inputs instead of immutable bytes',
     )
+    add_timing_arguments(parser)
     args = parser.parse_args()
+    configure_timing(args.samples, args.minimum_sample_seconds)
 
     pin_to_one_cpu()
     gc.disable()

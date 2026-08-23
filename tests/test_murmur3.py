@@ -1,4 +1,5 @@
 import inspect
+from array import array
 from collections.abc import Callable
 from typing import Any
 
@@ -13,6 +14,7 @@ def test_murmur3_known_answers_and_buffer_inputs() -> None:
     assert murmur3.murmur3_32(b'hello') == 0x248BFA47
     assert hashcodecs.murmur3_32(bytearray(b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_32(memoryview(b'hello')) == 0x248BFA47
+    assert hashcodecs.murmur3_32(array('B', b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_x86_128_digest(bytes([1, 2, 3])) == bytes.fromhex('e16401f6334213b5334213b5334213b5')
     assert hashcodecs.murmur3_x64_128_digest(bytes([1, 2, 3])) == bytes.fromhex('a937130eef3e641a659a233c404a4e49')
 

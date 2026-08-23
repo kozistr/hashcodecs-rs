@@ -4,8 +4,8 @@ use std::sync::OnceLock;
 
 use crate::backend::{self as cpu, Capabilities, SimdBackend};
 
-#[cfg(target_arch = "x86_64")]
-use super::x86;
+#[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
+use super::encode::cache;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Backend {
@@ -26,9 +26,14 @@ pub(super) struct RuntimeBackend {
 impl RuntimeBackend {
     #[inline]
     pub(super) fn use_streaming_stores(self, input_len: usize, output: *mut u8) -> bool {
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
         {
-            x86::use_streaming_stores(self.cached_input_limit, input_len, output)
+            cache::use_streaming_stores(self.cached_input_limit, input_len, output)
+        }
+        #[cfg(all(target_arch = "x86_64", any(kani, miri)))]
+        {
+            let _ = (self.cached_input_limit, input_len, output);
+            false
         }
         #[cfg(not(target_arch = "x86_64"))]
         {
@@ -48,8 +53,10 @@ pub(super) fn selected() -> RuntimeBackend {
 fn detect() -> RuntimeBackend {
     RuntimeBackend {
         kind: select(cpu::capabilities()),
-        #[cfg(target_arch = "x86_64")]
-        cached_input_limit: x86::cached_input_limit(),
+        #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
+        cached_input_limit: cache::cached_input_limit(),
+        #[cfg(all(target_arch = "x86_64", any(kani, miri)))]
+        cached_input_limit: None,
         #[cfg(not(target_arch = "x86_64"))]
         cached_input_limit: None,
     }

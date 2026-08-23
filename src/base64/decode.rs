@@ -1,9 +1,23 @@
 //! Base64 decoding API, layout validation, and scalar fallback.
 
+#[cfg(target_arch = "aarch64")]
+pub(super) mod aarch64;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx2;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod avx512;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod sse41;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod ssse3;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) mod x86_contracts;
+
 use super::dispatch::decode_simd_ptr;
+use super::output::{initialized_output, uninitialized_output};
 use super::{
     Base64Error, DECODE_STORE_PADDING, DecodeAlphabet, INVALID_VALUE, MIXED_DECODE,
-    STANDARD_DECODE, URLSAFE_DECODE, initialized_output, uninitialized_output,
+    STANDARD_DECODE, URLSAFE_DECODE,
 };
 
 /// Decodes padded RFC 4648 Base64 with the standard alphabet.
@@ -94,7 +108,7 @@ pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 ///
 #[inline]
 pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
-    decoded_len(input)
+    Ok(decode_layout(input)?.output_len)
 }
 
 /// Decodes standard padded Base64 into a caller-provided destination.
@@ -219,11 +233,6 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     };
     // The result prefix is fully initialized; the private padding is discarded.
     Ok(unsafe { initialized_output(output, layout.output_len) })
-}
-
-#[inline]
-pub(crate) fn decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
-    Ok(decode_layout(input)?.output_len)
 }
 
 /// Returns the layout for Base64 input whose final padding is omitted.

@@ -1,4 +1,9 @@
-use super::*;
+use super::super::Base64Error;
+use super::super::decode::aarch64::{
+    DECODE_ERROR_CHECK_INTERVAL, decode as decode_aarch64,
+    decode_transactional as decode_aarch64_transactional,
+};
+use super::super::encode::aarch64::encode as encode_aarch64;
 
 const CANARY: u8 = 0xa5;
 const GUARD: usize = 32;
@@ -11,7 +16,7 @@ fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: &mut [u8],
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_neon::<URLSAFE, MIXED>(input, output.as_mut_ptr()) }
+    unsafe { decode_aarch64::<URLSAFE, MIXED>(input, output.as_mut_ptr()) }
 }
 
 fn error_checks_are_bounded<const URLSAFE: bool, const MIXED: bool>() {
@@ -141,7 +146,7 @@ fn encode_misaligned_boundaries<const URLSAFE: bool>() {
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + expected_len + GUARD];
             let consumed = unsafe {
-                encode_neon::<URLSAFE>(input, guarded_output.as_mut_ptr().add(output_start))
+                encode_aarch64::<URLSAFE>(input, guarded_output.as_mut_ptr().add(output_start))
             };
             let written = consumed / 3 * 4;
 
@@ -215,7 +220,10 @@ fn decode_misaligned_boundaries<const URLSAFE: bool, const MIXED: bool>() {
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + expected.len() + GUARD];
             let offsets = unsafe {
-                decode_neon::<URLSAFE, MIXED>(input, guarded_output.as_mut_ptr().add(output_start))
+                decode_aarch64::<URLSAFE, MIXED>(
+                    input,
+                    guarded_output.as_mut_ptr().add(output_start),
+                )
             }
             .unwrap();
             let consumed = length / 16 * 16;
@@ -290,7 +298,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
                 let output_len = decoded_len(block_len);
                 let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
                 let result = unsafe {
-                    decode_neon::<URLSAFE, MIXED>(
+                    decode_aarch64::<URLSAFE, MIXED>(
                         input,
                         guarded_output.as_mut_ptr().add(output_start),
                     )
@@ -361,7 +369,10 @@ fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
             let output_len = decoded_len(total);
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
             let result = unsafe {
-                decode_neon::<URLSAFE, MIXED>(input, guarded_output.as_mut_ptr().add(output_start))
+                decode_aarch64::<URLSAFE, MIXED>(
+                    input,
+                    guarded_output.as_mut_ptr().add(output_start),
+                )
             };
             assert_eq!(result, Err(Base64Error::InvalidInput));
 
@@ -537,7 +548,7 @@ fn transactional_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
             let output_len = decoded_len(ENCODED_LEN);
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
             let result = unsafe {
-                decode_neon_transactional::<URLSAFE, MIXED>(
+                decode_aarch64_transactional::<URLSAFE, MIXED>(
                     input,
                     guarded_output.as_mut_ptr().add(output_start),
                 )

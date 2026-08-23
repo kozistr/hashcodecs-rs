@@ -1,4 +1,19 @@
+use super::alphabet::decode_table;
+use super::backend::{Backend, is_supported as backend_supported};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::decode::{self as decode_backend, x86_contracts};
+use super::dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::encode as encode_backend;
 use super::*;
+use crate::backend::{Capabilities, SimdBackend};
+
+#[cfg(target_arch = "aarch64")]
+mod aarch64;
+
+fn select_backend(backend: SimdBackend) -> Backend {
+    backend::select(Capabilities::for_backends(&[backend]))
+}
 use base64::Engine;
 
 #[test]
@@ -594,16 +609,16 @@ fn avx2_streaming_encoder_matches_scalar() {
 
         let consumed = unsafe {
             if urlsafe {
-                x86::encode_avx2_with_store::<true>(
+                encode_backend::avx2::encode_avx2_with_store::<true>(
                     &input,
                     output.as_mut_ptr(),
-                    x86::Avx2StoreMode::Streaming,
+                    encode_backend::avx2::Avx2StoreMode::Streaming,
                 )
             } else {
-                x86::encode_avx2_with_store::<false>(
+                encode_backend::avx2::encode_avx2_with_store::<false>(
                     &input,
                     output.as_mut_ptr(),
-                    x86::Avx2StoreMode::Streaming,
+                    encode_backend::avx2::Avx2StoreMode::Streaming,
                 )
             }
         };
@@ -617,15 +632,15 @@ fn avx2_streaming_encoder_matches_scalar() {
 #[test]
 fn avx512_control_vectors_describe_the_base64_transforms() {
     assert_eq!(
-        <x86::StandardDecoder as x86::Decoder>::decode_table(),
+        <x86_contracts::StandardDecoder as x86_contracts::Decoder>::decode_table(),
         &STANDARD_DECODE
     );
     assert_eq!(
-        <x86::UrlSafeDecoder as x86::Decoder>::decode_table(),
+        <x86_contracts::UrlSafeDecoder as x86_contracts::Decoder>::decode_table(),
         &URLSAFE_DECODE
     );
     assert_eq!(
-        <x86::MixedDecoder as x86::Decoder>::decode_table(),
+        <x86_contracts::MixedDecoder as x86_contracts::Decoder>::decode_table(),
         &MIXED_DECODE
     );
 
@@ -633,7 +648,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
     let mut shuffled = [0_u8; 64];
-    for (destination, &source) in x86::avx512::ENCODE_SHUFFLE.iter().enumerate() {
+    for (destination, &source) in encode_backend::avx512::ENCODE_SHUFFLE.iter().enumerate() {
         shuffled[destination] = input[source as usize];
     }
 
@@ -642,7 +657,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
         let lane_start = lane * 8;
         let word = u64::from_le_bytes(shuffled[lane_start..lane_start + 8].try_into().unwrap());
         for byte in 0..8 {
-            let shift = x86::avx512::MULTISHIFT_SHIFTS[byte];
+            let shift = encode_backend::avx512::MULTISHIFT_SHIFTS[byte];
             indices[lane_start + byte] = ((word >> shift) & 0x3f) as u8;
         }
     }
@@ -673,7 +688,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
             ]);
         }
     }
-    let decoded: Vec<u8> = x86::avx512::DECODE_SHUFFLE[..48]
+    let decoded: Vec<u8> = decode_backend::avx512::DECODE_SHUFFLE[..48]
         .iter()
         .map(|&index| packed[index as usize])
         .collect();

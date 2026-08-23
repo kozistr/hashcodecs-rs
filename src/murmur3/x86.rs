@@ -3,12 +3,10 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::{
-    mix_x86_32_hash, mix_x86_128_body_scalar, mix_x86_128_hashes, read_u32_le, read_u64_le,
-};
-
-const C1: u32 = 0xcc9e_2d51;
-const C2: u32 = 0x1b87_3593;
+use super::primitives::{read_u32_le, read_u64_le};
+use super::x64_128::{X64_128_C1, X64_128_C2, mix_x64_128_hashes};
+use super::x86_32::{X86_32_C1, X86_32_C2, mix_x86_32_hash};
+use super::x86_128::{X86_128_C1, X86_128_C2, mix_x86_128_body_scalar, mix_x86_128_hashes};
 
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn mix_x86_32_body_avx2(key: &[u8], hash: &mut u32) {
@@ -46,9 +44,9 @@ pub(super) unsafe fn mix_x86_32_body_avx2(key: &[u8], hash: &mut u32) {
     }
     while offset < key.len() {
         let block = read_u32_le(key, offset)
-            .wrapping_mul(C1)
+            .wrapping_mul(X86_32_C1)
             .rotate_left(15)
-            .wrapping_mul(C2);
+            .wrapping_mul(X86_32_C2);
         value = mix_x86_32_hash(value, block);
         offset += 4;
     }
@@ -58,12 +56,12 @@ pub(super) unsafe fn mix_x86_32_body_avx2(key: &[u8], hash: &mut u32) {
 #[target_feature(enable = "avx2")]
 #[inline]
 fn premix_avx2(blocks: __m256i) -> __m256i {
-    let blocks = _mm256_mullo_epi32(blocks, _mm256_set1_epi32(C1 as i32));
+    let blocks = _mm256_mullo_epi32(blocks, _mm256_set1_epi32(X86_32_C1 as i32));
     let blocks = _mm256_or_si256(
         _mm256_slli_epi32::<15>(blocks),
         _mm256_srli_epi32::<17>(blocks),
     );
-    _mm256_mullo_epi32(blocks, _mm256_set1_epi32(C2 as i32))
+    _mm256_mullo_epi32(blocks, _mm256_set1_epi32(X86_32_C2 as i32))
 }
 
 #[target_feature(enable = "sse4.1")]
@@ -102,9 +100,9 @@ pub(super) unsafe fn mix_x86_32_body_sse41(key: &[u8], hash: &mut u32) {
     }
     while offset < key.len() {
         let block = read_u32_le(key, offset)
-            .wrapping_mul(C1)
+            .wrapping_mul(X86_32_C1)
             .rotate_left(15)
-            .wrapping_mul(C2);
+            .wrapping_mul(X86_32_C2);
         value = mix_x86_32_hash(value, block);
         offset += 4;
     }
@@ -114,13 +112,10 @@ pub(super) unsafe fn mix_x86_32_body_sse41(key: &[u8], hash: &mut u32) {
 #[target_feature(enable = "sse4.1")]
 #[inline]
 fn premix_sse41(blocks: __m128i) -> __m128i {
-    let blocks = _mm_mullo_epi32(blocks, _mm_set1_epi32(C1 as i32));
+    let blocks = _mm_mullo_epi32(blocks, _mm_set1_epi32(X86_32_C1 as i32));
     let blocks = _mm_or_si128(_mm_slli_epi32::<15>(blocks), _mm_srli_epi32::<17>(blocks));
-    _mm_mullo_epi32(blocks, _mm_set1_epi32(C2 as i32))
+    _mm_mullo_epi32(blocks, _mm_set1_epi32(X86_32_C2 as i32))
 }
-
-const X86_128_C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
-const X86_128_C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
 
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn mix_x86_128_body_avx2(key: &[u8], hashes: &mut [u32; 4]) {
@@ -297,9 +292,6 @@ fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
     }
 }
 
-const X64_128_C1: u64 = 0x87c3_7b91_1142_53d5;
-const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
-
 macro_rules! define_x64_128_avx2_kernel {
     ($name:ident, $features:literal) => {
         #[target_feature(enable = $features)]
@@ -454,21 +446,6 @@ fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
     }
 }
 
-#[inline(always)]
-fn mix_x64_128_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64) {
-    *hash1 ^= block1;
-    *hash1 = hash1
-        .rotate_left(27)
-        .wrapping_add(*hash2)
-        .wrapping_mul(5)
-        .wrapping_add(0x52dc_e729);
-    *hash2 ^= block2;
-    *hash2 = hash2
-        .rotate_left(31)
-        .wrapping_add(*hash1)
-        .wrapping_mul(5)
-        .wrapping_add(0x3849_5ab5);
-}
 #[inline(always)]
 /// # Safety
 /// The selected backend must be supported by the current CPU.

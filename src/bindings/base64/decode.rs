@@ -17,7 +17,8 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use crate::bindings::{DETACH_THRESHOLD, bytearray_data, bytearray_size, list_items};
+use crate::bindings::objects::{bytearray_data, bytearray_size, list_items};
+use crate::bindings::runtime::DETACH_THRESHOLD;
 
 fn decode_strict<'py>(
     py: Python<'py>,
@@ -718,7 +719,7 @@ pub(super) fn standard_b64decode_into(
     decode_parsed_into(py, &input, output, None, false, true, None, false)
 }
 
-fn urlsafe_b64decode_impl<'py>(
+pub(super) fn urlsafe_b64decode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
     padded: bool,
@@ -727,7 +728,7 @@ fn urlsafe_b64decode_impl<'py>(
     decode_parsed(py, &input, Some(*b"-_"), false, padded, None, false)
 }
 
-fn urlsafe_b64decode_into_impl(
+pub(super) fn urlsafe_b64decode_into(
     py: Python<'_>,
     s: &Bound<'_, PyAny>,
     output: &Bound<'_, PyByteArray>,
@@ -999,42 +1000,4 @@ pub(super) fn b64decode_into(
         ignorechars,
         canonical,
     )
-}
-
-/// Decode with the URL-safe Base64 alphabet.
-pub(super) fn urlsafe_b64decode_pre_315<'py>(
-    py: Python<'py>,
-    s: &Bound<'py, PyAny>,
-    padded: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
-    urlsafe_b64decode_impl(py, s, padded)
-}
-
-/// Decode with the URL-safe Base64 alphabet.
-pub(super) fn urlsafe_b64decode_315<'py>(
-    py: Python<'py>,
-    s: &Bound<'py, PyAny>,
-    padded: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
-    urlsafe_b64decode_impl(py, s, padded)
-}
-
-/// Decode URL-safe Base64 into a reusable output.
-pub(super) fn urlsafe_b64decode_into_pre_315(
-    py: Python<'_>,
-    s: &Bound<'_, PyAny>,
-    output: &Bound<'_, PyByteArray>,
-    padded: bool,
-) -> PyResult<usize> {
-    urlsafe_b64decode_into_impl(py, s, output, padded)
-}
-
-/// Decode URL-safe Base64 into a reusable output.
-pub(super) fn urlsafe_b64decode_into_315(
-    py: Python<'_>,
-    s: &Bound<'_, PyAny>,
-    output: &Bound<'_, PyByteArray>,
-    padded: bool,
-) -> PyResult<usize> {
-    urlsafe_b64decode_into_impl(py, s, output, padded)
 }

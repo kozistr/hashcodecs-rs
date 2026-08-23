@@ -6,8 +6,8 @@ use pyo3::types::{PyByteArray, PyBytes};
 
 use super::{pybytes_with_len, with_output_ptr};
 use crate::base64::{encode_to_ptr, encoded_len};
-use crate::bindings::DETACH_THRESHOLD;
 use crate::bindings::buffer::BytesLike;
+use crate::bindings::runtime::DETACH_THRESHOLD;
 
 pub(super) fn encode<'py>(
     py: Python<'py>,

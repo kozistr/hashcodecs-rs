@@ -4,11 +4,8 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
-use super::buffer::{BytesLike, bytes_like};
-use super::{
-    DETACH_THRESHOLD, METHOD_FLAGS, parse_hash_arguments, parse_raw_arguments,
-    return_function_result, seed_u64, with_function_bytes,
-};
+use super::arguments::{parse_hash_arguments, parse_raw_arguments, seed_u64};
+use super::runtime::{return_function_result, with_function_bytes};
 use crate::xxhash::{xxh3_64, xxh3_128};
 
 mod batch;
@@ -190,34 +187,3 @@ unsafe extern "C" fn xxh3_128_batch_into_digest(
 }
 
 pub(super) use methods::add_to_module;
-
-fn parse_batch<'a, 'py>(
-    py: Python<'py>,
-    items: &'a [Bound<'py, PyAny>],
-) -> PyResult<Vec<BytesLike<'a, 'py>>> {
-    let inputs = items
-        .iter()
-        .map(|item| bytes_like(py, item, "items element"))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(inputs
-        .into_iter()
-        .map(|input| {
-            if input.detach_safe() {
-                input
-            } else {
-                BytesLike::Owned(unsafe { input.with_bytes(<[u8]>::to_vec) })
-            }
-        })
-        .collect())
-}
-
-fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
-    let total = inputs
-        .iter()
-        .fold(0_usize, |total, input| total.saturating_add(input.len()));
-    inputs.iter().all(BytesLike::detach_safe) && total >= DETACH_THRESHOLD
-}
-
-fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> Vec<&'a [u8]> {
-    inputs.iter().map(BytesLike::stable_bytes).collect()
-}

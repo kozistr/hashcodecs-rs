@@ -2,7 +2,8 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
-use super::{METHOD_FLAGS, murmur3_32, murmur3_x64_128_digest, murmur3_x86_128_digest};
+use super::one_shot::{murmur3_32, murmur3_x64_128_digest, murmur3_x86_128_digest};
+use crate::bindings::runtime::{METHOD_FLAGS, add_methods};
 
 static mut METHODS: [ffi::PyMethodDef; 4] = [
     ffi::PyMethodDef {
@@ -97,10 +98,5 @@ Examples:
 
 pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };
-    if result == -1 {
-        Err(PyErr::fetch(module.py()))
-    } else {
-        Ok(())
-    }
+    unsafe { add_methods(module, methods) }
 }

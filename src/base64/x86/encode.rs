@@ -7,6 +7,14 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 use std::hint::black_box;
 
+mod avx512;
+
+pub(in crate::base64) use avx512::encode as encode_avx512;
+#[cfg(test)]
+pub(in crate::base64) use avx512::{
+    ENCODE_SHUFFLE as AVX512_ENCODE_SHUFFLE, MULTISHIFT_SHIFTS as AVX512_MULTISHIFT_SHIFTS,
+};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::base64) enum Avx2StoreMode {
     Cached,

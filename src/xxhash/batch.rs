@@ -9,6 +9,7 @@ use super::x86;
 
 #[inline]
 fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8]; 4]> {
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     let _ = (chunk, secret);
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     if chunk[0].len() > 240

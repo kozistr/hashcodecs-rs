@@ -641,7 +641,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
     let mut shuffled = [0_u8; 64];
-    for (destination, &source) in x86::avx512::ENCODE_SHUFFLE.iter().enumerate() {
+    for (destination, &source) in x86::AVX512_ENCODE_SHUFFLE.iter().enumerate() {
         shuffled[destination] = input[source as usize];
     }
 
@@ -650,7 +650,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
         let lane_start = lane * 8;
         let word = u64::from_le_bytes(shuffled[lane_start..lane_start + 8].try_into().unwrap());
         for byte in 0..8 {
-            let shift = x86::avx512::MULTISHIFT_SHIFTS[byte];
+            let shift = x86::AVX512_MULTISHIFT_SHIFTS[byte];
             indices[lane_start + byte] = ((word >> shift) & 0x3f) as u8;
         }
     }
@@ -681,7 +681,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
             ]);
         }
     }
-    let decoded: Vec<u8> = x86::avx512::DECODE_SHUFFLE[..48]
+    let decoded: Vec<u8> = x86::AVX512_DECODE_SHUFFLE[..48]
         .iter()
         .map(|&index| packed[index as usize])
         .collect();

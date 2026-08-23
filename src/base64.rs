@@ -24,23 +24,24 @@ pub use encode::{
 };
 pub use error::Base64Error;
 
-pub(crate) use alphabet::DecodeAlphabet;
 use alphabet::{
-    DECODE_STORE_PADDING, INVALID_VALUE, MIXED_DECODE, STANDARD_ALPHABET, STANDARD_DECODE,
-    URLSAFE_ALPHABET, URLSAFE_DECODE,
+    DECODE_STORE_PADDING, INVALID_VALUE, MIXED_DECODE, STANDARD_DECODE, URLSAFE_ALPHABET,
+    URLSAFE_DECODE,
 };
+pub(crate) use alphabet::{DecodeAlphabet, STANDARD_ALPHABET};
 
-#[allow(unused_imports)]
+#[cfg(any(feature = "python", test))]
 pub(crate) use decode::{
-    DecodeLayout, decode_layout, decode_to_ptr_with_layout, decode_to_ptr_with_unpadded_layout,
-    decode_to_slice_with_layout, decode_to_slice_with_layout_and_alphabet,
+    decode_layout, decode_to_ptr_with_layout, decode_to_ptr_with_unpadded_layout,
+    decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_transactional,
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
-    decoded_len,
 };
-#[allow(unused_imports)]
-pub(crate) use encode::{encode_to_ptr, encode_to_slice, encoded_len};
+#[cfg(feature = "python")]
+pub(crate) use encode::encode_to_ptr;
+#[cfg(any(feature = "python", all(test, target_arch = "aarch64"), kani))]
+pub(crate) use encode::encoded_len;
 
 #[cfg(test)]
 pub(crate) use encode::encode_scalar;

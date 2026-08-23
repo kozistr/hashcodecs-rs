@@ -95,7 +95,7 @@ pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 ///
 #[inline]
 pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
-    decoded_len(input)
+    Ok(decode_layout(input)?.output_len)
 }
 
 /// Decodes standard padded Base64 into a caller-provided destination.
@@ -220,11 +220,6 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     };
     // The result prefix is fully initialized; the private padding is discarded.
     Ok(unsafe { initialized_output(output, layout.output_len) })
-}
-
-#[inline]
-pub(crate) fn decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
-    Ok(decode_layout(input)?.output_len)
 }
 
 /// Returns the layout for Base64 input whose final padding is omitted.

@@ -7,6 +7,12 @@ use std::arch::x86_64::*;
 
 use super::super::{Base64Error, MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
 
+mod avx512;
+
+#[cfg(test)]
+pub(in crate::base64) use avx512::DECODE_SHUFFLE as AVX512_DECODE_SHUFFLE;
+pub(in crate::base64) use avx512::decode as decode_avx512;
+
 pub(crate) struct StandardDecoder;
 pub(crate) struct UrlSafeDecoder;
 pub(crate) struct MixedDecoder;

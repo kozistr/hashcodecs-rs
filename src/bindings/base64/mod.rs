@@ -11,21 +11,19 @@ use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList};
 use self::decode::{
     b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
     standard_b64decode_batch, standard_b64decode_batch_into, standard_b64decode_into,
-    urlsafe_b64decode_315, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
-    urlsafe_b64decode_into_315, urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315,
+    urlsafe_b64decode, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
+    urlsafe_b64decode_into,
 };
 use super::arguments::parse_raw_arguments;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_items};
 use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
+use crate::base64::STANDARD_ALPHABET;
 
 mod callbacks;
 mod decode;
 mod encode;
 mod methods;
-
-const STANDARD_ALPHABET: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
 

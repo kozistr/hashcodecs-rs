@@ -10,6 +10,10 @@ pub(crate) enum SimdBackend {
     Ssse3,
     Sse41,
     Avx2,
+    #[cfg_attr(
+        not(any(test, target_arch = "x86", target_arch = "x86_64")),
+        allow(dead_code)
+    )]
     Avx512,
     Avx512Vbmi,
 }
@@ -61,6 +65,7 @@ impl Capabilities {
     }
 
     #[inline]
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     pub(crate) const fn has_bmi2(self) -> bool {
         self.bmi2
     }

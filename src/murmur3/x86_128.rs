@@ -5,6 +5,9 @@ use super::primitives::{fmix32, read_u32_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::x86;
 
+pub(super) const X86_128_C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
+pub(super) const X86_128_C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
+
 /// Incremental state for the canonical MurmurHash3 x86 128-bit algorithm.
 ///
 /// Input may be split at arbitrary byte boundaries. The four digest words are
@@ -162,27 +165,27 @@ pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32
     }
     if tail.len() > 12 {
         hashes[3] ^= blocks[3]
-            .wrapping_mul(0xa1e3_8b93)
+            .wrapping_mul(X86_128_C1[3])
             .rotate_left(18)
-            .wrapping_mul(0x239b_961b);
+            .wrapping_mul(X86_128_C2[3]);
     }
     if tail.len() > 8 {
         hashes[2] ^= blocks[2]
-            .wrapping_mul(0x38b3_4ae5)
+            .wrapping_mul(X86_128_C1[2])
             .rotate_left(17)
-            .wrapping_mul(0xa1e3_8b93);
+            .wrapping_mul(X86_128_C2[2]);
     }
     if tail.len() > 4 {
         hashes[1] ^= blocks[1]
-            .wrapping_mul(0xab0e_9789)
+            .wrapping_mul(X86_128_C1[1])
             .rotate_left(16)
-            .wrapping_mul(0x38b3_4ae5);
+            .wrapping_mul(X86_128_C2[1]);
     }
     if !tail.is_empty() {
         hashes[0] ^= blocks[0]
-            .wrapping_mul(0x239b_961b)
+            .wrapping_mul(X86_128_C1[0])
             .rotate_left(15)
-            .wrapping_mul(0xab0e_9789);
+            .wrapping_mul(X86_128_C2[0]);
     }
 
     finalize_x86_128(hashes, length)
@@ -203,28 +206,26 @@ pub(super) fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
 
 #[inline]
 pub(super) fn mix_x86_128_body_scalar(key: &[u8], hashes: &mut [u32; 4]) {
-    const C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
-    const C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
     const ROTATE_K: [u32; 4] = [15, 16, 17, 18];
 
     let mut offset = 0;
     while offset < key.len() {
         let block1 = read_u32_le(key, offset)
-            .wrapping_mul(C1[0])
+            .wrapping_mul(X86_128_C1[0])
             .rotate_left(ROTATE_K[0])
-            .wrapping_mul(C2[0]);
+            .wrapping_mul(X86_128_C2[0]);
         let block2 = read_u32_le(key, offset + 4)
-            .wrapping_mul(C1[1])
+            .wrapping_mul(X86_128_C1[1])
             .rotate_left(ROTATE_K[1])
-            .wrapping_mul(C2[1]);
+            .wrapping_mul(X86_128_C2[1]);
         let block3 = read_u32_le(key, offset + 8)
-            .wrapping_mul(C1[2])
+            .wrapping_mul(X86_128_C1[2])
             .rotate_left(ROTATE_K[2])
-            .wrapping_mul(C2[2]);
+            .wrapping_mul(X86_128_C2[2]);
         let block4 = read_u32_le(key, offset + 12)
-            .wrapping_mul(C1[3])
+            .wrapping_mul(X86_128_C1[3])
             .rotate_left(ROTATE_K[3])
-            .wrapping_mul(C2[3]);
+            .wrapping_mul(X86_128_C2[3]);
         mix_x86_128_hashes(hashes, block1, block2, block3, block4);
         offset += 16;
     }

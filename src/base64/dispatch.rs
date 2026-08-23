@@ -115,7 +115,7 @@ type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
     match backend {
-        Backend::Avx512 => Some(x86::avx512::encode::<URLSAFE>),
+        Backend::Avx512 => Some(x86::encode_avx512::<URLSAFE>),
         Backend::Avx2 => Some(x86::encode_avx2::<URLSAFE>),
         Backend::Sse41 | Backend::Ssse3 => Some(x86::encode_ssse3::<URLSAFE>),
         Backend::Scalar | Backend::Neon => None,
@@ -263,7 +263,7 @@ type DecodeKernel = unsafe fn(&[u8], *mut u8) -> Result<(usize, usize), Base64Er
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn decode_x86_kernel<A: x86::Decoder, S: x86::Store>(backend: Backend) -> Option<DecodeKernel> {
     match backend {
-        Backend::Avx512 => Some(x86::avx512::decode::<A, S>),
+        Backend::Avx512 => Some(x86::decode_avx512::<A, S>),
         Backend::Avx2 => Some(x86::decode_avx2::<A, S>),
         Backend::Sse41 => Some(x86::decode_sse41::<A, S>),
         Backend::Ssse3 => Some(x86::decode_ssse3::<A, S>),

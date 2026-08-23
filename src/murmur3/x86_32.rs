@@ -5,6 +5,9 @@ use super::primitives::{fmix32, read_u32_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::x86;
 
+pub(super) const X86_32_C1: u32 = 0xcc9e_2d51;
+pub(super) const X86_32_C2: u32 = 0x1b87_3593;
+
 /// Incremental state for the canonical MurmurHash3 x86 32-bit algorithm.
 ///
 /// Data can be supplied in any chunk sizes. Cloning the value creates an
@@ -170,16 +173,13 @@ pub(super) fn murmur3_x86_32_scalar(key: &[u8], seed: u32) -> u32 {
 
 #[inline]
 pub(super) fn mix_x86_32_body_scalar(key: &[u8], hash: &mut u32) {
-    const C1: u32 = 0xcc9e_2d51;
-    const C2: u32 = 0x1b87_3593;
-
     debug_assert!(key.len().is_multiple_of(4));
     let mut offset = 0;
     while offset < key.len() {
         let block = read_u32_le(key, offset)
-            .wrapping_mul(C1)
+            .wrapping_mul(X86_32_C1)
             .rotate_left(15)
-            .wrapping_mul(C2);
+            .wrapping_mul(X86_32_C2);
         *hash = mix_x86_32_hash(*hash, block);
         offset += 4;
     }
@@ -200,8 +200,6 @@ pub(super) fn finish_x86_32(key: &[u8], hash: u32, offset: usize) -> u32 {
 
 #[inline(always)]
 pub(super) fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
-    const C1: u32 = 0xcc9e_2d51;
-    const C2: u32 = 0x1b87_3593;
     debug_assert!(tail_bytes.len() < 4);
     let tail_len = tail_bytes.len();
     let mut tail = 0u32;
@@ -213,7 +211,10 @@ pub(super) fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) 
     }
     if tail_len != 0 {
         tail ^= tail_bytes[0] as u32;
-        hash ^= tail.wrapping_mul(C1).rotate_left(15).wrapping_mul(C2);
+        hash ^= tail
+            .wrapping_mul(X86_32_C1)
+            .rotate_left(15)
+            .wrapping_mul(X86_32_C2);
     }
 
     fmix32(hash ^ length)

@@ -717,13 +717,8 @@ pub(super) unsafe extern "C" fn urlsafe_b64decode(
             return ptr::null_mut();
         };
         let default = !python_at_least(py, (3, 15));
-        let result = truthy_argument(py, values[1], default).and_then(|padded| {
-            if python_at_least(py, (3, 15)) {
-                super::urlsafe_b64decode_315(py, raw_argument(py, &values[0]), padded)
-            } else {
-                super::urlsafe_b64decode_pre_315(py, raw_argument(py, &values[0]), padded)
-            }
-        });
+        let result = truthy_argument(py, values[1], default)
+            .and_then(|padded| super::urlsafe_b64decode(py, raw_argument(py, &values[0]), padded));
         return_bound(py, result)
     }
 }
@@ -751,16 +746,7 @@ pub(super) unsafe extern "C" fn urlsafe_b64decode_into(
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             let default = !python_at_least(py, (3, 15));
             let padded = truthy_argument(py, values[2], default)?;
-            if python_at_least(py, (3, 15)) {
-                super::urlsafe_b64decode_into_315(py, raw_argument(py, &values[0]), output, padded)
-            } else {
-                super::urlsafe_b64decode_into_pre_315(
-                    py,
-                    raw_argument(py, &values[0]),
-                    output,
-                    padded,
-                )
-            }
+            super::urlsafe_b64decode_into(py, raw_argument(py, &values[0]), output, padded)
         })();
         return_usize(py, result)
     }

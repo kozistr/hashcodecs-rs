@@ -5,6 +5,9 @@ use super::primitives::{fmix64, read_partial_u64_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::x86;
 
+pub(super) const X64_128_C1: u64 = 0x87c3_7b91_1142_53d5;
+pub(super) const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
+
 /// Incremental state for the canonical MurmurHash3 x64 128-bit algorithm.
 ///
 /// Input may be split at arbitrary byte boundaries. The two digest words are
@@ -178,9 +181,6 @@ pub(super) fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
 
 #[inline]
 pub(super) fn mix_x64_128_body_scalar(key: &[u8], hashes: &mut [u64; 2]) {
-    const C1: u64 = 0x87c3_7b91_1142_53d5;
-    const C2: u64 = 0x4cf5_ad43_2745_937f;
-
     debug_assert!(key.len().is_multiple_of(16));
     let mut hash1 = hashes[0];
     let mut hash2 = hashes[1];
@@ -189,20 +189,15 @@ pub(super) fn mix_x64_128_body_scalar(key: &[u8], hashes: &mut [u64; 2]) {
     while input < end {
         let value1 = u64::from_le(unsafe { input.cast::<u64>().read_unaligned() });
         let value2 = u64::from_le(unsafe { input.add(8).cast::<u64>().read_unaligned() });
-        let block1 = value1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
-        let block2 = value2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
-        hash1 ^= block1;
-        hash1 = hash1
-            .rotate_left(27)
-            .wrapping_add(hash2)
-            .wrapping_mul(5)
-            .wrapping_add(0x52dc_e729);
-        hash2 ^= block2;
-        hash2 = hash2
+        let block1 = value1
+            .wrapping_mul(X64_128_C1)
             .rotate_left(31)
-            .wrapping_add(hash1)
-            .wrapping_mul(5)
-            .wrapping_add(0x3849_5ab5);
+            .wrapping_mul(X64_128_C2);
+        let block2 = value2
+            .wrapping_mul(X64_128_C2)
+            .rotate_left(33)
+            .wrapping_mul(X64_128_C1);
+        mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
         input = unsafe { input.add(16) };
     }
     *hashes = [hash1, hash2];
@@ -215,16 +210,20 @@ pub(super) fn finish_x64_128(key: &[u8], hashes: [u64; 2], offset: usize) -> [u6
 
 #[inline]
 pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 2] {
-    const C1: u64 = 0x87c3_7b91_1142_53d5;
-    const C2: u64 = 0x4cf5_ad43_2745_937f;
     debug_assert!(tail.len() < 16);
     if tail.len() > 8 {
         let block2 = read_partial_u64_le(&tail[8..]);
-        hashes[1] ^= block2.wrapping_mul(C2).rotate_left(33).wrapping_mul(C1);
+        hashes[1] ^= block2
+            .wrapping_mul(X64_128_C2)
+            .rotate_left(33)
+            .wrapping_mul(X64_128_C1);
     }
     if !tail.is_empty() {
         let block1 = read_partial_u64_le(&tail[..tail.len().min(8)]);
-        hashes[0] ^= block1.wrapping_mul(C1).rotate_left(31).wrapping_mul(C2);
+        hashes[0] ^= block1
+            .wrapping_mul(X64_128_C1)
+            .rotate_left(31)
+            .wrapping_mul(X64_128_C2);
     }
 
     hashes[0] ^= length;
@@ -236,4 +235,20 @@ pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64
     hashes[0] = hashes[0].wrapping_add(hashes[1]);
     hashes[1] = hashes[1].wrapping_add(hashes[0]);
     hashes
+}
+
+#[inline(always)]
+pub(super) fn mix_x64_128_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64) {
+    *hash1 ^= block1;
+    *hash1 = hash1
+        .rotate_left(27)
+        .wrapping_add(*hash2)
+        .wrapping_mul(5)
+        .wrapping_add(0x52dc_e729);
+    *hash2 ^= block2;
+    *hash2 = hash2
+        .rotate_left(31)
+        .wrapping_add(*hash1)
+        .wrapping_mul(5)
+        .wrapping_add(0x3849_5ab5);
 }

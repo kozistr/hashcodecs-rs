@@ -1,9 +1,8 @@
 //! Base64 encoding API and scalar fallback.
 
 use super::dispatch::encode_simd_ptr;
-use super::{
-    Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET, initialized_output, uninitialized_output,
-};
+use super::output::{initialized_output, uninitialized_output};
+use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
 /// Encodes bytes with the padded RFC 4648 standard Base64 alphabet.
 ///

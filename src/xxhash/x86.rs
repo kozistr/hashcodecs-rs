@@ -1,6 +1,6 @@
 use crate::backend::{Capabilities, SimdBackend};
 
-use super::{init_secret_scalar, long_accumulate_scalar};
+use super::long::{init_secret_scalar, long_accumulate_scalar};
 
 pub(super) mod avx2;
 mod avx512;

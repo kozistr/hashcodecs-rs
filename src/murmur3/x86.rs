@@ -3,9 +3,9 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::{
-    mix_x86_32_hash, mix_x86_128_body_scalar, mix_x86_128_hashes, read_u32_le, read_u64_le,
-};
+use super::primitives::{read_u32_le, read_u64_le};
+use super::x86_32::mix_x86_32_hash;
+use super::x86_128::{mix_x86_128_body_scalar, mix_x86_128_hashes};
 
 const C1: u32 = 0xcc9e_2d51;
 const C2: u32 = 0x1b87_3593;

@@ -25,6 +25,7 @@ nav = [
     { "Overview" = "ARCHITECTURE.md" },
     { "Decision Index" = "adr/index.md" },
     { "Layered Module Boundaries" = "adr/0001-layered-module-boundaries.md" },
+    { "Feature-First Algorithm Modules" = "adr/0002-feature-first-algorithm-modules.md" },
   ] },
 ]
 

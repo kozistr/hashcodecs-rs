@@ -19,6 +19,7 @@ use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytea
 use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_items};
 use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
 
+mod callbacks;
 mod decode;
 mod encode;
 mod methods;

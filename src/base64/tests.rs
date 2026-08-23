@@ -1,4 +1,12 @@
+use super::alphabet::decode_table;
+use super::backend::{Backend, is_supported as backend_supported};
+use super::dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 use super::*;
+use crate::backend::{Capabilities, SimdBackend};
+
+fn select_backend(backend: SimdBackend) -> Backend {
+    backend::select(Capabilities::for_backends(&[backend]))
+}
 use base64::Engine;
 
 #[test]

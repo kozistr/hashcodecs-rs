@@ -3,7 +3,8 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::{P32_1, initial_accumulator, long_accumulate_scalar, long_schedule};
+use crate::xxhash::long::{initial_accumulator, long_accumulate_scalar, long_schedule};
+use crate::xxhash::primitives::P32_1;
 
 #[repr(align(64))]
 struct AlignedAccumulator([u64; 8]);

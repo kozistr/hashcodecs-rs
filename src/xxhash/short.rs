@@ -1,0 +1,174 @@
+use super::primitives::*;
+
+pub(super) fn xxh3_64_small(data: &[u8], seed: u64) -> u64 {
+    let len = data.len();
+    if len == 0 {
+        return avalanche64(seed ^ (u64le(&SECRET, 56) ^ u64le(&SECRET, 64)));
+    }
+    if len <= 3 {
+        let combined = (data[0] as u32) << 16
+            | (data[len >> 1] as u32) << 24
+            | data[len - 1] as u32
+            | (len as u32) << 8;
+        return avalanche64(
+            (combined as u64) ^ ((u32le(&SECRET, 0) ^ u32le(&SECRET, 4)) as u64).wrapping_add(seed),
+        );
+    }
+    if len <= 8 {
+        let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
+        let input = u32le(data, len - 4) as u64 | (u32le(data, 0) as u64) << 32;
+        return rrmxmx(
+            input ^ (u64le(&SECRET, 8) ^ u64le(&SECRET, 16)).wrapping_sub(seed),
+            len,
+        );
+    }
+    let lo = u64le(data, 0) ^ (u64le(&SECRET, 24) ^ u64le(&SECRET, 32)).wrapping_add(seed);
+    let hi = u64le(data, len - 8) ^ (u64le(&SECRET, 40) ^ u64le(&SECRET, 48)).wrapping_sub(seed);
+    avalanche(
+        (len as u64)
+            .wrapping_add(lo.swap_bytes())
+            .wrapping_add(hi)
+            .wrapping_add(mulfold(lo, hi)),
+    )
+}
+
+pub(super) fn xxh3_64_medium(data: &[u8], seed: u64) -> u64 {
+    let len = data.len();
+    let mut acc = (len as u64).wrapping_mul(P64_1);
+    if len > 32 {
+        if len > 64 {
+            if len > 96 {
+                acc = acc.wrapping_add(mix16(data, 48, &SECRET, 96, seed));
+                acc = acc.wrapping_add(mix16(data, len - 64, &SECRET, 112, seed));
+            }
+            acc = acc.wrapping_add(mix16(data, 32, &SECRET, 64, seed));
+            acc = acc.wrapping_add(mix16(data, len - 48, &SECRET, 80, seed));
+        }
+        acc = acc.wrapping_add(mix16(data, 16, &SECRET, 32, seed));
+        acc = acc.wrapping_add(mix16(data, len - 32, &SECRET, 48, seed));
+    }
+    acc = acc.wrapping_add(mix16(data, 0, &SECRET, 0, seed));
+    acc = acc.wrapping_add(mix16(data, len - 16, &SECRET, 16, seed));
+    avalanche(acc)
+}
+
+pub(super) fn xxh3_64_midsize(data: &[u8], seed: u64) -> u64 {
+    let len = data.len();
+    let mut acc = (len as u64).wrapping_mul(P64_1);
+    for i in 0..8 {
+        acc = acc.wrapping_add(mix16(data, 16 * i, &SECRET, 16 * i, seed));
+    }
+    acc = avalanche(acc);
+    for i in 8..(len / 16) {
+        acc = acc.wrapping_add(mix16(data, 16 * i, &SECRET, 3 + 16 * (i - 8), seed));
+    }
+    avalanche(acc.wrapping_add(mix16(data, len - 16, &SECRET, 119, seed)))
+}
+
+pub(super) fn xxh3_128_len_64(data: &[u8], seed: u64) -> [u64; 2] {
+    let acc = [64_u64.wrapping_mul(P64_1), 0];
+    let acc = mix32(acc, data, 16, 32, 32, seed);
+    final128(mix32(acc, data, 0, 48, 0, seed), 64, seed)
+}
+
+pub(super) fn xxh3_128_small(data: &[u8], seed: u64) -> [u64; 2] {
+    let len = data.len();
+    if len == 0 {
+        return [
+            avalanche64(seed ^ (u64le(&SECRET, 64) ^ u64le(&SECRET, 72))),
+            avalanche64(seed ^ (u64le(&SECRET, 80) ^ u64le(&SECRET, 88))),
+        ];
+    }
+    if len <= 3 {
+        let c = (data[0] as u32) << 16
+            | (data[len >> 1] as u32) << 24
+            | data[len - 1] as u32
+            | (len as u32) << 8;
+        let h = c.swap_bytes().rotate_left(13);
+        return [
+            avalanche64(
+                c as u64 ^ ((u32le(&SECRET, 0) ^ u32le(&SECRET, 4)) as u64).wrapping_add(seed),
+            ),
+            avalanche64(
+                h as u64 ^ ((u32le(&SECRET, 8) ^ u32le(&SECRET, 12)) as u64).wrapping_sub(seed),
+            ),
+        ];
+    }
+    if len <= 8 {
+        let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
+        let input = u32le(data, 0) as u64 | (u32le(data, len - 4) as u64) << 32;
+        let keyed = input ^ (u64le(&SECRET, 16) ^ u64le(&SECRET, 24)).wrapping_add(seed);
+        let product = (keyed as u128) * (P64_1.wrapping_add((len as u64) << 2) as u128);
+        let mut lo = product as u64;
+        let mut hi = (product >> 64) as u64;
+        hi = hi.wrapping_add(lo << 1);
+        lo ^= hi >> 3;
+        lo ^= lo >> 35;
+        lo = lo.wrapping_mul(MX2);
+        lo ^= lo >> 28;
+        return [lo, avalanche(hi)];
+    }
+    let lo = u64le(data, 0);
+    let mut hi = u64le(data, len - 8);
+    let product = ((lo ^ hi ^ (u64le(&SECRET, 32) ^ u64le(&SECRET, 40)).wrapping_sub(seed))
+        as u128)
+        * P64_1 as u128;
+    let mut low = (product as u64).wrapping_add(((len - 1) as u64) << 54);
+    let mut high = (product >> 64) as u64;
+    hi ^= (u64le(&SECRET, 48) ^ u64le(&SECRET, 56)).wrapping_add(seed);
+    high = high.wrapping_add(hi.wrapping_add((hi as u32 as u64).wrapping_mul(P32_2 - 1)));
+    low ^= high.swap_bytes();
+    let product = (low as u128) * P64_2 as u128;
+    [
+        avalanche(product as u64),
+        avalanche(((product >> 64) as u64).wrapping_add(high.wrapping_mul(P64_2))),
+    ]
+}
+
+pub(super) fn mix32(
+    mut acc: [u64; 2],
+    data: &[u8],
+    first: usize,
+    second: usize,
+    secret: usize,
+    seed: u64,
+) -> [u64; 2] {
+    acc[0] = acc[0].wrapping_add(mix16(data, first, &SECRET, secret, seed));
+    acc[0] ^= u64le(data, second).wrapping_add(u64le(data, second + 8));
+    acc[1] = acc[1].wrapping_add(mix16(data, second, &SECRET, secret + 16, seed));
+    acc[1] ^= u64le(data, first).wrapping_add(u64le(data, first + 8));
+    acc
+}
+pub(super) fn final128(acc: [u64; 2], len: usize, seed: u64) -> [u64; 2] {
+    [
+        avalanche(acc[0].wrapping_add(acc[1])),
+        0u64.wrapping_sub(avalanche(
+            acc[0]
+                .wrapping_mul(P64_1)
+                .wrapping_add(acc[1].wrapping_mul(P64_4))
+                .wrapping_add((len as u64).wrapping_sub(seed).wrapping_mul(P64_2)),
+        )),
+    ]
+}
+pub(super) fn xxh3_128_medium(data: &[u8], seed: u64) -> [u64; 2] {
+    let len = data.len();
+    let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
+    for i in (0..=((len - 1) / 32)).rev() {
+        acc = mix32(acc, data, i * 16, len - 16 * (i + 1), i * 32, seed);
+    }
+    final128(acc, len, seed)
+}
+pub(super) fn xxh3_128_midsize(data: &[u8], seed: u64) -> [u64; 2] {
+    let len = data.len();
+    let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
+    for i in (0..128).step_by(32) {
+        acc = mix32(acc, data, i, i + 16, i, seed);
+    }
+    acc = [avalanche(acc[0]), avalanche(acc[1])];
+    for index in 4..(len / 32) {
+        let offset = index * 32;
+        acc = mix32(acc, data, offset, offset + 16, 3 + (index - 4) * 32, seed);
+    }
+    acc = mix32(acc, data, len - 16, len - 32, 103, 0u64.wrapping_sub(seed));
+    final128(acc, len, seed)
+}

@@ -1,9 +1,10 @@
 //! Base64 decoding API, layout validation, and scalar fallback.
 
 use super::dispatch::decode_simd_ptr;
+use super::output::{initialized_output, uninitialized_output};
 use super::{
     Base64Error, DECODE_STORE_PADDING, DecodeAlphabet, INVALID_VALUE, MIXED_DECODE,
-    STANDARD_DECODE, URLSAFE_DECODE, initialized_output, uninitialized_output,
+    STANDARD_DECODE, URLSAFE_DECODE,
 };
 
 /// Decodes padded RFC 4648 Base64 with the standard alphabet.

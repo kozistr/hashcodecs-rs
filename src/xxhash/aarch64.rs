@@ -1,6 +1,7 @@
 use std::arch::aarch64::*;
 
-use super::{P32_1, initial_accumulator, long_schedule};
+use super::long::{initial_accumulator, long_schedule};
+use super::primitives::P32_1;
 
 #[inline(always)]
 unsafe fn accumulate_neon(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {

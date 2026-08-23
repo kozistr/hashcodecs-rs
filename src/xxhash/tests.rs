@@ -1,0 +1,217 @@
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use crate::backend::{self, SimdBackend};
+
+use super::long::{init_secret, init_secret_scalar, long_accumulate_scalar};
+use super::primitives::SECRET;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::x86;
+use super::*;
+use core::ffi::c_void;
+
+fn c_xxh3_64(input: &[u8], seed: u64) -> u64 {
+    unsafe {
+        xxhash_c_sys::XXH3_64bits_withSeed(input.as_ptr().cast::<c_void>(), input.len(), seed)
+    }
+}
+
+fn c_xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
+    let hash = unsafe {
+        xxhash_c_sys::XXH3_128bits_withSeed(input.as_ptr().cast::<c_void>(), input.len(), seed)
+    };
+    [hash.low64, hash.high64]
+}
+
+#[test]
+fn empty_vectors() {
+    assert_eq!(xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
+    assert_eq!(
+        xxh3_128(b"", 0),
+        [0x6001_c324_468d_497f, 0x99aa_06d3_0147_98d8]
+    );
+}
+#[test]
+fn batches_match_one_shot() {
+    let values: [&[u8]; 3] = [b"", b"hello", b"xxhash"];
+    assert_eq!(xxh3_64_batch(&values, 42), values.map(|v| xxh3_64(v, 42)));
+    assert_eq!(xxh3_128_batch(&values, 42), values.map(|v| xxh3_128(v, 42)));
+
+    let mixed_owned = [17, 129, 241, 300].map(|length| {
+        (0..length)
+            .map(|index| (index as u8).wrapping_mul(19).wrapping_add(7))
+            .collect::<Vec<_>>()
+    });
+    let mixed = mixed_owned.each_ref().map(Vec::as_slice);
+    assert_eq!(xxh3_64_batch(&mixed, 42), mixed.map(|v| xxh3_64(v, 42)));
+    assert_eq!(xxh3_128_batch(&mixed, 42), mixed.map(|v| xxh3_128(v, 42)));
+
+    let owned = (0..8)
+        .map(|item| {
+            (0..4161)
+                .map(|index| (index as u8).wrapping_mul(31).wrapping_add(item))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    assert_eq!(
+        xxh3_64_batch(&inputs, 0x1234_5678),
+        inputs
+            .iter()
+            .map(|input| xxhash_rust::xxh3::xxh3_64_with_seed(input, 0x1234_5678))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        xxh3_128_batch(&inputs, 0x1234_5678),
+        inputs
+            .iter()
+            .map(|input| {
+                let hash = xxhash_rust::xxh3::xxh3_128_with_seed(input, 0x1234_5678);
+                [hash as u64, (hash >> 64) as u64]
+            })
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn matches_reference_at_every_length_through_two_blocks() {
+    let input = (0..=2048)
+        .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
+        .collect::<Vec<_>>();
+    for length in 0..=2048 {
+        let input = &input[..length];
+        for &seed in &[0, 0xd6e8_feb8_6659_fd93] {
+            assert_eq!(
+                xxh3_64(input, seed),
+                c_xxh3_64(input, seed),
+                "XXH3-64 mismatch for length {length}, seed {seed:#x}",
+            );
+            let actual = xxh3_128(input, seed);
+            assert_eq!(
+                actual,
+                c_xxh3_128(input, seed),
+                "XXH3-128 mismatch for length {length}, seed {seed:#x}",
+            );
+        }
+    }
+}
+
+#[test]
+fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
+    const LENGTHS: &[usize] = &[
+        0, 1, 2, 3, 4, 8, 9, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129, 159, 160, 191,
+        192, 239, 240, 241, 255, 256, 511, 512, 1023, 1024, 1025, 4161,
+    ];
+    const SEEDS: &[u64] = &[0, 1, 0x0123_4567_89ab_cdef, u64::MAX];
+
+    for &length in LENGTHS {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(131).wrapping_add(17))
+            .collect();
+        for &seed in SEEDS {
+            assert_eq!(
+                xxh3_64(&input, seed),
+                xxhash_rust::xxh3::xxh3_64_with_seed(&input, seed),
+                "XXH3-64 mismatch for length {length}, seed {seed:#x}",
+            );
+            let reference = xxhash_rust::xxh3::xxh3_128_with_seed(&input, seed);
+            let actual = xxh3_128(&input, seed);
+            assert_eq!(
+                (u128::from(actual[1]) << 64) | u128::from(actual[0]),
+                reference,
+                "XXH3-128 mismatch for length {length}, seed {seed:#x}",
+            );
+        }
+    }
+}
+
+#[test]
+fn randomized_inputs_match_the_official_c_implementation() {
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    for case in 0..128 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let length = (state as usize) % (128 * 1024 + 1);
+        let mut input = vec![0_u8; length];
+        for byte in &mut input {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *byte = state as u8;
+        }
+        state = state.rotate_left(29).wrapping_add(case);
+        let seed = state;
+        assert_eq!(xxh3_64(&input, seed), c_xxh3_64(&input, seed));
+        assert_eq!(xxh3_128(&input, seed), c_xxh3_128(&input, seed));
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn every_supported_x86_backend_matches_scalar() {
+    use crate::backend::Capabilities;
+
+    let input: Vec<u8> = (0..4161)
+        .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
+        .collect();
+    let exact_kib: Vec<u8> = (0..1024)
+        .map(|index| (index as u8).wrapping_mul(53).wrapping_add(17))
+        .collect();
+    let capabilities = backend::capabilities();
+    let scalar = Capabilities::for_backends(&[]);
+    assert_eq!(x86::select(scalar), x86::Backend::Scalar);
+    assert_eq!(
+        x86::select(Capabilities::for_backends(&[SimdBackend::Ssse3])),
+        x86::Backend::Ssse3
+    );
+    assert_eq!(
+        x86::select(Capabilities::for_backends(&[SimdBackend::Sse41])),
+        x86::Backend::Sse41
+    );
+    assert_eq!(
+        x86::select(Capabilities::for_backends(&[SimdBackend::Avx2])),
+        x86::Backend::Avx2
+    );
+    assert_eq!(
+        x86::select(Capabilities::for_backends(&[SimdBackend::Avx512])),
+        x86::Backend::Avx512
+    );
+    for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
+        let owned_secret = (seed != 0).then(|| init_secret(seed));
+        let secret = owned_secret.as_ref().unwrap_or(&SECRET);
+        let expected = long_accumulate_scalar(&input, secret);
+        assert_eq!(x86::init_secret(seed, scalar), init_secret_scalar(seed));
+        assert_eq!(x86::long_accumulate(&input, secret, scalar), expected);
+        assert_eq!(
+            x86::long_accumulate(
+                &input,
+                secret,
+                Capabilities::for_backends(&[SimdBackend::Avx512]),
+            ),
+            expected
+        );
+
+        let supported = [
+            (x86::Backend::Scalar, SimdBackend::Scalar),
+            (x86::Backend::Ssse3, SimdBackend::Ssse3),
+            (x86::Backend::Sse41, SimdBackend::Sse41),
+            (x86::Backend::Avx2, SimdBackend::Avx2),
+            (x86::Backend::Avx512, SimdBackend::Avx512),
+        ];
+        for (selected, required) in supported
+            .into_iter()
+            .filter(|(_, required)| capabilities.supports(*required))
+        {
+            let forced = Capabilities::for_backends(&[required]);
+            assert_eq!(x86::select(forced), selected);
+            let actual = x86::long_accumulate(&input, secret, forced);
+            assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
+            if selected == x86::Backend::Avx2 {
+                assert_eq!(
+                    x86::long_accumulate(&exact_kib, secret, forced),
+                    long_accumulate_scalar(&exact_kib, secret),
+                    "AVX2 1 KiB mismatch for seed {seed:#x}",
+                );
+            }
+        }
+    }
+}

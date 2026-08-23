@@ -25,9 +25,9 @@ kernel, but never changes output formats or public behavior.
 | Path | Responsibility |
 | --- | --- |
 | `src/backend.rs` | Process-wide CPU capability detection shared by dispatchers. |
-| `src/base64.rs`, `src/base64/` | Base64 API, validation, scalar implementation, and architecture-specific kernels. |
-| `src/murmur3.rs`, `src/murmur3/` | One-shot MurmurHash3 implementations, shared incremental buffering, and dispatch thresholds. |
-| `src/xxhash.rs`, `src/xxhash/` | Canonical XXH3-64/128 implementations, long-input SIMD, and native batching. |
+| `src/base64.rs`, `src/base64/` | Base64 façade; encode/decode operations; alphabets; output ownership; dispatch; scalar and SIMD kernels. |
+| `src/murmur3.rs`, `src/murmur3/` | MurmurHash3 façade; x86-32, x86-128, and x64-128 variants; incremental buffering; dispatch. |
+| `src/xxhash.rs`, `src/xxhash/` | XXH3 façade; short-input formulas; long-input accumulation; batching; scalar and SIMD kernels. |
 | `src/bindings/mod.rs` | CPython extension composition root; it only assembles public functions and classes. |
 | `src/bindings/arguments.rs`, `objects.rs`, `runtime.rs` | Shared CPython parsing, object access, function registration, and GIL policy. |
 | `src/bindings/{base64,murmur3,xxhash}/` | Algorithm-specific CPython adapters. |
@@ -39,7 +39,8 @@ kernel, but never changes output formats or public behavior.
 
 The crate uses layered modules rather than a workspace of small crates. The boundaries are:
 
-- public algorithm modules own formats, validation, and scalar behavior;
+- public algorithm façades document and reexport the stable Rust API;
+- functional modules own validation, scalar behavior, and algorithm state;
 - dispatch modules depend on the shared CPU capability snapshot and select interchangeable kernels;
 - architecture-specific kernels never depend on Python bindings;
 - algorithm-specific Python adapters depend on the Rust APIs and shared binding policies;
@@ -51,7 +52,24 @@ length together, so each incremental hasher cannot represent an inconsistent tai
 call-shape parsing, and `runtime.rs` owns GIL-detachment and native function registration.
 
 New code should depend toward these shared policies instead of reaching sideways into another algorithm adapter.
-The rationale and consequences are recorded in [ADR 0001](adr/0001-layered-module-boundaries.md).
+Tests, Miri checks, and Kani proofs live in separate modules next to the functionality they cover.
+
+## Functional Module Shape
+
+The crate uses feature-first modules. Each algorithm keeps its public façade at `src/<algorithm>.rs` and its
+implementation under `src/<algorithm>/`. The implementation follows the algorithm's main change axis:
+
+| Algorithm | Main module boundary | Reason |
+| --- | --- | --- |
+| Base64 | `encode` and `decode` | Encoding and decoding have separate validation, sizing, and kernel flows. |
+| MurmurHash3 | `x86_32`, `x86_128`, and `x64_128` | Each canonical variant owns one-shot hashing, incremental state, tail handling, and finalization. |
+| XXH3 | `short`, `long`, and `batch` | XXH3-64 and XXH3-128 share primitives and the long-input accumulator. |
+
+The modules share dependency direction and visibility rules. They do not share an identical file template. Hot
+paths use direct calls and static dispatch; module boundaries do not add runtime traits or heap allocation.
+
+[ADR 0001](adr/0001-layered-module-boundaries.md) records the dependency direction. [ADR 0002](adr/0002-feature-first-algorithm-modules.md)
+records the algorithm-specific module shapes.
 
 ## Runtime Dispatch
 
@@ -69,7 +87,8 @@ checks.
 
 ### Base64
 
-Base64 separates public length and validation rules from encoding and decoding kernels. The runtime backend
+`base64.rs` reexports the public operations and error type. `alphabet.rs` owns lookup tables, `output.rs` owns
+allocation initialization, and the `encode` and `decode` modules own their operation flows. The runtime backend
 prefers AVX-512 VBMI, AVX2, SSE4.1, SSSE3, NEON, then scalar when supported. Scalar code handles short inputs and
 all tails.
 
@@ -84,14 +103,15 @@ set. Smaller work stays on ordinary cached stores.
 
 ### MurmurHash3
 
-MurmurHash3 provides x86-32, x86-128, and x64-128 variants. One-shot calls choose scalar, SSE4.1, or AVX2 using
-explicit size thresholds. Incremental hashers retain incomplete tails and use the same canonical finalization as
-the one-shot functions.
+The `x86_32`, `x86_128`, and `x64_128` modules each own one-shot calls, incremental state, scalar block mixing,
+tail handling, and finalization. All variants use `incremental.rs` for pending blocks and `primitives.rs` for
+little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX2 using explicit size thresholds.
 
 ### XXH3
 
-XXH3-64 and XXH3-128 follow the canonical length classes: 0-16, 17-128, 129-240, and long inputs. Only long inputs
-enter the accumulation backends; smaller inputs stay on specialized scalar formulas.
+`hash.rs` selects the canonical length class, `short.rs` contains the 0-240-byte formulas, and `long.rs` owns
+secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules. Only
+long inputs enter the accumulation backends.
 
 Native batches reuse the initialized secret and process inputs in groups of four. Four equal-size inputs longer
 than 240 bytes use the AVX2 batch accumulator when available; mixed sizes and remainders use the regular paths.
@@ -107,6 +127,9 @@ allows the output bytearray to also appear as an input.
 
 The extension uses version-specific CPython APIs rather than the stable ABI. Native functions are registered as
 fast callbacks, with shared parsers enforcing Python-compatible positional and keyword behavior.
+
+Algorithm adapters separate execution callbacks from method registration. MurmurHash3 also separates one-shot
+callbacks, digest formatting, and incremental Python classes.
 
 Buffer handling follows ownership rather than treating every buffer alike:
 

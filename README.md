@@ -117,6 +117,9 @@ The Rust core owns algorithm behavior and SIMD dispatch. A thin CPython layer ha
 ownership, reusable outputs, and GIL decisions; root-level Python modules provide typed public exports without
 adding per-call wrappers.
 
+Each Rust algorithm exposes a small public façade. Base64 organizes internals by encode and decode operations,
+MurmurHash3 by canonical variant, and XXH3 by short-input, long-input, and batch stages.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout, dispatch model, algorithm data flows,
 CPython boundary, and safety invariants.
 

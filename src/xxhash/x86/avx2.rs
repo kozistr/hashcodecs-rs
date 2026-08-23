@@ -3,7 +3,8 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::{P32_1, SECRET, initial_accumulator, long_schedule};
+use crate::xxhash::long::{initial_accumulator, long_schedule};
+use crate::xxhash::primitives::{P32_1, SECRET};
 
 #[repr(align(64))]
 #[derive(Clone, Copy)]

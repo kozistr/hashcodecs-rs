@@ -4,6 +4,16 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-23
+
+### What's Changed
+* chore: use trusted publishing for crates.io by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/44
+* refactor: establish clean architecture boundaries by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/45
+* feat: borrow contiguous Python buffers by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/46
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...v1.1.0
+
 ## [1.0.0] - 2026-08-22
 
 ### What's Changed
@@ -89,7 +99,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...v1.0.0
 [0.6.1]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.5.0...v0.6.0

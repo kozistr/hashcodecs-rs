@@ -12,33 +12,10 @@ Use `uv run python benchmarks/render_charts.py` to render the charts. Read exact
 ## Timing Controls
 
 Every Python benchmark accepts `--samples` (default: 15) and `--minimum-sample-seconds` (default: 0.2). Their
-sampling time per case is at least their product, plus calibration; use lower values only for exploratory runs.
+sampling time per case is at least their product, plus calibration; use lower values only for exploratory runs. For a quicker full
+hashcodecs-only pass, use `--hashcodecs-only --samples 3 --minimum-sample-seconds 0.05` with each Python benchmark
+script.
 
-Run the complete Python hashcodecs-only suite at the default timing with:
-
-```sh
-uv run --no-project --with . python benchmarks/python_base64.py --hashcodecs-only
-uv run --no-project --with . python benchmarks/python_base64_batch.py --hashcodecs-only
-uv run --no-project --with . python benchmarks/python_murmur3.py --hashcodecs-only
-uv run --no-project --with . python benchmarks/python_xxhash.py --hashcodecs-only
-```
-
-For a quicker exploratory pass, append `--samples 3 --minimum-sample-seconds 0.05` to each command.
-
-### Latest hashcodecs-only Python run
-
-The full default-timing run on 2026-08-23, pinned to one logical CPU on the documented benchmark host, included all
-cases. Selected throughput results are:
-
-| Case | Input | Throughput |
-| --- | ---: | ---: |
-| Base64 standard encode | 4 KiB | 23.57 GiB/s |
-| Base64 standard decode | 4 KiB | 17.94 GiB/s |
-| Base64 batch encode | 256 B × 64 | 8.80 GiB/s |
-| Base64 batch decode | 256 B × 64 | 7.58 GiB/s |
-| MurmurHash3 x64 128-bit | 1 MiB | 10.07 GiB/s |
-| XXH3-64 | 1 MiB | 79.20 GiB/s |
-| XXH3-128 | 1 MiB | 79.02 GiB/s |
 
 ## XXH3
 

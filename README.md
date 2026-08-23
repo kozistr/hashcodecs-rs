@@ -181,7 +181,8 @@ uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
 
 The Python benchmarks expose focused modes such as `--into`, `--bytearray-input`, `--memoryview-input`,
-`--incremental`, `--large`, and `--hashcodecs-only`. Use `--help` on a benchmark script for its supported modes.
+`--incremental`, `--large`, and `--hashcodecs-only`. All scripts also accept `--samples` and
+`--minimum-sample-seconds`; use `--help` on a benchmark script for its supported modes and defaults.
 
 For the same-ISA Windows XXH3 comparison shown above, rebuild the C baseline with:
 
@@ -193,9 +194,10 @@ cargo bench --bench xxhash
 
 ## Performance snapshot
 
-On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 78.83 GiB/s. The operator pinned one logical
-CPU and measured hashcodecs alone. At 256 B items in batches of 64, the Base64 batch API reaches 8.56 GiB/s for encode and 7.60 GiB/s for decode.
-The per-item loop reaches 4.41 and 3.39 GiB/s. Read the [benchmark details](BENCHMARK.md) and [raw results](docs/benchmarks/results.csv).
+In the full 2026-08-23 hashcodecs-only run on the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at
+79.20 GiB/s. With 256 B items in batches of 64, the Base64 batch API reaches 8.80 GiB/s for encode and 7.58 GiB/s for
+decode. The run pins one logical CPU and uses 15 samples with a 0.2-second minimum per sample. Read the
+[benchmark details](BENCHMARK.md) and [raw comparison results](docs/benchmarks/results.csv).
 
 ## Development
 

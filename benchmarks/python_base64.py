@@ -8,7 +8,7 @@ import gc
 from collections.abc import Callable
 
 import pybase64
-from _support import SIZES, data, pin_to_one_cpu, throughput
+from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
 
 import hashcodecs.base64 as hashcodecs_base64
 
@@ -72,7 +72,9 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs with full immutable memoryview inputs',
     )
+    add_timing_arguments(parser)
     args = parser.parse_args()
+    configure_timing(args.samples, args.minimum_sample_seconds)
 
     pin_to_one_cpu()
     gc.disable()

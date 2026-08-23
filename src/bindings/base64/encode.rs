@@ -46,7 +46,7 @@ pub(super) fn encode_into(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<usize> {
-    if input.aliases(output) {
+    if input.aliases(output) || input.requires_snapshot_for_output() {
         let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
         return encode_slice_into(&input, output, altchars, padded, wrapcol);
     }

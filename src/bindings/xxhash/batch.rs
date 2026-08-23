@@ -46,7 +46,7 @@ fn parse_batch<'a, 'py>(
     Ok(inputs
         .into_iter()
         .map(|input| {
-            if input.detach_safe() {
+            if input.detach_safe() || matches!(input, BytesLike::Buffer(_)) {
                 input
             } else {
                 BytesLike::Owned(unsafe { input.with_bytes(<[u8]>::to_vec) })

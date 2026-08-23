@@ -1,5 +1,6 @@
 import inspect
 import sys
+from array import array
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -41,7 +42,7 @@ def test_xxh3_one_shot_argument_compatibility(function: Callable[..., object]) -
 
 
 def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
-    values = [b'', bytearray(b'hello'), memoryview(b'xxhash')]
+    values = [b'', bytearray(b'hello'), memoryview(b'xxhash'), array('B', b'array')]
     assert hashcodecs.xxh3_64_batch(values, 42) == [hashcodecs.xxh3_64(value, 42) for value in values]
     assert hashcodecs.xxh3_128_batch(values, 42) == [hashcodecs.xxh3_128(value, 42) for value in values]
 
@@ -106,7 +107,7 @@ def test_xxh3_batch_into_packs_little_endian_and_preserves_tail(
     batch_into: Callable[..., int],
     digest_size: int,
 ) -> None:
-    values = [b'', bytearray(b'hello'), memoryview(b'xxhash')]
+    values = [b'', bytearray(b'hello'), memoryview(b'xxhash'), array('B', b'array')]
     expected = batch(values, 42)
     tail = b'unchanged'
     output = bytearray(digest_size * len(values)) + bytearray(tail)

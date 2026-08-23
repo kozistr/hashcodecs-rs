@@ -31,22 +31,26 @@ pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
     // every algorithm boundary used by its callers.
     unsafe { u32::from_le(s.as_ptr().add(o).cast::<u32>().read_unaligned()) }
 }
+
 #[inline(always)]
 pub(super) fn u64le(s: &[u8], o: usize) -> u64 {
     // SAFETY: See `u32le`; this is the same invariant for an eight-byte word.
     unsafe { u64::from_le(s.as_ptr().add(o).cast::<u64>().read_unaligned()) }
 }
+
 #[inline(always)]
 pub(super) fn mulfold(a: u64, b: u64) -> u64 {
     let p = (a as u128) * (b as u128);
     p as u64 ^ (p >> 64) as u64
 }
+
 #[inline(always)]
 pub(super) fn avalanche(mut h: u64) -> u64 {
     h ^= h >> 37;
     h = h.wrapping_mul(MX1);
     h ^ (h >> 32)
 }
+
 #[inline(always)]
 pub(super) fn avalanche64(mut h: u64) -> u64 {
     h ^= h >> 33;
@@ -55,6 +59,7 @@ pub(super) fn avalanche64(mut h: u64) -> u64 {
     h = h.wrapping_mul(P64_3);
     h ^ (h >> 32)
 }
+
 #[inline(always)]
 pub(super) fn rrmxmx(mut h: u64, len: usize) -> u64 {
     h ^= h.rotate_left(49) ^ h.rotate_left(24);
@@ -63,6 +68,7 @@ pub(super) fn rrmxmx(mut h: u64, len: usize) -> u64 {
     h = h.wrapping_mul(MX2);
     h ^ (h >> 28)
 }
+
 #[inline(always)]
 pub(super) fn mix16(data: &[u8], doff: usize, secret: &[u8], soff: usize, seed: u64) -> u64 {
     let lo = u64le(data, doff) ^ u64le(secret, soff).wrapping_add(seed);

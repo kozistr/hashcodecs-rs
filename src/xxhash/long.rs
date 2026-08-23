@@ -75,6 +75,7 @@ pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilitie
 pub(super) fn init_secret(seed: u64) -> [u8; 192] {
     init_secret_scalar(seed)
 }
+
 #[inline(always)]
 pub(super) fn accumulate_scalar(acc: &mut [u64; 8], data: &[u8], secret: &[u8], offset: usize) {
     for lane in 0..8 {
@@ -84,6 +85,7 @@ pub(super) fn accumulate_scalar(acc: &mut [u64; 8], data: &[u8], secret: &[u8], 
         acc[lane] = acc[lane].wrapping_add((keyed as u32 as u64).wrapping_mul(keyed >> 32));
     }
 }
+
 #[inline(always)]
 pub(super) fn scramble_scalar(acc: &mut [u64; 8], secret: &[u8]) {
     for (lane, value) in acc.iter_mut().enumerate() {
@@ -92,6 +94,7 @@ pub(super) fn scramble_scalar(acc: &mut [u64; 8], secret: &[u8]) {
         *value = value.wrapping_mul(P32_1);
     }
 }
+
 pub(super) fn merge(acc: &[u64; 8], secret: &[u8], start: u64) -> u64 {
     let mut result = start;
     for lane in 0..4 {
@@ -102,6 +105,7 @@ pub(super) fn merge(acc: &[u64; 8], secret: &[u8], start: u64) -> u64 {
     }
     avalanche(result)
 }
+
 #[inline]
 pub(super) fn initial_accumulator() -> [u64; 8] {
     [P32_3, P64_1, P64_2, P64_3, P64_4, P32_2, P64_5, P32_1]
@@ -195,6 +199,7 @@ pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
 pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     long_accumulate_scalar(data, secret)
 }
+
 pub(super) fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
     let secret = (seed != 0).then(|| init_secret(seed));
     let secret = secret.as_ref().unwrap_or(&SECRET);

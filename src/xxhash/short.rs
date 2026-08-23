@@ -139,6 +139,7 @@ pub(super) fn mix32(
     acc[1] ^= u64le(data, first).wrapping_add(u64le(data, first + 8));
     acc
 }
+
 pub(super) fn final128(acc: [u64; 2], len: usize, seed: u64) -> [u64; 2] {
     [
         avalanche(acc[0].wrapping_add(acc[1])),
@@ -150,6 +151,7 @@ pub(super) fn final128(acc: [u64; 2], len: usize, seed: u64) -> [u64; 2] {
         )),
     ]
 }
+
 pub(super) fn xxh3_128_medium(data: &[u8], seed: u64) -> [u64; 2] {
     let len = data.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
@@ -158,6 +160,7 @@ pub(super) fn xxh3_128_medium(data: &[u8], seed: u64) -> [u64; 2] {
     }
     final128(acc, len, seed)
 }
+
 pub(super) fn xxh3_128_midsize(data: &[u8], seed: u64) -> [u64; 2] {
     let len = data.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];

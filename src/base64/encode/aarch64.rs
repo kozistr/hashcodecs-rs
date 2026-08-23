@@ -5,7 +5,7 @@ use std::arch::aarch64::*;
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
 #[target_feature(enable = "neon")]
-pub(crate) unsafe fn encode_neon<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let alphabet = if URLSAFE {
         URLSAFE_ALPHABET
     } else {

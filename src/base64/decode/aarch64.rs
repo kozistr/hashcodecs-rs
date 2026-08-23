@@ -35,28 +35,24 @@ struct DecodeTables {
 }
 
 #[target_feature(enable = "neon")]
-pub(crate) unsafe fn decode_neon<const URLSAFE: bool, const MIXED: bool>(
+pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_neon_mode::<URLSAFE, MIXED, false>(input, output) }
+    unsafe { decode_mode::<URLSAFE, MIXED, false>(input, output) }
 }
 
 #[target_feature(enable = "neon")]
-pub(crate) unsafe fn decode_neon_transactional<const URLSAFE: bool, const MIXED: bool>(
+pub(crate) unsafe fn decode_transactional<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_neon_mode::<URLSAFE, MIXED, true>(input, output) }
+    unsafe { decode_mode::<URLSAFE, MIXED, true>(input, output) }
 }
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn decode_neon_mode<
-    const URLSAFE: bool,
-    const MIXED: bool,
-    const TRANSACTIONAL_ERRORS: bool,
->(
+unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONAL_ERRORS: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {

@@ -79,9 +79,9 @@ unsafe fn encode_with_backend_ptr(
         if backend == Backend::Neon {
             return unsafe {
                 if urlsafe {
-                    encode_aarch64::encode_neon::<true>(input, output)
+                    encode_aarch64::encode::<true>(input, output)
                 } else {
-                    encode_aarch64::encode_neon::<false>(input, output)
+                    encode_aarch64::encode::<false>(input, output)
                 }
             };
         }
@@ -178,25 +178,25 @@ unsafe fn decode_with_backend_ptr_mode(
                 if transactional_errors {
                     match alphabet {
                         DecodeAlphabet::Standard => {
-                            decode_aarch64::decode_neon_transactional::<false, false>(input, output)
+                            decode_aarch64::decode_transactional::<false, false>(input, output)
                         }
                         DecodeAlphabet::UrlSafe => {
-                            decode_aarch64::decode_neon_transactional::<true, false>(input, output)
+                            decode_aarch64::decode_transactional::<true, false>(input, output)
                         }
                         DecodeAlphabet::Mixed => {
-                            decode_aarch64::decode_neon_transactional::<false, true>(input, output)
+                            decode_aarch64::decode_transactional::<false, true>(input, output)
                         }
                     }
                 } else {
                     match alphabet {
                         DecodeAlphabet::Standard => {
-                            decode_aarch64::decode_neon::<false, false>(input, output)
+                            decode_aarch64::decode::<false, false>(input, output)
                         }
                         DecodeAlphabet::UrlSafe => {
-                            decode_aarch64::decode_neon::<true, false>(input, output)
+                            decode_aarch64::decode::<true, false>(input, output)
                         }
                         DecodeAlphabet::Mixed => {
-                            decode_aarch64::decode_neon::<false, true>(input, output)
+                            decode_aarch64::decode::<false, true>(input, output)
                         }
                     }
                 }

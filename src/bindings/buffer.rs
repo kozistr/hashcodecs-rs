@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::sync::critical_section::with_critical_section;
 use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 
-use super::{bytearray_data, bytearray_size, bytes_data, bytes_size};
+use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
 

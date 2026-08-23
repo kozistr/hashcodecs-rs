@@ -17,16 +17,17 @@ pub(super) enum Backend {
 
 #[inline]
 pub(super) fn select(capabilities: Capabilities) -> Backend {
-    if capabilities.supports(SimdBackend::Avx512) {
-        Backend::Avx512
-    } else if capabilities.supports(SimdBackend::Avx2) {
-        Backend::Avx2
-    } else if capabilities.supports(SimdBackend::Sse41) {
-        Backend::Sse41
-    } else if capabilities.supports(SimdBackend::Ssse3) {
-        Backend::Ssse3
-    } else {
-        Backend::Scalar
+    match capabilities.best(&[
+        SimdBackend::Avx512,
+        SimdBackend::Avx2,
+        SimdBackend::Sse41,
+        SimdBackend::Ssse3,
+    ]) {
+        SimdBackend::Avx512 => Backend::Avx512,
+        SimdBackend::Avx2 => Backend::Avx2,
+        SimdBackend::Sse41 => Backend::Sse41,
+        SimdBackend::Ssse3 => Backend::Ssse3,
+        SimdBackend::Scalar | SimdBackend::Neon | SimdBackend::Avx512Vbmi => Backend::Scalar,
     }
 }
 

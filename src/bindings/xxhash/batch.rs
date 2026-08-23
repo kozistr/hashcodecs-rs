@@ -4,11 +4,11 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
-use super::{batch_detach_safe, borrow_batch, parse_batch};
-use crate::bindings::buffer::with_bytearray;
+use crate::bindings::buffer::{BytesLike, bytes_like, with_bytearray};
 #[cfg(not(Py_GIL_DISABLED))]
-use crate::bindings::{DETACH_THRESHOLD, bytes_data};
-use crate::bindings::{bytearray_data, bytearray_size, list_items};
+use crate::bindings::objects::bytes_data;
+use crate::bindings::objects::{bytearray_data, bytearray_size, list_items};
+use crate::bindings::runtime::DETACH_THRESHOLD;
 use crate::xxhash::{xxh3_64_batch as xxh3_64_batch_hash, xxh3_128_batch as xxh3_128_batch_hash};
 
 #[cfg(not(Py_GIL_DISABLED))]
@@ -33,6 +33,37 @@ fn exact_small_bytes<'a>(items: &'a Bound<'_, PyList>) -> Option<Vec<&'a [u8]>> 
         }
         Some(inputs)
     }
+}
+
+fn parse_batch<'a, 'py>(
+    py: Python<'py>,
+    items: &'a [Bound<'py, PyAny>],
+) -> PyResult<Vec<BytesLike<'a, 'py>>> {
+    let inputs = items
+        .iter()
+        .map(|item| bytes_like(py, item, "items element"))
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(inputs
+        .into_iter()
+        .map(|input| {
+            if input.detach_safe() {
+                input
+            } else {
+                BytesLike::Owned(unsafe { input.with_bytes(<[u8]>::to_vec) })
+            }
+        })
+        .collect())
+}
+
+fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
+    let total = inputs
+        .iter()
+        .fold(0_usize, |total, input| total.saturating_add(input.len()));
+    inputs.iter().all(BytesLike::detach_safe) && total >= DETACH_THRESHOLD
+}
+
+fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> Vec<&'a [u8]> {
+    inputs.iter().map(BytesLike::stable_bytes).collect()
 }
 
 fn xxh3_64_hashes(py: Python<'_>, items: &Bound<'_, PyList>, seed: u64) -> PyResult<Vec<u64>> {

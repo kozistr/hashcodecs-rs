@@ -14,11 +14,10 @@ use self::decode::{
     urlsafe_b64decode_315, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
     urlsafe_b64decode_into_315, urlsafe_b64decode_into_pre_315, urlsafe_b64decode_pre_315,
 };
+use super::arguments::parse_raw_arguments;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use super::{
-    METHOD_FLAGS, bytearray_data, bytearray_size, bytes_data_mut, list_items, parse_raw_arguments,
-    return_function_result,
-};
+use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_items};
+use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
 
 mod decode;
 mod encode;

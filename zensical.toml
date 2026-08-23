@@ -21,7 +21,11 @@ nav = [
   { "Performance" = "performance.md" },
   { "Changelog" = "https://github.com/kozistr/hashcodecs-rs/blob/main/CHANGELOG.md" },
   { "Benchmark Details" = "https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md" },
-  { "Architecture" = "ARCHITECTURE.md" },
+  { "Architecture" = [
+    { "Overview" = "ARCHITECTURE.md" },
+    { "Decision Index" = "adr/index.md" },
+    { "Layered Module Boundaries" = "adr/0001-layered-module-boundaries.md" },
+  ] },
 ]
 
 [project.theme]

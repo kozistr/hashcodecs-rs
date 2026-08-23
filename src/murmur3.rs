@@ -3,6 +3,8 @@
 //! SIMD kernels premix independent input words in parallel. The canonical
 //! loop-carried state transitions remain ordered exactly as specified.
 
+use self::incremental::BlockBuffer;
+
 #[inline(always)]
 fn fmix32(mut hash: u32) -> u32 {
     hash ^= hash >> 16;
@@ -65,36 +67,6 @@ fn read_partial_u64_le(input: &[u8]) -> u64 {
     }
 }
 
-#[inline]
-fn consume_blocks<const BLOCK_SIZE: usize>(
-    tail: &mut [u8; BLOCK_SIZE],
-    tail_len: &mut usize,
-    mut input: &[u8],
-    mut consume: impl FnMut(&[u8]),
-) {
-    debug_assert!(BLOCK_SIZE.is_power_of_two());
-    if *tail_len != 0 {
-        let needed = BLOCK_SIZE - *tail_len;
-        let copied = needed.min(input.len());
-        tail[*tail_len..*tail_len + copied].copy_from_slice(&input[..copied]);
-        *tail_len += copied;
-        input = &input[copied..];
-        if *tail_len != BLOCK_SIZE {
-            return;
-        }
-        consume(tail);
-        *tail_len = 0;
-    }
-
-    let body_len = input.len() & !(BLOCK_SIZE - 1);
-    if body_len != 0 {
-        consume(&input[..body_len]);
-    }
-    let remaining = &input[body_len..];
-    tail[..remaining.len()].copy_from_slice(remaining);
-    *tail_len = remaining.len();
-}
-
 /// Incremental state for the canonical MurmurHash3 x86 32-bit algorithm.
 ///
 /// Data can be supplied in any chunk sizes. Cloning the value creates an
@@ -115,8 +87,7 @@ fn consume_blocks<const BLOCK_SIZE: usize>(
 #[derive(Clone, Debug)]
 pub struct Murmur3X86Hasher32 {
     hash: u32,
-    tail: [u8; 4],
-    tail_len: usize,
+    tail: BlockBuffer<4>,
     length: u32,
 }
 
@@ -142,8 +113,7 @@ impl Murmur3X86Hasher32 {
     pub const fn new(seed: u32) -> Self {
         Self {
             hash: seed,
-            tail: [0; 4],
-            tail_len: 0,
+            tail: BlockBuffer::new(),
             length: 0,
         }
     }
@@ -174,7 +144,7 @@ impl Murmur3X86Hasher32 {
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u32);
         let hash = &mut self.hash;
-        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+        self.tail.consume(input, |blocks| {
             mix_x86_32_body(blocks, hash);
         });
     }
@@ -198,7 +168,7 @@ impl Murmur3X86Hasher32 {
     ///
     #[inline]
     pub fn digest(&self) -> u32 {
-        finish_x86_32_tail(&self.tail[..self.tail_len], self.hash, self.length)
+        finish_x86_32_tail(self.tail.remaining(), self.hash, self.length)
     }
 }
 
@@ -330,8 +300,7 @@ fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
 #[derive(Clone, Debug)]
 pub struct Murmur3X86Hasher128 {
     hashes: [u32; 4],
-    tail: [u8; 16],
-    tail_len: usize,
+    tail: BlockBuffer<16>,
     length: u32,
 }
 
@@ -357,8 +326,7 @@ impl Murmur3X86Hasher128 {
     pub const fn new(seed: u32) -> Self {
         Self {
             hashes: [seed; 4],
-            tail: [0; 16],
-            tail_len: 0,
+            tail: BlockBuffer::new(),
             length: 0,
         }
     }
@@ -389,7 +357,7 @@ impl Murmur3X86Hasher128 {
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u32);
         let hashes = &mut self.hashes;
-        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+        self.tail.consume(input, |blocks| {
             mix_x86_128_body(blocks, hashes);
         });
     }
@@ -411,7 +379,7 @@ impl Murmur3X86Hasher128 {
     ///
     #[inline]
     pub fn digest(&self) -> [u32; 4] {
-        finish_x86_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
+        finish_x86_128_tail(self.tail.remaining(), self.hashes, self.length)
     }
 }
 
@@ -515,8 +483,7 @@ fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 
 #[derive(Clone, Debug)]
 pub struct Murmur3X64Hasher128 {
     hashes: [u64; 2],
-    tail: [u8; 16],
-    tail_len: usize,
+    tail: BlockBuffer<16>,
     length: u64,
 }
 
@@ -542,8 +509,7 @@ impl Murmur3X64Hasher128 {
     pub const fn new(seed: u32) -> Self {
         Self {
             hashes: [seed as u64; 2],
-            tail: [0; 16],
-            tail_len: 0,
+            tail: BlockBuffer::new(),
             length: 0,
         }
     }
@@ -574,7 +540,7 @@ impl Murmur3X64Hasher128 {
     pub fn update(&mut self, input: &[u8]) {
         self.length = self.length.wrapping_add(input.len() as u64);
         let hashes = &mut self.hashes;
-        consume_blocks(&mut self.tail, &mut self.tail_len, input, |blocks| {
+        self.tail.consume(input, |blocks| {
             mix_x64_128_body(blocks, hashes);
         });
     }
@@ -596,7 +562,7 @@ impl Murmur3X64Hasher128 {
     ///
     #[inline]
     pub fn digest(&self) -> [u64; 2] {
-        finish_x64_128_tail(&self.tail[..self.tail_len], self.hashes, self.length)
+        finish_x64_128_tail(self.tail.remaining(), self.hashes, self.length)
     }
 }
 
@@ -831,6 +797,7 @@ fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
 
 #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 mod dispatch;
+mod incremental;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86;

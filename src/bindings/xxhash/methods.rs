@@ -3,9 +3,10 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
 use super::{
-    METHOD_FLAGS, xxh3_64_batch_digest, xxh3_64_batch_into_digest, xxh3_64_digest,
-    xxh3_128_batch_digest, xxh3_128_batch_into_digest, xxh3_128_digest,
+    xxh3_64_batch_digest, xxh3_64_batch_into_digest, xxh3_64_digest, xxh3_128_batch_digest,
+    xxh3_128_batch_into_digest, xxh3_128_digest,
 };
+use crate::bindings::runtime::{METHOD_FLAGS, add_methods};
 
 static mut METHODS: [ffi::PyMethodDef; 7] = [
     ffi::PyMethodDef {
@@ -189,10 +190,5 @@ Examples:
 
 pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };
-    if result == -1 {
-        Err(PyErr::fetch(module.py()))
-    } else {
-        Ok(())
-    }
+    unsafe { add_methods(module, methods) }
 }

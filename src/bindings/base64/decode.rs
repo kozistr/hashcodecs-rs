@@ -17,7 +17,8 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use crate::bindings::{DETACH_THRESHOLD, bytearray_data, bytearray_size, list_items};
+use crate::bindings::objects::{bytearray_data, bytearray_size, list_items};
+use crate::bindings::runtime::DETACH_THRESHOLD;
 
 fn decode_strict<'py>(
     py: Python<'py>,

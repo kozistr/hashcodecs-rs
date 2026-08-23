@@ -1396,10 +1396,5 @@ Examples:
                 .as_ptr();
         }
     }
-    let result = unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) };
-    if result == -1 {
-        Err(PyErr::fetch(module.py()))
-    } else {
-        Ok(())
-    }
+    unsafe { add_methods(module, methods) }
 }

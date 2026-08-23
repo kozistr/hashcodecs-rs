@@ -26,12 +26,32 @@ kernel, but never changes output formats or public behavior.
 | --- | --- |
 | `src/backend.rs` | Process-wide CPU capability detection shared by dispatchers. |
 | `src/base64.rs`, `src/base64/` | Base64 API, validation, scalar implementation, and architecture-specific kernels. |
-| `src/murmur3.rs`, `src/murmur3/` | One-shot and incremental MurmurHash3 implementations and dispatch thresholds. |
+| `src/murmur3.rs`, `src/murmur3/` | One-shot MurmurHash3 implementations, shared incremental buffering, and dispatch thresholds. |
 | `src/xxhash.rs`, `src/xxhash/` | Canonical XXH3-64/128 implementations, long-input SIMD, and native batching. |
-| `src/bindings/` | CPython callbacks, argument parsing, buffer ownership, and GIL policy. |
+| `src/bindings/mod.rs` | CPython extension composition root; it only assembles public functions and classes. |
+| `src/bindings/arguments.rs`, `objects.rs`, `runtime.rs` | Shared CPython parsing, object access, function registration, and GIL policy. |
+| `src/bindings/{base64,murmur3,xxhash}/` | Algorithm-specific CPython adapters. |
 | `hashcodecs/` | Typed Python facade and public module organization. |
 | `benches/`, `benchmarks/` | Rust and Python throughput measurements. |
 | `tests/`, `fuzz/` | Python compatibility tests, differential fuzzing, and safety validation. |
+
+## Dependency Rules
+
+The crate uses layered modules rather than a workspace of small crates. The boundaries are:
+
+- public algorithm modules own formats, validation, and scalar behavior;
+- dispatch modules depend on the shared CPU capability snapshot and select interchangeable kernels;
+- architecture-specific kernels never depend on Python bindings;
+- algorithm-specific Python adapters depend on the Rust APIs and shared binding policies;
+- `bindings/mod.rs` is a composition root and contains no parsing, buffer, or execution policy.
+
+Shared state machines own their invariants. For example, `murmur3/incremental.rs` keeps the pending block and its
+length together, so each incremental hasher cannot represent an inconsistent tail. At the CPython boundary,
+`objects.rs` contains raw object access, `buffer.rs` owns borrowing and copying decisions, `arguments.rs` owns
+call-shape parsing, and `runtime.rs` owns GIL-detachment and native function registration.
+
+New code should depend toward these shared policies instead of reaching sideways into another algorithm adapter.
+The rationale and consequences are recorded in [ADR 0001](adr/0001-layered-module-boundaries.md).
 
 ## Runtime Dispatch
 

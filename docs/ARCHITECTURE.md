@@ -68,9 +68,6 @@ implementation under `src/<algorithm>/`. The implementation follows the algorith
 The modules share dependency direction and visibility rules. They do not share an identical file template. Hot
 paths use direct calls and static dispatch; module boundaries do not add runtime traits or heap allocation.
 
-[ADR 0001](adr/0001-layered-module-boundaries.md) records the dependency direction. [ADR 0002](adr/0002-feature-first-algorithm-modules.md)
-records the algorithm-specific module shapes.
-
 ## Runtime Dispatch
 
 CPU capabilities are detected once and cached in a `OnceLock`. Dispatchers receive a compact capability value

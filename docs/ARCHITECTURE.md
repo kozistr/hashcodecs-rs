@@ -112,8 +112,9 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 ### XXH3
 
 `hash.rs` selects the canonical length class, `short.rs` contains the 0-240-byte formulas, and `long.rs` owns
-secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules. Only
-long inputs enter the accumulation backends.
+secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
+`long/{aarch64,avx2,avx512,ssse3}.rs` contains the ISA kernels beside the scalar long-input flow and its CPU
+selection. Only long inputs enter those kernels.
 
 Native batches reuse the initialized secret and process inputs in groups of four. Four equal-size inputs longer
 than 240 bytes use the AVX2 batch accumulator when available; mixed sizes and remainders use the regular paths.

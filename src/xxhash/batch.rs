@@ -2,10 +2,10 @@
 use crate::backend::{self, SimdBackend};
 
 use super::hash::{xxh3_64_with_long_secret, xxh3_128_with_long_secret};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::long::avx2;
 use super::long::{finalize_long_128, init_secret, merge};
 use super::primitives::{P64_1, SECRET};
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
 
 #[inline]
 fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8]; 4]> {
@@ -17,7 +17,7 @@ fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8];
         && backend::capabilities().supports(SimdBackend::Avx2)
     {
         let values = [chunk[0], chunk[1], chunk[2], chunk[3]];
-        return Some(unsafe { x86::avx2::long_accumulate_batch4(values, secret) });
+        return Some(unsafe { avx2::accumulate_batch4(values, secret) });
     }
     None
 }

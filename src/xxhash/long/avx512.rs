@@ -1,25 +1,18 @@
+//! AVX-512 long-input accumulation kernel.
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::long::{initial_accumulator, long_accumulate_scalar, long_schedule};
+use crate::xxhash::long::{initial_accumulator, long_schedule};
 use crate::xxhash::primitives::P32_1;
 
 #[repr(align(64))]
 struct AlignedAccumulator([u64; 8]);
 
-#[inline]
-pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    if std::is_x86_feature_detected!("avx512f") {
-        unsafe { kernel(data, secret) }
-    } else {
-        long_accumulate_scalar(data, secret)
-    }
-}
-
 #[target_feature(enable = "avx512f")]
-unsafe fn kernel(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     #[inline]
     #[target_feature(enable = "avx512f")]
     unsafe fn accumulate(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {

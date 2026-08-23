@@ -1,10 +1,12 @@
+//! AArch64 long-input accumulation kernel.
+
 use std::arch::aarch64::*;
 
-use super::long::{initial_accumulator, long_schedule};
-use super::primitives::P32_1;
+use super::super::primitives::P32_1;
+use super::{initial_accumulator, long_schedule};
 
 #[inline(always)]
-unsafe fn accumulate_neon(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {
+unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let acc_offset = vector * 2;
@@ -26,7 +28,7 @@ unsafe fn accumulate_neon(acc: &mut [u64; 8], data: *const u8, secret: *const u8
 }
 
 #[inline(always)]
-unsafe fn scramble_neon(acc: &mut [u64; 8], secret: *const u8) {
+unsafe fn scramble(acc: &mut [u64; 8], secret: *const u8) {
     let prime = unsafe { vdup_n_u32(P32_1 as u32) };
 
     for vector in 0..4 {
@@ -52,7 +54,7 @@ unsafe fn scramble_neon(acc: &mut [u64; 8], secret: *const u8) {
 /// # Safety
 /// The caller must have detected NEON support. `data` must be in XXH3 long
 /// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     let schedule = long_schedule(data.len());
     let mut acc = initial_accumulator();
 
@@ -60,19 +62,19 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
         let offset = block * 1024;
         for stripe in 0..16 {
             unsafe {
-                accumulate_neon(
+                accumulate_stripe(
                     &mut acc,
                     data.as_ptr().add(offset + stripe * 64),
                     secret.as_ptr().add(stripe * 8),
                 )
             };
         }
-        unsafe { scramble_neon(&mut acc, secret.as_ptr().add(128)) };
+        unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
 
     for stripe in 0..schedule.tail_stripes {
         unsafe {
-            accumulate_neon(
+            accumulate_stripe(
                 &mut acc,
                 data.as_ptr().add(schedule.tail_offset + stripe * 64),
                 secret.as_ptr().add(stripe * 8),
@@ -81,7 +83,7 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     }
 
     unsafe {
-        accumulate_neon(
+        accumulate_stripe(
             &mut acc,
             data.as_ptr().add(schedule.last_offset),
             secret.as_ptr().add(121),

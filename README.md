@@ -119,7 +119,7 @@ adding per-call wrappers.
 
 Each Rust algorithm exposes a small public façade. Base64 groups internals by encode and decode operation and
 places ISA kernels such as `encode/avx2.rs` and `decode/ssse3.rs` under their operation. MurmurHash3 groups code by
-canonical variant. XXH3 groups code by processing stage.
+canonical variant. XXH3 uses processing-stage modules, with long-input ISA kernels under `xxhash/long/`.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout, dispatch model, algorithm data flows,
 CPython boundary, and safety invariants.

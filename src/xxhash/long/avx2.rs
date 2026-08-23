@@ -1,3 +1,5 @@
+//! AVX2 secret initialization and long-input accumulation kernels.
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -101,7 +103,7 @@ unsafe fn finish(acc: Accumulator) -> [u64; 8] {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn long_accumulate_1024(data: &[u8], secret: &[u8]) -> [u64; 8] {
+unsafe fn accumulate_1024(data: &[u8], secret: &[u8]) -> [u64; 8] {
     let zero = _mm256_setzero_si256();
     // Split the 16 stripes across independent chains, then reduce once.
     let mut acc0 = unsafe { initial() };
@@ -151,9 +153,9 @@ unsafe fn long_accumulate_1024(data: &[u8], secret: &[u8]) -> [u64; 8] {
 /// # Safety
 /// The caller must have detected AVX2 support. `data` must be in XXH3 long
 /// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     if data.len() == 1024 {
-        return unsafe { long_accumulate_1024(data, secret) };
+        return unsafe { accumulate_1024(data, secret) };
     }
     let schedule = long_schedule(data.len());
     let initial = AlignedAccumulator(initial_accumulator());
@@ -199,7 +201,7 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
 /// # Safety
 /// The caller must have detected AVX2 support. All inputs must have the same
 /// long-mode length and `secret` must contain at least 192 bytes.
-pub(in crate::xxhash) unsafe fn long_accumulate_batch4(
+pub(in crate::xxhash) unsafe fn accumulate_batch4(
     data: [&[u8]; 4],
     secret: &[u8],
 ) -> [[u64; 8]; 4] {

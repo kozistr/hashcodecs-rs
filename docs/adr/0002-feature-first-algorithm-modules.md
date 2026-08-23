@@ -21,7 +21,7 @@ a sibling directory.
 - Base64 splits by operation: encode and decode. Each operation owns flat architecture-kernel modules. Keep an
   architecture-family module only when multiple kernels share contracts.
 - MurmurHash3 splits by canonical variant: x86-32, x86-128, and x64-128.
-- XXH3 splits by processing stage: short-input formulas, long-input accumulation, and batching.
+- XXH3 splits by processing stage. The `long` module owns its scalar flow and flat ISA kernel modules.
 - Shared primitive modules contain leaf functions and constants with no public API or binding dependencies.
 - Architecture kernels depend on primitive and long-pipeline modules through crate-private interfaces.
 - Test, Miri, and Kani modules sit beside the functionality under test.
@@ -32,9 +32,9 @@ dispatch to hashing or codec paths.
 
 ## Consequences
 
-A change to one MurmurHash3 variant stays in one variant module. XXH3-64 and XXH3-128 continue to share their
-long-input accumulator without copying code. Base64 keeps separate encode and decode flows without adding an
-extra directory for an architecture family.
+A change to one MurmurHash3 variant stays in one variant module. XXH3-64 and XXH3-128 share the implementation
+under `xxhash/long/`. Base64 keeps separate encode and decode flows without adding an extra directory for an
+architecture family.
 
 Developers must learn three internal shapes. The repository documents each shape in `docs/ARCHITECTURE.md`, and
 the shared dependency rules from ADR 0001 still apply to all three.

@@ -15,11 +15,6 @@ mod long;
 mod primitives;
 mod short;
 
-#[cfg(target_arch = "aarch64")]
-mod aarch64;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86;
-
 pub use batch::{xxh3_64_batch, xxh3_128_batch};
 pub use hash::{xxh3_64, xxh3_128};
 

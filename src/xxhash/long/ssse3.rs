@@ -1,3 +1,5 @@
+//! SSSE3 long-input accumulation kernel.
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -11,7 +13,7 @@ struct AlignedAccumulator([u64; 8]);
 
 #[inline]
 #[target_feature(enable = "ssse3")]
-unsafe fn accumulate(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {
+unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let input = unsafe { _mm_loadu_si128(data.add(byte_offset).cast()) };
@@ -53,14 +55,14 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
 /// # Safety
 /// The caller must have detected SSSE3 support. `data` must be in XXH3 long
 /// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
+pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     let schedule = long_schedule(data.len());
     let mut acc = AlignedAccumulator(initial_accumulator());
     for block in 0..schedule.full_blocks {
         let offset = block * 1024;
         for stripe in 0..16 {
             unsafe {
-                accumulate(
+                accumulate_stripe(
                     &mut acc,
                     data.as_ptr().add(offset + stripe * 64),
                     secret.as_ptr().add(stripe * 8),
@@ -71,7 +73,7 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     }
     for stripe in 0..schedule.tail_stripes {
         unsafe {
-            accumulate(
+            accumulate_stripe(
                 &mut acc,
                 data.as_ptr().add(schedule.tail_offset + stripe * 64),
                 secret.as_ptr().add(stripe * 8),
@@ -79,7 +81,7 @@ pub(super) unsafe fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
         };
     }
     unsafe {
-        accumulate(
+        accumulate_stripe(
             &mut acc,
             data.as_ptr().add(schedule.last_offset),
             secret.as_ptr().add(121),

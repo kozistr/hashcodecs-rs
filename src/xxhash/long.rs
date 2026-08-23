@@ -1,13 +1,47 @@
 #[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend;
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use crate::backend::Capabilities;
+#[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::SimdBackend;
 
 #[cfg(target_arch = "aarch64")]
-use super::aarch64;
-use super::primitives::*;
+mod aarch64;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
+pub(super) mod avx2;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod avx512;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod ssse3;
+
+use super::primitives::*;
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum X86Backend {
+    Scalar,
+    Ssse3,
+    Sse41,
+    Avx2,
+    Avx512,
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn select_x86(capabilities: Capabilities) -> X86Backend {
+    match capabilities.best(&[
+        SimdBackend::Avx512,
+        SimdBackend::Avx2,
+        SimdBackend::Sse41,
+        SimdBackend::Ssse3,
+    ]) {
+        SimdBackend::Avx512 => X86Backend::Avx512,
+        SimdBackend::Avx2 => X86Backend::Avx2,
+        SimdBackend::Sse41 => X86Backend::Sse41,
+        SimdBackend::Ssse3 => X86Backend::Ssse3,
+        SimdBackend::Scalar | SimdBackend::Neon | SimdBackend::Avx512Vbmi => X86Backend::Scalar,
+    }
+}
 
 pub(super) fn init_secret_scalar(seed: u64) -> [u8; 192] {
     let mut secret = SECRET;
@@ -23,7 +57,17 @@ pub(super) fn init_secret_scalar(seed: u64) -> [u8; 192] {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
 pub(super) fn init_secret(seed: u64) -> [u8; 192] {
-    x86::init_secret(seed, backend::capabilities())
+    init_secret_with_capabilities(seed, backend::capabilities())
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> [u8; 192] {
+    if capabilities.supports(SimdBackend::Avx2) {
+        unsafe { avx2::init_secret(seed) }
+    } else {
+        init_secret_scalar(seed)
+    }
 }
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -108,14 +152,39 @@ pub(super) fn long_accumulate_scalar(data: &[u8], secret: &[u8]) -> [u64; 8] {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
 pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    x86::long_accumulate(data, secret, backend::capabilities())
+    let selected = select_x86(backend::capabilities());
+    // CPU detection above satisfies the selected kernel's target-feature contract.
+    unsafe { accumulate_x86(data, secret, selected) }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) unsafe fn accumulate_x86(data: &[u8], secret: &[u8], backend: X86Backend) -> [u64; 8] {
+    let Some(kernel) = x86_kernel(backend) else {
+        return long_accumulate_scalar(data, secret);
+    };
+    unsafe { kernel(data, secret) }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+type X86Kernel = unsafe fn(&[u8], &[u8]) -> [u64; 8];
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn x86_kernel(backend: X86Backend) -> Option<X86Kernel> {
+    match backend {
+        X86Backend::Scalar => None,
+        X86Backend::Ssse3 | X86Backend::Sse41 => Some(ssse3::accumulate),
+        X86Backend::Avx2 => Some(avx2::accumulate),
+        X86Backend::Avx512 => Some(avx512::accumulate),
+    }
 }
 
 #[cfg(target_arch = "aarch64")]
 #[inline]
 pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     if backend::capabilities().supports(SimdBackend::Neon) {
-        unsafe { aarch64::long_accumulate(data, secret) }
+        unsafe { aarch64::accumulate(data, secret) }
     } else {
         long_accumulate_scalar(data, secret)
     }

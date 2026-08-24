@@ -8,7 +8,6 @@ import threading
 import warnings
 from array import array
 from collections.abc import Callable
-from time import sleep
 from typing import Any
 
 import pytest
@@ -19,6 +18,7 @@ import hashcodecs.base64 as base64
 PYTHON_315 = sys.version_info >= (3, 15)
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
+BASE64_DETACH_THRESHOLD = 256 * 1024
 
 
 @pytest.mark.parametrize('payload', [b'', b'a', b'ab', b'abc', bytes(range(256))])
@@ -570,7 +570,7 @@ def test_all_short_payload_lengths_match_cpython() -> None:
 
 
 def test_large_base64_calls_cross_the_gil_release_threshold() -> None:
-    payload = bytes(range(256)) * 257
+    payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
     encoded = stdlib_base64.b64encode(payload)
     assert base64.b64encode(payload) == encoded
     assert base64.b64decode(encoded) == payload
@@ -1020,18 +1020,28 @@ def test_base64_batch_exports_docstrings_and_signatures() -> None:
 
 def _assert_batch_releases_the_gil(operation: Callable[[], list[bytes]], expected: list[bytes]) -> None:
     ready = threading.Event()
+    start = threading.Event()
     progressed = threading.Event()
 
-    def delayed_progress() -> None:
+    def report_progress() -> None:
         ready.set()
-        sleep(0.001)
-        progressed.set()
+        if start.wait(timeout=1):
+            progressed.set()
 
-    worker = threading.Thread(target=delayed_progress)
+    worker = threading.Thread(target=report_progress)
     worker.start()
     assert ready.wait(timeout=1)
-    result = operation()
-    progressed_during_call = progressed.is_set()
+    previous_switch_interval = sys.getswitchinterval()
+    try:
+        # Keep the main thread from yielding between waking the worker and
+        # entering the native call. The worker can then progress only when the
+        # extension explicitly detaches from the interpreter.
+        sys.setswitchinterval(1.0)
+        start.set()
+        result = operation()
+        progressed_during_call = progressed.is_set()
+    finally:
+        sys.setswitchinterval(previous_switch_interval)
     worker.join(timeout=1)
 
     assert not worker.is_alive()
@@ -1040,11 +1050,12 @@ def _assert_batch_releases_the_gil(operation: Callable[[], list[bytes]], expecte
 
 
 def test_large_base64_batch_crosses_the_gil_release_threshold() -> None:
-    payload = bytes(range(256)) * 256
+    payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
     encoded_item = stdlib_base64.b64encode(payload)
-    # Keep both operations well beyond the scheduler delay on fast SIMD hosts.
-    payloads = [payload] * 2048
-    encoded = [encoded_item] * 2048
+    # Keep both operations long enough for the awakened worker to be scheduled
+    # even on fast SIMD hosts while bounding the total test allocation.
+    payloads = [payload] * 512
+    encoded = [encoded_item] * 512
 
     _assert_batch_releases_the_gil(lambda: base64.b64encode_batch(payloads), encoded)
     _assert_batch_releases_the_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads)

@@ -2,6 +2,7 @@ import base64 as stdlib_base64
 import binascii
 import builtins
 import inspect
+import random
 import sys
 import threading
 import warnings
@@ -358,9 +359,9 @@ def test_base64_into_handles_aliases_and_every_short_length() -> None:
         assert decoded[written] == 0
 
 
-def test_lenient_decode_into_fallback_uses_final_size_and_preserves_suffix() -> None:
+def test_lenient_decode_into_uses_final_size_and_preserves_suffix() -> None:
     # The strict SIMD probe sees 128 structurally aligned bytes, while the
-    # lenient fallback discards four invalid bytes and produces only 93 bytes.
+    # lenient decoder discards four invalid bytes and produces only 93 bytes.
     encoded = b'A' * 80 + b'!!!!' + b'A' * 44
     expected = stdlib_base64.b64decode(encoded)
     assert len(expected) == 93
@@ -374,6 +375,28 @@ def test_lenient_decode_into_fallback_uses_final_size_and_preserves_suffix() -> 
     assert base64.b64decode_into(encoded, guarded) == len(expected)
     assert guarded[: len(expected)] == expected
     assert guarded[len(expected) :] == bytes([canary] * 16)
+
+
+def test_common_lenient_decoding_does_not_call_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_binascii(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError(f'unexpected binascii decode: {args!r} {kwargs!r}')
+
+    monkeypatch.setattr(binascii, 'a2b_base64', fail_binascii)
+
+    noisy = b'Y!W \nJj'
+    assert base64.b64decode(noisy) == b'abc'
+    assert base64.standard_b64decode(noisy) == b'abc'
+    assert base64.b64decode(b'@\n#8=', b'@#') == b'\xfb\xff'
+    assert base64.urlsafe_b64decode(b'-\n_8=') == b'\xfb\xff'
+
+    output = bytearray(b'.' * 8)
+    assert base64.b64decode_into(noisy, output) == 3
+    assert output == b'abc.....'
+
+    assert base64.b64decode_batch([noisy, b'Z GVm']) == [b'abc', b'def']
+    outputs = [bytearray(b'....'), bytearray(b'....')]
+    assert base64.b64decode_batch_into([noisy, b'Z GVm'], outputs) == [3, 3]
+    assert outputs == [b'abc.', b'def.']
 
 
 @pytest.mark.parametrize(
@@ -495,6 +518,19 @@ def test_decode_edge_cases_match_cpython(value: bytes, altchars: bytes | None, v
     mutable = bytearray(value)
     assert _outcome(base64.b64decode, mutable, altchars, validate) == expected
     assert _into_outcome(mutable, altchars, validate) == expected
+
+
+def test_generated_lenient_inputs_match_cpython() -> None:
+    generator = random.Random(0xB64DEC0DE)
+    alphabet = b'ABab09+/=_! \r\n-@#'
+    altchars_cases = (None, b'+/', b'-_', b'@#', b'++', b'A_')
+
+    for _ in range(2_000):
+        value = bytes(generator.choice(alphabet) for _ in range(generator.randrange(33)))
+        for altchars in altchars_cases:
+            expected = _outcome(stdlib_base64.b64decode, value, altchars, False)
+            assert _outcome(base64.b64decode, value, altchars, False) == expected
+            assert _into_outcome(value, altchars, False) == expected
 
 
 def test_all_short_payload_lengths_match_cpython() -> None:

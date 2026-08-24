@@ -196,6 +196,28 @@ CHARTS = (
         ),
     ),
     Chart(
+        'base64-python-lenient.svg',
+        'Lenient Python Base64 throughput',
+        (
+            panel(
+                'MIME whitespace',
+                SIZES,
+                returned_bytes=[2.48, 3.02, 1.95, 1.93],
+                reusable_bytearray=[2.62, 3.09, 3.26, 2.89],
+                CPython=[0.85, 0.94, 0.85, 0.84],
+                pybase64=[2.46, 3.76, 2.67, 2.62],
+            ),
+            panel(
+                'Ignored non-alphabet bytes',
+                SIZES,
+                returned_bytes=[1.66, 2.06, 1.60, 1.61],
+                reusable_bytearray=[1.86, 2.19, 2.30, 2.18],
+                CPython=[0.85, 0.94, 0.83, 0.84],
+                pybase64=[2.55, 3.96, 2.62, 2.74],
+            ),
+        ),
+    ),
+    Chart(
         'murmur3-python.svg',
         'Python MurmurHash3 throughput',
         tuple(
@@ -363,6 +385,7 @@ OFFICIAL_SERIES = {
     'murmur3-rust.svg': 'murmur3',
     'xxh3-rust.svg': 'upstream C',
     'base64-python.svg': 'CPython',
+    'base64-python-lenient.svg': 'CPython',
     'murmur3-python.svg': 'mmh3',
     'xxh3-python.svg': 'xxhash',
     'base64-python-batch.svg': 'CPython',

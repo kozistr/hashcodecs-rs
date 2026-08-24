@@ -32,6 +32,13 @@ Pass one reusable `bytearray` to each `*_into` call.
 
 [![Reusable Python Base64 buffers](docs/benchmarks/base64-python-reusable.svg)](docs/benchmarks/base64-python-reusable.svg)
 
+## Lenient Python Base64
+
+Run `python benchmarks/python_base64.py --lenient`. The MIME cases insert CRLF after each 76-character line. The
+noisy cases insert `!` at the same boundaries. Both cases measure returned bytes and reusable output buffers.
+
+[![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
+
 ## Python Memoryview Inputs
 
 Use full immutable memoryviews for inputs of at least 64 KiB.

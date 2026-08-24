@@ -72,6 +72,11 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs with full immutable memoryview inputs',
     )
+    mode.add_argument(
+        '--lenient',
+        action='store_true',
+        help='time MIME-wrapped and noisy lenient decoding',
+    )
     add_timing_arguments(parser)
     args = parser.parse_args()
     configure_timing(args.samples, args.minimum_sample_seconds)
@@ -83,6 +88,31 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.lenient:
+                mime = b'\r\n'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
+                noisy = b'!'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
+                for label, encoded in (('MIME', mime), ('noisy', noisy)):
+                    decoded_output = bytearray(size)
+                    benchmark(
+                        f'{label} decode',
+                        size,
+                        lambda encoded=encoded: hashcodecs_base64.b64decode(encoded),
+                        (
+                            ('stdlib', lambda encoded=encoded: stdlib_base64.b64decode(encoded)),
+                            ('pybase64', lambda encoded=encoded: pybase64.b64decode(encoded)),
+                        ),
+                    )
+                    benchmark_into(
+                        f'{label} decode into',
+                        size,
+                        lambda encoded=encoded, output=decoded_output: hashcodecs_base64.b64decode_into(
+                            encoded, output
+                        ),
+                        decoded_output,
+                        payload,
+                    )
+                continue
 
             if args.bytearray_input:
                 mutable_payload = bytearray(payload)

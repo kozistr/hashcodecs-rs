@@ -27,6 +27,10 @@ allocation except where a reusable-buffer chart says otherwise. Higher is better
 
 ![Python Base64 throughput](benchmarks/base64-python.svg)
 
+The focused lenient benchmark covers MIME whitespace and ignored non-alphabet bytes.
+
+![Lenient Python Base64 throughput](benchmarks/base64-python-lenient.svg)
+
 ### MurmurHash3
 
 ![Python MurmurHash3 throughput](benchmarks/murmur3-python.svg)

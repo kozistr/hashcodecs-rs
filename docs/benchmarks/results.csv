@@ -259,46 +259,46 @@ Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,mmh3,5.32
 Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,mmh3,8.05
 Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,mmh3,9.36
 Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,mmh3,8.20
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,16.00
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,40.57
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,79.20
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,46.56
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,13.42
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,29.23
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,47.10
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.50
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,14.47
-Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,36.83
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,79.02
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,46.55
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,9.27
-Python XXH3 throughput,XXH3-128 one-shot,4 KiB,xxhash,22.42
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,46.74
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.79
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs list,5.39
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs list,43.93
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs list,53.80
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs list,37.57
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs packed,13.19
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs packed,66.05
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs packed,58.90
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs packed,37.79
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,xxhash,2.15
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,xxhash,14.55
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,xxhash,30.50
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,xxhash,18.39
-Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs list,2.72
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs list,27.78
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs list,45.84
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs list,37.45
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,17.01
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,40.95
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,78.47
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,46.01
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,13.45
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,29.13
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,48.08
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.62
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,14.05
+Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,36.10
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,78.05
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,45.45
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,9.26
+Python XXH3 throughput,XXH3-128 one-shot,4 KiB,xxhash,23.44
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,48.46
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.62
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs list,5.26
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs list,43.50
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs list,53.92
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs list,37.37
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs packed,13.02
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs packed,65.13
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs packed,60.02
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs packed,37.30
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,xxhash,2.05
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,xxhash,14.68
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,xxhash,30.39
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,xxhash,17.70
+Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs list,2.68
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs list,27.86
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs list,45.64
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs list,37.18
 Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs packed,7.51
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs packed,54.01
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs packed,56.31
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs packed,37.26
-Python XXH3 throughput,XXH3-128 batch (32 items),64 B,xxhash,1.01
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,xxhash,9.87
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,xxhash,23.87
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,xxhash,13.75
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs packed,53.77
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs packed,55.91
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs packed,37.21
+Python XXH3 throughput,XXH3-128 batch (32 items),64 B,xxhash,1.02
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,xxhash,9.82
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,xxhash,24.06
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,xxhash,17.82
 Reusable Python Base64 buffers,Standard encode,1 KiB,hashcodecs,13.69
 Reusable Python Base64 buffers,Standard encode,4 KiB,hashcodecs,26.58
 Reusable Python Base64 buffers,Standard encode,1 MiB,hashcodecs,39.96

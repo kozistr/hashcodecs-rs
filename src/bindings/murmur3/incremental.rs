@@ -4,7 +4,7 @@ use pyo3::types::PyBytes;
 
 use super::digest::{hex_digest, x64_128_digest, x86_128_digest};
 use crate::bindings::buffer::{BytesLike, bytes_like};
-use crate::bindings::runtime::DETACH_THRESHOLD;
+use crate::bindings::runtime::MURMUR3_DETACH_THRESHOLD;
 use crate::murmur3::{Murmur3X64Hasher128, Murmur3X86Hasher32, Murmur3X86Hasher128};
 
 fn with_input<T: Ungil>(
@@ -12,7 +12,7 @@ fn with_input<T: Ungil>(
     input: &BytesLike<'_, '_>,
     operation: impl Ungil + Send + FnOnce(&[u8]) -> T,
 ) -> T {
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= MURMUR3_DETACH_THRESHOLD;
     unsafe {
         input.with_bytes(|input| {
             if detach {

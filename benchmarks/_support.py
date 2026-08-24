@@ -7,6 +7,7 @@ import ctypes
 import math
 import os
 import sys
+import threading
 from collections.abc import Callable
 from statistics import median
 from time import perf_counter
@@ -107,4 +108,66 @@ def throughput(function: Callable[[], object], input_size: int) -> float:
         for _ in range(iterations):
             function()
         samples.append(input_size * iterations / (perf_counter() - start))
+    return median(samples)
+
+
+def latency(function: Callable[[], object]) -> float:
+    """Return median nanoseconds per call after calibrating the sample size."""
+    iterations = 1
+    while True:
+        start = perf_counter()
+        for _ in range(iterations):
+            function()
+        elapsed = perf_counter() - start
+        if elapsed >= MINIMUM_SAMPLE_SECONDS:
+            break
+        iterations *= 2
+
+    samples = []
+    for _ in range(SAMPLES):
+        start = perf_counter()
+        for _ in range(iterations):
+            function()
+        samples.append((perf_counter() - start) * 1_000_000_000 / iterations)
+    return median(samples)
+
+
+def threaded_throughput(function: Callable[[], object], input_size: int, workers: int) -> float:
+    """Return aggregate bytes per second from equal work in Python threads."""
+    iterations = 1
+    while True:
+        start = perf_counter()
+        for _ in range(iterations):
+            function()
+        elapsed = perf_counter() - start
+        if elapsed >= MINIMUM_SAMPLE_SECONDS:
+            break
+        iterations *= 2
+
+    samples = []
+    for _ in range(SAMPLES):
+        barrier = threading.Barrier(workers + 1)
+        errors: list[BaseException] = []
+
+        def run(
+            barrier: threading.Barrier = barrier,
+            errors: list[BaseException] = errors,
+        ) -> None:
+            try:
+                barrier.wait()
+                for _ in range(iterations):
+                    function()
+            except BaseException as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=run) for _ in range(workers)]
+        for thread in threads:
+            thread.start()
+        start = perf_counter()
+        barrier.wait()
+        for thread in threads:
+            thread.join()
+        if errors:
+            raise errors[0]
+        samples.append(input_size * iterations * workers / (perf_counter() - start))
     return median(samples)

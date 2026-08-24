@@ -7,7 +7,7 @@ use pyo3::types::{PyByteArray, PyBytes};
 use super::{pybytes_with_len, with_output_ptr};
 use crate::base64::{encode_to_ptr, encoded_len};
 use crate::bindings::buffer::BytesLike;
-use crate::bindings::runtime::DETACH_THRESHOLD;
+use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn encode_exact<'py>(
@@ -42,7 +42,7 @@ pub(super) fn encode<'py>(
     if let Some(input) = input.snapshot_mutable() {
         return encode(py, &BytesLike::Owned(input), altchars, padded, wrapcol);
     }
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let output_len = encoded_output_len(input.len(), padded, wrapcol);
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {

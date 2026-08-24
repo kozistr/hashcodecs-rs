@@ -237,24 +237,24 @@ CHARTS = (
         'Python XXH3 throughput',
         (
             panel(
-                'XXH3-64 one-shot', SIZES, hashcodecs=[16.00, 40.57, 79.20, 46.56], xxhash=[13.42, 29.23, 47.10, 38.50]
+                'XXH3-64 one-shot', SIZES, hashcodecs=[17.01, 40.95, 78.47, 46.01], xxhash=[13.45, 29.13, 48.08, 38.62]
             ),
             panel(
-                'XXH3-128 one-shot', SIZES, hashcodecs=[14.47, 36.83, 79.02, 46.55], xxhash=[9.27, 22.42, 46.74, 38.79]
+                'XXH3-128 one-shot', SIZES, hashcodecs=[14.05, 36.10, 78.05, 45.45], xxhash=[9.26, 23.44, 48.46, 38.62]
             ),
             panel(
                 'XXH3-64 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[5.39, 43.93, 53.80, 37.57],
-                hashcodecs_packed=[13.19, 66.05, 58.90, 37.79],
-                xxhash=[2.15, 14.55, 30.50, 18.39],
+                hashcodecs_list=[5.26, 43.50, 53.92, 37.37],
+                hashcodecs_packed=[13.02, 65.13, 60.02, 37.30],
+                xxhash=[2.05, 14.68, 30.39, 17.70],
             ),
             panel(
                 'XXH3-128 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[2.72, 27.78, 45.84, 37.45],
-                hashcodecs_packed=[7.51, 54.01, 56.31, 37.26],
-                xxhash=[1.01, 9.87, 23.87, 13.75],
+                hashcodecs_list=[2.68, 27.86, 45.64, 37.18],
+                hashcodecs_packed=[7.51, 53.77, 55.91, 37.21],
+                xxhash=[1.02, 9.82, 24.06, 17.82],
             ),
         ),
     ),

@@ -9,18 +9,21 @@ use pyo3::types::PyModule;
 use super::buffer::bytes_like;
 use super::objects::{bytes_data, bytes_size};
 
-pub(super) const DETACH_THRESHOLD: usize = 64 * 1024;
+pub(super) const BASE64_DETACH_THRESHOLD: usize = 256 * 1024;
+pub(super) const MURMUR3_DETACH_THRESHOLD: usize = 64 * 1024;
+pub(super) const XXH3_DETACH_THRESHOLD: usize = 256 * 1024;
 pub(super) const METHOD_FLAGS: i32 = ffi::METH_FASTCALL | ffi::METH_KEYWORDS;
 
 pub(super) fn with_function_bytes<T: Send>(
     py: Python<'_>,
     object: *mut ffi::PyObject,
+    detach_threshold: usize,
     operation: impl FnOnce(&[u8]) -> T + Send,
 ) -> PyResult<T> {
     if unsafe { ffi::PyBytes_CheckExact(object) } != 0 {
         let length = unsafe { bytes_size(object) };
         let bytes = unsafe { std::slice::from_raw_parts(bytes_data(object), length) };
-        return if length >= DETACH_THRESHOLD {
+        return if length >= detach_threshold {
             Ok(py.detach(|| operation(bytes)))
         } else {
             Ok(operation(bytes))
@@ -28,7 +31,7 @@ pub(super) fn with_function_bytes<T: Send>(
     }
     let object = unsafe { Bound::from_borrowed_ptr(py, object) };
     let input = bytes_like(py, &object, "s")?;
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= detach_threshold;
     Ok(unsafe {
         input.with_bytes(|bytes| {
             if detach {

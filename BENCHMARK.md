@@ -16,6 +16,12 @@ sampling time per case is at least their product, plus calibration; use lower va
 hashcodecs-only pass, use `--hashcodecs-only --samples 3 --minimum-sample-seconds 0.05` with each Python benchmark
 script.
 
+## Python Call Costs
+
+Run `python benchmarks/python_calls.py` to measure positional calls from 0 through 256 bytes in nanoseconds per
+call. Use `--keywords` for positional and keyword calls at 64 bytes, or `--thresholds` for latency around the
+GIL-detachment cutoffs. The `--thread-scaling` mode measures aggregate throughput with one, two, and four threads;
+it does not pin the process to one logical CPU.
 
 ## XXH3
 

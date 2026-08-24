@@ -6,7 +6,7 @@ use crate::bindings::buffer::{BytesLike, bytes_like, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::objects::{exact_bytes_at, exact_small_bytes};
-use crate::bindings::runtime::DETACH_THRESHOLD;
+use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
 use crate::xxhash::{
     xxh3_64_batch as xxh3_64_batch_hash, xxh3_64_batch_each, xxh3_128_batch as xxh3_128_batch_hash,
     xxh3_128_batch_each,
@@ -16,7 +16,7 @@ use crate::xxhash::{
 fn exact_small_inputs<'a>(items: &'a Bound<'_, PyList>) -> Option<Vec<&'a [u8]>> {
     // The GIL keeps list slots alive for this small-input path. Larger inputs
     // retain owned references before releasing the GIL in the fallback below.
-    if !exact_small_bytes(items, DETACH_THRESHOLD) {
+    if !exact_small_bytes(items, XXH3_DETACH_THRESHOLD) {
         return None;
     }
     Some(
@@ -50,7 +50,7 @@ fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
     let total = inputs
         .iter()
         .fold(0_usize, |total, input| total.saturating_add(input.len()));
-    inputs.iter().all(BytesLike::detach_safe) && total >= DETACH_THRESHOLD
+    inputs.iter().all(BytesLike::detach_safe) && total >= XXH3_DETACH_THRESHOLD
 }
 
 fn direct_output_safe(inputs: &[BytesLike<'_, '_>], detach: bool) -> bool {

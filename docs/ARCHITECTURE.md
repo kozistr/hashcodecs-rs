@@ -147,7 +147,8 @@ Buffer handling follows ownership rather than treating every buffer alike:
 - exact `bytearray` values are borrowed but never used in detached work;
 - small or sliced memoryviews are copied;
 - full contiguous bytes or bytearray owners can be retained for large memoryviews;
-- immutable operations at or above 64 KiB may detach from the GIL;
+- immutable Base64 and XXH3 operations at or above 256 KiB may detach from the GIL;
+- immutable MurmurHash3 operations at or above 64 KiB may detach from the GIL;
 - mutable storage never crosses a detached region.
 
 Allocating outputs are initialized directly in CPython-owned memory. Reusable-output APIs validate capacity before

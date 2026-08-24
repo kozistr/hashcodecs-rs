@@ -5,7 +5,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use super::arguments::{parse_hash_arguments, parse_raw_arguments, seed_u64};
-use super::runtime::{catch_unwind_callback, return_function_result, with_function_bytes};
+use super::runtime::{
+    XXH3_DETACH_THRESHOLD, catch_unwind_callback, return_function_result, with_function_bytes,
+};
 use crate::xxhash::{xxh3_64, xxh3_128};
 
 mod batch;
@@ -27,7 +29,9 @@ unsafe extern "C" fn xxh3_64_digest(
         let Some(seed) = seed_u64(arguments.seed) else {
             return ptr::null_mut();
         };
-        let result = with_function_bytes(py, arguments.input, |bytes| xxh3_64(bytes, seed));
+        let result = with_function_bytes(py, arguments.input, XXH3_DETACH_THRESHOLD, |bytes| {
+            xxh3_64(bytes, seed)
+        });
         return_function_result(
             py,
             result.map(|value| ffi::PyLong_FromUnsignedLongLong(value as _)),
@@ -50,7 +54,9 @@ unsafe extern "C" fn xxh3_128_digest(
         let Some(seed) = seed_u64(arguments.seed) else {
             return ptr::null_mut();
         };
-        let result = with_function_bytes(py, arguments.input, |bytes| xxh3_128(bytes, seed));
+        let result = with_function_bytes(py, arguments.input, XXH3_DETACH_THRESHOLD, |bytes| {
+            xxh3_128(bytes, seed)
+        });
         match result {
             Ok([low, high]) => {
                 let value = (u128::from(high) << 64) | u128::from(low);

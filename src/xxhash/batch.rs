@@ -55,9 +55,9 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let (chunks, remainder) = inputs.as_chunks::<4>();
     for chunk in chunks {
         if let Some(accumulators) = batch4_long_accumulators(chunk, secret) {
-            output.extend(accumulators.iter().map(|acc| {
+            output.extend(accumulators.iter().map(|accumulator| {
                 merge(
-                    acc,
+                    accumulator,
                     &secret[11..],
                     (chunk[0].len() as u64).wrapping_mul(P64_1),
                 )
@@ -77,6 +77,34 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     );
     output
 }
+
+#[cfg(feature = "python")]
+#[inline]
+pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, mut output: impl FnMut(u64)) {
+    let owned_secret =
+        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
+    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
+    let (chunks, remainder) = inputs.as_chunks::<4>();
+    for chunk in chunks {
+        if let Some(accumulators) = batch4_long_accumulators(chunk, secret) {
+            for accumulator in &accumulators {
+                output(merge(
+                    accumulator,
+                    &secret[11..],
+                    (chunk[0].len() as u64).wrapping_mul(P64_1),
+                ));
+            }
+            continue;
+        }
+        for input in chunk {
+            output(xxh3_64_with_long_secret(input, seed, secret));
+        }
+    }
+    for input in remainder {
+        output(xxh3_64_with_long_secret(input, seed, secret));
+    }
+}
+
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
 ///
 /// Results preserve input order. Seed-derived setup is shared by the batch, and
@@ -115,7 +143,7 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
             output.extend(
                 accumulators
                     .into_iter()
-                    .map(|acc| finalize_long_128(length, secret, acc)),
+                    .map(|accumulator| finalize_long_128(length, secret, accumulator)),
             );
             continue;
         }
@@ -131,4 +159,28 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
             .map(|input| xxh3_128_with_long_secret(input, seed, secret)),
     );
     output
+}
+
+#[cfg(feature = "python")]
+#[inline]
+pub(crate) fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, mut output: impl FnMut([u64; 2])) {
+    let owned_secret =
+        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
+    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
+    let (chunks, remainder) = inputs.as_chunks::<4>();
+    for chunk in chunks {
+        if let Some(accumulators) = batch4_long_accumulators(chunk, secret) {
+            let length = chunk[0].len();
+            for accumulator in accumulators {
+                output(finalize_long_128(length, secret, accumulator));
+            }
+            continue;
+        }
+        for input in chunk {
+            output(xxh3_128_with_long_secret(input, seed, secret));
+        }
+    }
+    for input in remainder {
+        output(xxh3_128_with_long_secret(input, seed, secret));
+    }
 }

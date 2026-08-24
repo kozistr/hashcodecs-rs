@@ -16,7 +16,9 @@ use self::decode::{
 };
 use super::arguments::parse_raw_arguments;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_items};
+use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_from_fn, list_items};
+#[cfg(not(Py_GIL_DISABLED))]
+use super::objects::{exact_bytes_at, exact_bytes_up_to};
 use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
 use crate::base64::STANDARD_ALPHABET;
 
@@ -26,6 +28,9 @@ mod encode;
 mod methods;
 
 static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
+
+#[cfg(not(Py_GIL_DISABLED))]
+const EXACT_BYTES_BATCH_MAX: usize = 256;
 
 #[inline]
 pub(super) fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
@@ -312,11 +317,24 @@ fn b64encode_batch_parsed<'py>(
     items: &Bound<'py, PyList>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
-    let mut encoded = batch_results(items.len())?;
-    for item in list_items(items) {
-        encoded.push(encode_parsed(py, &item, altchars, true, None)?);
+    #[cfg(not(Py_GIL_DISABLED))]
+    if exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX) {
+        return list_from_fn(py, items.len(), |index| unsafe {
+            encode::encode_exact(py, exact_bytes_at(items, index), altchars, true, None)
+        });
     }
-    PyList::new(py, encoded)
+    let items = list_items(items);
+    let length = items.len();
+    let mut items = items.into_iter();
+    list_from_fn(py, length, |_| {
+        encode_parsed(
+            py,
+            &items.next().expect("batch item count is exact"),
+            altchars,
+            true,
+            None,
+        )
+    })
 }
 
 pub(super) fn standard_b64encode_batch<'py>(
@@ -356,13 +374,18 @@ fn b64encode_batch_into_parsed<'py>(
     outputs: &Bound<'py, PyList>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
+    let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut written = batch_results(items.len())?;
-    for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
+    let length = items.len();
+    let mut pairs = items.into_iter().zip(outputs.iter());
+    list_from_fn(py, length, |_| {
+        let (item, output) = pairs.next().expect("batch item count is exact");
         let input = contiguous_bytes_like(py, &item, "s")?;
-        written.push(encode_parsed_into(&input, output, altchars, true, None)?);
-    }
-    PyList::new(py, written)
+        Ok(PyInt::new(
+            py,
+            encode_parsed_into(&input, output, altchars, true, None)?,
+        ))
+    })
 }
 
 pub(super) fn standard_b64encode_batch_into<'py>(

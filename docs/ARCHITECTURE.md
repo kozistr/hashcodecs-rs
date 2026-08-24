@@ -98,7 +98,7 @@ The API has three output models:
 - `*_into` functions write into caller-managed storage;
 - allocating batch functions discard partial result lists on failure;
 - Base64 reusable-output batches are intentionally fail-fast and non-transactional;
-- packed XXH3 batches snapshot and hash every input before mutating their destination.
+- the XXH3 binding validates and stabilizes every packed-batch input before it mutates the destination.
 
 Large aligned x86 encoding may use non-temporal stores after the input exceeds the detected private-cache working
 set. Smaller work stays on ordinary cached stores.
@@ -123,8 +123,10 @@ Python exposes two result models:
 - `xxh3_*_batch` returns ergonomic `list[int]` results;
 - `xxh3_*_batch_into` writes packed little-endian digests into one reusable `bytearray` and returns bytes written.
 
-The packed path hashes every input before mutating the destination. That makes validation failure atomic and
-allows the output bytearray to also appear as an input.
+The binding validates capacity and stabilizes every input before it mutates the destination. For small stable
+batches, it writes each infallible hash result to the packed output. For detached large batches and arbitrary
+exporters, it retains temporary results until hashing finishes; this fallback lets callers use the output bytearray
+as an input.
 
 ## CPython Boundary
 

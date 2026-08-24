@@ -175,6 +175,30 @@ def test_xxh3_batch_into_allows_output_to_alias_an_input(
     assert output[digest_size:] == original[digest_size:]
 
 
+@pytest.mark.parametrize(
+    ('one_shot', 'batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_xxh3_batch_into_snapshots_overlapping_memoryviews(
+    one_shot: Callable[..., int],
+    batch_into: Callable[..., int],
+    digest_size: int,
+) -> None:
+    output = bytearray(range(64))
+    original = bytes(output)
+    inputs = [memoryview(output)[16:32], memoryview(output)[:16]]
+    expected = b''.join(
+        one_shot(value, 42).to_bytes(digest_size, 'little') for value in (original[16:32], original[:16])
+    )
+
+    assert batch_into(inputs, output, 42) == len(expected)
+    assert output[: len(expected)] == expected
+    assert output[len(expected) :] == original[len(expected) :]
+
+
 def test_xxh3_batch_into_exports() -> None:
     assert hashcodecs.xxh3_64_batch_into is xxhash.xxh3_64_batch_into
     assert hashcodecs.xxh3_128_batch_into is xxhash.xxh3_128_batch_into

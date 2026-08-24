@@ -16,6 +16,8 @@ mod primitives;
 mod short;
 
 pub use batch::{xxh3_64_batch, xxh3_128_batch};
+#[cfg(feature = "python")]
+pub(crate) use batch::{xxh3_64_batch_each, xxh3_128_batch_each};
 pub use hash::{xxh3_64, xxh3_128};
 
 #[cfg(all(test, miri))]

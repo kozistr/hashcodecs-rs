@@ -9,6 +9,28 @@ use crate::base64::{encode_to_ptr, encoded_len};
 use crate::bindings::buffer::BytesLike;
 use crate::bindings::runtime::DETACH_THRESHOLD;
 
+#[cfg(not(Py_GIL_DISABLED))]
+pub(super) fn encode_exact<'py>(
+    py: Python<'py>,
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    wrapcol: Option<usize>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let output_len = encoded_output_len(input.len(), padded, wrapcol);
+    let (output, ()) = unsafe {
+        pybytes_with_len(py, output_len, |output| {
+            let urlsafe = altchars == Some(*b"-_");
+            encode_configured_ptr(input, output, urlsafe, padded, wrapcol);
+            if let Some(altchars) = altchars.filter(|_| !urlsafe) {
+                let output = slice::from_raw_parts_mut(output, output_len);
+                substitute_altchars(output, altchars);
+            }
+        })
+    }?;
+    Ok(output)
+}
+
 pub(super) fn encode<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,

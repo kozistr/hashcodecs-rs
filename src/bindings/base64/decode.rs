@@ -19,7 +19,7 @@ use crate::base64::{
 };
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
-use crate::bindings::runtime::DETACH_THRESHOLD;
+use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
 struct BytesWriter(*mut ffi::compat::PyBytesWriter);
 
@@ -212,7 +212,7 @@ fn try_decode_lenient<'py>(
     let output_address = unsafe { writer.data() } as usize;
     let table = lenient_decode_table(altchars);
     let continue_after_padding = lenient_continues_after_padding(py);
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let result = unsafe {
         input.with_bytes(|input| {
             let decode = move || {
@@ -293,7 +293,7 @@ fn decode_strict_native<'py>(
             return Ok(Err(StrictDecodeError::InvalidLayout));
         }
     };
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len, |output| {
             input.with_bytes(|input| {
@@ -430,7 +430,7 @@ fn decode_unpadded<'py>(
     }
     let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
         .map_err(|_| decoding_error(py, "Incorrect padding"))?;
-    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len, |output| {
             input.with_bytes(|input| {
@@ -1118,7 +1118,7 @@ pub(super) fn urlsafe_b64decode_into(
 /// ``items`` must be a list. ``altchars`` and ``validate`` apply to every item.
 /// Processing is fail-fast: an error discards the partial result and is raised
 /// immediately. Processing is single-threaded. Immutable items of at least
-/// 64 KiB release the GIL independently; smaller and mutable items do not. Do
+/// 256 KiB release the GIL independently; smaller and mutable items do not. Do
 /// not mutate ``items`` concurrently while this function is running.
 pub(super) fn b64decode_batch<'py>(
     py: Python<'py>,

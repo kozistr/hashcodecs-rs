@@ -300,7 +300,7 @@ pub(super) fn b64encode<'py>(
 ///
 /// ``items`` must be a list. ``altchars`` applies to every item. Processing is
 /// fail-fast: an error discards the partial result and is raised immediately.
-/// Processing is single-threaded. Immutable items of at least 64 KiB release
+/// Processing is single-threaded. Immutable items of at least 256 KiB release
 /// the GIL independently; smaller and mutable items do not. Do not mutate
 /// ``items`` concurrently while this function is running.
 pub(super) fn b64encode_batch<'py>(

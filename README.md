@@ -180,6 +180,7 @@ cargo bench --bench xxhash
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py
 uv run --no-project --with . python benchmarks/python_base64_batch.py
+uv run --no-project --with . python benchmarks/python_calls.py
 uv run --no-project --with . python benchmarks/python_murmur3.py
 uv run --no-project --with . python benchmarks/python_xxhash.py
 ```

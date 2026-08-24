@@ -5,7 +5,9 @@ use crate::backend::{self, SimdBackend};
 use super::long::{
     X86_BACKEND_PREFERENCE, accumulate_x86, init_secret_with_capabilities, x86_kernel,
 };
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::long::{init_secret, init_secret_scalar, long_accumulate_scalar};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::primitives::SECRET;
 use super::*;
 use core::ffi::c_void;

@@ -1,6 +1,7 @@
 use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
+use std::sync::Once;
 
 use super::callbacks::*;
 use super::{METHOD_FLAGS, add_methods, python_at_least};
@@ -396,7 +397,7 @@ Examples:
             PyCFunctionFastWithKeywords: b64decode_into,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"b64decode_into($module, /, s, output, altchars=None, validate=None, *, padded=True, ignorechars=None, canonical=False)
+        ml_doc: cr"b64decode_into($module, /, s, output, altchars=None, validate=None, *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
 --
 
 Decode Base64 data into a reusable bytearray.
@@ -583,11 +584,15 @@ Decode each item into a matching reusable bytearray with the URL-safe alphabet."
     ffi::PyMethodDef::zeroed(),
 ];
 
+static METHODS_INIT: Once = Once::new();
+
 pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    if python_at_least(module.py(), (3, 15)) {
-        unsafe {
-            (*methods.add(14)).ml_doc = cr"urlsafe_b64decode($module, /, s, *, padded=False)
+    let use_python_315_docs = python_at_least(module.py(), (3, 15));
+    METHODS_INIT.call_once(|| {
+        if use_python_315_docs {
+            unsafe {
+                (*methods.add(14)).ml_doc = cr"urlsafe_b64decode($module, /, s, *, padded=False)
 --
 
 Decode Base64 using the URL-safe alphabet.
@@ -607,9 +612,9 @@ Raises:
 Examples:
     >>> urlsafe_b64decode(b'-_8')
     b'\xfb\xff'"
-                .as_ptr();
-            (*methods.add(15)).ml_doc =
-                cr"urlsafe_b64decode_into($module, /, s, output, *, padded=False)
+                    .as_ptr();
+                (*methods.add(15)).ml_doc =
+                    cr"urlsafe_b64decode_into($module, /, s, output, *, padded=False)
 --
 
 Decode URL-safe Base64 into a reusable bytearray.
@@ -631,8 +636,9 @@ Examples:
     >>> output = bytearray(2)
     >>> urlsafe_b64decode_into(b'-_8', output)
     2"
-                .as_ptr();
+                    .as_ptr();
+            }
         }
-    }
+    });
     unsafe { add_methods(module, methods) }
 }

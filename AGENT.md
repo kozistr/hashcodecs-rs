@@ -36,7 +36,7 @@ uv run --frozen --no-sync ruff format --check .
 uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
 ```
 
-Maintain 100% Rust line coverage and 100% Python branch coverage. The hardware-only AVX-512 implementation is the sole permitted filename exclusion; do not add other coverage exclusions or coverage-specific production branches. Cover malformed input, boundary lengths, every available SIMD backend, exact output-slice boundaries, and CPython differential cases.
+Maintain 100% Rust core line coverage and 100% Python facade branch coverage. The Rust percentage is measured without default features and therefore excludes the feature-gated CPython bindings; those bindings are behavior-tested by the Python suite. The hardware-only AVX-512 implementation is the sole permitted filename exclusion; do not add other coverage exclusions or coverage-specific production branches. Cover malformed input, boundary lengths, every available SIMD backend, exact output-slice boundaries, and CPython differential cases.
 
 ## Benchmarks
 

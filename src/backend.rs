@@ -135,13 +135,15 @@ fn x86_capabilities(
     if sse41 && ssse3 {
         simd |= SimdBackend::Sse41.bit();
     }
-    if avx2 {
+    // AVX2 kernels may delegate tails to SSSE3 implementations.
+    if avx2 && ssse3 {
         simd |= SimdBackend::Avx2.bit();
     }
-    if avx512 {
+    // AVX-512 kernels may delegate tails through AVX2 to SSSE3.
+    if avx512 && avx2 && ssse3 {
         simd |= SimdBackend::Avx512.bit();
     }
-    if avx512 && avx512_vbmi {
+    if avx512 && avx512_vbmi && avx2 && ssse3 {
         simd |= SimdBackend::Avx512Vbmi.bit();
     }
     Capabilities { simd, bmi2 }
@@ -174,14 +176,21 @@ mod tests {
         let sse41 = x86_capabilities(false, false, false, true, true, false);
         assert!(sse41.supports(SimdBackend::Sse41));
 
-        let avx2 = x86_capabilities(false, false, true, false, false, true);
+        let incomplete_avx2 = x86_capabilities(false, false, true, false, false, true);
+        assert!(!incomplete_avx2.supports(SimdBackend::Avx2));
+        let avx2 = x86_capabilities(false, false, true, false, true, true);
         assert!(avx2.supports(SimdBackend::Avx2));
         assert!(!avx2.supports(SimdBackend::Sse41));
         assert!(avx2.has_bmi2());
 
         let avx512 = x86_capabilities(false, true, false, false, false, false);
-        assert!(avx512.supports(SimdBackend::Avx512));
+        assert!(!avx512.supports(SimdBackend::Avx512));
         assert!(!avx512.supports(SimdBackend::Avx2));
+        assert!(!avx512.supports(SimdBackend::Avx512Vbmi));
+
+        let avx512 = x86_capabilities(false, true, true, false, true, false);
+        assert!(avx512.supports(SimdBackend::Avx512));
+        assert!(avx512.supports(SimdBackend::Avx2));
         assert!(!avx512.supports(SimdBackend::Avx512Vbmi));
 
         let incomplete_vbmi = x86_capabilities(true, false, false, false, false, false);

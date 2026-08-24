@@ -16,6 +16,10 @@ pub(super) fn encode<'py>(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    #[cfg(Py_GIL_DISABLED)]
+    if let Some(input) = input.snapshot_mutable() {
+        return encode(py, &BytesLike::Owned(input), altchars, padded, wrapcol);
+    }
     let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
     let output_len = encoded_output_len(input.len(), padded, wrapcol);
     let (output, ()) = unsafe {
@@ -50,7 +54,11 @@ pub(super) fn encode_into(
         let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
         return encode_slice_into(&input, output, altchars, padded, wrapcol);
     }
-    unsafe { input.with_bytes(|input| encode_slice_into(input, output, altchars, padded, wrapcol)) }
+    unsafe {
+        input.with_bytes_and_output(output, |input, output, provided| {
+            encode_slice_to_ptr(input, output, provided, altchars, padded, wrapcol)
+        })
+    }
 }
 
 pub(super) fn normalize_wrapcol(wrapcol: i128) -> PyResult<Option<usize>> {
@@ -105,6 +113,27 @@ fn encode_slice_into(
             substitute_altchars(output, altchars);
         }
     })?;
+    Ok(required)
+}
+
+fn encode_slice_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    wrapcol: Option<usize>,
+) -> PyResult<usize> {
+    let required = encoded_output_len(input.len(), padded, wrapcol);
+    if provided < required {
+        return Err(super::output_too_small(required, provided));
+    }
+    let urlsafe = altchars == Some(*b"-_");
+    unsafe { encode_configured_ptr(input, output, urlsafe, padded, wrapcol) };
+    if let Some(altchars) = altchars.filter(|_| !urlsafe) {
+        let output = unsafe { slice::from_raw_parts_mut(output, required) };
+        substitute_altchars(output, altchars);
+    }
     Ok(required)
 }
 

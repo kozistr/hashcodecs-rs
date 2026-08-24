@@ -16,6 +16,7 @@ import hashcodecs
 import hashcodecs.base64 as base64
 
 PYTHON_315 = sys.version_info >= (3, 15)
+FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 
 
@@ -134,6 +135,82 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     large_encoded = stdlib_base64.b64encode(large_payload)
     assert base64.b64encode(memoryview(large_payload)) == large_encoded
     assert base64.b64decode(memoryview(large_encoded), validate=True) == large_payload
+
+
+def _assert_mutable_input_race_is_serialized(
+    operation: Callable[[], bytes],
+    value: bytearray,
+    states: tuple[bytes, bytes],
+    expected: set[bytes],
+) -> None:
+    start = threading.Barrier(2)
+    failures: list[BaseException | bytes] = []
+
+    def run_operation() -> None:
+        try:
+            start.wait()
+            for _ in range(32):
+                result = operation()
+                if result not in expected:
+                    failures.append(result[:64])
+                    return
+        except BaseException as error:
+            failures.append(error)
+
+    def resize_input() -> None:
+        start.wait()
+        for index in range(32):
+            value[:] = states[index % 2]
+
+    worker = threading.Thread(target=run_operation)
+    mutator = threading.Thread(target=resize_input)
+    worker.start()
+    mutator.start()
+    worker.join(timeout=30)
+    mutator.join(timeout=30)
+
+    assert not worker.is_alive()
+    assert not mutator.is_alive()
+    assert not failures
+
+
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+def test_base64_bytearray_resize_races_are_serialized() -> None:
+    raw_states = (b'a' * (1024 * 1024), b'b' * (1024 * 1024 + 3))
+    raw = bytearray(raw_states[0])
+    encoded_states = tuple(stdlib_base64.b64encode(state) for state in raw_states)
+    _assert_mutable_input_race_is_serialized(
+        lambda: base64.b64encode(raw),
+        raw,
+        raw_states,
+        set(encoded_states),
+    )
+
+    encoded = bytearray(encoded_states[0])
+    _assert_mutable_input_race_is_serialized(
+        lambda: base64.b64decode(encoded, validate=True),
+        encoded,
+        encoded_states,
+        set(raw_states),
+    )
+
+    raw = bytearray(raw_states[0])
+    encode_output = bytearray(len(encoded_states[1]))
+    _assert_mutable_input_race_is_serialized(
+        lambda: bytes(encode_output[: base64.b64encode_into(raw, encode_output)]),
+        raw,
+        raw_states,
+        set(encoded_states),
+    )
+
+    encoded = bytearray(encoded_states[0])
+    decode_output = bytearray(len(raw_states[1]))
+    _assert_mutable_input_race_is_serialized(
+        lambda: bytes(decode_output[: base64.b64decode_into(encoded, decode_output, validate=True)]),
+        encoded,
+        encoded_states,
+        set(raw_states),
+    )
 
 
 def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
@@ -582,8 +659,16 @@ def test_urlsafe_padding_options_follow_the_running_cpython() -> None:
             base64.urlsafe_b64decode(b'-_8')
 
 
-def test_single_alphabet_helpers_are_native_and_keep_public_metadata() -> None:
+def test_base64_functions_are_native_and_keep_public_metadata() -> None:
     for name in (
+        'b64decode',
+        'b64decode_batch',
+        'b64decode_batch_into',
+        'b64decode_into',
+        'b64encode',
+        'b64encode_batch',
+        'b64encode_batch_into',
+        'b64encode_into',
         'standard_b64decode',
         'standard_b64decode_into',
         'standard_b64encode',
@@ -597,6 +682,12 @@ def test_single_alphabet_helpers_are_native_and_keep_public_metadata() -> None:
         assert inspect.isbuiltin(function)
         assert function.__module__ == 'hashcodecs.base64'
         assert function.__doc__
+
+
+def test_b64decode_into_signature_does_not_advertise_none_for_ignorechars() -> None:
+    assert inspect.signature(base64.b64decode_into).parameters['ignorechars'].default is not None
+    with pytest.raises(TypeError):
+        base64.b64decode_into(b'YWJj', bytearray(3), ignorechars=None)
 
 
 def test_python_315_decode_options_are_backported() -> None:

@@ -708,6 +708,9 @@ fn length_helpers_and_buffer_errors_are_precise() {
     assert_eq!(b64decoded_len(b"YWI="), Ok(2));
     assert_eq!(b64decoded_len(b"YWJj"), Ok(3));
     assert_eq!(b64decoded_len(b"abc"), Err(Base64Error::InvalidInput));
+    assert_eq!(b64decoded_len(b"===="), Err(Base64Error::InvalidInput));
+    assert_eq!(b64decoded_len(b"A==="), Err(Base64Error::InvalidInput));
+    assert_eq!(b64decoded_len(b"AA=A"), Err(Base64Error::InvalidInput));
 
     let error = Base64Error::OutputTooSmall {
         required: 8,

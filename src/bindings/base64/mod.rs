@@ -48,6 +48,8 @@ fn parse_altchars(
     } else {
         contiguous_bytes_like(py, value, "altchars")?
     };
+    #[cfg(Py_GIL_DISABLED)]
+    let bytes = bytes.into_stable();
     if bytes.len() != 2 {
         if python_at_least(py, (3, 15)) {
             let value = if allow_text {
@@ -105,6 +107,8 @@ fn prepare_b64encode_altchars(
     }
 
     let bytes = contiguous_bytes_like(py, value, "altchars")?;
+    #[cfg(Py_GIL_DISABLED)]
+    let bytes = bytes.into_stable();
     if bytes.len() != 2 {
         let message = if python_at_least(py, (3, 15)) {
             "alphabet must have length 64"

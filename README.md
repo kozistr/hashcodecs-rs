@@ -113,7 +113,7 @@ assert_eq!(
 
 ## Architecture
 
-The Rust core owns algorithm behavior and SIMD dispatch. A thin CPython layer handles argument parsing, buffer
+The Rust core owns algorithm behavior and SIMD dispatch. A substantial CPython layer handles argument parsing, buffer
 ownership, reusable outputs, and GIL decisions; root-level Python modules provide typed public exports without
 adding per-call wrappers.
 

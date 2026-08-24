@@ -9,6 +9,11 @@ import hashcodecs
 import hashcodecs.murmur3 as murmur3
 
 
+def test_murmur3_functions_keep_public_module_metadata() -> None:
+    for name in murmur3.__all__:
+        assert getattr(murmur3, name).__module__ == 'hashcodecs.murmur3'
+
+
 def test_murmur3_known_answers_and_buffer_inputs() -> None:
     assert hashcodecs.murmur3_32(b'hello') == 0x248BFA47
     assert murmur3.murmur3_32(b'hello') == 0x248BFA47

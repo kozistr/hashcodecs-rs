@@ -4,20 +4,8 @@ run-name: CI / ${{ github.ref_name }}
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.readthedocs.yaml'
-      - 'CITATION.cff'
-      - 'docs/**'
-      - 'zensical.toml'
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.readthedocs.yaml'
-      - 'CITATION.cff'
-      - 'docs/**'
-      - 'zensical.toml'
   workflow_call:
     inputs:
       ref:
@@ -71,7 +59,7 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Check Rust line coverage
+      - name: Check Rust core line coverage
         run: |
           cargo llvm-cov --no-default-features --fail-under-lines 100 \
             --ignore-filename-regex 'avx512\.rs$' --show-missing-lines

@@ -5,7 +5,9 @@ use pyo3::prelude::Python;
 
 use super::digest::{x64_128_digest, x86_128_digest};
 use crate::bindings::arguments::{parse_hash_arguments, seed_u32};
-use crate::bindings::runtime::{return_function_result, with_function_bytes};
+use crate::bindings::runtime::{
+    catch_unwind_callback, return_function_result, with_function_bytes,
+};
 use crate::murmur3::{murmur3_x64_128, murmur3_x86_32, murmur3_x86_128};
 
 fn bytes_result(digest: &[u8]) -> *mut ffi::PyObject {
@@ -19,7 +21,7 @@ pub(super) unsafe extern "C" fn murmur3_32(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"murmur3_32".as_ptr())
         else {
             return ptr::null_mut();
@@ -32,7 +34,7 @@ pub(super) unsafe extern "C" fn murmur3_32(
             py,
             result.map(|value| ffi::PyLong_FromUnsignedLong(value as _)),
         )
-    }
+    })
 }
 
 pub(super) unsafe extern "C" fn murmur3_x86_128_digest(
@@ -42,7 +44,7 @@ pub(super) unsafe extern "C" fn murmur3_x86_128_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some(arguments) =
             parse_hash_arguments(args, nargsf, keywords, c"murmur3_x86_128_digest".as_ptr())
         else {
@@ -55,7 +57,7 @@ pub(super) unsafe extern "C" fn murmur3_x86_128_digest(
             x86_128_digest(murmur3_x86_128(bytes, seed))
         });
         return_function_result(py, result.map(|digest| bytes_result(&digest)))
-    }
+    })
 }
 
 pub(super) unsafe extern "C" fn murmur3_x64_128_digest(
@@ -65,7 +67,7 @@ pub(super) unsafe extern "C" fn murmur3_x64_128_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some(arguments) =
             parse_hash_arguments(args, nargsf, keywords, c"murmur3_x64_128_digest".as_ptr())
         else {
@@ -78,5 +80,5 @@ pub(super) unsafe extern "C" fn murmur3_x64_128_digest(
             x64_128_digest(murmur3_x64_128(bytes, seed))
         });
         return_function_result(py, result.map(|digest| bytes_result(&digest)))
-    }
+    })
 }

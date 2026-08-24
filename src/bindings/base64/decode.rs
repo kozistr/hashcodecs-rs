@@ -10,7 +10,7 @@ use super::{
     pybytes_with_len, python_at_least, with_output_ptr,
 };
 use crate::base64::{
-    Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_layout,
+    Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_transactional,
     decode_to_slice_with_unpadded_layout_and_alphabet,
@@ -25,6 +25,10 @@ fn decode_strict<'py>(
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    #[cfg(Py_GIL_DISABLED)]
+    if let Some(input) = input.snapshot_mutable() {
+        return decode_strict(py, &BytesLike::Owned(input), alphabet);
+    }
     let layout = unsafe { input.with_bytes(decode_layout) }
         .map_err(|_| decoding_error(py, "Incorrect padding"))?;
     let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
@@ -60,8 +64,8 @@ fn decode_strict_into(
         return decode_strict_slice_into(&input, output, alphabet, transactional_errors);
     }
     unsafe {
-        input.with_bytes(|input| {
-            decode_strict_slice_into(input, output, alphabet, transactional_errors)
+        input.with_bytes_and_output(output, |input, output, provided| {
+            decode_strict_to_ptr(input, output, provided, alphabet, transactional_errors)
         })
     }
 }
@@ -75,25 +79,56 @@ fn decode_strict_slice_into(
     let layout = decode_layout(input)?;
     with_bytearray(output, || {
         let provided = unsafe { bytearray_size(output.as_ptr()) };
-        if provided < layout.output_len {
-            return Err(Base64Error::OutputTooSmall {
-                required: layout.output_len,
-                provided,
-            });
-        }
-        let output = unsafe {
-            slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len)
-        };
-        let output = &mut output[..layout.output_len];
-        if transactional_errors {
-            decode_to_slice_with_layout_and_alphabet_transactional(
-                input, output, layout, alphabet,
-            )?;
-        } else {
-            decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
-        }
-        Ok(layout.output_len)
+        decode_strict_with_layout_to_ptr(
+            input,
+            unsafe { bytearray_data(output.as_ptr()) },
+            provided,
+            layout,
+            alphabet,
+            transactional_errors,
+        )
     })
+}
+
+fn decode_strict_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    let layout = decode_layout(input)?;
+    decode_strict_with_layout_to_ptr(
+        input,
+        output,
+        provided,
+        layout,
+        alphabet,
+        transactional_errors,
+    )
+}
+
+fn decode_strict_with_layout_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if provided < layout.output_len {
+        return Err(Base64Error::OutputTooSmall {
+            required: layout.output_len,
+            provided,
+        });
+    }
+    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len) };
+    if transactional_errors {
+        decode_to_slice_with_layout_and_alphabet_transactional(input, output, layout, alphabet)?;
+    } else {
+        decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
+    }
+    Ok(layout.output_len)
 }
 
 fn decode_unpadded<'py>(
@@ -101,6 +136,10 @@ fn decode_unpadded<'py>(
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    #[cfg(Py_GIL_DISABLED)]
+    if let Some(input) = input.snapshot_mutable() {
+        return decode_unpadded(py, &BytesLike::Owned(input), alphabet);
+    }
     let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
         .map_err(|_| decoding_error(py, "Incorrect padding"))?;
     let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
@@ -135,8 +174,8 @@ fn decode_unpadded_into(
         return decode_unpadded_slice_into(&input, output, alphabet, transactional_errors);
     }
     unsafe {
-        input.with_bytes(|input| {
-            decode_unpadded_slice_into(input, output, alphabet, transactional_errors)
+        input.with_bytes_and_output(output, |input, output, provided| {
+            decode_unpadded_to_ptr(input, output, provided, alphabet, transactional_errors)
         })
     }
 }
@@ -153,24 +192,61 @@ fn decode_unpadded_slice_into(
     let layout = decode_unpadded_layout(input)?;
     with_bytearray(output, || {
         let provided = unsafe { bytearray_size(output.as_ptr()) };
-        if provided < layout.output_len {
-            return Err(Base64Error::OutputTooSmall {
-                required: layout.output_len,
-                provided,
-            });
-        }
-        let output = unsafe {
-            slice::from_raw_parts_mut(bytearray_data(output.as_ptr()), layout.output_len)
-        };
-        if transactional_errors {
-            decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
-                input, output, layout, alphabet,
-            )?;
-        } else {
-            decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
-        }
-        Ok(layout.output_len)
+        decode_unpadded_with_layout_to_ptr(
+            input,
+            unsafe { bytearray_data(output.as_ptr()) },
+            provided,
+            layout,
+            alphabet,
+            transactional_errors,
+        )
     })
+}
+
+fn decode_unpadded_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if input.contains(&b'=') {
+        return Err(Base64Error::InvalidInput);
+    }
+    let layout = decode_unpadded_layout(input)?;
+    decode_unpadded_with_layout_to_ptr(
+        input,
+        output,
+        provided,
+        layout,
+        alphabet,
+        transactional_errors,
+    )
+}
+
+fn decode_unpadded_with_layout_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    layout: DecodeLayout,
+    alphabet: DecodeAlphabet,
+    transactional_errors: bool,
+) -> Result<usize, Base64Error> {
+    if provided < layout.output_len {
+        return Err(Base64Error::OutputTooSmall {
+            required: layout.output_len,
+            provided,
+        });
+    }
+    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len) };
+    if transactional_errors {
+        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+            input, output, layout, alphabet,
+        )?;
+    } else {
+        decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
+    }
+    Ok(layout.output_len)
 }
 
 fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
@@ -343,6 +419,18 @@ fn decode_with_binascii<'py>(
     ignorechars: Option<&Bound<'py, PyAny>>,
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    #[cfg(Py_GIL_DISABLED)]
+    if let Some(input) = input.snapshot_mutable() {
+        return decode_with_binascii(
+            py,
+            &BytesLike::Owned(input),
+            altchars,
+            strict_mode,
+            padded,
+            ignorechars,
+            canonical,
+        );
+    }
     if !python_at_least(py, (3, 15)) && (!padded || ignorechars.is_some() || canonical) {
         return decode_advanced_legacy(
             py,

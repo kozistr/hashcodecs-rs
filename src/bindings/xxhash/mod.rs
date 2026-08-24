@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use super::arguments::{parse_hash_arguments, parse_raw_arguments, seed_u64};
-use super::runtime::{return_function_result, with_function_bytes};
+use super::runtime::{catch_unwind_callback, return_function_result, with_function_bytes};
 use crate::xxhash::{xxh3_64, xxh3_128};
 
 mod batch;
@@ -19,7 +19,7 @@ unsafe extern "C" fn xxh3_64_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_64".as_ptr())
         else {
             return ptr::null_mut();
@@ -32,7 +32,7 @@ unsafe extern "C" fn xxh3_64_digest(
             py,
             result.map(|value| ffi::PyLong_FromUnsignedLongLong(value as _)),
         )
-    }
+    })
 }
 
 unsafe extern "C" fn xxh3_128_digest(
@@ -42,7 +42,7 @@ unsafe extern "C" fn xxh3_128_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some(arguments) = parse_hash_arguments(args, nargsf, keywords, c"xxh3_128".as_ptr())
         else {
             return ptr::null_mut();
@@ -61,7 +61,7 @@ unsafe extern "C" fn xxh3_128_digest(
                 ptr::null_mut()
             }
         }
-    }
+    })
 }
 
 unsafe extern "C" fn xxh3_64_batch_digest(
@@ -71,7 +71,7 @@ unsafe extern "C" fn xxh3_64_batch_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some([items, seed]) = parse_raw_arguments(
             args,
             nargs,
@@ -91,7 +91,7 @@ unsafe extern "C" fn xxh3_64_batch_digest(
             xxh3_64_batch(py, &items, seed)
         })();
         return_function_result(py, result.map(Bound::into_ptr))
-    }
+    })
 }
 
 unsafe extern "C" fn xxh3_128_batch_digest(
@@ -101,7 +101,7 @@ unsafe extern "C" fn xxh3_128_batch_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some([items, seed]) = parse_raw_arguments(
             args,
             nargs,
@@ -121,7 +121,7 @@ unsafe extern "C" fn xxh3_128_batch_digest(
             xxh3_128_batch(py, &items, seed)
         })();
         return_function_result(py, result.map(Bound::into_ptr))
-    }
+    })
 }
 
 unsafe extern "C" fn xxh3_64_batch_into_digest(
@@ -131,7 +131,7 @@ unsafe extern "C" fn xxh3_64_batch_into_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some([items, output, seed]) = parse_raw_arguments(
             args,
             nargs,
@@ -152,7 +152,7 @@ unsafe extern "C" fn xxh3_64_batch_into_digest(
             xxh3_64_batch_into(py, &items, &output, seed)
         })();
         return_function_result(py, result.map(|written| PyInt::new(py, written).into_ptr()))
-    }
+    })
 }
 
 unsafe extern "C" fn xxh3_128_batch_into_digest(
@@ -162,7 +162,7 @@ unsafe extern "C" fn xxh3_128_batch_into_digest(
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     let py = unsafe { Python::assume_attached() };
-    unsafe {
+    catch_unwind_callback(py, || unsafe {
         let Some([items, output, seed]) = parse_raw_arguments(
             args,
             nargs,
@@ -183,7 +183,7 @@ unsafe extern "C" fn xxh3_128_batch_into_digest(
             xxh3_128_batch_into(py, &items, &output, seed)
         })();
         return_function_result(py, result.map(|written| PyInt::new(py, written).into_ptr()))
-    }
+    })
 }
 
 pub(super) use methods::add_to_module;

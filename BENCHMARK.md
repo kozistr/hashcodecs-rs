@@ -30,6 +30,12 @@ For Python, run the upstream `xxhash` extension beside hashcodecs. Pass 32 equal
 The Rust remainder cases pass two or three equal-size long inputs. Run Python remainder cases with
 `python benchmarks/python_xxhash.py --batch-counts 2 3`.
 
+Use the focused one-shot run to cover the AVX2 four-chain boundaries:
+
+```sh
+cargo bench --bench xxhash -- --sample-size 50 "xxh3_(64|128)/(241|512|768|1024|1536|2048|4096)/hashcodecs"
+```
+
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
 
 [![Rust XXH3 batch remainder throughput](docs/benchmarks/xxh3-rust-batch-remainders.svg)](docs/benchmarks/xxh3-rust-batch-remainders.svg)

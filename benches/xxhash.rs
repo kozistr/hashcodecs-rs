@@ -6,7 +6,18 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const SIZES: [usize; 5] = [64, 1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
+const SIZES: [usize; 10] = [
+    64,
+    241,
+    512,
+    768,
+    1024,
+    1536,
+    2048,
+    4 * 1024,
+    1024 * 1024,
+    8 * 1024 * 1024,
+];
 
 fn data(size: usize, salt: u8) -> Vec<u8> {
     (0..size)

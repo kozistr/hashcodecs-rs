@@ -159,7 +159,7 @@ fn every_supported_x86_backend_matches_scalar() {
     let input: Vec<u8> = (0..4161)
         .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
         .collect();
-    let exact_kib: Vec<u8> = (0..1024)
+    let chain_input: Vec<u8> = (0..4096)
         .map(|index| (index as u8).wrapping_mul(53).wrapping_add(17))
         .collect();
     let capabilities = backend::capabilities();
@@ -221,11 +221,14 @@ fn every_supported_x86_backend_matches_scalar() {
             let actual = unsafe { accumulate_x86(&input, secret, selected) };
             assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
             if selected == SimdBackend::Avx2 {
-                assert_eq!(
-                    unsafe { accumulate_x86(&exact_kib, secret, selected) },
-                    long_accumulate_scalar(&exact_kib, secret),
-                    "AVX2 1 KiB mismatch for seed {seed:#x}",
-                );
+                for length in [241, 512, 768, 1024, 1536, 2048, 4096] {
+                    let chain_input = &chain_input[..length];
+                    assert_eq!(
+                        unsafe { accumulate_x86(chain_input, secret, selected) },
+                        long_accumulate_scalar(chain_input, secret),
+                        "AVX2 four-chain mismatch at {length} bytes for seed {seed:#x}",
+                    );
+                }
             }
         }
     }

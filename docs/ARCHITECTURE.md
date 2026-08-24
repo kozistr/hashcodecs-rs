@@ -121,8 +121,9 @@ secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-1
 `long/{aarch64,avx2,avx512,ssse3}.rs` contains the ISA kernels beside the scalar long-input flow and its CPU
 selection. Only long inputs enter those kernels.
 
-Native batches reuse the initialized secret and process inputs in groups of four. Four equal-size inputs longer
-than 240 bytes use the AVX2 batch accumulator when available; mixed sizes and remainders use the regular paths.
+Native batches reuse the initialized secret and process inputs in groups of up to four. Two to four equal-size
+inputs longer than 240 bytes use an AVX2 batch accumulator when available; single items and mixed sizes use the
+regular paths.
 Python exposes two result models:
 
 - `xxh3_*_batch` returns ergonomic `list[int]` results;

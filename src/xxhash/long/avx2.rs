@@ -195,70 +195,80 @@ pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     output.0
 }
 
-/// Interleaves four independent hashes so load and multiply latency from one
-/// input can overlap useful work from the other three.
-#[target_feature(enable = "avx2")]
-/// # Safety
-/// The caller must have detected AVX2 support. All inputs must have the same
-/// long-mode length and `secret` must contain at least 192 bytes.
-pub(in crate::xxhash) unsafe fn accumulate_batch4(
-    data: [&[u8]; 4],
-    secret: &[u8],
-) -> [[u64; 8]; 4] {
-    let mut acc0 = unsafe { initial() };
-    let mut acc1 = acc0;
-    let mut acc2 = acc0;
-    let mut acc3 = acc0;
-    let length = data[0].len();
-    let schedule = long_schedule(length);
+macro_rules! define_accumulate_batch {
+    ($name:ident, $size:literal, $(($acc:ident, $index:literal)),+ $(,)?) => {
+        /// Interleaves independent hashes so load and multiply latency from one
+        /// input can overlap useful work from the others.
+        #[target_feature(enable = "avx2")]
+        /// # Safety
+        /// The caller must have detected AVX2 support. All inputs must have the
+        /// same long-mode length and `secret` must contain at least 192 bytes.
+        pub(in crate::xxhash) unsafe fn $name(
+            data: [&[u8]; $size],
+            secret: &[u8],
+        ) -> [[u64; 8]; $size] {
+            $(let mut $acc = unsafe { initial() };)+
+            let schedule = long_schedule(data[0].len());
 
-    for block in 0..schedule.full_blocks {
-        let offset = block * 1024;
-        if block + 2 <= schedule.full_blocks {
-            let prefetch_offset = (block + 2) * 1024;
+            for block in 0..schedule.full_blocks {
+                let offset = block * 1024;
+                if block + 2 <= schedule.full_blocks {
+                    let prefetch_offset = (block + 2) * 1024;
+                    unsafe {
+                        $(_mm_prefetch::<_MM_HINT_T0>(
+                            data[$index].as_ptr().add(prefetch_offset).cast(),
+                        );)+
+                    }
+                }
+                for stripe in 0..16 {
+                    let input_offset = offset + stripe * 64;
+                    let key = unsafe { secret.as_ptr().add(stripe * 8) };
+                    unsafe {
+                        $(accumulate_registers(
+                            &mut $acc,
+                            data[$index].as_ptr().add(input_offset),
+                            key,
+                        );)+
+                    }
+                }
+                let key = unsafe { secret.as_ptr().add(128) };
+                unsafe {
+                    $(scramble_registers(&mut $acc, key);)+
+                }
+            }
+
+            for stripe in 0..schedule.tail_stripes {
+                let input_offset = schedule.tail_offset + stripe * 64;
+                let key = unsafe { secret.as_ptr().add(stripe * 8) };
+                unsafe {
+                    $(accumulate_registers(
+                        &mut $acc,
+                        data[$index].as_ptr().add(input_offset),
+                        key,
+                    );)+
+                }
+            }
+            let input_offset = schedule.last_offset;
+            let key = unsafe { secret.as_ptr().add(121) };
             unsafe {
-                _mm_prefetch::<_MM_HINT_T0>(data[0].as_ptr().add(prefetch_offset).cast());
-                _mm_prefetch::<_MM_HINT_T0>(data[1].as_ptr().add(prefetch_offset).cast());
-                _mm_prefetch::<_MM_HINT_T0>(data[2].as_ptr().add(prefetch_offset).cast());
-                _mm_prefetch::<_MM_HINT_T0>(data[3].as_ptr().add(prefetch_offset).cast());
+                $(accumulate_registers(
+                    &mut $acc,
+                    data[$index].as_ptr().add(input_offset),
+                    key,
+                );)+
+                [$(finish($acc)),+]
             }
         }
-        for stripe in 0..16 {
-            let input_offset = offset + stripe * 64;
-            let key = unsafe { secret.as_ptr().add(stripe * 8) };
-            unsafe {
-                accumulate_registers(&mut acc0, data[0].as_ptr().add(input_offset), key);
-                accumulate_registers(&mut acc1, data[1].as_ptr().add(input_offset), key);
-                accumulate_registers(&mut acc2, data[2].as_ptr().add(input_offset), key);
-                accumulate_registers(&mut acc3, data[3].as_ptr().add(input_offset), key);
-            }
-        }
-        let key = unsafe { secret.as_ptr().add(128) };
-        unsafe {
-            scramble_registers(&mut acc0, key);
-            scramble_registers(&mut acc1, key);
-            scramble_registers(&mut acc2, key);
-            scramble_registers(&mut acc3, key);
-        }
-    }
-
-    for stripe in 0..schedule.tail_stripes {
-        let input_offset = schedule.tail_offset + stripe * 64;
-        let key = unsafe { secret.as_ptr().add(stripe * 8) };
-        unsafe {
-            accumulate_registers(&mut acc0, data[0].as_ptr().add(input_offset), key);
-            accumulate_registers(&mut acc1, data[1].as_ptr().add(input_offset), key);
-            accumulate_registers(&mut acc2, data[2].as_ptr().add(input_offset), key);
-            accumulate_registers(&mut acc3, data[3].as_ptr().add(input_offset), key);
-        }
-    }
-    let input_offset = schedule.last_offset;
-    let key = unsafe { secret.as_ptr().add(121) };
-    unsafe {
-        accumulate_registers(&mut acc0, data[0].as_ptr().add(input_offset), key);
-        accumulate_registers(&mut acc1, data[1].as_ptr().add(input_offset), key);
-        accumulate_registers(&mut acc2, data[2].as_ptr().add(input_offset), key);
-        accumulate_registers(&mut acc3, data[3].as_ptr().add(input_offset), key);
-    }
-    unsafe { [finish(acc0), finish(acc1), finish(acc2), finish(acc3)] }
+    };
 }
+
+define_accumulate_batch!(accumulate_batch2, 2, (acc0, 0), (acc1, 1));
+define_accumulate_batch!(accumulate_batch3, 3, (acc0, 0), (acc1, 1), (acc2, 2));
+define_accumulate_batch!(
+    accumulate_batch4,
+    4,
+    (acc0, 0),
+    (acc1, 1),
+    (acc2, 2),
+    (acc3, 3),
+);

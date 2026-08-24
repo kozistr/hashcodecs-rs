@@ -52,9 +52,20 @@ def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     assert hashcodecs.xxh3_64_batch(values, 42) == [hashcodecs.xxh3_64(value, 42) for value in values]
     assert hashcodecs.xxh3_128_batch(values, 42) == [hashcodecs.xxh3_128(value, 42) for value in values]
 
-    large = [bytes((index * 31 + item) & 0xFF for index in range(4097)) for item in range(8)]
-    assert hashcodecs.xxh3_64_batch(large, 0x12345678) == [hashcodecs.xxh3_64(value, 0x12345678) for value in large]
-    assert hashcodecs.xxh3_128_batch(large, 0x12345678) == [hashcodecs.xxh3_128(value, 0x12345678) for value in large]
+
+@pytest.mark.parametrize('item_count', range(2, 9))
+def test_xxh3_long_batch_remainders_match_one_shot(item_count: int) -> None:
+    large = [bytes((index * 31 + item) & 0xFF for index in range(4097)) for item in range(item_count)]
+    for one_shot, batch, batch_into, digest_size in (
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch, hashcodecs.xxh3_128_batch_into, 16),
+    ):
+        expected = [one_shot(value, 0x12345678) for value in large]
+        assert batch(large, 0x12345678) == expected
+
+        output = bytearray(digest_size * item_count)
+        assert batch_into(large, output, 0x12345678) == len(output)
+        assert output == b''.join(value.to_bytes(digest_size, 'little') for value in expected)
 
 
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')

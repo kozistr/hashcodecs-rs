@@ -81,6 +81,16 @@ python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --
 python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --allocation-profile
 ```
 
+Add `--profile-direction encode` for returned encoding. By default, the profiling loop assigns the next result
+before releasing the previous one. Add `--discard-profile-result` to release each result before the next call. Use
+`b64encode_batch_into` for that workload.
+
+```sh
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --profile-operation returned
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --profile-operation returned --discard-profile-result
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --allocation-profile
+```
+
 ## Reusable Python Base64 Batch Buffers
 
 Pass one reusable `bytearray` to each item in the batch. Use the `*_batch_into` APIs.

@@ -100,6 +100,11 @@ The API has three output models:
 - Base64 reusable-output batches are intentionally fail-fast and non-transactional;
 - the XXH3 binding validates and stabilizes every packed-batch input before it mutates the destination.
 
+The Python Base64 binding sends strict input to the SIMD core without constructing a discarded Python exception.
+For lenient input, it keeps the MIME whitespace path on normalized SIMD input and decodes other ignored bytes into
+the final Python object or reusable buffer. The native state machine follows the padding behavior of each supported
+CPython patch series. It calls `binascii` only when malformed input needs CPython's exact exception.
+
 Large aligned x86 encoding may use non-temporal stores after the input exceeds the detected private-cache working
 set. Smaller work stays on ordinary cached stores.
 

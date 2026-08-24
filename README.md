@@ -150,6 +150,10 @@ Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 
+The lenient benchmark inserts MIME whitespace or ignored non-alphabet bytes and includes reusable output.
+
+[![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
+
 ### MurmurHash3: Python
 
 [![Python MurmurHash3 throughput](docs/benchmarks/murmur3-python.svg)](docs/benchmarks/murmur3-python.svg)
@@ -180,7 +184,7 @@ uv run --no-project --with . python benchmarks/python_murmur3.py
 uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
 
-The Python benchmarks expose focused modes such as `--into`, `--bytearray-input`, `--memoryview-input`,
+The Python benchmarks expose focused modes such as `--into`, `--lenient`, `--bytearray-input`, `--memoryview-input`,
 `--incremental`, `--large`, and `--hashcodecs-only`. All scripts also accept `--samples` and
 `--minimum-sample-seconds`; use `--help` on a benchmark script for its supported modes and defaults.
 

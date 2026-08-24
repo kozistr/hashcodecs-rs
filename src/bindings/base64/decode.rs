@@ -1,6 +1,7 @@
-use core::slice;
+use core::{ptr, slice};
 
 use pyo3::exceptions::{PyDeprecationWarning, PyFutureWarning, PyMemoryError};
+use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyDict, PyInt, PyList, PyType};
@@ -20,17 +21,278 @@ use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, 
 use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
 use crate::bindings::runtime::DETACH_THRESHOLD;
 
-fn decode_strict<'py>(
+struct BytesWriter(*mut ffi::compat::PyBytesWriter);
+
+impl BytesWriter {
+    fn new(py: Python<'_>, input_len: usize) -> PyResult<Self> {
+        let capacity = input_len
+            .div_ceil(4)
+            .checked_mul(3)
+            .and_then(|length| ffi::Py_ssize_t::try_from(length).ok())
+            .ok_or_else(|| PyMemoryError::new_err("Base64 output is too large"))?;
+        let writer = unsafe { ffi::compat::PyBytesWriter_Create(capacity) };
+        if writer.is_null() {
+            Err(PyErr::fetch(py))
+        } else {
+            Ok(Self(writer))
+        }
+    }
+
+    unsafe fn data(&self) -> *mut u8 {
+        unsafe { ffi::compat::PyBytesWriter_GetData(self.0).cast() }
+    }
+
+    unsafe fn finish<'py>(
+        mut self,
+        py: Python<'py>,
+        length: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let length = ffi::Py_ssize_t::try_from(length)
+            .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+        let writer = self.0;
+        self.0 = ptr::null_mut();
+        let output = unsafe { ffi::compat::PyBytesWriter_FinishWithSize(writer, length) };
+        Ok(unsafe { Bound::from_owned_ptr_or_err(py, output)?.cast_into_unchecked() })
+    }
+}
+
+impl Drop for BytesWriter {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe { ffi::compat::PyBytesWriter_Discard(self.0) };
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LenientDecodeError {
+    InvalidInput,
+    OutputTooSmall,
+}
+
+fn lenient_decode_table(altchars: Option<[u8; 2]>) -> [u8; 256] {
+    let mut table = [64_u8; 256];
+    for (value, &byte) in STANDARD_ALPHABET.iter().enumerate() {
+        table[usize::from(byte)] = value as u8;
+    }
+    if let Some([plus, slash]) = altchars {
+        table[usize::from(plus)] = 62;
+        table[usize::from(slash)] = 63;
+    }
+    table
+}
+
+fn lenient_continues_after_padding(py: Python<'_>) -> bool {
+    let version = py.version_info();
+    match (version.major, version.minor) {
+        (3, 13) => version.patch >= 13,
+        (3, 14) => version.patch >= 4,
+        (major, minor) => (major, minor) >= (3, 15),
+    }
+}
+
+/// Decode with CPython's non-strict padding and invalid-character semantics.
+///
+/// # Safety
+///
+/// `output` must be valid for writes of `provided` bytes and must not overlap
+/// `input`.
+unsafe fn decode_lenient_to_ptr(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    table: &[u8; 256],
+    padded: bool,
+    continue_after_padding: bool,
+) -> Result<usize, LenientDecodeError> {
+    let mut source = 0;
+    let mut written = 0;
+    let mut quad_pos = 0;
+    let mut leftchar = 0;
+    let mut pads = 0;
+
+    while source < input.len() {
+        while quad_pos == 0 && source + 4 <= input.len() {
+            let first = table[usize::from(input[source])];
+            let second = table[usize::from(input[source + 1])];
+            let third = table[usize::from(input[source + 2])];
+            let fourth = table[usize::from(input[source + 3])];
+            if first | second | third | fourth >= 64 {
+                break;
+            }
+            if provided.saturating_sub(written) < 3 {
+                return Err(LenientDecodeError::OutputTooSmall);
+            }
+            let decoded = [
+                (first << 2) | (second >> 4),
+                (second << 4) | (third >> 2),
+                (third << 6) | fourth,
+            ];
+            unsafe {
+                output
+                    .add(written)
+                    .copy_from_nonoverlapping(decoded.as_ptr(), 3)
+            };
+            written += 3;
+            source += 4;
+        }
+        if source == input.len() {
+            break;
+        }
+
+        let byte = input[source];
+        source += 1;
+        if padded && byte == b'=' {
+            pads += 1;
+            if !continue_after_padding && quad_pos >= 2 && quad_pos + pads >= 4 {
+                return Ok(written);
+            }
+            continue;
+        }
+
+        let value = table[usize::from(byte)];
+        if value >= 64 {
+            continue;
+        }
+        pads = 0;
+        match quad_pos {
+            0 => {
+                quad_pos = 1;
+                leftchar = value;
+            }
+            1 => {
+                if written == provided {
+                    return Err(LenientDecodeError::OutputTooSmall);
+                }
+                unsafe { output.add(written).write((leftchar << 2) | (value >> 4)) };
+                written += 1;
+                quad_pos = 2;
+                leftchar = value & 0x0f;
+            }
+            2 => {
+                if written == provided {
+                    return Err(LenientDecodeError::OutputTooSmall);
+                }
+                unsafe { output.add(written).write((leftchar << 4) | (value >> 2)) };
+                written += 1;
+                quad_pos = 3;
+                leftchar = value & 0x03;
+            }
+            3 => {
+                if written == provided {
+                    return Err(LenientDecodeError::OutputTooSmall);
+                }
+                unsafe { output.add(written).write((leftchar << 6) | value) };
+                written += 1;
+                quad_pos = 0;
+                leftchar = 0;
+            }
+            _ => unreachable!("Base64 quartet position is bounded"),
+        }
+    }
+
+    if quad_pos == 1 || (padded && quad_pos != 0 && quad_pos + pads < 4) {
+        Err(LenientDecodeError::InvalidInput)
+    } else {
+        Ok(written)
+    }
+}
+
+fn try_decode_lenient<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    #[cfg(Py_GIL_DISABLED)]
+    if let Some(input) = input.snapshot_mutable() {
+        return try_decode_lenient(py, &BytesLike::Owned(input), altchars, padded);
+    }
+    let writer = BytesWriter::new(py, input.len())?;
+    let output_address = unsafe { writer.data() } as usize;
+    let table = lenient_decode_table(altchars);
+    let continue_after_padding = lenient_continues_after_padding(py);
+    let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
+    let result = unsafe {
+        input.with_bytes(|input| {
+            let decode = move || {
+                decode_lenient_to_ptr(
+                    input,
+                    output_address as *mut u8,
+                    input.len().div_ceil(4) * 3,
+                    &table,
+                    padded,
+                    continue_after_padding,
+                )
+            };
+            if detach { py.detach(decode) } else { decode() }
+        })
+    };
+    match result {
+        Ok(written) => unsafe { writer.finish(py, written).map(Some) },
+        Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => Ok(None),
+    }
+}
+
+fn try_decode_lenient_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    continue_after_padding: bool,
+) -> Option<usize> {
+    let table = lenient_decode_table(altchars);
+    if input.aliases(output) || input.requires_snapshot_for_output() {
+        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+        return with_bytearray(output, || unsafe {
+            decode_lenient_to_ptr(
+                &input,
+                bytearray_data(output.as_ptr()),
+                bytearray_size(output.as_ptr()),
+                &table,
+                padded,
+                continue_after_padding,
+            )
+            .ok()
+        });
+    }
+    unsafe {
+        input
+            .with_bytes_and_output(output, |input, output, provided| {
+                decode_lenient_to_ptr(
+                    input,
+                    output,
+                    provided,
+                    &table,
+                    padded,
+                    continue_after_padding,
+                )
+            })
+            .ok()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StrictDecodeError {
+    InvalidLayout,
+    InvalidAlphabet,
+}
+
+fn decode_strict_native<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
-) -> PyResult<Bound<'py, PyBytes>> {
+) -> PyResult<Result<Bound<'py, PyBytes>, StrictDecodeError>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable() {
-        return decode_strict(py, &BytesLike::Owned(input), alphabet);
+        return decode_strict_native(py, &BytesLike::Owned(input), alphabet);
     }
-    let layout = unsafe { input.with_bytes(decode_layout) }
-        .map_err(|_| decoding_error(py, "Incorrect padding"))?;
+    let layout = match unsafe { input.with_bytes(decode_layout) } {
+        Ok(layout) => layout,
+        Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
+            return Ok(Err(StrictDecodeError::InvalidLayout));
+        }
+    };
     let detach = input.detach_safe() && input.len() >= DETACH_THRESHOLD;
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len, |output| {
@@ -49,8 +311,34 @@ fn decode_strict<'py>(
             })
         })
     }?;
-    result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))?;
-    Ok(output)
+    Ok(match result {
+        Ok(()) => Ok(output),
+        Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
+            Err(StrictDecodeError::InvalidAlphabet)
+        }
+    })
+}
+
+fn try_decode_strict<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    alphabet: DecodeAlphabet,
+) -> PyResult<Option<Bound<'py, PyBytes>>> {
+    Ok(decode_strict_native(py, input, alphabet)?.ok())
+}
+
+fn decode_strict<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    alphabet: DecodeAlphabet,
+) -> PyResult<Bound<'py, PyBytes>> {
+    match decode_strict_native(py, input, alphabet)? {
+        Ok(output) => Ok(output),
+        Err(StrictDecodeError::InvalidLayout) => Err(decoding_error(py, "Incorrect padding")),
+        Err(StrictDecodeError::InvalidAlphabet) => {
+            Err(decoding_error(py, "Only base64 data is allowed"))
+        }
+    }
 }
 
 fn decode_strict_into(
@@ -651,12 +939,10 @@ fn try_decode_urlsafe_315<'py>(
     strict_mode: bool,
     padded: bool,
 ) -> PyResult<Option<Bound<'py, PyBytes>>> {
-    if padded || !strict_mode {
-        match decode_strict(py, input, DecodeAlphabet::UrlSafe) {
-            Ok(output) => return Ok(Some(output)),
-            Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-            Err(_) => {}
-        }
+    if (padded || !strict_mode)
+        && let Some(output) = try_decode_strict(py, input, DecodeAlphabet::UrlSafe)?
+    {
+        return Ok(Some(output));
     }
     if !padded {
         match decode_unpadded(py, input, DecodeAlphabet::UrlSafe) {
@@ -732,19 +1018,17 @@ fn decode_parsed_inner<'py>(
             Some([b'-', b'_']) => Some(DecodeAlphabet::Mixed),
             Some(_) => None,
         };
-        if let Some(alphabet) = direct {
-            match decode_strict(py, input, alphabet) {
-                Ok(output) => return Ok(output),
-                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                Err(_) => {}
-            }
-            if padded && let Some(normalized) = normalize_mime_whitespace(input)? {
-                match decode_strict(py, &BytesLike::Owned(normalized), alphabet) {
-                    Ok(output) => return Ok(output),
-                    Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                    Err(_) => {}
-                }
-            }
+        if let Some(alphabet) = direct
+            && let Some(output) = try_decode_strict(py, input, alphabet)?
+        {
+            return Ok(output);
+        }
+        if padded
+            && let Some(alphabet) = direct
+            && let Some(normalized) = normalize_mime_whitespace(input)?
+            && let Some(output) = try_decode_strict(py, &BytesLike::Owned(normalized), alphabet)?
+        {
+            return Ok(output);
         }
         if !padded {
             match decode_unpadded_with_altchars(py, input, altchars) {
@@ -752,6 +1036,9 @@ fn decode_parsed_inner<'py>(
                 Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
                 Err(_) => {}
             }
+        }
+        if let Some(output) = try_decode_lenient(py, input, altchars, padded)? {
+            return Ok(output);
         }
     }
     decode_with_binascii(
@@ -997,6 +1284,20 @@ fn decode_parsed_into_inner(
             Err(Base64Error::OutputTooSmall { .. }) => {}
             Err(Base64Error::InvalidInput) => {}
         }
+    }
+
+    if !strict_mode
+        && ignorechars.is_none()
+        && !canonical
+        && let Some(written) = try_decode_lenient_into(
+            input,
+            output,
+            altchars,
+            padded,
+            lenient_continues_after_padding(py),
+        )
+    {
+        return Ok(written);
     }
 
     let decoded = decode_with_binascii(

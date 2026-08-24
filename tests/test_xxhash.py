@@ -20,6 +20,7 @@ def test_xxh3_functions_keep_public_module_metadata() -> None:
 
 def test_xxh3_known_empty_digests_and_exports() -> None:
     assert hashcodecs.xxh3_64(b'') == 0x2D06800538D394C2
+    assert hashcodecs.xxh3_64(bytearray()) == 0x2D06800538D394C2
     assert xxhash.xxh3_64(b'') == 0x2D06800538D394C2
     assert hashcodecs.xxh3_128(b'') == 0x99AA06D3014798D86001C324468D497F
 

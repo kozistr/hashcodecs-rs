@@ -1,4 +1,4 @@
-#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::dispatch;
 use super::incremental::BlockBuffer;
 use super::primitives::{fmix64, read_partial_u64_le};

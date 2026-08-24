@@ -15,6 +15,7 @@ def test_murmur3_functions_keep_public_module_metadata() -> None:
 
 
 def test_murmur3_known_answers_and_buffer_inputs() -> None:
+    assert hashcodecs.murmur3_32(bytearray()) == 0
     assert hashcodecs.murmur3_32(b'hello') == 0x248BFA47
     assert murmur3.murmur3_32(b'hello') == 0x248BFA47
     assert hashcodecs.murmur3_32(bytearray(b'hello')) == 0x248BFA47

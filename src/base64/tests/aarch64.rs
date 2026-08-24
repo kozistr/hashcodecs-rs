@@ -114,7 +114,7 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
 fn scalar_decoded<const URLSAFE: bool, const MIXED: bool>(input: &[u8]) -> Vec<u8> {
     let table = decode_table::<URLSAFE, MIXED>();
     let mut output = Vec::with_capacity(decoded_len(input.len()));
-    for quartet in input.chunks_exact(4) {
+    for quartet in input.as_chunks::<4>().0 {
         let first = table[quartet[0] as usize];
         let second = table[quartet[1] as usize];
         let third = table[quartet[2] as usize];

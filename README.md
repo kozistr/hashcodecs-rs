@@ -10,6 +10,12 @@
 ![Total Downloads](https://img.shields.io/pepy/dt/hashcodecs?style=for-the-badge&label=Total%20Downloads)
 ![Monthly Downloads](https://img.shields.io/pypi/dm/hashcodecs?style=for-the-badge&label=Monthly%20downloads)
 
+<p align="center">
+  <a href="BENCHMARK.md">
+    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="CPython 3.12 URL-safe Base64 encoding and decoding benchmark">
+  </a>
+</p>
+
 SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust.
 
 Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs` accepts `bytes`, `bytearray`, and
@@ -149,10 +155,6 @@ equal-size inputs and include result-vector allocation.
 Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`.
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
-
-The lenient benchmark inserts MIME whitespace or ignored non-alphabet bytes and includes reusable output.
-
-[![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
 
 ### MurmurHash3: Python
 

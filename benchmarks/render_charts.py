@@ -212,16 +212,16 @@ CHARTS = (
             panel(
                 'URL-safe encode',
                 SIZES,
-                hashcodecs=[10.25, 22.60, 3.33, 4.66],
-                CPython=[0.37, 0.39, 0.33, 0.34],
-                pybase64=[0.96, 1.12, 0.84, 0.84],
+                hashcodecs=[10.25, 22.83, 3.33, 4.66],
+                CPython=[0.37, 0.41, 0.33, 0.34],
+                pybase64=[0.96, 1.19, 0.84, 0.84],
             ),
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[7.51, 14.09, 4.16, 4.36],
-                CPython=[0.47, 0.69, 0.60, 0.59],
-                pybase64=[1.13, 1.47, 1.34, 1.38],
+                hashcodecs=[7.51, 13.31, 4.16, 4.36],
+                CPython=[0.47, 0.74, 0.60, 0.59],
+                pybase64=[1.13, 1.56, 1.34, 1.38],
             ),
         ),
     ),
@@ -328,8 +328,8 @@ CHARTS = (
                 ('16 B decode', [0.49, 0.61, 0.61], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
                 ('256 B encode', [11.08, 13.25, 11.73], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
                 ('256 B decode', [6.64, 7.49, 6.81], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
-                ('4 KiB encode', [24.70, 18.24, 2.03], [20.55, 15.76, 2.46], [12.23, 8.99, 2.27], [0.46, 0.45, 0.39]),
-                ('4 KiB decode', [20.38, 19.60, 3.17], [16.03, 15.50, 11.21], [7.74, 7.62, 6.66], [1.07, 1.06, 1.05]),
+                ('4 KiB encode', [24.70, 18.24, 1.99], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
+                ('4 KiB decode', [20.38, 19.60, 14.15], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
             )
         ),
     ),
@@ -341,7 +341,7 @@ CHARTS = (
             for title, encode, decode in (
                 ('16 B items', [0.41, 0.54, 0.53], [0.40, 0.57, 0.56]),
                 ('256 B items', [5.14, 6.14, 5.98], [5.83, 7.49, 7.40]),
-                ('4 KiB items', [27.39, 27.84, 18.06], [22.22, 23.33, 17.22]),
+                ('4 KiB items', [27.39, 27.84, 18.02], [22.22, 23.33, 17.31]),
             )
         ),
     ),
@@ -592,6 +592,129 @@ def render(chart: Chart) -> str:
     return '\n'.join(chunks) + '\n'
 
 
+def chart_value(filename: str, panel_title: str, category: str, series_name: str) -> float:
+    chart = next(chart for chart in CHARTS if chart.filename == filename)
+    spec = next(spec for spec in chart.panels if spec.title == panel_title)
+    series = next(values for name, values in spec.series if name == series_name)
+    value = series[spec.categories.index(category)]
+    if value is None:
+        raise ValueError(f'missing benchmark value: {filename}, {panel_title}, {category}, {series_name}')
+    return value
+
+
+def render_performance_at_a_glance() -> str:
+    """Render like-for-like Python encode and decode benchmarks for the README."""
+    benchmarks = tuple(
+        (
+            operation,
+            tuple(
+                (
+                    implementation,
+                    chart_value('base64-python.svg', f'URL-safe {operation.lower()}', '4 KiB', implementation),
+                )
+                for implementation in ('hashcodecs', 'pybase64', 'CPython')
+            ),
+        )
+        for operation in ('Encode', 'Decode')
+    )
+    width = 1200
+    height = 460
+    panel_width = width / 2
+    label_width = 125
+    plot_width = 410
+    bar_height = 48
+    bar_gap = 30
+    first_bar_y = 178
+    axis_max = math.ceil(max(value for _, measurements in benchmarks for _, value in measurements) / 2) * 2
+    chunks = [
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
+        ),
+        '<title id="title">CPython 3.12 URL-safe Base64 throughput</title>',
+        (
+            '<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches '
+            f'{benchmarks[0][1][0][1]:.2f} GiB/s encoding and {benchmarks[1][1][0][1]:.2f} GiB/s decoding. '
+            'Both panels use the same throughput scale. Higher is better.</desc>'
+        ),
+        '<rect width="100%" height="100%" rx="18" fill="#f7faf9"/>',
+        (
+            '<text x="600" y="52" text-anchor="middle" fill="#172033" '
+            'font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="750">'
+            'Python Base64 performance at a glance</text>'
+        ),
+        (
+            '<text x="600" y="84" text-anchor="middle" fill="#465263" '
+            'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">'
+            'URL-safe · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>'
+        ),
+        '<line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>',
+    ]
+
+    for panel_index, (operation, measurements) in enumerate(benchmarks):
+        panel_x = panel_index * panel_width
+        center_x = panel_x + panel_width / 2
+        plot_x = panel_x + label_width + 35
+        ours = measurements[0][1]
+        pybase64 = measurements[1][1]
+        cpython = measurements[2][1]
+        chunks.extend(
+            (
+                (
+                    f'<text x="{center_x:.1f}" y="126" text-anchor="middle" fill="#172033" '
+                    f'font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">{operation}</text>'
+                ),
+                (
+                    f'<text x="{center_x:.1f}" y="152" text-anchor="middle" fill="#637083" '
+                    'font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">'
+                    f'{ours / cpython:.0f}&#215; CPython · {ours / pybase64:.0f}&#215; pybase64</text>'
+                ),
+            )
+        )
+
+        for series_index, (name, value) in enumerate(measurements):
+            y = first_bar_y + series_index * (bar_height + bar_gap)
+            bar_width = value / axis_max * plot_width
+            series_color = color(name, series_index)
+            label_inside = bar_width >= 150
+            value_x = plot_x + bar_width - 12 if label_inside else plot_x + bar_width + 12
+            chunks.extend(
+                (
+                    (
+                        f'<text x="{plot_x - 16:.1f}" y="{y + 32}" text-anchor="end" fill="#172033" '
+                        f'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">{esc(name)}</text>'
+                    ),
+                    (
+                        f'<rect x="{plot_x:.1f}" y="{y}" width="{plot_width}" height="{bar_height}" '
+                        'rx="8" fill="#e7ecef"/>'
+                    ),
+                    (
+                        f'<rect x="{plot_x:.1f}" y="{y}" width="{bar_width:.1f}" height="{bar_height}" '
+                        f'rx="8" fill="{series_color}"/>'
+                    ),
+                    (
+                        f'<text x="{value_x:.1f}" y="{y + 31}" '
+                        f'text-anchor="{"end" if label_inside else "start"}" '
+                        f'fill="{"#ffffff" if label_inside else "#172033"}" '
+                        'font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">'
+                        f'{value:.2f}</text>'
+                    ),
+                )
+            )
+
+    chunks.extend(
+        (
+            (
+                '<text x="600" y="433" text-anchor="middle" fill="#637083" '
+                'font-family="Segoe UI,Arial,sans-serif" font-size="12">'
+                'Intel Core Ultra 7 265K · Windows 10 x64 · pinned CPU · 15 samples</text>'
+            ),
+            '</svg>',
+        )
+    )
+    return '\n'.join(chunks) + '\n'
+
+
 def write_csv() -> None:
     with (OUTPUT / 'results.csv').open('w', newline='', encoding='utf-8') as output:
         writer = csv.writer(output, lineterminator='\n')
@@ -608,6 +731,9 @@ def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for chart in CHARTS:
         (OUTPUT / chart.filename).write_text(render(chart), encoding='utf-8', newline='\n')
+    (OUTPUT / 'performance-at-a-glance.svg').write_text(
+        render_performance_at_a_glance(), encoding='utf-8', newline='\n'
+    )
     write_csv()
 
 

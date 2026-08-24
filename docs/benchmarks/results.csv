@@ -180,27 +180,27 @@ Python Base64 throughput,Standard decode,4 KiB,pybase64,8.01
 Python Base64 throughput,Standard decode,1 MiB,pybase64,3.26
 Python Base64 throughput,Standard decode,8 MiB,pybase64,3.57
 Python Base64 throughput,URL-safe encode,1 KiB,hashcodecs,10.25
-Python Base64 throughput,URL-safe encode,4 KiB,hashcodecs,22.60
+Python Base64 throughput,URL-safe encode,4 KiB,hashcodecs,22.83
 Python Base64 throughput,URL-safe encode,1 MiB,hashcodecs,3.33
 Python Base64 throughput,URL-safe encode,8 MiB,hashcodecs,4.66
 Python Base64 throughput,URL-safe encode,1 KiB,CPython,0.37
-Python Base64 throughput,URL-safe encode,4 KiB,CPython,0.39
+Python Base64 throughput,URL-safe encode,4 KiB,CPython,0.41
 Python Base64 throughput,URL-safe encode,1 MiB,CPython,0.33
 Python Base64 throughput,URL-safe encode,8 MiB,CPython,0.34
 Python Base64 throughput,URL-safe encode,1 KiB,pybase64,0.96
-Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.12
+Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.19
 Python Base64 throughput,URL-safe encode,1 MiB,pybase64,0.84
 Python Base64 throughput,URL-safe encode,8 MiB,pybase64,0.84
 Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,7.51
-Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,14.09
+Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,13.31
 Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.16
 Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,4.36
 Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.47
-Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.69
+Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.74
 Python Base64 throughput,URL-safe decode,1 MiB,CPython,0.60
 Python Base64 throughput,URL-safe decode,8 MiB,CPython,0.59
 Python Base64 throughput,URL-safe decode,1 KiB,pybase64,1.13
-Python Base64 throughput,URL-safe decode,4 KiB,pybase64,1.47
+Python Base64 throughput,URL-safe decode,4 KiB,pybase64,1.56
 Python Base64 throughput,URL-safe decode,1 MiB,pybase64,1.34
 Python Base64 throughput,URL-safe decode,8 MiB,pybase64,1.38
 Lenient Python Base64 throughput,MIME whitespace,1 KiB,returned bytes,2.48
@@ -405,28 +405,28 @@ Python Base64 batch throughput,256 B decode,64,CPython,0.75
 Python Base64 batch throughput,256 B decode,"1,024",CPython,0.72
 Python Base64 batch throughput,4 KiB encode,8,hashcodecs,24.70
 Python Base64 batch throughput,4 KiB encode,64,hashcodecs,18.24
-Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs,2.03
+Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs,1.99
 Python Base64 batch throughput,4 KiB encode,8,hashcodecs loop,20.55
 Python Base64 batch throughput,4 KiB encode,64,hashcodecs loop,15.76
-Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs loop,2.46
+Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs loop,3.77
 Python Base64 batch throughput,4 KiB encode,8,pybase64,12.23
 Python Base64 batch throughput,4 KiB encode,64,pybase64,8.99
-Python Base64 batch throughput,4 KiB encode,"1,024",pybase64,2.27
+Python Base64 batch throughput,4 KiB encode,"1,024",pybase64,3.28
 Python Base64 batch throughput,4 KiB encode,8,CPython,0.46
 Python Base64 batch throughput,4 KiB encode,64,CPython,0.45
-Python Base64 batch throughput,4 KiB encode,"1,024",CPython,0.39
+Python Base64 batch throughput,4 KiB encode,"1,024",CPython,0.43
 Python Base64 batch throughput,4 KiB decode,8,hashcodecs,20.38
 Python Base64 batch throughput,4 KiB decode,64,hashcodecs,19.60
-Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs,3.17
+Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs,14.15
 Python Base64 batch throughput,4 KiB decode,8,hashcodecs loop,16.03
 Python Base64 batch throughput,4 KiB decode,64,hashcodecs loop,15.50
-Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs loop,11.21
+Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs loop,12.75
 Python Base64 batch throughput,4 KiB decode,8,pybase64,7.74
 Python Base64 batch throughput,4 KiB decode,64,pybase64,7.62
-Python Base64 batch throughput,4 KiB decode,"1,024",pybase64,6.66
+Python Base64 batch throughput,4 KiB decode,"1,024",pybase64,7.17
 Python Base64 batch throughput,4 KiB decode,8,CPython,1.07
 Python Base64 batch throughput,4 KiB decode,64,CPython,1.06
-Python Base64 batch throughput,4 KiB decode,"1,024",CPython,1.05
+Python Base64 batch throughput,4 KiB decode,"1,024",CPython,1.11
 Reusable Python Base64 batch buffers,16 B items,8,encode,0.41
 Reusable Python Base64 batch buffers,16 B items,64,encode,0.54
 Reusable Python Base64 batch buffers,16 B items,"1,024",encode,0.53
@@ -441,10 +441,10 @@ Reusable Python Base64 batch buffers,256 B items,64,decode,7.49
 Reusable Python Base64 batch buffers,256 B items,"1,024",decode,7.40
 Reusable Python Base64 batch buffers,4 KiB items,8,encode,27.39
 Reusable Python Base64 batch buffers,4 KiB items,64,encode,27.84
-Reusable Python Base64 batch buffers,4 KiB items,"1,024",encode,18.06
+Reusable Python Base64 batch buffers,4 KiB items,"1,024",encode,18.02
 Reusable Python Base64 batch buffers,4 KiB items,8,decode,22.22
 Reusable Python Base64 batch buffers,4 KiB items,64,decode,23.33
-Reusable Python Base64 batch buffers,4 KiB items,"1,024",decode,17.22
+Reusable Python Base64 batch buffers,4 KiB items,"1,024",decode,17.31
 Large Python Base64 batches,1 MiB items,1,returned encode,3.04
 Large Python Base64 batches,1 MiB items,2,returned encode,3.11
 Large Python Base64 batches,1 MiB items,4,returned encode,3.14

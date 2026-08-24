@@ -181,6 +181,22 @@ def run_matrix(
             )
 
 
+def encode_operations(
+    item_size: int, batch_size: int
+) -> tuple[dict[str, Callable[[], object]], list[bytes], list[bytearray]]:
+    payloads = [data(item_size) for _ in range(batch_size)]
+    encoded = [stdlib_base64.b64encode(payload) for payload in payloads]
+    outputs = [bytearray(len(value)) for value in encoded]
+    operations: dict[str, Callable[[], object]] = {
+        'returned': lambda: hashcodecs_base64.b64encode_batch(payloads),
+        'batch-into': lambda: hashcodecs_base64.b64encode_batch_into(payloads, outputs),
+        'hash-loop': lambda: [hashcodecs_base64.b64encode(item) for item in payloads],
+        'pybase64-loop': lambda: [pybase64.b64encode(item) for item in payloads],
+        'stdlib-loop': lambda: [stdlib_base64.b64encode(item) for item in payloads],
+    }
+    return operations, encoded, outputs
+
+
 def decode_operations(
     item_size: int, batch_size: int
 ) -> tuple[dict[str, Callable[[], object]], list[bytes], list[bytearray]]:
@@ -197,37 +213,55 @@ def decode_operations(
     return operations, payloads, outputs
 
 
-def check_decode_result(name: str, result: object, payloads: list[bytes], outputs: list[bytearray]) -> None:
+def check_result(name: str, result: object, expected: list[bytes], outputs: list[bytearray]) -> None:
     if name == 'batch-into':
         assert isinstance(result, list)
-        assert [bytes(output[:length]) for output, length in zip(outputs, result, strict=True)] == payloads
+        assert [bytes(output[:length]) for output, length in zip(outputs, result, strict=True)] == expected
     else:
-        assert result == payloads
+        assert result == expected
 
 
-def profile_decode(name: str, item_size: int, batch_size: int, seconds: float) -> None:
-    operations, payloads, outputs = decode_operations(item_size, batch_size)
+def profile_operation(
+    direction: str,
+    name: str,
+    item_size: int,
+    batch_size: int,
+    seconds: float,
+    discard_result: bool,
+) -> None:
+    operation_factory = encode_operations if direction == 'encode' else decode_operations
+    operations, expected, outputs = operation_factory(item_size, batch_size)
     operation = operations[name]
     result = operation()
-    check_decode_result(name, result, payloads, outputs)
+    check_result(name, result, expected, outputs)
+    if discard_result:
+        del result
     iterations = 0
     started = time.perf_counter()
     deadline = started + seconds
     while time.perf_counter() < deadline:
         for _ in range(8):
-            result = operation()
+            if discard_result:
+                operation()
+            else:
+                result = operation()
             iterations += 1
     elapsed = time.perf_counter() - started
-    check_decode_result(name, result, payloads, outputs)
+    if discard_result:
+        result = operation()
+    check_result(name, result, expected, outputs)
     rate = item_size * batch_size * iterations / elapsed
+    lifetime = 'discarded' if discard_result else 'retained'
     print(
-        f'profile operation={name} item={item_size} B batch={batch_size} iterations={iterations} '
+        f'profile direction={direction} operation={name} item={item_size} B batch={batch_size} '
+        f'lifetime={lifetime} iterations={iterations} '
         f'elapsed={elapsed:.3f} s throughput={rate / 1024**3:.2f} GiB/s'
     )
 
 
-def allocation_profile(item_size: int, batch_size: int) -> None:
-    operations, payloads, outputs = decode_operations(item_size, batch_size)
+def allocation_profile(direction: str, item_size: int, batch_size: int) -> None:
+    operation_factory = encode_operations if direction == 'encode' else decode_operations
+    operations, expected, outputs = operation_factory(item_size, batch_size)
     tracemalloc.start()
     try:
         for name in ('returned', 'batch-into', 'hash-loop'):
@@ -236,10 +270,10 @@ def allocation_profile(item_size: int, batch_size: int) -> None:
             before, _ = tracemalloc.get_traced_memory()
             result = operations[name]()
             current, peak = tracemalloc.get_traced_memory()
-            check_decode_result(name, result, payloads, outputs)
+            check_result(name, result, expected, outputs)
             retained = sys.getsizeof(result) + sum(sys.getsizeof(item) for item in result)
             print(
-                f'alloc operation={name:10} item={item_size} B batch={batch_size} '
+                f'alloc direction={direction} operation={name:10} item={item_size} B batch={batch_size} '
                 f'traced-retained={current - before:,} B traced-peak={peak - before:,} B '
                 f'result-size={retained:,} B'
             )
@@ -270,8 +304,19 @@ def main() -> None:
         default=10.0,
         help='duration for --profile-operation (default: 10)',
     )
+    parser.add_argument(
+        '--discard-profile-result',
+        action='store_true',
+        help='discard each profiler result before starting the next operation',
+    )
     profile_mode.add_argument(
-        '--allocation-profile', action='store_true', help='measure retained and peak decode allocations'
+        '--allocation-profile', action='store_true', help='measure retained and peak operation allocations'
+    )
+    parser.add_argument(
+        '--profile-direction',
+        choices=('encode', 'decode'),
+        default='decode',
+        help='operation direction for profiling modes (default: decode)',
     )
     add_timing_arguments(parser)
     arguments = parser.parse_args()
@@ -283,15 +328,24 @@ def main() -> None:
         len(item_sizes) != 1 or len(batch_sizes) != 1
     ):
         parser.error('profiling requires exactly one --item-sizes value and one --batch-sizes value')
+    if arguments.discard_profile_result and not arguments.profile_operation:
+        parser.error('--discard-profile-result requires --profile-operation')
     configure_timing(arguments.samples, arguments.minimum_sample_seconds)
 
     pin_to_one_cpu()
     gc.disable()
     try:
         if arguments.profile_operation:
-            profile_decode(arguments.profile_operation, item_sizes[0], batch_sizes[0], arguments.profile_seconds)
+            profile_operation(
+                arguments.profile_direction,
+                arguments.profile_operation,
+                item_sizes[0],
+                batch_sizes[0],
+                arguments.profile_seconds,
+                arguments.discard_profile_result,
+            )
         elif arguments.allocation_profile:
-            allocation_profile(item_sizes[0], batch_sizes[0])
+            allocation_profile(arguments.profile_direction, item_sizes[0], batch_sizes[0])
         else:
             run_matrix(item_sizes, batch_sizes, arguments.hashcodecs_only, arguments.decode_only)
     finally:

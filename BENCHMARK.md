@@ -81,6 +81,28 @@ python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --
 python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --allocation-profile
 ```
 
+### 1,024-item returned encode investigation
+
+The batch matrix discards each returned list before the next call. On CPython 3.12, encoding 1,024 inputs of 4 KiB
+reached 2.14 GiB/s under that lifetime. Retaining the previous result until the next call reached 12.61 GiB/s, while
+the hashcodecs Python loop reached 11.44 GiB/s and reusable batch output reached 18.00 GiB/s.
+
+`tracemalloc` recorded 5,637,232 bytes for the native returned batch and 5,637,840 bytes for the Python loop. The
+reusable path allocated 36,976 bytes for its returned length list. Raising the exact-bytes fast-path cutoff from
+256 bytes to the 256 KiB detach boundary produced no throughput gain. CPython's system `malloc` mode retained the
+same lifetime split: 12.02 GiB/s with the previous result alive and 2.22 GiB/s with immediate disposal.
+
+The core keeps no hidden reference to an earlier result. Such a cache would retain about 5.6 MB for this case and
+make process memory depend on the last batch. Use `b64encode_batch_into` for loops that discard each encoded batch.
+
+Reproduce the encoding profiles and choose whether the profiler retains or discards the previous result:
+
+```sh
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --profile-operation returned
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --profile-operation returned --discard-profile-result
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-direction encode --allocation-profile
+```
+
 ## Reusable Python Base64 Batch Buffers
 
 Pass one reusable `bytearray` to each item in the batch. Use the `*_batch_into` APIs.

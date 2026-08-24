@@ -61,6 +61,20 @@ Set the horizontal axis to batch size. Read total input throughput on the vertic
 
 [![Python Base64 batch throughput](docs/benchmarks/base64-python-batch.svg)](docs/benchmarks/base64-python-batch.svg)
 
+For focused runs, override the item and batch sizes directly. `--decode-only` avoids carrying encode allocator state
+into a decode investigation:
+
+```sh
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 512 768 1024 1280 2048 --decode-only
+```
+
+Use a single operation when recording a sampling profile, or compare traced allocations without a sampler:
+
+```sh
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --profile-operation returned
+python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 1024 --allocation-profile
+```
+
 ## Reusable Python Base64 Batch Buffers
 
 Pass one reusable `bytearray` to each item in the batch. Use the `*_batch_into` APIs.

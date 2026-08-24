@@ -121,6 +121,10 @@ secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-1
 `long/{aarch64,avx2,avx512,ssse3}.rs` contains the ISA kernels beside the scalar long-input flow and its CPU
 selection. Only long inputs enter those kernels.
 
+The AVX2 one-shot kernel splits each full 1,024-byte block across four accumulator chains. It also splits tails
+that contain at least four stripes, including the final overlapping stripe. The kernel reduces the chains before
+each block scramble and before the final merge.
+
 Native batches reuse the initialized secret and process inputs in groups of up to four. Two to four equal-size
 inputs longer than 240 bytes use an AVX2 batch accumulator when available; single items and mixed sizes use the
 regular paths.

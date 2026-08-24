@@ -96,20 +96,20 @@ Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,8.01
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,8.19
 Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,7.91
 Rust XXH3 throughput,XXH3-64 one-shot,64 B,hashcodecs,33.90
-Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,41.83
-Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,62.96
-Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,79.74
-Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,46.03
+Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,43.23
+Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,62.09
+Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,91.56
+Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,51.30
 Rust XXH3 throughput,XXH3-64 one-shot,64 B,upstream C,28.42
 Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,upstream C,26.27
 Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,upstream C,39.63
 Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,upstream C,48.79
 Rust XXH3 throughput,XXH3-64 one-shot,8 MiB,upstream C,38.62
 Rust XXH3 throughput,XXH3-128 one-shot,64 B,hashcodecs,11.23
-Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,34.06
-Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,57.72
-Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,79.70
-Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,46.13
+Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,41.21
+Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,69.82
+Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,92.33
+Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,51.28
 Rust XXH3 throughput,XXH3-128 one-shot,64 B,upstream C,8.40
 Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,upstream C,21.85
 Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,upstream C,37.36

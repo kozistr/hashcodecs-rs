@@ -61,52 +61,55 @@ fn one_shot(c: &mut Criterion) {
 }
 
 fn batch(c: &mut Criterion) {
-    const ITEMS: usize = 32;
-    for size in [64, 1024, 4 * 1024, 1024 * 1024] {
-        let owned = (0..ITEMS)
-            .map(|index| data(size, index as u8))
-            .collect::<Vec<_>>();
-        let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let mut group = c.benchmark_group(format!("xxh3_batch/{size}"));
-        group.throughput(Throughput::Bytes((size * ITEMS) as u64));
+    for items in [2, 3, 32] {
+        for size in [64, 1024, 4 * 1024, 1024 * 1024] {
+            let owned = (0..items)
+                .map(|index| data(size, index as u8))
+                .collect::<Vec<_>>();
+            let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let mut group = c.benchmark_group(format!("xxh3_batch/{items}_items/{size}"));
+            group.throughput(Throughput::Bytes((size * items) as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("hashcodecs_64", ITEMS),
-            &inputs,
-            |bench, inputs| bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(inputs), 42)),
-        );
-        group.bench_with_input(
-            BenchmarkId::new("upstream_c_64", ITEMS),
-            &inputs,
-            |bench, inputs| {
-                bench.iter(|| {
-                    inputs
-                        .iter()
-                        .map(|input| c_xxh3_64(black_box(input), 42))
-                        .collect::<Vec<_>>()
-                })
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("hashcodecs_128", ITEMS),
-            &inputs,
-            |bench, inputs| {
-                bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(inputs), 42))
-            },
-        );
-        group.bench_with_input(
-            BenchmarkId::new("upstream_c_128", ITEMS),
-            &inputs,
-            |bench, inputs| {
-                bench.iter(|| {
-                    inputs
-                        .iter()
-                        .map(|input| c_xxh3_128(black_box(input), 42))
-                        .collect::<Vec<_>>()
-                })
-            },
-        );
-        group.finish();
+            group.bench_with_input(
+                BenchmarkId::new("hashcodecs_64", items),
+                &inputs,
+                |bench, inputs| {
+                    bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(inputs), 42))
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new("upstream_c_64", items),
+                &inputs,
+                |bench, inputs| {
+                    bench.iter(|| {
+                        inputs
+                            .iter()
+                            .map(|input| c_xxh3_64(black_box(input), 42))
+                            .collect::<Vec<_>>()
+                    })
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new("hashcodecs_128", items),
+                &inputs,
+                |bench, inputs| {
+                    bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(inputs), 42))
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new("upstream_c_128", items),
+                &inputs,
+                |bench, inputs| {
+                    bench.iter(|| {
+                        inputs
+                            .iter()
+                            .map(|input| c_xxh3_128(black_box(input), 42))
+                            .collect::<Vec<_>>()
+                    })
+                },
+            );
+            group.finish();
+        }
     }
 }
 

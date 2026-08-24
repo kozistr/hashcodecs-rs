@@ -48,31 +48,33 @@ fn batches_match_one_shot() {
     assert_eq!(xxh3_64_batch(&mixed, 42), mixed.map(|v| xxh3_64(v, 42)));
     assert_eq!(xxh3_128_batch(&mixed, 42), mixed.map(|v| xxh3_128(v, 42)));
 
-    let owned = (0..8)
-        .map(|item| {
-            (0..4161)
-                .map(|index| (index as u8).wrapping_mul(31).wrapping_add(item))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
-    assert_eq!(
-        xxh3_64_batch(&inputs, 0x1234_5678),
-        inputs
-            .iter()
-            .map(|input| xxhash_rust::xxh3::xxh3_64_with_seed(input, 0x1234_5678))
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        xxh3_128_batch(&inputs, 0x1234_5678),
-        inputs
-            .iter()
-            .map(|input| {
-                let hash = xxhash_rust::xxh3::xxh3_128_with_seed(input, 0x1234_5678);
-                [hash as u64, (hash >> 64) as u64]
+    for item_count in 2..=8 {
+        let owned = (0..item_count)
+            .map(|item| {
+                (0..4161)
+                    .map(|index| (index as u8).wrapping_mul(31).wrapping_add(item))
+                    .collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>()
-    );
+            .collect::<Vec<_>>();
+        let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        assert_eq!(
+            xxh3_64_batch(&inputs, 0x1234_5678),
+            inputs
+                .iter()
+                .map(|input| xxhash_rust::xxh3::xxh3_64_with_seed(input, 0x1234_5678))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            xxh3_128_batch(&inputs, 0x1234_5678),
+            inputs
+                .iter()
+                .map(|input| {
+                    let hash = xxhash_rust::xxh3::xxh3_128_with_seed(input, 0x1234_5678);
+                    [hash as u64, (hash >> 64) as u64]
+                })
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 #[test]

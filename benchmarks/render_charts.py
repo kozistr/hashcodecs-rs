@@ -162,6 +162,36 @@ CHARTS = (
         ),
     ),
     Chart(
+        'xxh3-rust-batch-remainders.svg',
+        'Rust XXH3 batch remainder throughput',
+        (
+            panel(
+                'XXH3-64 batch (2 items)',
+                ['1 KiB', '4 KiB', '1 MiB'],
+                hashcodecs=[55.83, 82.69, 95.29],
+                upstream_C=[25.82, 38.78, 48.17],
+            ),
+            panel(
+                'XXH3-128 batch (2 items)',
+                ['1 KiB', '4 KiB', '1 MiB'],
+                hashcodecs=[52.14, 78.58, 94.99],
+                upstream_C=[21.10, 36.63, 48.25],
+            ),
+            panel(
+                'XXH3-64 batch (3 items)',
+                ['1 KiB', '4 KiB', '1 MiB'],
+                hashcodecs=[64.68, 86.93, 91.18],
+                upstream_C=[26.05, 39.30, 46.87],
+            ),
+            panel(
+                'XXH3-128 batch (3 items)',
+                ['1 KiB', '4 KiB', '1 MiB'],
+                hashcodecs=[55.90, 82.34, 90.77],
+                upstream_C=[21.44, 36.88, 47.47],
+            ),
+        ),
+    ),
+    Chart(
         'base64-python.svg',
         'Python Base64 throughput',
         (
@@ -384,6 +414,7 @@ OFFICIAL_SERIES = {
     'base64-rust.svg': 'base64',
     'murmur3-rust.svg': 'murmur3',
     'xxh3-rust.svg': 'upstream C',
+    'xxh3-rust-batch-remainders.svg': 'upstream C',
     'base64-python.svg': 'CPython',
     'base64-python-lenient.svg': 'CPython',
     'murmur3-python.svg': 'mmh3',

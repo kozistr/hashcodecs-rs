@@ -165,9 +165,11 @@ pub(super) fn xxh3_64_batch_into(
     output: &Bound<'_, PyByteArray>,
     seed: u64,
 ) -> PyResult<usize> {
+    let item_count = items.len();
+    with_bytearray(output, || packed_output_len(output, item_count, 8))?;
     let hashes = xxh3_64_hashes(py, items, seed)?;
     with_bytearray(output, || {
-        let written = packed_output_len(output, items.len(), 8)?;
+        let written = packed_output_len(output, hashes.len(), 8)?;
         write_packed_64(output, &hashes);
         Ok(written)
     })
@@ -179,9 +181,11 @@ pub(super) fn xxh3_128_batch_into(
     output: &Bound<'_, PyByteArray>,
     seed: u64,
 ) -> PyResult<usize> {
+    let item_count = items.len();
+    with_bytearray(output, || packed_output_len(output, item_count, 16))?;
     let hashes = xxh3_128_hashes(py, items, seed)?;
     with_bytearray(output, || {
-        let written = packed_output_len(output, items.len(), 16)?;
+        let written = packed_output_len(output, hashes.len(), 16)?;
         write_packed_128(output, &hashes);
         Ok(written)
     })

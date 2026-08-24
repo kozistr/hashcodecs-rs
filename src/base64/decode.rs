@@ -108,7 +108,11 @@ pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 ///
 #[inline]
 pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
-    Ok(decode_layout(input)?.output_len)
+    let layout = decode_layout(input)?;
+    if input[..input.len() - layout.padding].contains(&b'=') {
+        return Err(Base64Error::InvalidInput);
+    }
+    Ok(layout.output_len)
 }
 
 /// Decodes standard padded Base64 into a caller-provided destination.

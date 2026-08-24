@@ -1,6 +1,8 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 
 use pyo3::ffi;
+use pyo3::panic::PanicException;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
@@ -51,6 +53,26 @@ pub(super) unsafe fn return_function_result(
     }
 }
 
+pub(super) fn catch_unwind_callback(
+    py: Python<'_>,
+    callback: impl FnOnce() -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    match catch_unwind(AssertUnwindSafe(callback)) {
+        Ok(result) => result,
+        Err(payload) => {
+            let message = if let Some(message) = payload.downcast_ref::<String>() {
+                message.clone()
+            } else if let Some(message) = payload.downcast_ref::<&str>() {
+                (*message).to_owned()
+            } else {
+                "panic from Rust code".to_owned()
+            };
+            PanicException::new_err(message).restore(py);
+            ptr::null_mut()
+        }
+    }
+}
+
 pub(super) unsafe fn add_methods(
     module: &Bound<'_, PyModule>,
     methods: *mut ffi::PyMethodDef,
@@ -59,5 +81,21 @@ pub(super) unsafe fn add_methods(
         Err(PyErr::fetch(module.py()))
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn callback_panics_become_python_exceptions() {
+        Python::initialize();
+        Python::attach(|py| {
+            let result = catch_unwind_callback(py, || panic!("callback panic"));
+            assert!(result.is_null());
+            assert!(PyErr::occurred(py));
+            unsafe { ffi::PyErr_Clear() };
+        });
     }
 }

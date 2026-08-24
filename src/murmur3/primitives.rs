@@ -19,22 +19,34 @@ pub(super) fn fmix64(mut hash: u64) -> u64 {
 #[inline(always)]
 pub(super) fn read_u16_le(input: &[u8], offset: usize) -> u16 {
     debug_assert!(offset + 2 <= input.len());
-    unsafe { u16::from_le((input.as_ptr().add(offset).cast::<u16>()).read_unaligned()) }
+    u16::from_le_bytes(
+        input[offset..offset + 2]
+            .try_into()
+            .expect("two-byte load exceeds input"),
+    )
 }
 
 #[inline(always)]
 pub(super) fn read_u32_le(input: &[u8], offset: usize) -> u32 {
     debug_assert!(offset + 4 <= input.len());
-    // Bounds are checked by the caller. Unaligned reads avoid a temporary
-    // array and compile to one load on the x86 CPUs this crate targets.
-    unsafe { u32::from_le((input.as_ptr().add(offset).cast::<u32>()).read_unaligned()) }
+    // The checked conversion still compiles to one unaligned load when the
+    // caller's surrounding loop proves the bounds.
+    u32::from_le_bytes(
+        input[offset..offset + 4]
+            .try_into()
+            .expect("four-byte load exceeds input"),
+    )
 }
 
 #[inline(always)]
 pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
     debug_assert!(offset + 8 <= input.len());
-    // See `read_u32_le`; this is portable because `from_le` normalizes endian.
-    unsafe { u64::from_le((input.as_ptr().add(offset).cast::<u64>()).read_unaligned()) }
+    // See read_u32_le; from_le_bytes also normalizes endian.
+    u64::from_le_bytes(
+        input[offset..offset + 8]
+            .try_into()
+            .expect("eight-byte load exceeds input"),
+    )
 }
 
 #[inline(always)]

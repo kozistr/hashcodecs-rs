@@ -28,6 +28,14 @@ from ._hashcodecs import (
 )
 
 for _function in (
+    b64decode,
+    b64decode_batch,
+    b64decode_batch_into,
+    b64decode_into,
+    b64encode,
+    b64encode_batch,
+    b64encode_batch_into,
+    b64encode_into,
     standard_b64decode,
     standard_b64decode_batch,
     standard_b64decode_batch_into,

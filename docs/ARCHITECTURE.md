@@ -1,6 +1,7 @@
 # Architecture
 
-`hashcodecs` is a Rust library with a thin CPython extension and a small Python facade. The design keeps
+`hashcodecs` is a Rust library with a substantial CPython compatibility layer and a small Python facade. The
+design keeps
 algorithm correctness, CPU-specific execution, and language bindings separate so each layer can evolve without
 changing the others.
 
@@ -95,7 +96,9 @@ The API has three output models:
 
 - allocating functions return a new byte string or vector;
 - `*_into` functions write into caller-managed storage;
-- batch functions parse and validate the full operation before writing results.
+- allocating batch functions discard partial result lists on failure;
+- Base64 reusable-output batches are intentionally fail-fast and non-transactional;
+- packed XXH3 batches snapshot and hash every input before mutating their destination.
 
 Large aligned x86 encoding may use non-temporal stores after the input exceeds the detected private-cache working
 set. Smaller work stays on ordinary cached stores.
@@ -151,6 +154,10 @@ The root `hashcodecs/` package is the canonical Python source. `_hashcodecs` con
 
 Wheel tests execute the installed package, while coverage paths map that installed location back to the root source
 package.
+
+The 100% Rust line-coverage gate measures the Rust core by building without default features; the feature-gated
+CPython binding layer is behavior-tested by the Python suite but is not part of that native coverage percentage,
+the sanitizer jobs, Miri interpretation, or Kani proofs.
 
 ## Correctness and Safety
 

@@ -3,7 +3,7 @@ use pyo3::exceptions::{PyBufferError, PyTypeError, PyValueError};
 use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::sync::critical_section::with_critical_section;
+use pyo3::sync::critical_section::{with_critical_section, with_critical_section2};
 use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
@@ -87,6 +87,36 @@ impl BytesLike<'_, '_> {
         matches!(self, Self::Buffer(_))
     }
 
+    #[cfg(Py_GIL_DISABLED)]
+    pub(super) fn snapshot_mutable(&self) -> Option<Vec<u8>> {
+        match self {
+            Self::ByteArray(value) => Some(with_critical_section(value.as_any(), || unsafe {
+                bytearray_bytes(value).to_vec()
+            })),
+            Self::OwnedByteArray(value) => Some(with_critical_section(value.as_any(), || unsafe {
+                bytearray_bytes(value).to_vec()
+            })),
+            _ => None,
+        }
+    }
+
+    #[cfg(Py_GIL_DISABLED)]
+    pub(super) fn into_stable(self) -> Self {
+        match self {
+            Self::ByteArray(value) => {
+                Self::Owned(with_critical_section(value.as_any(), || unsafe {
+                    bytearray_bytes(value).to_vec()
+                }))
+            }
+            Self::OwnedByteArray(value) => {
+                Self::Owned(with_critical_section(value.as_any(), || unsafe {
+                    bytearray_bytes(&value).to_vec()
+                }))
+            }
+            stable => stable,
+        }
+    }
+
     pub(super) fn aliases(&self, output: &Bound<'_, PyByteArray>) -> bool {
         matches!(
             self,
@@ -111,6 +141,44 @@ impl BytesLike<'_, '_> {
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::Owned(bytes) => callback(bytes),
+        }
+    }
+
+    /// The callback must not run arbitrary Python or detach from the interpreter.
+    /// The caller must ensure that self and output do not alias.
+    pub(super) unsafe fn with_bytes_and_output<T>(
+        &self,
+        output: &Bound<'_, PyByteArray>,
+        callback: impl FnOnce(&[u8], *mut u8, usize) -> T,
+    ) -> T {
+        match self {
+            Self::ByteArray(value) => {
+                with_critical_section2(value.as_any(), output.as_any(), || unsafe {
+                    callback(
+                        bytearray_bytes(value),
+                        bytearray_data(output.as_ptr()),
+                        bytearray_size(output.as_ptr()),
+                    )
+                })
+            }
+            Self::OwnedByteArray(value) => {
+                with_critical_section2(value.as_any(), output.as_any(), || unsafe {
+                    callback(
+                        bytearray_bytes(value),
+                        bytearray_data(output.as_ptr()),
+                        bytearray_size(output.as_ptr()),
+                    )
+                })
+            }
+            _ => with_critical_section(output.as_any(), || unsafe {
+                self.with_bytes(|input| {
+                    callback(
+                        input,
+                        bytearray_data(output.as_ptr()),
+                        bytearray_size(output.as_ptr()),
+                    )
+                })
+            }),
         }
     }
 

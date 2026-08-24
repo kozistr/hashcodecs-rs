@@ -26,6 +26,8 @@ use alphabet::{
 };
 pub(crate) use alphabet::{DecodeAlphabet, STANDARD_ALPHABET};
 
+#[cfg(feature = "python")]
+pub(crate) use decode::DecodeLayout;
 #[cfg(any(feature = "python", test))]
 pub(crate) use decode::{
     decode_layout, decode_to_ptr_with_layout, decode_to_ptr_with_unpadded_layout,

@@ -48,7 +48,8 @@ fn batch4_long_accumulators(chunk: &[&[u8]], secret: &[u8]) -> Option<[[u64; 8];
 ///
 #[inline]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
-    let owned_secret = (seed != 0).then(|| init_secret(seed));
+    let owned_secret =
+        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
     let secret = owned_secret.as_ref().unwrap_or(&SECRET);
     let mut output = Vec::with_capacity(inputs.len());
     let (chunks, remainder) = inputs.as_chunks::<4>();
@@ -103,7 +104,8 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
 ///
 #[inline]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
-    let owned_secret = (seed != 0).then(|| init_secret(seed));
+    let owned_secret =
+        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
     let secret = owned_secret.as_ref().unwrap_or(&SECRET);
     let mut output = Vec::with_capacity(inputs.len());
     let (chunks, remainder) = inputs.as_chunks::<4>();

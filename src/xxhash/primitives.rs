@@ -26,16 +26,23 @@ pub(super) const SECRET: [u8; 192] = [
 
 #[inline(always)]
 pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
-    // SAFETY: XXH3's length-class dispatch guarantees a complete word at each
-    // offset. Kani proves the primitive for every valid offset, and Miri checks
-    // every algorithm boundary used by its callers.
-    unsafe { u32::from_le(s.as_ptr().add(o).cast::<u32>().read_unaligned()) }
+    // Length-class dispatch proves this range in optimized callers; checked
+    // indexing keeps the helper itself safe if a future caller is wrong.
+    u32::from_le_bytes(
+        s[o..o + 4]
+            .try_into()
+            .expect("four-byte load exceeds input"),
+    )
 }
 
 #[inline(always)]
 pub(super) fn u64le(s: &[u8], o: usize) -> u64 {
-    // SAFETY: See `u32le`; this is the same invariant for an eight-byte word.
-    unsafe { u64::from_le(s.as_ptr().add(o).cast::<u64>().read_unaligned()) }
+    // See u32le; this is the same invariant for an eight-byte word.
+    u64::from_le_bytes(
+        s[o..o + 8]
+            .try_into()
+            .expect("eight-byte load exceeds input"),
+    )
 }
 
 #[inline(always)]

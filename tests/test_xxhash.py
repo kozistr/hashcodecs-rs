@@ -13,6 +13,11 @@ import hashcodecs.xxhash as xxhash
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 
 
+def test_xxh3_functions_keep_public_module_metadata() -> None:
+    for name in xxhash.__all__:
+        assert getattr(xxhash, name).__module__ == 'hashcodecs.xxhash'
+
+
 def test_xxh3_known_empty_digests_and_exports() -> None:
     assert hashcodecs.xxh3_64(b'') == 0x2D06800538D394C2
     assert xxhash.xxh3_64(b'') == 0x2D06800538D394C2

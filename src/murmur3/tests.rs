@@ -1,8 +1,12 @@
 use super::primitives::read_partial_u64_le;
-use super::x64_128::{finish_x64_128, murmur3_x64_128_scalar_inner};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::x64_128::finish_x64_128;
+use super::x64_128::murmur3_x64_128_scalar_inner;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::x86;
-use super::x86_32::{finish_x86_32, murmur3_x86_32_scalar};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::x86_32::finish_x86_32;
+use super::x86_32::murmur3_x86_32_scalar;
 use super::x86_128::{finalize_x86_128, finish_x86_128, mix_x86_128_body, mix_x86_128_body_scalar};
 use super::*;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

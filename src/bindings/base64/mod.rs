@@ -16,9 +16,9 @@ use self::decode::{
 };
 use super::arguments::parse_raw_arguments;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_from_fn, list_items};
 #[cfg(not(Py_GIL_DISABLED))]
-use super::objects::{exact_bytes_at, exact_bytes_up_to};
+use super::objects::exact_bytes_up_to;
+use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_from_fn, list_items};
 use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
 use crate::base64::STANDARD_ALPHABET;
 
@@ -318,9 +318,15 @@ fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX) {
-        return list_from_fn(py, items.len(), |index| unsafe {
-            encode::encode_exact(py, exact_bytes_at(items, index), altchars, true, None)
+    if let Some(items) = exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX) {
+        // Validation retains every input before allocating the output list.
+        // Creating a GC-tracked Python object can run finalizers which mutate
+        // the original list.
+        let length = items.len();
+        let mut items = items.into_iter();
+        return list_from_fn(py, length, |_| {
+            let item = items.next().expect("batch item count is exact");
+            encode::encode_exact(py, item.as_bytes(), altchars, true, None)
         });
     }
     let items = list_items(items);

@@ -97,7 +97,7 @@ fn lenient_continues_after_padding(py: Python<'_>) -> bool {
 ///
 /// `output` must be valid for writes of `provided` bytes and must not overlap
 /// `input`.
-unsafe fn decode_lenient_to_ptr(
+unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
     input: &[u8],
     output: *mut u8,
     provided: usize,
@@ -128,11 +128,13 @@ unsafe fn decode_lenient_to_ptr(
                 (second << 4) | (third >> 2),
                 (third << 6) | fourth,
             ];
-            unsafe {
-                output
-                    .add(written)
-                    .copy_from_nonoverlapping(decoded.as_ptr(), 3)
-            };
+            if WRITE {
+                unsafe {
+                    output
+                        .add(written)
+                        .copy_from_nonoverlapping(decoded.as_ptr(), 3)
+                };
+            }
             written += 3;
             source += 4;
         }
@@ -142,7 +144,7 @@ unsafe fn decode_lenient_to_ptr(
 
         let byte = input[source];
         source += 1;
-        if padded && byte == b'=' {
+        if padded && byte == b'=' && table[usize::from(b'=')] >= 64 {
             pads += 1;
             if !continue_after_padding && quad_pos >= 2 && quad_pos + pads >= 4 {
                 return Ok(written);
@@ -164,7 +166,9 @@ unsafe fn decode_lenient_to_ptr(
                 if written == provided {
                     return Err(LenientDecodeError::OutputTooSmall);
                 }
-                unsafe { output.add(written).write((leftchar << 2) | (value >> 4)) };
+                if WRITE {
+                    unsafe { output.add(written).write((leftchar << 2) | (value >> 4)) };
+                }
                 written += 1;
                 quad_pos = 2;
                 leftchar = value & 0x0f;
@@ -173,7 +177,9 @@ unsafe fn decode_lenient_to_ptr(
                 if written == provided {
                     return Err(LenientDecodeError::OutputTooSmall);
                 }
-                unsafe { output.add(written).write((leftchar << 4) | (value >> 2)) };
+                if WRITE {
+                    unsafe { output.add(written).write((leftchar << 4) | (value >> 2)) };
+                }
                 written += 1;
                 quad_pos = 3;
                 leftchar = value & 0x03;
@@ -182,7 +188,9 @@ unsafe fn decode_lenient_to_ptr(
                 if written == provided {
                     return Err(LenientDecodeError::OutputTooSmall);
                 }
-                unsafe { output.add(written).write((leftchar << 6) | value) };
+                if WRITE {
+                    unsafe { output.add(written).write((leftchar << 6) | value) };
+                }
                 written += 1;
                 quad_pos = 0;
                 leftchar = 0;
@@ -216,7 +224,7 @@ fn try_decode_lenient<'py>(
     let result = unsafe {
         input.with_bytes(|input| {
             let decode = move || {
-                decode_lenient_to_ptr(
+                decode_lenient_to_ptr::<true>(
                     input,
                     output_address as *mut u8,
                     input.len().div_ceil(4) * 3,
@@ -240,12 +248,12 @@ fn try_decode_lenient_into(
     altchars: Option<[u8; 2]>,
     padded: bool,
     continue_after_padding: bool,
-) -> Option<usize> {
+) -> PyResult<Option<usize>> {
     let table = lenient_decode_table(altchars);
     if input.aliases(output) || input.requires_snapshot_for_output() {
         let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
         return with_bytearray(output, || unsafe {
-            decode_lenient_to_ptr(
+            decode_lenient_slice_into(
                 &input,
                 bytearray_data(output.as_ptr()),
                 bytearray_size(output.as_ptr()),
@@ -253,23 +261,69 @@ fn try_decode_lenient_into(
                 padded,
                 continue_after_padding,
             )
-            .ok()
         });
     }
     unsafe {
-        input
-            .with_bytes_and_output(output, |input, output, provided| {
-                decode_lenient_to_ptr(
-                    input,
-                    output,
-                    provided,
-                    &table,
-                    padded,
-                    continue_after_padding,
-                )
-            })
-            .ok()
+        input.with_bytes_and_output(output, |input, output, provided| {
+            decode_lenient_slice_into(
+                input,
+                output,
+                provided,
+                &table,
+                padded,
+                continue_after_padding,
+            )
+        })
     }
+}
+
+/// Decode lenient input without partially writing an undersized destination.
+///
+/// # Safety
+///
+/// `output` must be valid for writes of `provided` bytes and must not overlap
+/// `input`.
+unsafe fn decode_lenient_slice_into(
+    input: &[u8],
+    output: *mut u8,
+    provided: usize,
+    table: &[u8; 256],
+    padded: bool,
+    continue_after_padding: bool,
+) -> PyResult<Option<usize>> {
+    let maximum = input.len().div_ceil(4) * 3;
+    if provided < maximum {
+        let required = unsafe {
+            decode_lenient_to_ptr::<false>(
+                input,
+                std::ptr::NonNull::<u8>::dangling().as_ptr(),
+                usize::MAX,
+                table,
+                padded,
+                continue_after_padding,
+            )
+        };
+        match required {
+            Ok(required) if provided < required => {
+                return Err(output_too_small(required, provided));
+            }
+            Ok(_) => {}
+            Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
+                return Ok(None);
+            }
+        }
+    }
+    Ok(unsafe {
+        decode_lenient_to_ptr::<true>(
+            input,
+            output,
+            provided,
+            table,
+            padded,
+            continue_after_padding,
+        )
+    }
+    .ok())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1295,7 +1349,7 @@ fn decode_parsed_into_inner(
             altchars,
             padded,
             lenient_continues_after_padding(py),
-        )
+        )?
     {
         return Ok(written);
     }

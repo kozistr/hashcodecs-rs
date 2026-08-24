@@ -2,6 +2,8 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::PyMemoryError;
 use pyo3::ffi;
 use pyo3::prelude::*;
+#[cfg(not(Py_GIL_DISABLED))]
+use pyo3::types::PyBytes;
 use pyo3::types::PyList;
 
 pub(super) fn list_from_fn<'py, T>(
@@ -27,13 +29,21 @@ where
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-pub(super) fn exact_bytes_up_to(items: &Bound<'_, PyList>, max_length: usize) -> bool {
+pub(super) fn exact_bytes_up_to<'py>(
+    items: &Bound<'py, PyList>,
+    max_length: usize,
+) -> Option<Vec<Bound<'py, PyBytes>>> {
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
-        (0..length).all(|index| {
+        let mut values = Vec::with_capacity(length as usize);
+        for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index);
-            ffi::PyBytes_CheckExact(item) != 0 && ffi::Py_SIZE(item) as usize <= max_length
-        })
+            if ffi::PyBytes_CheckExact(item) == 0 || ffi::Py_SIZE(item) as usize > max_length {
+                return None;
+            }
+            values.push(Bound::from_borrowed_ptr(items.py(), item).cast_into_unchecked());
+        }
+        Some(values)
     }
 }
 
@@ -83,10 +93,13 @@ pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> Vec<Bound<'py, PyAn
 #[inline]
 pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
     #[cfg(Py_GIL_DISABLED)]
-    return unsafe { ffi::PyByteArray_AsString(value).cast() };
+    let data: *mut u8 = unsafe { ffi::PyByteArray_AsString(value).cast() };
     #[cfg(not(Py_GIL_DISABLED))]
-    unsafe {
-        ffi::PyByteArray_AS_STRING(value).cast()
+    let data: *mut u8 = unsafe { ffi::PyByteArray_AS_STRING(value).cast() };
+    if data.is_null() {
+        std::ptr::NonNull::<u8>::dangling().as_ptr()
+    } else {
+        data
     }
 }
 
@@ -113,4 +126,22 @@ pub(super) unsafe fn bytes_data_mut(value: *mut ffi::PyObject) -> *mut u8 {
 #[inline]
 pub(super) unsafe fn bytes_size(value: *mut ffi::PyObject) -> usize {
     unsafe { ffi::Py_SIZE(value) as usize }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::types::PyByteArray;
+
+    #[test]
+    fn empty_bytearray_has_a_valid_zero_length_rust_pointer() {
+        Python::initialize();
+        Python::attach(|py| {
+            let value = PyByteArray::new(py, b"");
+            let data = unsafe { bytearray_data(value.as_ptr()) };
+            assert!(!data.is_null());
+            assert_eq!(unsafe { bytearray_size(value.as_ptr()) }, 0);
+            assert!(unsafe { std::slice::from_raw_parts_mut(data, 0) }.is_empty());
+        });
+    }
 }

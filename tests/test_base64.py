@@ -311,8 +311,10 @@ def test_base64_into_variants_and_errors() -> None:
         base64.b64encode_into(b'abc', bytearray(3))
     with pytest.raises(ValueError, match='requires 3 bytes'):
         base64.b64decode_into(b'YWJj', bytearray(2), validate=True)
+    undersized = bytearray(b'XX')
     with pytest.raises(ValueError, match='requires 3 bytes'):
-        base64.b64decode_into(b'Y W\nJj', bytearray(2))
+        base64.b64decode_into(b'Y!WJj', undersized)
+    assert undersized == b'XX'
     with pytest.raises(binascii.Error):
         base64.b64decode_into(b'YWJj!', bytearray(8), validate=True)
     with pytest.raises(TypeError):
@@ -322,6 +324,12 @@ def test_base64_into_variants_and_errors() -> None:
 
 
 def test_base64_into_handles_aliases_and_every_short_length() -> None:
+    empty = bytearray()
+    assert base64.b64encode(empty) == b''
+    assert base64.b64decode(empty) == b''
+    assert base64.b64encode_into(empty, empty) == 0
+    assert base64.b64decode_into(empty, empty) == 0
+
     shared = bytearray(8)
     shared[:3] = b'abc'
     assert base64.b64encode_into(memoryview(shared)[:3], shared) == 4
@@ -397,6 +405,23 @@ def test_common_lenient_decoding_does_not_call_binascii(monkeypatch: pytest.Monk
     outputs = [bytearray(b'....'), bytearray(b'....')]
     assert base64.b64decode_batch_into([noisy, b'Z GVm'], outputs) == [3, 3]
     assert outputs == [b'abc.', b'def.']
+
+
+@pytest.mark.parametrize('altchars', [b'=_', b'_=', b'=='])
+@pytest.mark.parametrize('encoded', [b'=', b'====', b'AA==', b'A===', b'YQ=='])
+def test_lenient_decode_treats_custom_equals_as_alphabet(encoded: bytes, altchars: bytes) -> None:
+    try:
+        expected = stdlib_base64.b64decode(encoded, altchars)
+    except binascii.Error:
+        with pytest.raises(binascii.Error):
+            base64.b64decode(encoded, altchars)
+        with pytest.raises(binascii.Error):
+            base64.b64decode_into(encoded, bytearray(16), altchars)
+    else:
+        assert base64.b64decode(encoded, altchars) == expected
+        output = bytearray(len(expected))
+        assert base64.b64decode_into(encoded, output, altchars) == len(expected)
+        assert output == expected
 
 
 @pytest.mark.parametrize(
@@ -523,7 +548,7 @@ def test_decode_edge_cases_match_cpython(value: bytes, altchars: bytes | None, v
 def test_generated_lenient_inputs_match_cpython() -> None:
     generator = random.Random(0xB64DEC0DE)
     alphabet = b'ABab09+/=_! \r\n-@#'
-    altchars_cases = (None, b'+/', b'-_', b'@#', b'++', b'A_')
+    altchars_cases = (None, b'+/', b'-_', b'@#', b'++', b'A_', b'=_', b'_=', b'==')
 
     for _ in range(2_000):
         value = bytes(generator.choice(alphabet) for _ in range(generator.randrange(33)))
@@ -720,10 +745,19 @@ def test_base64_functions_are_native_and_keep_public_metadata() -> None:
         assert function.__doc__
 
 
-def test_b64decode_into_signature_does_not_advertise_none_for_ignorechars() -> None:
-    assert inspect.signature(base64.b64decode_into).parameters['ignorechars'].default is not None
+def test_b64decode_into_signature_does_not_advertise_sentinel_defaults_as_none() -> None:
+    parameters = inspect.signature(base64.b64decode_into).parameters
+    assert parameters['validate'].default is not None
+    assert parameters['ignorechars'].default is not None
     with pytest.raises(TypeError):
         base64.b64decode_into(b'YWJj', bytearray(3), ignorechars=None)
+
+    omitted = bytearray(3)
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(b'YWJj!', omitted, ignorechars=b'')
+    explicit_none = bytearray(3)
+    assert base64.b64decode_into(b'YWJj!', explicit_none, validate=None, ignorechars=b'') == 3
+    assert explicit_none == b'abc'
 
 
 def test_python_315_decode_options_are_backported() -> None:

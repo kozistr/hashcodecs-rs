@@ -397,7 +397,7 @@ Examples:
             PyCFunctionFastWithKeywords: b64decode_into,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"b64decode_into($module, /, s, output, altchars=None, validate=None, *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
+        ml_doc: cr"b64decode_into($module, /, s, output, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
 --
 
 Decode Base64 data into a reusable bytearray.

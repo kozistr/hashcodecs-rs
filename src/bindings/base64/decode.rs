@@ -3,11 +3,11 @@ use core::slice;
 use pyo3::exceptions::{PyDeprecationWarning, PyFutureWarning, PyMemoryError};
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyDict, PyList, PyType};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyInt, PyList, PyType};
 
 use super::{
-    STANDARD_ALPHABET, batch_outputs, batch_results, output_too_small, parse_altchars,
-    pybytes_with_len, python_at_least, with_output_ptr,
+    STANDARD_ALPHABET, batch_outputs, output_too_small, parse_altchars, pybytes_with_len,
+    python_at_least, with_output_ptr,
 };
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
@@ -17,7 +17,7 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
-use crate::bindings::objects::{bytearray_data, bytearray_size, list_items};
+use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
 use crate::bindings::runtime::DETACH_THRESHOLD;
 
 fn decode_strict<'py>(
@@ -849,14 +849,14 @@ fn b64decode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
-    let mut decoded = batch_results(items.len())?;
-    for item in list_items(items) {
+    let items = list_items(items);
+    let length = items.len();
+    let mut items = items.into_iter();
+    list_from_fn(py, length, |_| {
+        let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        decoded.push(decode_parsed(
-            py, &input, altchars, validate, true, None, false,
-        )?);
-    }
-    PyList::new(py, decoded)
+        decode_parsed(py, &input, altchars, validate, true, None, false)
+    })
 }
 
 pub(super) fn standard_b64decode_batch<'py>(
@@ -1037,15 +1037,18 @@ fn b64decode_batch_into_parsed<'py>(
     altchars: Option<[u8; 2]>,
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
+    let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut written = batch_results(items.len())?;
-    for (item, output) in list_items(items).into_iter().zip(outputs.iter()) {
+    let length = items.len();
+    let mut pairs = items.into_iter().zip(outputs.iter());
+    list_from_fn(py, length, |_| {
+        let (item, output) = pairs.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        written.push(decode_parsed_into(
-            py, &input, output, altchars, validate, true, None, false,
-        )?);
-    }
-    PyList::new(py, written)
+        Ok(PyInt::new(
+            py,
+            decode_parsed_into(py, &input, output, altchars, validate, true, None, false)?,
+        ))
+    })
 }
 
 pub(super) fn standard_b64decode_batch_into<'py>(

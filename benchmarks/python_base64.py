@@ -73,6 +73,11 @@ def main() -> None:
         help='time hashcodecs with full immutable memoryview inputs',
     )
     mode.add_argument(
+        '--sliced-memoryview-input',
+        action='store_true',
+        help='time hashcodecs with nonzero-offset immutable memoryview inputs',
+    )
+    mode.add_argument(
         '--lenient',
         action='store_true',
         help='time MIME-wrapped and noisy lenient decoding',
@@ -151,25 +156,33 @@ def main() -> None:
                 )
                 continue
 
-            if args.memoryview_input:
-                payload_view = memoryview(payload)
-                standard_view = memoryview(standard)
+            if args.memoryview_input or args.sliced_memoryview_input:
+                if args.sliced_memoryview_input:
+                    payload_owner = b'\xa5' + payload + b'\x5a'
+                    standard_owner = b'!' + standard + b'!'
+                    payload_view = memoryview(payload_owner)[1:-1]
+                    standard_view = memoryview(standard_owner)[1:-1]
+                    input_label = 'sliced memoryview'
+                else:
+                    payload_view = memoryview(payload)
+                    standard_view = memoryview(standard)
+                    input_label = 'memoryview'
                 encoded_output = bytearray(len(standard))
                 decoded_output = bytearray(size)
                 benchmark_ours(
-                    'memoryview encode',
+                    f'{input_label} encode',
                     size,
                     lambda payload=payload_view: hashcodecs_base64.b64encode(payload),
                     standard,
                 )
                 benchmark_ours(
-                    'memoryview decode',
+                    f'{input_label} decode',
                     size,
                     lambda standard=standard_view: hashcodecs_base64.b64decode(standard, validate=True),
                     payload,
                 )
                 benchmark_into(
-                    'memoryview encode into',
+                    f'{input_label} encode into',
                     size,
                     lambda payload=payload_view, output=encoded_output: hashcodecs_base64.b64encode_into(
                         payload, output
@@ -178,7 +191,7 @@ def main() -> None:
                     standard,
                 )
                 benchmark_into(
-                    'memoryview decode into',
+                    f'{input_label} decode into',
                     size,
                     lambda standard=standard_view, output=decoded_output: hashcodecs_base64.b64decode_into(
                         standard, output, validate=True

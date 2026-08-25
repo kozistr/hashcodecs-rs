@@ -304,11 +304,13 @@ fn exact_memoryview_bytes_like<'a, 'py>(
     } else {
         false
     };
+
     if require_contiguous && !contiguous {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",
         ));
     }
+
     if contiguous && try_owner {
         let owner = memoryview.getattr(intern!(py, "obj"))?;
         if PyBytes::is_exact_type_of(&owner) {
@@ -323,23 +325,28 @@ fn exact_memoryview_bytes_like<'a, 'py>(
             }
         }
     }
+
     #[cfg(not(Py_GIL_DISABLED))]
-    if contiguous {
-        return borrowed_contiguous_buffer(memoryview.as_any()).map(BytesLike::Buffer);
+    if let Some(buffer) = borrowed_contiguous_buffer(memoryview.as_any()) {
+        return Ok(BytesLike::Buffer(buffer));
     }
+
     copy_memoryview(memoryview, false).map(BytesLike::OwnedBytes)
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> PyResult<BorrowedBuffer<'py>> {
+fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> Option<BorrowedBuffer<'py>> {
     let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+
     if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &mut view, ffi::PyBUF_CONTIG_RO) } == 0 {
-        return Ok(BorrowedBuffer {
+        return Some(BorrowedBuffer {
             view,
             _python: std::marker::PhantomData,
         });
     }
-    Err(PyErr::fetch(value.py()))
+
+    unsafe { ffi::PyErr_Clear() };
+    None
 }
 
 fn copy_memoryview<'py>(

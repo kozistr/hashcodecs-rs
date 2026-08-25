@@ -261,18 +261,21 @@ unsafe fn lenient_symbol_count_neon(input: &[u8], altchars: Option<[u8; 2]>) -> 
 fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        if std::is_x86_feature_detected!("avx2") {
+        if input.len() >= 32 && std::is_x86_feature_detected!("avx2") {
             return unsafe { lenient_count_x86::avx2(input, altchars) };
         }
-        if std::is_x86_feature_detected!("sse2") {
+        if input.len() >= 16 && std::is_x86_feature_detected!("sse2") {
             return unsafe { lenient_count_x86::sse2(input, altchars) };
         }
     }
+
     #[cfg(target_arch = "aarch64")]
     {
-        return unsafe { lenient_symbol_count_neon(input, altchars) };
+        if input.len() >= 16 {
+            return unsafe { lenient_symbol_count_neon(input, altchars) };
+        }
     }
-    #[allow(unreachable_code)]
+
     input
         .iter()
         .filter(|&&byte| is_lenient_symbol(byte, altchars))

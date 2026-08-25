@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import subprocess
 from pathlib import Path
@@ -33,7 +34,10 @@ class CustomBuildHook(BuildHookInterface[Any]):
             cwd=root,
         )
 
-        extension = root / 'target' / 'release' / self._library_name()
+        target_dir = Path(os.environ.get('CARGO_TARGET_DIR', root / 'target'))
+        if not target_dir.is_absolute():
+            target_dir = root / target_dir
+        extension = target_dir / 'release' / self._library_name()
         build_data['force_include'] = {str(extension): f'hashcodecs/_hashcodecs{self._extension_suffix()}'}
         build_data['pure_python'] = False
         build_data['tag'] = self._wheel_tag()

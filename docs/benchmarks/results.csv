@@ -339,22 +339,38 @@ Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,8.75
 Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,15.33
 Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,20.81
 Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,17.46
-Python Base64 memoryview inputs,Encode,1 KiB,returned bytes,6.24
-Python Base64 memoryview inputs,Encode,4 KiB,returned bytes,19.96
-Python Base64 memoryview inputs,Encode,1 MiB,returned bytes,3.88
-Python Base64 memoryview inputs,Encode,8 MiB,returned bytes,4.71
-Python Base64 memoryview inputs,Encode,1 KiB,reusable bytearray,7.16
-Python Base64 memoryview inputs,Encode,4 KiB,reusable bytearray,22.76
-Python Base64 memoryview inputs,Encode,1 MiB,reusable bytearray,40.06
-Python Base64 memoryview inputs,Encode,8 MiB,reusable bytearray,30.37
-Python Base64 memoryview inputs,Decode,1 KiB,returned bytes,5.60
-Python Base64 memoryview inputs,Decode,4 KiB,returned bytes,15.62
-Python Base64 memoryview inputs,Decode,1 MiB,returned bytes,4.48
-Python Base64 memoryview inputs,Decode,8 MiB,returned bytes,4.11
-Python Base64 memoryview inputs,Decode,1 KiB,reusable bytearray,6.21
-Python Base64 memoryview inputs,Decode,4 KiB,reusable bytearray,17.20
-Python Base64 memoryview inputs,Decode,1 MiB,reusable bytearray,29.38
-Python Base64 memoryview inputs,Decode,8 MiB,reusable bytearray,19.51
+Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,full view,6.24
+Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,full view,19.96
+Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,full view,3.88
+Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,full view,4.71
+Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,nonzero offset,8.11
+Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,nonzero offset,18.84
+Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,nonzero offset,3.59
+Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,nonzero offset,4.05
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,full view,7.16
+Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,full view,22.76
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,full view,40.06
+Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,full view,30.37
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,nonzero offset,8.32
+Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,nonzero offset,17.59
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,nonzero offset,22.60
+Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,nonzero offset,11.18
+Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,full view,5.60
+Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,full view,15.62
+Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,full view,4.48
+Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,full view,4.11
+Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,nonzero offset,7.16
+Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,nonzero offset,14.90
+Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,nonzero offset,4.11
+Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,nonzero offset,4.95
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,full view,6.21
+Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,full view,17.20
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,full view,29.38
+Python Base64 memoryview inputs,"Decode, reusable bytearray",8 MiB,full view,19.51
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,nonzero offset,6.78
+Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,nonzero offset,13.74
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,nonzero offset,15.15
+Python Base64 memoryview inputs,"Decode, reusable bytearray",8 MiB,nonzero offset,8.19
 Python Base64 batch throughput,16 B encode,8,hashcodecs,0.95
 Python Base64 batch throughput,16 B encode,64,hashcodecs,1.39
 Python Base64 batch throughput,16 B encode,"1,024",hashcodecs,1.42

@@ -21,6 +21,10 @@ use crate::bindings::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, 
 use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
+use self::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
+
+mod plan;
+
 struct BytesWriter(*mut ffi::compat::PyBytesWriter);
 
 impl BytesWriter {
@@ -955,38 +959,6 @@ fn strict_base64_310(input: &[u8]) -> bool {
         && input[padding..].iter().all(|&byte| byte == b'=')
 }
 
-fn decode_parsed<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
-    ignorechars: Option<&Bound<'py, PyAny>>,
-    canonical: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
-    if ignorechars.is_none()
-        && !canonical
-        && altchars == Some(*b"-_")
-        && python_at_least(py, (3, 15))
-        && let Some(output) = try_decode_urlsafe_315(py, input, strict_mode, padded)?
-    {
-        // A successful strict URL-safe decode proves that no legacy `+` or
-        // `/` characters were present, so no warning scan is necessary.
-        return Ok(output);
-    }
-    let output = decode_parsed_inner(
-        py,
-        input,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )?;
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
-    Ok(output)
-}
-
 fn try_decode_urlsafe_315<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
@@ -1008,16 +980,19 @@ fn try_decode_urlsafe_315<'py>(
     Ok(None)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn decode_parsed_inner<'py>(
+fn decode_plan_allocating_inner<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
-    altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
-    ignorechars: Option<&Bound<'py, PyAny>>,
-    canonical: bool,
+    options: DecodeOptions<'_, 'py>,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let DecodeOptions {
+        altchars,
+        padded,
+        ignorechars,
+        canonical,
+        ..
+    } = options;
+    let strict_mode = options.strict_mode();
     let empty_ignorechars = ignorechars.is_some_and(|value| {
         value
             .cast::<PyBytes>()
@@ -1117,16 +1092,10 @@ pub(super) fn b64decode<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
-    let strict_mode = validate.unwrap_or(ignorechars.is_some());
-    decode_parsed(
-        py,
-        &input,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )
+    let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
+    DecodePlan::new(&input, options)
+        .execute(py, DecodeExecution::Allocate)
+        .map(DecodeOutput::into_bytes)
 }
 
 /// Decode with the standard Base64 alphabet.
@@ -1135,7 +1104,9 @@ pub(super) fn standard_b64decode<'py>(
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    decode_parsed(py, &input, None, false, true, None, false)
+    DecodePlan::new(&input, DecodeOptions::standard())
+        .execute(py, DecodeExecution::Allocate)
+        .map(DecodeOutput::into_bytes)
 }
 
 /// Decode standard Base64 into a reusable output.
@@ -1145,7 +1116,9 @@ pub(super) fn standard_b64decode_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    decode_parsed_into(py, &input, output, None, false, true, None, false)
+    DecodePlan::new(&input, DecodeOptions::standard())
+        .execute(py, DecodeExecution::Into(output))
+        .map(DecodeOutput::into_written)
 }
 
 pub(super) fn urlsafe_b64decode<'py>(
@@ -1154,7 +1127,9 @@ pub(super) fn urlsafe_b64decode<'py>(
     padded: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    decode_parsed(py, &input, Some(*b"-_"), false, padded, None, false)
+    DecodePlan::new(&input, DecodeOptions::urlsafe(padded))
+        .execute(py, DecodeExecution::Allocate)
+        .map(DecodeOutput::into_bytes)
 }
 
 pub(super) fn urlsafe_b64decode_into(
@@ -1164,7 +1139,9 @@ pub(super) fn urlsafe_b64decode_into(
     padded: bool,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    decode_parsed_into(py, &input, output, Some(*b"-_"), false, padded, None, false)
+    DecodePlan::new(&input, DecodeOptions::urlsafe(padded))
+        .execute(py, DecodeExecution::Into(output))
+        .map(DecodeOutput::into_written)
 }
 
 /// Decode each ASCII string or bytes-like item and return results in input order.
@@ -1193,10 +1170,13 @@ fn b64decode_batch_parsed<'py>(
     let items = list_items(items);
     let length = items.len();
     let mut items = items.into_iter();
+    let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        decode_parsed(py, &input, altchars, validate, true, None, false)
+        DecodePlan::new(&input, options)
+            .execute(py, DecodeExecution::Allocate)
+            .map(DecodeOutput::into_bytes)
     })
 }
 
@@ -1212,40 +1192,6 @@ pub(super) fn urlsafe_b64decode_batch<'py>(
     items: &Bound<'py, PyList>,
 ) -> PyResult<Bound<'py, PyList>> {
     b64decode_batch_parsed(py, items, Some(*b"-_"), false)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn decode_parsed_into(
-    py: Python<'_>,
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
-    ignorechars: Option<&Bound<'_, PyAny>>,
-    canonical: bool,
-) -> PyResult<usize> {
-    if ignorechars.is_none()
-        && !canonical
-        && altchars == Some(*b"-_")
-        && python_at_least(py, (3, 15))
-        && let Some(written) = try_decode_urlsafe_315_into(input, output, strict_mode, padded)?
-    {
-        // The strict URL-safe decoder rejects legacy standard-alphabet bytes.
-        return Ok(written);
-    }
-    let written = decode_parsed_into_inner(
-        py,
-        input,
-        output,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )?;
-    warn_legacy_altchars(py, input, altchars, ignorechars.is_some(), strict_mode)?;
-    Ok(written)
 }
 
 fn try_decode_urlsafe_315_into(
@@ -1276,17 +1222,20 @@ fn try_decode_urlsafe_315_into(
     Ok(None)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn decode_parsed_into_inner(
+fn decode_plan_into_inner(
     py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
-    ignorechars: Option<&Bound<'_, PyAny>>,
-    canonical: bool,
+    options: DecodeOptions<'_, '_>,
 ) -> PyResult<usize> {
+    let DecodeOptions {
+        altchars,
+        padded,
+        ignorechars,
+        canonical,
+        ..
+    } = options;
+    let strict_mode = options.strict_mode();
     let transactional_errors = !strict_mode;
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
@@ -1396,12 +1345,15 @@ fn b64decode_batch_into_parsed<'py>(
     let outputs = batch_outputs(items.len(), outputs)?;
     let length = items.len();
     let mut pairs = items.into_iter().zip(outputs.iter());
+    let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, length, |_| {
         let (item, output) = pairs.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
         Ok(PyInt::new(
             py,
-            decode_parsed_into(py, &input, output, altchars, validate, true, None, false)?,
+            DecodePlan::new(&input, options)
+                .execute(py, DecodeExecution::Into(output))?
+                .into_written(),
         ))
     })
 }
@@ -1435,15 +1387,8 @@ pub(super) fn b64decode_into(
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
-    let strict_mode = validate.unwrap_or(ignorechars.is_some());
-    decode_parsed_into(
-        py,
-        &input,
-        output,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )
+    let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
+    DecodePlan::new(&input, options)
+        .execute(py, DecodeExecution::Into(output))
+        .map(DecodeOutput::into_written)
 }

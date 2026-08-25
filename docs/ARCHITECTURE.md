@@ -161,16 +161,18 @@ writing and preserve bytes beyond the returned length.
 
 ## Python Package
 
-The root `hashcodecs/` package is the canonical Python source. `_hashcodecs` contains the native extension surface;
-`base64.py`, `murmur3.py`, and `xxhash.py` organize exports without adding per-call wrappers. `_hashcodecs.pyi` and
-`py.typed` make the native API visible to type checkers.
+The typed `_hashcodecs.pyi` declaration is the canonical Python API description. It drives the public modules,
+package exports, module stubs, native text signatures and docstrings, and API-reference member lists through
+`tools/generate_api_metadata.py`. The generated `base64.py`, `murmur3.py`, and `xxhash.py` modules organize exports
+without adding per-call wrappers. `py.typed` makes the declarations visible to type checkers.
 
 Wheel tests execute the installed package, while coverage paths map that installed location back to the root source
 package.
 
-The 100% Rust line-coverage gate measures the Rust core by building without default features; the feature-gated
-CPython binding layer is behavior-tested by the Python suite but is not part of that native coverage percentage,
-the sanitizer jobs, Miri interpretation, or Kani proofs.
+The 100% Rust line-coverage gate continues to measure the Rust core without default features. A separate coverage
+job builds an instrumented CPython extension, runs the Python suite through it, and uploads the binding-layer Rust
+coverage under its own `rust-bindings` flag. The feature-gated binding layer remains outside the core percentage,
+the sanitizer jobs, Miri interpretation, and Kani proofs.
 
 ## Correctness and Safety
 

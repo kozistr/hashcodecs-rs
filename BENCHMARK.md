@@ -57,7 +57,9 @@ noisy cases insert `!` at the same boundaries. Both cases measure returned bytes
 
 ## Python Memoryview Inputs
 
-Use full immutable memoryviews for inputs of at least 64 KiB.
+Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length views with a
+nonzero starting offset. The latter covers the copy/stabilization path used by slices while keeping the encoded data
+identical.
 
 [![Python Base64 memoryview inputs](docs/benchmarks/base64-python-memoryview.svg)](docs/benchmarks/base64-python-memoryview.svg)
 

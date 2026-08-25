@@ -35,6 +35,8 @@ COLORS = {
     'reusable decode': '#d55e00',
     'encode': '#007f73',
     'decode': '#356ac3',
+    'full view': '#007f73',
+    'nonzero offset': '#d55e00',
 }
 FALLBACK_COLORS = ('#007f73', '#d55e00', '#356ac3', '#8f4a73', '#a86f00', '#637083')
 
@@ -303,16 +305,28 @@ CHARTS = (
         'Python Base64 memoryview inputs',
         (
             panel(
-                'Encode',
+                'Encode, returned bytes',
                 SIZES,
-                returned_bytes=[6.24, 19.96, 3.88, 4.71],
-                reusable_bytearray=[7.16, 22.76, 40.06, 30.37],
+                full_view=[6.24, 19.96, 3.88, 4.71],
+                nonzero_offset=[8.11, 18.84, 3.59, 4.05],
             ),
             panel(
-                'Decode',
+                'Encode, reusable bytearray',
                 SIZES,
-                returned_bytes=[5.60, 15.62, 4.48, 4.11],
-                reusable_bytearray=[6.21, 17.20, 29.38, 19.51],
+                full_view=[7.16, 22.76, 40.06, 30.37],
+                nonzero_offset=[8.32, 17.59, 22.60, 11.18],
+            ),
+            panel(
+                'Decode, returned bytes',
+                SIZES,
+                full_view=[5.60, 15.62, 4.48, 4.11],
+                nonzero_offset=[7.16, 14.90, 4.11, 4.95],
+            ),
+            panel(
+                'Decode, reusable bytearray',
+                SIZES,
+                full_view=[6.21, 17.20, 29.38, 19.51],
+                nonzero_offset=[6.78, 13.74, 15.15, 8.19],
             ),
         ),
     ),

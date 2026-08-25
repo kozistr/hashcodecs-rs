@@ -12,12 +12,13 @@ static mut METHODS: [ffi::PyMethodDef; 4] = [
             PyCFunctionFastWithKeywords: murmur3_32,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"murmur3_32($module, /, s, seed=0)
+        ml_doc: cr###"murmur3_32($module, /, s, seed=0)
 --
 
 Compute the canonical MurmurHash3 x86 32-bit hash.
 
-MurmurHash3 is fast but non-cryptographic.
+MurmurHash3 is a fast non-cryptographic hash. The result is compatible with
+the original x86-32 reference algorithm.
 
 Args:
     s: Contiguous bytes-like data to hash.
@@ -32,7 +33,7 @@ Raises:
 
 Examples:
     >>> hex(murmur3_32(b'hello'))
-    '0x248bfa47'"
+    '0x248bfa47'"###
             .as_ptr(),
     },
     ffi::PyMethodDef {
@@ -41,7 +42,7 @@ Examples:
             PyCFunctionFastWithKeywords: murmur3_x86_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"murmur3_x86_128_digest($module, /, s, seed=0)
+        ml_doc: cr###"murmur3_x86_128_digest($module, /, s, seed=0)
 --
 
 Compute the canonical MurmurHash3 x86 128-bit digest.
@@ -61,8 +62,8 @@ Raises:
 
 Examples:
     >>> len(murmur3_x86_128_digest(b'hello'))
-    16"
-        .as_ptr(),
+    16"###
+            .as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"murmur3_x64_128_digest".as_ptr(),
@@ -70,7 +71,7 @@ Examples:
             PyCFunctionFastWithKeywords: murmur3_x64_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"murmur3_x64_128_digest($module, /, s, seed=0)
+        ml_doc: cr###"murmur3_x64_128_digest($module, /, s, seed=0)
 --
 
 Compute the canonical MurmurHash3 x64 128-bit digest.
@@ -90,8 +91,8 @@ Raises:
 
 Examples:
     >>> len(murmur3_x64_128_digest(b'hello'))
-    16"
-        .as_ptr(),
+    16"###
+            .as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),
 ];

@@ -15,12 +15,12 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
             PyCFunctionFastWithKeywords: xxh3_64_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_64($module, /, s, seed=0)
+        ml_doc: cr###"xxh3_64($module, /, s, seed=0)
 --
 
 Compute the canonical XXH3 64-bit hash.
 
-XXH3 is fast but non-cryptographic.
+XXH3 is a non-cryptographic hash designed for speed.
 
 Args:
     s: Contiguous bytes-like data to hash.
@@ -35,7 +35,7 @@ Raises:
 
 Examples:
     >>> hex(xxh3_64(b''))
-    '0x2d06800538d394c2'"
+    '0x2d06800538d394c2'"###
             .as_ptr(),
     },
     ffi::PyMethodDef {
@@ -44,12 +44,13 @@ Examples:
             PyCFunctionFastWithKeywords: xxh3_128_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_128($module, /, s, seed=0)
+        ml_doc: cr###"xxh3_128($module, /, s, seed=0)
 --
 
 Compute the canonical XXH3 128-bit hash.
 
-The low word occupies the least significant half. XXH3 is non-cryptographic.
+The low 64-bit word occupies the least significant half of the returned
+integer. XXH3 is non-cryptographic.
 
 Args:
     s: Contiguous bytes-like data to hash.
@@ -64,7 +65,7 @@ Raises:
 
 Examples:
     >>> hex(xxh3_128(b''))
-    '0x99aa06d3014798d86001c324468d497f'"
+    '0x99aa06d3014798d86001c324468d497f'"###
             .as_ptr(),
     },
     ffi::PyMethodDef {
@@ -73,7 +74,7 @@ Examples:
             PyCFunctionFastWithKeywords: xxh3_64_batch_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_64_batch($module, /, items, seed=0)
+        ml_doc: cr###"xxh3_64_batch($module, /, items, seed=0)
 --
 
 Compute canonical XXH3 64-bit hashes for a list of inputs.
@@ -91,7 +92,7 @@ Raises:
 
 Examples:
     >>> xxh3_64_batch([b'', b'hello']) == [xxh3_64(b''), xxh3_64(b'hello')]
-    True"
+    True"###
             .as_ptr(),
     },
     ffi::PyMethodDef {
@@ -100,7 +101,7 @@ Examples:
             PyCFunctionFastWithKeywords: xxh3_128_batch_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_128_batch($module, /, items, seed=0)
+        ml_doc: cr###"xxh3_128_batch($module, /, items, seed=0)
 --
 
 Compute canonical XXH3 128-bit hashes for a list of inputs.
@@ -118,7 +119,7 @@ Raises:
 
 Examples:
     >>> xxh3_128_batch([b'', b'hello']) == [xxh3_128(b''), xxh3_128(b'hello')]
-    True"
+    True"###
             .as_ptr(),
     },
     ffi::PyMethodDef {
@@ -127,12 +128,13 @@ Examples:
             PyCFunctionFastWithKeywords: xxh3_64_batch_into_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_64_batch_into($module, /, items, output, seed=0)
+        ml_doc: cr###"xxh3_64_batch_into($module, /, items, output, seed=0)
 --
 
 Write XXH3 64-bit hashes as packed little-endian bytes.
 
-Inputs and capacity are validated before output is mutated.
+Inputs and capacity are validated before output is mutated. Bytes after the
+written prefix remain unchanged.
 
 Args:
     items: A list of contiguous bytes-like objects to hash.
@@ -150,8 +152,10 @@ Raises:
 Examples:
     >>> output = bytearray(8)
     >>> xxh3_64_batch_into([b'hello'], output)
-    8"
-        .as_ptr(),
+    8
+    >>> int.from_bytes(output, 'little') == xxh3_64(b'hello')
+    True"###
+            .as_ptr(),
     },
     ffi::PyMethodDef {
         ml_name: c"xxh3_128_batch_into".as_ptr(),
@@ -159,12 +163,13 @@ Examples:
             PyCFunctionFastWithKeywords: xxh3_128_batch_into_digest,
         },
         ml_flags: METHOD_FLAGS,
-        ml_doc: cr"xxh3_128_batch_into($module, /, items, output, seed=0)
+        ml_doc: cr###"xxh3_128_batch_into($module, /, items, output, seed=0)
 --
 
 Write XXH3 128-bit hashes as packed little-endian bytes.
 
-Inputs and capacity are validated before output is mutated.
+Inputs and capacity are validated before output is mutated. Bytes after the
+written prefix remain unchanged.
 
 Args:
     items: A list of contiguous bytes-like objects to hash.
@@ -182,8 +187,10 @@ Raises:
 Examples:
     >>> output = bytearray(16)
     >>> xxh3_128_batch_into([b'hello'], output)
-    16"
-        .as_ptr(),
+    16
+    >>> int.from_bytes(output, 'little') == xxh3_128(b'hello')
+    True"###
+            .as_ptr(),
     },
     ffi::PyMethodDef::zeroed(),
 ];

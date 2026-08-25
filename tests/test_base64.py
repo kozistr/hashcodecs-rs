@@ -408,7 +408,7 @@ def test_lenient_decode_into_uses_final_size_and_preserves_suffix() -> None:
         b'Y!WJj',
         b'A' * 12 + b'!!!!',
         b'A' * 28 + b'!!!!',
-    ]
+    ],
 )
 def test_lenient_decode_into_covers_counter_widths(encoded: bytes) -> None:
     expected = stdlib_base64.b64decode(encoded, validate=False)

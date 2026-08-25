@@ -169,10 +169,10 @@ without adding per-call wrappers. `py.typed` makes the declarations visible to t
 Wheel tests execute the installed package, while coverage paths map that installed location back to the root source
 package.
 
-The 100% Rust line-coverage gate continues to measure the Rust core without default features. A separate coverage
-job builds an instrumented CPython extension, runs the Python suite through it, and uploads the binding-layer Rust
-coverage under its own `rust-bindings` flag. The feature-gated binding layer remains outside the core percentage,
-the sanitizer jobs, Miri interpretation, and Kani proofs.
+The 100% Rust line-coverage gate continues to measure the Rust core without default features. Separate Linux
+coverage jobs build instrumented CPython extensions for Python 3.12 and free-threaded Python 3.15, run the Python
+suite through them, and merge the binding-layer Rust coverage under a `rust-bindings` flag. The feature-gated
+binding layer remains outside the core percentage, the sanitizer jobs, Miri interpretation, and Kani proofs.
 
 ## Correctness and Safety
 

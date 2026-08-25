@@ -76,7 +76,15 @@ jobs:
           fail_ci_if_error: true
 
   rust_binding_coverage:
-    name: Rust / CPython binding coverage
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Rust / CPython binding coverage
+            python-version: "3.12"
+          - name: Rust / CPython binding coverage / Python 3.15t
+            python-version: "3.15t"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -93,7 +101,7 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache-dependency-glob: uv.lock
 
       - name: Install test dependencies
@@ -120,7 +128,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: rust-bindings-coverage.xml
           flags: rust-bindings
+          name: rust-bindings-py${{ matrix.python-version }}
+          env_vars: PYTHON_VERSION
           fail_ci_if_error: true
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
 
   rust_test:
     name: Rust / Test
@@ -326,9 +338,33 @@ jobs:
       fail-fast: true
       matrix:
         include:
+          - name: Linux / Python 3.10
+            os: ubuntu-latest
+            python-version: "3.10"
+            upload-coverage: true
+          - name: Linux / Python 3.11
+            os: ubuntu-latest
+            python-version: "3.11"
+            upload-coverage: true
           - name: Linux / Python 3.12
             os: ubuntu-latest
             python-version: "3.12"
+            upload-coverage: true
+          - name: Linux / Python 3.13
+            os: ubuntu-latest
+            python-version: "3.13"
+            upload-coverage: true
+          - name: Linux / Python 3.14
+            os: ubuntu-latest
+            python-version: "3.14"
+            upload-coverage: true
+          - name: Linux / Python 3.15
+            os: ubuntu-latest
+            python-version: "3.15"
+            upload-coverage: true
+          - name: Linux / Python 3.14t
+            os: ubuntu-latest
+            python-version: "3.14t"
             upload-coverage: true
           - name: Linux / Python 3.15t
             os: ubuntu-latest
@@ -338,9 +374,17 @@ jobs:
             os: windows-latest
             python-version: "3.12"
             upload-coverage: true
+          - name: Windows / Python 3.15t
+            os: windows-latest
+            python-version: "3.15t"
+            upload-coverage: true
           - name: macOS ARM64 / Python 3.12
             os: macos-latest
             python-version: "3.12"
+            upload-coverage: true
+          - name: macOS ARM64 / Python 3.15t
+            os: macos-latest
+            python-version: "3.15t"
             upload-coverage: true
     runs-on: ${{ matrix.os }}
     env:

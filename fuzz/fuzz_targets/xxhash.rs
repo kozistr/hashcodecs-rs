@@ -22,7 +22,7 @@ fuzz_target!(|bytes: &[u8]| {
         [expected128 as u64, (expected128 >> 64) as u64]
     );
 
-    // Equal-length independent allocations drive the four-way AVX2 batch path.
+    // Equal-length independent allocations drive every AVX2 batch width.
     let mut owned = std::array::from_fn::<_, 4, _>(|_| input.to_vec());
     for (index, value) in owned.iter_mut().enumerate() {
         if let Some(first) = value.first_mut() {
@@ -33,15 +33,24 @@ fuzz_target!(|bytes: &[u8]| {
         }
     }
     let batch = owned.each_ref().map(Vec::as_slice);
-    assert_eq!(
-        xxh3_64_batch(&batch, seed),
-        batch.map(|value| xxhash_rust::xxh3::xxh3_64_with_seed(value, seed))
-    );
-    assert_eq!(
-        xxh3_128_batch(&batch, seed),
-        batch.map(|value| {
-            let hash = xxhash_rust::xxh3::xxh3_128_with_seed(value, seed);
-            [hash as u64, (hash >> 64) as u64]
-        })
-    );
+    for width in 2..=4 {
+        let batch = &batch[..width];
+        assert_eq!(
+            xxh3_64_batch(batch, seed),
+            batch
+                .iter()
+                .map(|value| xxhash_rust::xxh3::xxh3_64_with_seed(value, seed))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            xxh3_128_batch(batch, seed),
+            batch
+                .iter()
+                .map(|value| {
+                    let hash = xxhash_rust::xxh3::xxh3_128_with_seed(value, seed);
+                    [hash as u64, (hash >> 64) as u64]
+                })
+                .collect::<Vec<_>>()
+        );
+    }
 });

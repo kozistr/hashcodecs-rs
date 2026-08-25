@@ -73,4 +73,13 @@ fn main() {
         check_murmur(input, 0x9747_b28c);
     }
     check_xxhash(&inputs, 0x9e37_79b1_85eb_ca87);
+
+    let mut equal_long_inputs: Vec<Vec<u8>> = (0..4).map(|_| payload(4096)).collect();
+    for (index, input) in equal_long_inputs.iter_mut().enumerate() {
+        input[0] = input[0].wrapping_add(index as u8);
+        input[4095] ^= (index as u8).wrapping_mul(0x5b);
+    }
+    for width in 2..=4 {
+        check_xxhash(&equal_long_inputs[..width], 0x9e37_79b1_85eb_ca87);
+    }
 }

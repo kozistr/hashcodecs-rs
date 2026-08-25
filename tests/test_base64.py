@@ -262,6 +262,22 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         assert encoded.calls == 1
         assert payload.calls == 1
 
+        class ExportFailure(RuntimeError):
+            pass
+
+        class RaisingBuffer:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def __buffer__(self, flags: int) -> memoryview:
+                self.calls += 1
+                raise ExportFailure('custom export failure')
+
+        raising = RaisingBuffer()
+        with pytest.raises(ExportFailure, match='custom export failure'):
+            base64.b64encode(raising)
+        assert raising.calls == 1
+
         class BufferList(list):
             def __buffer__(self, flags: int) -> memoryview:
                 return memoryview(b'abc')

@@ -30,10 +30,12 @@ The `standard_b64encode` and `urlsafe_b64encode` helpers select the respective a
 
 ## Decoding and Validation
 
-`b64decode(s, altchars=None, validate=False, *, padded=True, ignorechars=..., canonical=False)` decodes an ASCII
+`b64decode(s, altchars=None, validate=..., *, padded=True, ignorechars=..., canonical=False)` decodes an ASCII
 string or bytes-like value.
 
 - `validate=True` rejects characters outside the chosen alphabet instead of discarding them.
+- If you supply `ignorechars` without `validate`, hashcodecs uses strict mode. Pass `validate=False` to keep lenient
+  mode; hashcodecs then limits discarded bytes to `ignorechars`.
 - `padded=False` accepts an unpadded final Base64 quantum.
 - `ignorechars` specifies which non-alphabet bytes lenient decoding may ignore. Its default preserves the standard
   library's lenient behavior.

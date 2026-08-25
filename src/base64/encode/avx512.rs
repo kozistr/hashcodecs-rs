@@ -28,7 +28,7 @@ const fn encode_shuffle() -> [u8; 64] {
     shuffle
 }
 
-#[target_feature(enable = "avx512vbmi")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     input: &[u8],
     output: *mut u8,
@@ -116,7 +116,7 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     }
 }
 
-#[target_feature(enable = "avx512vbmi")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn encode_48(
     input: *const u8,

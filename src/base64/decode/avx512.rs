@@ -31,7 +31,7 @@ const fn decode_shuffle() -> [u8; 64] {
     shuffle
 }
 
-#[target_feature(enable = "avx512vbmi")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     input: &[u8],
     output: *mut u8,
@@ -100,7 +100,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     }
 }
 
-#[target_feature(enable = "avx512vbmi")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn decode_64(
     input: *const u8,

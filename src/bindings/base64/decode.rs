@@ -86,6 +86,279 @@ fn lenient_decode_table(altchars: Option<[u8; 2]>) -> [u8; 256] {
     table
 }
 
+#[inline]
+fn decoded_symbol_len(symbols: usize) -> usize {
+    symbols / 4 * 3
+        + match symbols % 4 {
+            2 => 1,
+            3 => 2,
+            _ => 0,
+        }
+}
+
+#[inline(always)]
+fn is_lenient_symbol(byte: u8, altchars: Option<[u8; 2]>) -> bool {
+    byte.wrapping_sub(b'A') <= b'Z' - b'A'
+        || byte.wrapping_sub(b'a') <= b'z' - b'a'
+        || byte.wrapping_sub(b'0') <= b'9' - b'0'
+        || matches!(byte, b'+' | b'/')
+        || altchars.is_some_and(|[plus, slash]| byte == plus || byte == slash)
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod lenient_count_x86 {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    #[target_feature(enable = "avx2")]
+    pub(super) unsafe fn avx2(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+        let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+        let extra0 = _mm256_set1_epi8(extra0 as i8);
+        let extra1 = _mm256_set1_epi8(extra1 as i8);
+        let mut source = 0;
+        let mut symbols = 0;
+        while source + 32 <= input.len() {
+            let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
+            let valid = valid_avx2(bytes, extra0, extra1);
+            symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
+            source += 32;
+        }
+        symbols
+            + input[source..]
+                .iter()
+                .filter(|&&byte| super::is_lenient_symbol(byte, altchars))
+                .count()
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    fn valid_avx2(bytes: __m256i, extra0: __m256i, extra1: __m256i) -> __m256i {
+        let upper = range_avx2(bytes, b'A', b'Z');
+        let lower = range_avx2(bytes, b'a', b'z');
+        let digits = range_avx2(bytes, b'0', b'9');
+        _mm256_or_si256(
+            _mm256_or_si256(upper, lower),
+            _mm256_or_si256(
+                digits,
+                _mm256_or_si256(
+                    _mm256_or_si256(
+                        _mm256_cmpeq_epi8(bytes, _mm256_set1_epi8(b'+' as i8)),
+                        _mm256_cmpeq_epi8(bytes, _mm256_set1_epi8(b'/' as i8)),
+                    ),
+                    _mm256_or_si256(
+                        _mm256_cmpeq_epi8(bytes, extra0),
+                        _mm256_cmpeq_epi8(bytes, extra1),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    fn range_avx2(bytes: __m256i, lower: u8, upper: u8) -> __m256i {
+        _mm256_and_si256(
+            _mm256_cmpeq_epi8(_mm256_max_epu8(bytes, _mm256_set1_epi8(lower as i8)), bytes),
+            _mm256_cmpeq_epi8(_mm256_min_epu8(bytes, _mm256_set1_epi8(upper as i8)), bytes),
+        )
+    }
+
+    #[target_feature(enable = "sse2")]
+    pub(super) unsafe fn sse2(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+        let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+        let extra0 = _mm_set1_epi8(extra0 as i8);
+        let extra1 = _mm_set1_epi8(extra1 as i8);
+        let mut source = 0;
+        let mut symbols = 0;
+        while source + 16 <= input.len() {
+            let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
+            let valid = valid_sse2(bytes, extra0, extra1);
+            symbols += _mm_movemask_epi8(valid).count_ones() as usize;
+            source += 16;
+        }
+        symbols
+            + input[source..]
+                .iter()
+                .filter(|&&byte| super::is_lenient_symbol(byte, altchars))
+                .count()
+    }
+
+    #[target_feature(enable = "sse2")]
+    #[inline]
+    fn valid_sse2(bytes: __m128i, extra0: __m128i, extra1: __m128i) -> __m128i {
+        let upper = range_sse2(bytes, b'A', b'Z');
+        let lower = range_sse2(bytes, b'a', b'z');
+        let digits = range_sse2(bytes, b'0', b'9');
+        _mm_or_si128(
+            _mm_or_si128(upper, lower),
+            _mm_or_si128(
+                digits,
+                _mm_or_si128(
+                    _mm_or_si128(
+                        _mm_cmpeq_epi8(bytes, _mm_set1_epi8(b'+' as i8)),
+                        _mm_cmpeq_epi8(bytes, _mm_set1_epi8(b'/' as i8)),
+                    ),
+                    _mm_or_si128(_mm_cmpeq_epi8(bytes, extra0), _mm_cmpeq_epi8(bytes, extra1)),
+                ),
+            ),
+        )
+    }
+
+    #[target_feature(enable = "sse2")]
+    #[inline]
+    fn range_sse2(bytes: __m128i, lower: u8, upper: u8) -> __m128i {
+        _mm_and_si128(
+            _mm_cmpeq_epi8(_mm_max_epu8(bytes, _mm_set1_epi8(lower as i8)), bytes),
+            _mm_cmpeq_epi8(_mm_min_epu8(bytes, _mm_set1_epi8(upper as i8)), bytes),
+        )
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+unsafe fn lenient_symbol_count_neon(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+    use std::arch::aarch64::*;
+
+    let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+    let mut source = 0;
+    let mut symbols = 0;
+    while source + 16 <= input.len() {
+        let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
+        let range = |lower, upper| {
+            vandq_u8(
+                vcgeq_u8(bytes, vdupq_n_u8(lower)),
+                vcleq_u8(bytes, vdupq_n_u8(upper)),
+            )
+        };
+        let valid = vorrq_u8(
+            vorrq_u8(range(b'A', b'Z'), range(b'a', b'z')),
+            vorrq_u8(
+                range(b'0', b'9'),
+                vorrq_u8(
+                    vorrq_u8(
+                        vceqq_u8(bytes, vdupq_n_u8(b'+')),
+                        vceqq_u8(bytes, vdupq_n_u8(b'/')),
+                    ),
+                    vorrq_u8(
+                        vceqq_u8(bytes, vdupq_n_u8(extra0)),
+                        vceqq_u8(bytes, vdupq_n_u8(extra1)),
+                    ),
+                ),
+            ),
+        );
+        symbols += vaddvq_u8(vshrq_n_u8::<7>(valid)) as usize;
+        source += 16;
+    }
+    symbols
+        + input[source..]
+            .iter()
+            .filter(|&&byte| is_lenient_symbol(byte, altchars))
+            .count()
+}
+
+fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if input.len() >= 32 && std::is_x86_feature_detected!("avx2") {
+            return unsafe { lenient_count_x86::avx2(input, altchars) };
+        }
+        if input.len() >= 16 && std::is_x86_feature_detected!("sse2") {
+            return unsafe { lenient_count_x86::sse2(input, altchars) };
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        if input.len() >= 16 {
+            return unsafe { lenient_symbol_count_neon(input, altchars) };
+        }
+    }
+
+    input
+        .iter()
+        .filter(|&&byte| is_lenient_symbol(byte, altchars))
+        .count()
+}
+
+/// Count the output from CPython's non-strict padding and discard rules.
+///
+/// Current CPython versions continue after a complete padding sequence, so a
+/// branchless symbol count plus the trailing padding state determines the
+/// result. Older versions use the sequential fallback to honor their early
+/// stop at the first complete padding sequence.
+fn lenient_decoded_len(
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    continue_after_padding: bool,
+) -> Result<usize, LenientDecodeError> {
+    if continue_after_padding {
+        let symbols = lenient_symbol_count(input, altchars);
+        let quad_pos = symbols % 4;
+        let pads = if padded && !is_lenient_symbol(b'=', altchars) && quad_pos != 0 {
+            input
+                .iter()
+                .rev()
+                .take_while(|&&byte| !is_lenient_symbol(byte, altchars))
+                .filter(|&&byte| byte == b'=')
+                .count()
+        } else {
+            0
+        };
+        return if quad_pos == 1 || (padded && quad_pos != 0 && quad_pos + pads < 4) {
+            Err(LenientDecodeError::InvalidInput)
+        } else {
+            Ok(decoded_symbol_len(symbols))
+        };
+    }
+
+    let mut source = 0;
+    let mut symbols = 0;
+    let mut pads = 0;
+
+    while source < input.len() {
+        while source + 8 <= input.len() {
+            if !input[source..source + 8]
+                .iter()
+                .all(|&byte| is_lenient_symbol(byte, altchars))
+            {
+                break;
+            }
+            symbols += 8;
+            pads = 0;
+            source += 8;
+        }
+        if source == input.len() {
+            break;
+        }
+
+        let byte = input[source];
+        source += 1;
+        if padded && byte == b'=' && !is_lenient_symbol(b'=', altchars) {
+            pads += 1;
+            let quad_pos = symbols % 4;
+            if !continue_after_padding && quad_pos >= 2 && quad_pos + pads >= 4 {
+                return Ok(decoded_symbol_len(symbols));
+            }
+            continue;
+        }
+        if !is_lenient_symbol(byte, altchars) {
+            continue;
+        }
+        symbols += 1;
+        pads = 0;
+    }
+
+    let quad_pos = symbols % 4;
+    if quad_pos == 1 || (padded && quad_pos != 0 && quad_pos + pads < 4) {
+        Err(LenientDecodeError::InvalidInput)
+    } else {
+        Ok(decoded_symbol_len(symbols))
+    }
+}
+
 fn lenient_continues_after_padding(py: Python<'_>) -> bool {
     let version = py.version_info();
     match (version.major, version.minor) {
@@ -262,6 +535,7 @@ fn try_decode_lenient_into(
                 bytearray_data(output.as_ptr()),
                 bytearray_size(output.as_ptr()),
                 &table,
+                altchars,
                 padded,
                 continue_after_padding,
             )
@@ -274,6 +548,7 @@ fn try_decode_lenient_into(
                 output,
                 provided,
                 &table,
+                altchars,
                 padded,
                 continue_after_padding,
             )
@@ -292,21 +567,13 @@ unsafe fn decode_lenient_slice_into(
     output: *mut u8,
     provided: usize,
     table: &[u8; 256],
+    altchars: Option<[u8; 2]>,
     padded: bool,
     continue_after_padding: bool,
 ) -> PyResult<Option<usize>> {
     let maximum = input.len().div_ceil(4) * 3;
     if provided < maximum {
-        let required = unsafe {
-            decode_lenient_to_ptr::<false>(
-                input,
-                std::ptr::NonNull::<u8>::dangling().as_ptr(),
-                usize::MAX,
-                table,
-                padded,
-                continue_after_padding,
-            )
-        };
+        let required = lenient_decoded_len(input, altchars, padded, continue_after_padding);
         match required {
             Ok(required) if provided < required => {
                 return Err(output_too_small(required, provided));
@@ -1391,4 +1658,26 @@ pub(super) fn b64decode_into(
     DecodePlan::new(&input, options)
         .execute(py, DecodeExecution::Into(output))
         .map(DecodeOutput::into_written)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_lenient_symbol, lenient_symbol_count};
+
+    #[test]
+    fn simd_lenient_symbol_count_matches_scalar_for_all_bytes_and_alignments() {
+        let input: Vec<u8> = (0_u8..=u8::MAX).cycle().take(1024).collect();
+        for altchars in [None, Some(*b"-_"), Some(*b"@#"), Some(*b"=_")] {
+            for offset in 0..32 {
+                for tail in 0..32 {
+                    let input = &input[offset..input.len() - tail];
+                    let expected = input
+                        .iter()
+                        .filter(|&&byte| is_lenient_symbol(byte, altchars))
+                        .count();
+                    assert_eq!(lenient_symbol_count(input, altchars), expected);
+                }
+            }
+        }
+    }
 }

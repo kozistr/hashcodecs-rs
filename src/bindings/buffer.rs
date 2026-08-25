@@ -278,12 +278,14 @@ fn buffer_bytes_like<'a, 'py>(
         let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
         return exact_memoryview_bytes_like(memoryview, require_contiguous);
     }
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(buffer) = borrowed_contiguous_buffer(value) {
-        return Ok(BytesLike::Buffer(buffer));
+    if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
+        return Err(type_error(argument));
     }
-    let memoryview = PyMemoryView::from(value).map_err(|_| type_error(argument))?;
-    copy_memoryview(&memoryview, require_contiguous).map(BytesLike::OwnedBytes)
+    // A memoryview owns the export acquired here. Subsequent contiguity checks
+    // and borrowing operate on that view instead of invoking the exporter a
+    // second time, and an exporter-defined exception remains intact.
+    let memoryview = PyMemoryView::from(value)?;
+    exact_memoryview_bytes_like(&memoryview, require_contiguous)
 }
 
 fn exact_memoryview_bytes_like<'a, 'py>(
@@ -295,18 +297,20 @@ fn exact_memoryview_bytes_like<'a, 'py>(
         .getattr(intern!(py, "nbytes"))?
         .extract::<usize>()?;
     let try_owner = nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
-    let contiguous = if require_contiguous || try_owner {
+    let contiguous = if require_contiguous || try_owner || cfg!(not(Py_GIL_DISABLED)) {
         memoryview
             .getattr(intern!(py, "c_contiguous"))?
             .is_truthy()?
     } else {
         false
     };
+
     if require_contiguous && !contiguous {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",
         ));
     }
+
     if contiguous && try_owner {
         let owner = memoryview.getattr(intern!(py, "obj"))?;
         if PyBytes::is_exact_type_of(&owner) {
@@ -321,22 +325,26 @@ fn exact_memoryview_bytes_like<'a, 'py>(
             }
         }
     }
+
     #[cfg(not(Py_GIL_DISABLED))]
     if let Some(buffer) = borrowed_contiguous_buffer(memoryview.as_any()) {
         return Ok(BytesLike::Buffer(buffer));
     }
+
     copy_memoryview(memoryview, false).map(BytesLike::OwnedBytes)
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
 fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> Option<BorrowedBuffer<'py>> {
     let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+
     if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &mut view, ffi::PyBUF_CONTIG_RO) } == 0 {
         return Some(BorrowedBuffer {
             view,
             _python: std::marker::PhantomData,
         });
     }
+
     unsafe { ffi::PyErr_Clear() };
     None
 }

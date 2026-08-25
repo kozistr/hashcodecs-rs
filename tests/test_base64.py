@@ -262,6 +262,22 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         assert encoded.calls == 1
         assert payload.calls == 1
 
+        class ExportFailure(RuntimeError):
+            pass
+
+        class RaisingBuffer:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def __buffer__(self, flags: int) -> memoryview:
+                self.calls += 1
+                raise ExportFailure('custom export failure')
+
+        raising = RaisingBuffer()
+        with pytest.raises(ExportFailure, match='custom export failure'):
+            base64.b64encode(raising)
+        assert raising.calls == 1
+
         class BufferList(list):
             def __buffer__(self, flags: int) -> memoryview:
                 return memoryview(b'abc')
@@ -383,6 +399,30 @@ def test_lenient_decode_into_uses_final_size_and_preserves_suffix() -> None:
     assert base64.b64decode_into(encoded, guarded) == len(expected)
     assert guarded[: len(expected)] == expected
     assert guarded[len(expected) :] == bytes([canary] * 16)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the new lenient sizing path')
+@pytest.mark.parametrize(
+    'encoded',
+    [
+        b'Y!WJj',
+        b'A' * 12 + b'!!!!',
+        b'A' * 28 + b'!!!!',
+    ],
+)
+def test_lenient_decode_into_covers_counter_widths(encoded: bytes) -> None:
+    expected = stdlib_base64.b64decode(encoded, validate=False)
+    output = bytearray(len(expected))
+
+    written = base64.b64decode_into(encoded, output, validate=False)
+
+    assert written == len(expected)
+    assert output == expected
+
+
+def test_lenient_decode_into_exact_eight_symbol_boundary() -> None:
+    with pytest.raises(ValueError, match='requires 6 bytes'):
+        base64.b64decode_into(b'AAAAAAAA', bytearray(5), validate=False)
 
 
 def test_common_lenient_decoding_does_not_call_binascii(monkeypatch: pytest.MonkeyPatch) -> None:

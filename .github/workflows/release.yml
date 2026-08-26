@@ -322,7 +322,8 @@ jobs:
           popd
           uv venv sdist-venv
           uv pip install --python sdist-venv --no-index --find-links sdist-wheel hashcodecs
-          sdist-venv/bin/python -c "import hashcodecs; assert hashcodecs.xxh3_64(b'hello')"
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/sdist-venv/bin/python" -c "import hashcodecs; assert hashcodecs.xxh3_64(b'hello')"
 
   publish_pypi:
     name: Publish / PyPI

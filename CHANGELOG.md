@@ -4,6 +4,15 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-26
+
+### What's Changed
+* fix: harden buffer and lenient decode paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/58
+* Refactor Murmur SIMD and centralize XXH3 long dispatch by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/59
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...v1.2.1
+
 ## [1.2.0] - 2026-08-25
 
 ### What's Changed
@@ -117,7 +126,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kozistr/hashcodecs-rs/compare/v0.6.1...v1.0.0

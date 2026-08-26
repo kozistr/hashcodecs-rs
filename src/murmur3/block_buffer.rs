@@ -2,6 +2,7 @@
 pub(super) struct FullBlocks<'a, const BLOCK_SIZE: usize>(&'a [u8]);
 
 impl<'a, const BLOCK_SIZE: usize> FullBlocks<'a, BLOCK_SIZE> {
+    #[cfg(any(test, kani, target_arch = "x86", target_arch = "x86_64"))]
     #[inline]
     pub(super) fn new(bytes: &'a [u8]) -> Option<Self> {
         (BLOCK_SIZE != 0 && bytes.len().is_multiple_of(BLOCK_SIZE)).then_some(Self(bytes))

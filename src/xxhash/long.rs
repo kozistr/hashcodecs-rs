@@ -20,7 +20,7 @@ use x86::{avx2, avx2_batch, avx512, ssse3};
 
 use super::primitives::*;
 
-#[cfg(test)]
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
 pub(super) fn long_accumulate_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     scalar::accumulate(input, secret)
 }
@@ -163,10 +163,32 @@ pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilitie
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct LongSchedule {
-    pub(super) full_blocks: usize,
-    pub(super) tail_offset: usize,
-    pub(super) tail_stripes: usize,
-    pub(super) last_offset: usize,
+    full_blocks: usize,
+    tail_offset: usize,
+    tail_stripes: usize,
+    last_offset: usize,
+}
+
+impl LongSchedule {
+    #[inline(always)]
+    pub(super) const fn full_blocks(self) -> usize {
+        self.full_blocks
+    }
+
+    #[inline(always)]
+    pub(super) const fn tail_offset(self) -> usize {
+        self.tail_offset
+    }
+
+    #[inline(always)]
+    pub(super) const fn tail_stripes(self) -> usize {
+        self.tail_stripes
+    }
+
+    #[inline(always)]
+    pub(super) const fn last_offset(self) -> usize {
+        self.last_offset
+    }
 }
 
 #[inline]

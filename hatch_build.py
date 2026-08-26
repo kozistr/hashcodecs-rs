@@ -23,8 +23,14 @@ class CustomBuildHook(BuildHookInterface[Any]):
 
         root = Path(self.root)
         wheel_tag = self._wheel_tag()
-        target_dir = root / 'target' / 'hatch' / wheel_tag
         env = os.environ.copy()
+        configured_target_dir = env.get('CARGO_TARGET_DIR') or env.get('CARGO_LLVM_COV_TARGET_DIR')
+        if configured_target_dir:
+            target_dir = Path(configured_target_dir)
+            if not target_dir.is_absolute():
+                target_dir = root / target_dir
+        else:
+            target_dir = root / 'target' / 'hatch' / wheel_tag
         env['CARGO_TARGET_DIR'] = str(target_dir)
         env['PYO3_PYTHON'] = sys.executable
         result = subprocess.run(

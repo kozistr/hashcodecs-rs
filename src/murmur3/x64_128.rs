@@ -219,7 +219,7 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
 }
 
 #[inline]
-#[cfg(test)]
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
 pub(super) fn finish_x64_128(key: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
     finish_x64_128_tail(&key[offset..], hashes, key.len() as u64)
 }

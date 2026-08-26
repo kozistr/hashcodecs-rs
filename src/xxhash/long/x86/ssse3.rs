@@ -62,7 +62,7 @@ pub(in crate::xxhash::long) unsafe fn accumulate(
     let secret = secret.as_bytes();
     let schedule = long_schedule(input);
     let mut acc = AlignedAccumulator(initial_accumulator());
-    for block in 0..schedule.full_blocks {
+    for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         for stripe in 0..16 {
             unsafe {
@@ -75,11 +75,11 @@ pub(in crate::xxhash::long) unsafe fn accumulate(
         }
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
-    for stripe in 0..schedule.tail_stripes {
+    for stripe in 0..schedule.tail_stripes() {
         unsafe {
             accumulate_stripe(
                 &mut acc,
-                data.as_ptr().add(schedule.tail_offset + stripe * 64),
+                data.as_ptr().add(schedule.tail_offset() + stripe * 64),
                 secret.as_ptr().add(stripe * 8),
             )
         };
@@ -87,7 +87,7 @@ pub(in crate::xxhash::long) unsafe fn accumulate(
     unsafe {
         accumulate_stripe(
             &mut acc,
-            data.as_ptr().add(schedule.last_offset),
+            data.as_ptr().add(schedule.last_offset()),
             secret.as_ptr().add(121),
         )
     };

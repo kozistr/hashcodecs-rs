@@ -209,7 +209,7 @@ pub(super) fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
 }
 
 #[inline(always)]
-#[cfg(test)]
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
 pub(super) fn finish_x86_32(key: &[u8], hash: u32, offset: usize) -> u32 {
     finish_x86_32_tail(&key[offset..], hash, key.len() as u32)
 }

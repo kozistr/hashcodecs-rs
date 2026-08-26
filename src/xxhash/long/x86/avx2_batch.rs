@@ -25,9 +25,9 @@ macro_rules! define_accumulate_batch {
             $(let mut $acc = unsafe { initial() };)+
             let schedule = long_schedule(inputs[0]);
 
-            for block in 0..schedule.full_blocks {
+            for block in 0..schedule.full_blocks() {
                 let offset = block * 1024;
-                if block + 2 <= schedule.full_blocks {
+                if block + 2 <= schedule.full_blocks() {
                     let prefetch_offset = (block + 2) * 1024;
                     unsafe {
                         $(_mm_prefetch::<_MM_HINT_T0>(
@@ -52,8 +52,8 @@ macro_rules! define_accumulate_batch {
                 }
             }
 
-            for stripe in 0..schedule.tail_stripes {
-                let input_offset = schedule.tail_offset + stripe * 64;
+            for stripe in 0..schedule.tail_stripes() {
+                let input_offset = schedule.tail_offset() + stripe * 64;
                 let key = unsafe { secret.as_ptr().add(stripe * 8) };
                 unsafe {
                     $(accumulate_registers(
@@ -63,7 +63,7 @@ macro_rules! define_accumulate_batch {
                     );)+
                 }
             }
-            let input_offset = schedule.last_offset;
+            let input_offset = schedule.last_offset();
             let key = unsafe { secret.as_ptr().add(121) };
             unsafe {
                 $(accumulate_registers(

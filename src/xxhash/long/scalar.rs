@@ -32,22 +32,22 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     let data = input.as_bytes();
     let schedule = long_schedule(input);
     let mut acc = initial_accumulator();
-    for block in 0..schedule.full_blocks {
+    for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         for stripe in 0..16 {
             accumulate_stripe(&mut acc, data, secret, offset + stripe * 64, stripe * 8);
         }
         scramble(&mut acc, secret);
     }
-    for stripe in 0..schedule.tail_stripes {
+    for stripe in 0..schedule.tail_stripes() {
         accumulate_stripe(
             &mut acc,
             data,
             secret,
-            schedule.tail_offset + stripe * 64,
+            schedule.tail_offset() + stripe * 64,
             stripe * 8,
         );
     }
-    accumulate_stripe(&mut acc, data, secret, schedule.last_offset, 121);
+    accumulate_stripe(&mut acc, data, secret, schedule.last_offset(), 121);
     acc
 }

@@ -255,9 +255,9 @@ pub(in crate::xxhash::long) unsafe fn accumulate(
     let secret = secret.as_bytes();
     let schedule = long_schedule(input);
     let mut acc = unsafe { initial() };
-    for block in 0..schedule.full_blocks {
+    for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
-        if block + 2 <= schedule.full_blocks {
+        if block + 2 <= schedule.full_blocks() {
             unsafe { _mm_prefetch::<_MM_HINT_T0>(data.as_ptr().add((block + 2) * 1024).cast()) };
         }
         acc = unsafe { accumulate_block_chains(acc, data.as_ptr().add(offset), secret.as_ptr()) };
@@ -265,16 +265,16 @@ pub(in crate::xxhash::long) unsafe fn accumulate(
         unsafe { scramble_registers(&mut acc, key) };
     }
 
-    let tail = unsafe { data.as_ptr().add(schedule.tail_offset) };
-    let last = unsafe { data.as_ptr().add(schedule.last_offset) };
+    let tail = unsafe { data.as_ptr().add(schedule.tail_offset()) };
+    let last = unsafe { data.as_ptr().add(schedule.last_offset()) };
     // The final stripe uses a distinct secret and forms the fourth independent
     // update when the regular tail already contains at least three stripes.
-    if schedule.tail_stripes >= 3 {
+    if schedule.tail_stripes() >= 3 {
         acc = unsafe {
-            accumulate_tail_chains(acc, tail, secret.as_ptr(), schedule.tail_stripes, last)
+            accumulate_tail_chains(acc, tail, secret.as_ptr(), schedule.tail_stripes(), last)
         };
     } else {
-        for stripe in 0..schedule.tail_stripes {
+        for stripe in 0..schedule.tail_stripes() {
             let input = unsafe { tail.add(stripe * 64) };
             let key = unsafe { secret.as_ptr().add(stripe * 8) };
             unsafe { accumulate_registers(&mut acc, input, key) };

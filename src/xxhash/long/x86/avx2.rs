@@ -1,11 +1,11 @@
-//! AVX2 secret initialization and long-input accumulation kernels.
+//! AVX2 secret initialization and long-input accumulator.
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::long::{initial_accumulator, long_schedule};
+use crate::xxhash::long::{LongInput, Secret, initial_accumulator, long_schedule};
 use crate::xxhash::primitives::{P32_1, SECRET};
 
 #[repr(align(64))]
@@ -13,7 +13,7 @@ use crate::xxhash::primitives::{P32_1, SECRET};
 struct AlignedAccumulator([u64; 8]);
 
 #[derive(Clone, Copy)]
-struct Accumulator {
+pub(super) struct Accumulator {
     low: __m256i,
     high: __m256i,
 }
@@ -21,7 +21,7 @@ struct Accumulator {
 #[target_feature(enable = "avx2")]
 /// # Safety
 /// The caller must have detected AVX2 support.
-pub(super) unsafe fn init_secret(seed: u64) -> [u8; 192] {
+pub(in crate::xxhash::long) unsafe fn init_secret(seed: u64) -> Secret {
     let negative = 0_u64.wrapping_sub(seed);
     let delta = _mm256_set_epi64x(negative as i64, seed as i64, negative as i64, seed as i64);
     let mut output = [0_u8; 192];
@@ -35,7 +35,7 @@ pub(super) unsafe fn init_secret(seed: u64) -> [u8; 192] {
             )
         };
     }
-    output
+    Secret(output)
 }
 
 #[inline]
@@ -62,7 +62,7 @@ unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn initial() -> Accumulator {
+pub(super) unsafe fn initial() -> Accumulator {
     let initial = AlignedAccumulator(initial_accumulator());
     Accumulator {
         low: unsafe { _mm256_load_si256(initial.0.as_ptr().cast()) },
@@ -72,14 +72,18 @@ unsafe fn initial() -> Accumulator {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn accumulate_registers(acc: &mut Accumulator, data: *const u8, secret: *const u8) {
+pub(super) unsafe fn accumulate_registers(
+    acc: &mut Accumulator,
+    data: *const u8,
+    secret: *const u8,
+) {
     acc.low = unsafe { accumulate_vector(acc.low, data, secret) };
     acc.high = unsafe { accumulate_vector(acc.high, data.add(32), secret.add(32)) };
 }
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn scramble_registers(acc: &mut Accumulator, secret: *const u8) {
+pub(super) unsafe fn scramble_registers(acc: &mut Accumulator, secret: *const u8) {
     acc.low = unsafe { scramble_vector(acc.low, secret) };
     acc.high = unsafe { scramble_vector(acc.high, secret.add(32)) };
 }
@@ -95,7 +99,7 @@ unsafe fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn finish(acc: Accumulator) -> [u64; 8] {
+pub(super) unsafe fn finish(acc: Accumulator) -> [u64; 8] {
     let mut output = AlignedAccumulator([0; 8]);
     unsafe { store(acc, &mut output) };
     output.0
@@ -242,14 +246,18 @@ unsafe fn accumulate_tail_chains(
 
 #[target_feature(enable = "avx2")]
 /// # Safety
-/// The caller must have detected AVX2 support. `data` must be in XXH3 long
-/// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    let schedule = long_schedule(data.len());
+/// The caller must have detected AVX2 support.
+pub(in crate::xxhash::long) unsafe fn accumulate(
+    input: LongInput<'_>,
+    secret: &Secret,
+) -> [u64; 8] {
+    let data = input.as_bytes();
+    let secret = secret.as_bytes();
+    let schedule = long_schedule(input);
     let mut acc = unsafe { initial() };
-    for block in 0..schedule.full_blocks {
+    for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
-        if block + 2 <= schedule.full_blocks {
+        if block + 2 <= schedule.full_blocks() {
             unsafe { _mm_prefetch::<_MM_HINT_T0>(data.as_ptr().add((block + 2) * 1024).cast()) };
         }
         acc = unsafe { accumulate_block_chains(acc, data.as_ptr().add(offset), secret.as_ptr()) };
@@ -257,16 +265,16 @@ pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
         unsafe { scramble_registers(&mut acc, key) };
     }
 
-    let tail = unsafe { data.as_ptr().add(schedule.tail_offset) };
-    let last = unsafe { data.as_ptr().add(schedule.last_offset) };
+    let tail = unsafe { data.as_ptr().add(schedule.tail_offset()) };
+    let last = unsafe { data.as_ptr().add(schedule.last_offset()) };
     // The final stripe uses a distinct secret and forms the fourth independent
     // update when the regular tail already contains at least three stripes.
-    if schedule.tail_stripes >= 3 {
+    if schedule.tail_stripes() >= 3 {
         acc = unsafe {
-            accumulate_tail_chains(acc, tail, secret.as_ptr(), schedule.tail_stripes, last)
+            accumulate_tail_chains(acc, tail, secret.as_ptr(), schedule.tail_stripes(), last)
         };
     } else {
-        for stripe in 0..schedule.tail_stripes {
+        for stripe in 0..schedule.tail_stripes() {
             let input = unsafe { tail.add(stripe * 64) };
             let key = unsafe { secret.as_ptr().add(stripe * 8) };
             unsafe { accumulate_registers(&mut acc, input, key) };
@@ -276,81 +284,3 @@ pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     }
     unsafe { finish(acc) }
 }
-
-macro_rules! define_accumulate_batch {
-    ($name:ident, $size:literal, $(($acc:ident, $index:literal)),+ $(,)?) => {
-        /// Interleaves independent hashes so load and multiply latency from one
-        /// input can overlap useful work from the others.
-        #[target_feature(enable = "avx2")]
-        /// # Safety
-        /// The caller must have detected AVX2 support. All inputs must have the
-        /// same long-mode length and `secret` must contain at least 192 bytes.
-        pub(in crate::xxhash) unsafe fn $name(
-            data: [&[u8]; $size],
-            secret: &[u8],
-        ) -> [[u64; 8]; $size] {
-            $(let mut $acc = unsafe { initial() };)+
-            let schedule = long_schedule(data[0].len());
-
-            for block in 0..schedule.full_blocks {
-                let offset = block * 1024;
-                if block + 2 <= schedule.full_blocks {
-                    let prefetch_offset = (block + 2) * 1024;
-                    unsafe {
-                        $(_mm_prefetch::<_MM_HINT_T0>(
-                            data[$index].as_ptr().add(prefetch_offset).cast(),
-                        );)+
-                    }
-                }
-                for stripe in 0..16 {
-                    let input_offset = offset + stripe * 64;
-                    let key = unsafe { secret.as_ptr().add(stripe * 8) };
-                    unsafe {
-                        $(accumulate_registers(
-                            &mut $acc,
-                            data[$index].as_ptr().add(input_offset),
-                            key,
-                        );)+
-                    }
-                }
-                let key = unsafe { secret.as_ptr().add(128) };
-                unsafe {
-                    $(scramble_registers(&mut $acc, key);)+
-                }
-            }
-
-            for stripe in 0..schedule.tail_stripes {
-                let input_offset = schedule.tail_offset + stripe * 64;
-                let key = unsafe { secret.as_ptr().add(stripe * 8) };
-                unsafe {
-                    $(accumulate_registers(
-                        &mut $acc,
-                        data[$index].as_ptr().add(input_offset),
-                        key,
-                    );)+
-                }
-            }
-            let input_offset = schedule.last_offset;
-            let key = unsafe { secret.as_ptr().add(121) };
-            unsafe {
-                $(accumulate_registers(
-                    &mut $acc,
-                    data[$index].as_ptr().add(input_offset),
-                    key,
-                );)+
-                [$(finish($acc)),+]
-            }
-        }
-    };
-}
-
-define_accumulate_batch!(accumulate_batch2, 2, (acc0, 0), (acc1, 1));
-define_accumulate_batch!(accumulate_batch3, 3, (acc0, 0), (acc1, 1), (acc2, 2));
-define_accumulate_batch!(
-    accumulate_batch4,
-    4,
-    (acc0, 0),
-    (acc1, 1),
-    (acc2, 2),
-    (acc3, 3),
-);

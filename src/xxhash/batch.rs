@@ -1,62 +1,89 @@
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::{self, SimdBackend};
+use super::hash::{xxh3_64, xxh3_128};
+use super::long::{LongBatch, LongEngine, LongRun, Secret, finalize_long_64, finalize_long_128};
 
-use super::hash::{xxh3_64_with_long_secret, xxh3_128_with_long_secret};
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::long::avx2;
-use super::long::{finalize_long_128, init_secret, merge};
-use super::primitives::{P64_1, SECRET};
-
-#[inline]
-fn emit_batch_long_accumulators(
-    chunk: &[&[u8]],
-    secret: &[u8],
-    output: impl FnMut([u64; 8]),
-) -> bool {
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    {
-        let _ = (chunk, secret, output);
-        false
-    }
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        let mut output = output;
-        if chunk[0].len() <= 240
-            || !chunk.iter().all(|input| input.len() == chunk[0].len())
-            || !backend::capabilities().supports(SimdBackend::Avx2)
+macro_rules! emit_long_group {
+    ($name:ident, $size:literal, $($acc:ident),+ $(,)?) => {
+        #[inline(always)]
+        fn $name<T, F, O>(
+            secret: &Secret,
+            inputs: LongBatch<'_, $size>,
+            accumulators: [[u64; 8]; $size],
+            finalize: F,
+            output: &mut O,
+        ) where
+            F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
+            O: FnMut(T),
         {
-            return false;
+            let [$($acc),+] = accumulators;
+            let length = inputs.input(0).len();
+            $(output(finalize(length, secret, $acc));)+
         }
-        match chunk {
-            [first, second] => {
-                for accumulator in unsafe { avx2::accumulate_batch2([first, second], secret) } {
-                    output(accumulator);
-                }
-            }
-            [first, second, third] => {
-                for accumulator in
-                    unsafe { avx2::accumulate_batch3([first, second, third], secret) }
-                {
-                    output(accumulator);
-                }
-            }
-            [first, second, third, fourth] => {
-                for accumulator in
-                    unsafe { avx2::accumulate_batch4([first, second, third, fourth], secret) }
-                {
-                    output(accumulator);
-                }
-            }
-            _ => return false,
+    };
+}
+
+emit_long_group!(emit_long_group2, 2, acc0, acc1);
+emit_long_group!(emit_long_group3, 3, acc0, acc1, acc2);
+emit_long_group!(emit_long_group4, 4, acc0, acc1, acc2, acc3);
+
+/// Shared monomorphized traversal for returned vectors and callback consumers.
+#[inline(always)]
+fn batch_each<T, S, F, O>(inputs: &[&[u8]], seed: u64, short: S, finalize: F, mut output: O)
+where
+    S: Copy + Fn(&[u8], u64) -> T,
+    F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
+    O: FnMut(T),
+{
+    let mut index = 0;
+    while index < inputs.len() && inputs[index].len() <= 240 {
+        output(short(inputs[index], seed));
+        index += 1;
+    }
+    if index == inputs.len() {
+        return;
+    }
+
+    let engine = LongEngine::new();
+    let derived_secret = engine.derive_secret(seed);
+    let secret = engine.secret(&derived_secret);
+    while index < inputs.len() {
+        let Some(run) = LongRun::new(&inputs[index..]) else {
+            output(short(inputs[index], seed));
+            index += 1;
+            continue;
+        };
+
+        let mut run_index = 0;
+        while run_index + 4 <= run.len() {
+            let group = run.batch4(run_index);
+            let accumulators = engine.accumulate_batch4(group, secret);
+            emit_long_group4(secret, group, accumulators, finalize, &mut output);
+            run_index += 4;
         }
-        true
+        match run.len() - run_index {
+            3 => {
+                let group = run.batch3(run_index);
+                let accumulators = engine.accumulate_batch3(group, secret);
+                emit_long_group3(secret, group, accumulators, finalize, &mut output);
+            }
+            2 => {
+                let group = run.batch2(run_index);
+                let accumulators = engine.accumulate_batch2(group, secret);
+                emit_long_group2(secret, group, accumulators, finalize, &mut output);
+            }
+            1 => {
+                let input = run.first(run_index);
+                output(engine.hash(input, secret, finalize));
+            }
+            _ => {}
+        }
+        index += run.len();
     }
 }
 
 /// Computes canonical XXH3 64-bit hashes for a batch without copying inputs.
 ///
 /// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// equal-size long inputs may be processed two to four at a time on AVX2.
+/// contiguous equal-size long runs may be processed two to four at a time.
 ///
 /// # Arguments
 ///
@@ -79,55 +106,23 @@ fn emit_batch_long_accumulators(
 ///
 #[inline]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
-    let owned_secret =
-        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
-    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
-    let mut output = Vec::with_capacity(inputs.len());
-    for chunk in inputs.chunks(4) {
-        if emit_batch_long_accumulators(chunk, secret, |accumulator| {
-            output.push(merge(
-                &accumulator,
-                &secret[11..],
-                (chunk[0].len() as u64).wrapping_mul(P64_1),
-            ));
-        }) {
-            continue;
-        }
-        output.extend(
-            chunk
-                .iter()
-                .map(|input| xxh3_64_with_long_secret(input, seed, secret)),
-        );
-    }
-    output
+    let mut hashes = Vec::with_capacity(inputs.len());
+    batch_each(inputs, seed, xxh3_64, finalize_long_64, |hash| {
+        hashes.push(hash)
+    });
+    hashes
 }
 
 #[cfg(feature = "python")]
 #[inline]
-pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, mut output: impl FnMut(u64)) {
-    let owned_secret =
-        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
-    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
-    for chunk in inputs.chunks(4) {
-        if emit_batch_long_accumulators(chunk, secret, |accumulator| {
-            output(merge(
-                &accumulator,
-                &secret[11..],
-                (chunk[0].len() as u64).wrapping_mul(P64_1),
-            ));
-        }) {
-            continue;
-        }
-        for input in chunk {
-            output(xxh3_64_with_long_secret(input, seed, secret));
-        }
-    }
+pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
+    batch_each(inputs, seed, xxh3_64, finalize_long_64, output);
 }
 
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
 ///
 /// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// equal-size long inputs may be processed two to four at a time on AVX2.
+/// contiguous equal-size long runs may be processed two to four at a time.
 ///
 /// # Arguments
 ///
@@ -151,41 +146,137 @@ pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, mut output: impl F
 ///
 #[inline]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
-    let owned_secret =
-        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
-    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
-    let mut output = Vec::with_capacity(inputs.len());
-    for chunk in inputs.chunks(4) {
-        if emit_batch_long_accumulators(chunk, secret, |accumulator| {
-            let length = chunk[0].len();
-            output.push(finalize_long_128(length, secret, accumulator));
-        }) {
-            continue;
-        }
-        output.extend(
-            chunk
-                .iter()
-                .map(|input| xxh3_128_with_long_secret(input, seed, secret)),
-        );
-    }
-    output
+    let mut hashes = Vec::with_capacity(inputs.len());
+    batch_each(inputs, seed, xxh3_128, finalize_long_128, |hash| {
+        hashes.push(hash)
+    });
+    hashes
 }
 
 #[cfg(feature = "python")]
 #[inline]
-pub(crate) fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, mut output: impl FnMut([u64; 2])) {
-    let owned_secret =
-        (seed != 0 && inputs.iter().any(|input| input.len() > 240)).then(|| init_secret(seed));
-    let secret = owned_secret.as_ref().unwrap_or(&SECRET);
-    for chunk in inputs.chunks(4) {
-        if emit_batch_long_accumulators(chunk, secret, |accumulator| {
-            let length = chunk[0].len();
-            output(finalize_long_128(length, secret, accumulator));
-        }) {
-            continue;
-        }
-        for input in chunk {
-            output(xxh3_128_with_long_secret(input, seed, secret));
-        }
+pub(crate) fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
+    batch_each(inputs, seed, xxh3_128, finalize_long_128, output);
+}
+
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+mod tests {
+    use super::*;
+    use crate::backend::Capabilities;
+
+    #[test]
+    fn scalar_engine_falls_back_for_batch_groups() {
+        let owned = [300, 300].map(|length| vec![length as u8; length]);
+        let refs = owned.each_ref().map(Vec::as_slice);
+        let run = LongRun::new(&refs).unwrap();
+        let inputs = run.batch2(0);
+        let engine = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        let derived = engine.derive_secret(17);
+        let mut actual = Vec::new();
+        emit_long_group2(
+            engine.secret(&derived),
+            inputs,
+            engine.accumulate_batch2(inputs, engine.secret(&derived)),
+            finalize_long_64,
+            &mut |hash| {
+                actual.push(hash);
+            },
+        );
+        assert_eq!(
+            actual,
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let engine = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        let derived = engine.derive_secret(17);
+        let mut actual = Vec::new();
+        emit_long_group2(
+            engine.secret(&derived),
+            inputs,
+            engine.accumulate_batch2(inputs, engine.secret(&derived)),
+            finalize_long_128,
+            &mut |hash| {
+                actual.push(hash);
+            },
+        );
+        assert_eq!(
+            actual,
+            owned
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let owned = [300, 300, 300, 300].map(|length| vec![length as u8; length]);
+        let refs = owned.each_ref().map(Vec::as_slice);
+        let run = LongRun::new(&refs).unwrap();
+        let group3 = run.batch3(0);
+        let group4 = run.batch4(0);
+        let mut actual = Vec::new();
+        emit_long_group3(
+            engine.secret(&derived),
+            group3,
+            engine.accumulate_batch3(group3, engine.secret(&derived)),
+            finalize_long_64,
+            &mut |hash| actual.push(hash),
+        );
+        assert_eq!(
+            actual,
+            owned[..3]
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let mut actual = Vec::new();
+        emit_long_group4(
+            engine.secret(&derived),
+            group4,
+            engine.accumulate_batch4(group4, engine.secret(&derived)),
+            finalize_long_64,
+            &mut |hash| actual.push(hash),
+        );
+        assert_eq!(
+            actual,
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let mut actual = Vec::new();
+        emit_long_group3(
+            engine.secret(&derived),
+            group3,
+            engine.accumulate_batch3(group3, engine.secret(&derived)),
+            finalize_long_128,
+            &mut |hash| actual.push(hash),
+        );
+        assert_eq!(
+            actual,
+            owned[..3]
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let mut actual = Vec::new();
+        emit_long_group4(
+            engine.secret(&derived),
+            group4,
+            engine.accumulate_batch4(group4, engine.secret(&derived)),
+            finalize_long_128,
+            &mut |hash| actual.push(hash),
+        );
+        assert_eq!(
+            actual,
+            owned
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
     }
 }

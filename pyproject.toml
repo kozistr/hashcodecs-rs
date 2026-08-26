@@ -44,9 +44,9 @@ dev = [
     "ruff>=0.16,<0.17",
 ]
 benchmark = [
-    "mmh3>=5.2.1,<6",
-    "pybase64>=1.4.3,<2",
-    "xxhash>=3.6,<4",
+    "mmh3==5.2.1",
+    "pybase64==1.4.3",
+    "xxhash==3.8.1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -71,8 +71,6 @@ include = [
     "/src",
     "/tools",
 ]
-exclude = ["/src/base64/tests.rs"]
-
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
 

@@ -327,6 +327,8 @@ def test_base64_into_variants_and_errors() -> None:
         base64.b64encode_into(b'abc', bytearray(3))
     with pytest.raises(ValueError, match='requires 3 bytes'):
         base64.b64decode_into(b'YWJj', bytearray(2), validate=True)
+    with pytest.raises(ValueError, match='requires 3 bytes'):
+        base64.b64decode_into(b'YWJj', bytearray(2), validate=True, padded=False)
     undersized = bytearray(b'XX')
     with pytest.raises(ValueError, match='requires 3 bytes'):
         base64.b64decode_into(b'Y!WJj', undersized)
@@ -925,6 +927,52 @@ def test_base64_batch_into_alphabets_wrappers_and_alias() -> None:
     shared = bytearray(b'YWJj')
     assert base64.b64decode_batch_into([shared], [shared], validate=True) == [3]
     assert shared[:3] == b'abc'
+
+
+def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
+    shared = bytearray(b'abcd')
+    encoded = bytearray(8)
+    assert base64.b64encode_batch_into([b'xyz', shared], [shared, encoded]) == [4, 8]
+    assert shared == b'eHl6'
+    assert encoded == b'YWJjZA=='
+
+    shared = bytearray(b'YWJj')
+    decoded = bytearray(3)
+    assert base64.b64decode_batch_into([b'ZGVm', shared], [shared, decoded], validate=True) == [3, 3]
+    assert shared[:3] == b'def'
+    assert decoded == b'abc'
+
+
+def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
+    encoded_storage = bytearray(b'abcd....')
+    encoded_input = memoryview(encoded_storage)[:4]
+    encoded_output = bytearray(8)
+    assert base64.b64encode_batch_into([b'xyz', encoded_input], [encoded_storage, encoded_output]) == [4, 8]
+    assert encoded_storage[:4] == b'eHl6'
+    assert encoded_output == b'YWJjZA=='
+
+    decoded_storage = bytearray(b'YWJj')
+    decoded_input = memoryview(decoded_storage)
+    decoded_output = bytearray(3)
+    assert base64.b64decode_batch_into([b'ZGVm', decoded_input], [decoded_storage, decoded_output], validate=True) == [
+        3,
+        3,
+    ]
+    assert decoded_storage[:3] == b'def'
+    assert decoded_output == b'abc'
+
+    large_storage = bytearray((index * 29 + 7) & 0xFF for index in range(4096))
+    large_input = memoryview(large_storage)
+    expected_later = stdlib_base64.b64encode(large_storage)
+    first_input = b'x' * 3072
+    expected_first = stdlib_base64.b64encode(first_input)
+    large_output = bytearray(len(expected_later))
+    assert base64.b64encode_batch_into([first_input, large_input], [large_storage, large_output]) == [
+        len(expected_first),
+        len(expected_later),
+    ]
+    assert large_storage == expected_first
+    assert large_output == expected_later
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')

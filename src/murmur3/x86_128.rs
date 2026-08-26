@@ -1,9 +1,9 @@
+use super::block_buffer::{BlockBuffer, FullBlocks};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::dispatch;
-use super::incremental::BlockBuffer;
 use super::primitives::{fmix32, read_u32_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
+pub(super) mod x86;
 
 pub(super) const X86_128_C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
 pub(super) const X86_128_C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
@@ -145,13 +145,14 @@ impl Default for Murmur3X86Hasher128 {
 ///
 #[inline]
 pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
+    let (blocks, tail) = FullBlocks::<16>::split(key);
     let mut hashes = [seed; 4];
-    let block_end = key.len() & !15;
-    mix_x86_128_body(&key[..block_end], &mut hashes);
-    finish_x86_128(key, hashes, block_end)
+    mix_x86_128_body(blocks, &mut hashes);
+    finish_x86_128_tail(tail, hashes, key.len() as u32)
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn finish_x86_128(key: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
     finish_x86_128_tail(&key[offset..], hashes, key.len() as u32)
 }
@@ -192,22 +193,39 @@ pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32
 }
 
 #[inline]
-pub(super) fn mix_x86_128_body(key: &[u8], hashes: &mut [u32; 4]) {
+pub(super) fn mix_x86_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x86_128(key.len(), capabilities);
-        if unsafe { x86::try_mix_x86_128_body(key, hashes, selected) } {
+        if blocks.len() < dispatch::X86_128_AVX2_MIN {
+            mix_x86_128_body_scalar(blocks, hashes);
             return;
         }
+        let capabilities = crate::backend::capabilities();
+        let selected = dispatch::x86_128(blocks.len(), capabilities);
+        mix_x86_128_body_with_backend(blocks, hashes, selected);
     }
-    mix_x86_128_body_scalar(key, hashes);
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    mix_x86_128_body_scalar(blocks, hashes);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn mix_x86_128_body_with_backend(
+    blocks: FullBlocks<'_, 16>,
+    hashes: &mut [u32; 4],
+    backend: dispatch::Backend,
+) {
+    if unsafe { x86::try_mix_x86_128_body(blocks, hashes, backend) } {
+        return;
+    }
+    mix_x86_128_body_scalar(blocks, hashes);
 }
 
 #[inline]
-pub(super) fn mix_x86_128_body_scalar(key: &[u8], hashes: &mut [u32; 4]) {
+pub(super) fn mix_x86_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     const ROTATE_K: [u32; 4] = [15, 16, 17, 18];
 
+    let key = blocks.as_bytes();
     let mut offset = 0;
     while offset < key.len() {
         let block1 = read_u32_le(key, offset)

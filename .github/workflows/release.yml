@@ -310,6 +310,20 @@ jobs:
       - name: Check crates.io package
         run: cargo package --locked
 
+      - name: Build and test from extracted source distribution
+        shell: bash
+        run: |
+          mkdir sdist-check
+          tar -xzf dist/*.tar.gz -C sdist-check
+          source_root="$(find sdist-check -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          pushd "$source_root"
+          cargo test --lib --locked
+          uv build --wheel --out-dir "$GITHUB_WORKSPACE/sdist-wheel"
+          popd
+          uv venv sdist-venv
+          uv pip install --python sdist-venv --no-index --find-links sdist-wheel hashcodecs
+          sdist-venv/bin/python -c "import hashcodecs; assert hashcodecs.xxh3_64(b'hello')"
+
   publish_pypi:
     name: Publish / PyPI
     needs: [prepare, verify]

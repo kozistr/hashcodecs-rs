@@ -1,3 +1,5 @@
+from typing import final
+
 from _typeshed import ReadableBuffer
 
 def b64encode(
@@ -146,7 +148,7 @@ def b64decode(
     bit validation are available for protocols with tighter requirements.
 
     Args:
-        s: ASCII text or contiguous bytes-like Base64 data.
+        s: ASCII text or bytes-like Base64 data.
         altchars: Two characters replacing "+" and "/", or None for the
             standard alphabet.
         validate: Reject non-alphabet bytes when true. The default is lenient
@@ -256,7 +258,7 @@ def b64decode_into(
     destination prefix may already have been modified.
 
     Args:
-        s: ASCII text or contiguous bytes-like Base64 data.
+        s: ASCII text or bytes-like Base64 data.
         output: Destination bytearray with room for the complete result.
         altchars: Two characters replacing "+" and "/", or None for the
             standard alphabet.
@@ -348,7 +350,7 @@ def standard_b64decode(s: str | ReadableBuffer) -> bytes:
     Python's base64.standard_b64decode function.
 
     Args:
-        s: ASCII text or contiguous bytes-like Base64 data.
+        s: ASCII text or bytes-like Base64 data.
 
     Returns:
         Newly allocated decoded bytes.
@@ -368,7 +370,7 @@ def standard_b64decode_into(s: str | ReadableBuffer, output: bytearray) -> int:
     """Decode standard Base64 into a reusable bytearray.
 
     Args:
-        s: ASCII text or contiguous bytes-like Base64 data.
+        s: ASCII text or bytes-like Base64 data.
         output: Destination bytearray with room for the decoded result.
 
     Returns:
@@ -615,7 +617,7 @@ def xxh3_64_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
     """Compute canonical XXH3 64-bit hashes for a list of inputs.
 
     Args:
-        items: A list of contiguous bytes-like objects to hash.
+        items: A list of bytes-like objects to hash.
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
@@ -638,7 +640,7 @@ def xxh3_64_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int
     written prefix remain unchanged.
 
     Args:
-        items: A list of contiguous bytes-like objects to hash.
+        items: A list of bytes-like objects to hash.
         output: Destination with at least 8 * len(items) bytes.
         seed: Initial unsigned 64-bit seed shared by every item.
 
@@ -663,7 +665,7 @@ def xxh3_128_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
     """Compute canonical XXH3 128-bit hashes for a list of inputs.
 
     Args:
-        items: A list of contiguous bytes-like objects to hash.
+        items: A list of bytes-like objects to hash.
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
@@ -686,7 +688,7 @@ def xxh3_128_batch_into(items: list[ReadableBuffer], output: bytearray, seed: in
     written prefix remain unchanged.
 
     Args:
-        items: A list of contiguous bytes-like objects to hash.
+        items: A list of bytes-like objects to hash.
         output: Destination with at least 16 * len(items) bytes.
         seed: Initial unsigned 64-bit seed shared by every item.
 
@@ -707,11 +709,12 @@ def xxh3_128_batch_into(items: list[ReadableBuffer], output: bytearray, seed: in
     """
     ...
 
+@final
 class murmur3_x86_32:
     """Incremental MurmurHash3 x86 32-bit hasher.
 
     Args:
-        data: Optional initial contiguous bytes-like data.
+        data: Optional initial bytes-like data.
         seed: Initial unsigned 32-bit seed.
 
     Examples:
@@ -725,7 +728,7 @@ class murmur3_x86_32:
         """Initialize an incremental x86 32-bit hash state.
 
         Args:
-            data: Optional initial contiguous bytes-like data.
+            data: Optional initial bytes-like data.
             seed: Initial unsigned 32-bit seed.
 
         Raises:
@@ -738,7 +741,7 @@ class murmur3_x86_32:
         """Append bytes to the hash state.
 
         Args:
-            data: Contiguous bytes-like data to append.
+            data: Bytes-like data to append.
 
         Returns:
             None.
@@ -804,11 +807,12 @@ class murmur3_x86_32:
         """Return the algorithm name (murmur3_x86_32)."""
         ...
 
+@final
 class murmur3_x86_128:
     """Incremental MurmurHash3 x86 128-bit hasher.
 
     Args:
-        data: Optional initial contiguous bytes-like data.
+        data: Optional initial bytes-like data.
         seed: Initial unsigned 32-bit seed.
 
     Examples:
@@ -822,7 +826,7 @@ class murmur3_x86_128:
         """Initialize an incremental x86 128-bit hash state.
 
         Args:
-            data: Optional initial contiguous bytes-like data.
+            data: Optional initial bytes-like data.
             seed: Initial unsigned 32-bit seed.
 
         Raises:
@@ -835,7 +839,7 @@ class murmur3_x86_128:
         """Append bytes to the hash state.
 
         Args:
-            data: Contiguous bytes-like data to append.
+            data: Bytes-like data to append.
 
         Returns:
             None.
@@ -901,11 +905,12 @@ class murmur3_x86_128:
         """Return the algorithm name (murmur3_x86_128)."""
         ...
 
+@final
 class murmur3_x64_128:
     """Incremental MurmurHash3 x64 128-bit hasher.
 
     Args:
-        data: Optional initial contiguous bytes-like data.
+        data: Optional initial bytes-like data.
         seed: Initial unsigned 32-bit seed.
 
     Examples:
@@ -920,7 +925,7 @@ class murmur3_x64_128:
         """Initialize an incremental x64 128-bit hash state.
 
         Args:
-            data: Optional initial contiguous bytes-like data.
+            data: Optional initial bytes-like data.
             seed: Initial unsigned 32-bit seed.
 
         Raises:
@@ -933,7 +938,7 @@ class murmur3_x64_128:
         """Append bytes to the hash state.
 
         Args:
-            data: Contiguous bytes-like data to append.
+            data: Bytes-like data to append.
 
         Returns:
             None.

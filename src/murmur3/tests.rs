@@ -1,14 +1,17 @@
+use super::block_buffer::FullBlocks;
 use super::primitives::read_partial_u64_le;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x64_128::finish_x64_128;
 use super::x64_128::murmur3_x64_128_scalar_inner;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86_32::finish_x86_32;
+use super::x64_128::{finish_x64_128, mix_x64_128_body_scalar, mix_x64_128_body_with_backend};
 use super::x86_32::murmur3_x86_32_scalar;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::x86_32::{finish_x86_32, mix_x86_32_body_scalar, mix_x86_32_body_with_backend};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::x86_128::mix_x86_128_body_with_backend;
 use super::x86_128::{finalize_x86_128, finish_x86_128, mix_x86_128_body, mix_x86_128_body_scalar};
 use super::*;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::{x64_128::x86 as x64_x86, x86_32::x86 as x86_32_x86, x86_128::x86 as x86_128_x86};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::{self as cpu, SimdBackend};
 use std::io::Cursor;
@@ -114,7 +117,8 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     ];
     for selected in supported.into_iter().flatten() {
         let mut hashes = [seed; 4];
-        assert!(unsafe { x86::try_mix_x86_128_body(&input[..block_end], &mut hashes, selected) });
+        let blocks = FullBlocks::new(&input[..block_end]).unwrap();
+        assert!(unsafe { x86_128_x86::try_mix_x86_128_body(blocks, &mut hashes, selected) });
         assert_eq!(
             x86_words_as_u128(finish_x86_128(input, hashes, block_end)),
             expected
@@ -123,8 +127,8 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
 
     let mut unchanged = [seed; 4];
     assert!(!unsafe {
-        x86::try_mix_x86_128_body(
-            &input[..block_end],
+        x86_128_x86::try_mix_x86_128_body(
+            FullBlocks::new(&input[..block_end]).unwrap(),
             &mut unchanged,
             dispatch::Backend::Scalar,
         )
@@ -149,7 +153,12 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     for (selected, bmi2) in supported.into_iter().flatten() {
         let mut hashes = [seed as u64; 2];
         assert!(unsafe {
-            x86::try_mix_x64_128_body(&input[..block_end], &mut hashes, selected, bmi2)
+            x64_x86::try_mix_x64_128_body(
+                FullBlocks::new(&input[..block_end]).unwrap(),
+                &mut hashes,
+                selected,
+                bmi2,
+            )
         });
         assert_eq!(
             x64_words_as_u128(finish_x64_128(input, hashes, block_end)),
@@ -159,8 +168,8 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
 
     let mut unchanged = [seed as u64; 2];
     assert!(!unsafe {
-        x86::try_mix_x64_128_body(
-            &input[..block_end],
+        x64_x86::try_mix_x64_128_body(
+            FullBlocks::new(&input[..block_end]).unwrap(),
             &mut unchanged,
             dispatch::Backend::Scalar,
             false,
@@ -188,12 +197,38 @@ fn known_answer_vectors() {
 fn scalar_x86_128_body_matches_the_reference() {
     let data: Vec<u8> = (0..255).map(|value| value as u8).collect();
     let mut scalar = [7; 4];
-    mix_x86_128_body(&data[..240], &mut scalar);
+    mix_x86_128_body(FullBlocks::new(&data[..240]).unwrap(), &mut scalar);
     let scalar_hash = finalize_x86_128(scalar, 240);
     assert_eq!(
         x86_words_as_u128(scalar_hash),
         murmur3::murmur3_x86_128(&mut Cursor::new(&data[..240]), 7).unwrap()
     );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn scalar_dispatch_fallbacks_process_full_blocks() {
+    let data = (0..256).map(|value| value as u8).collect::<Vec<_>>();
+
+    let blocks32 = FullBlocks::new(&data[..32]).unwrap();
+    let mut expected32 = 7;
+    mix_x86_32_body_scalar(blocks32, &mut expected32);
+    let mut actual32 = 7;
+    mix_x86_32_body_with_backend(blocks32, &mut actual32, dispatch::Backend::Scalar);
+    assert_eq!(actual32, expected32);
+
+    let blocks128 = FullBlocks::new(&data).unwrap();
+    let mut expected_x86 = [11; 4];
+    mix_x86_128_body_scalar(blocks128, &mut expected_x86);
+    let mut actual_x86 = [11; 4];
+    mix_x86_128_body_with_backend(blocks128, &mut actual_x86, dispatch::Backend::Scalar);
+    assert_eq!(actual_x86, expected_x86);
+
+    let mut expected_x64 = [13; 2];
+    mix_x64_128_body_scalar(blocks128, &mut expected_x64);
+    let mut actual_x64 = [13; 2];
+    mix_x64_128_body_with_backend(blocks128, &mut actual_x64, dispatch::Backend::Scalar, false);
+    assert_eq!(actual_x64, expected_x64);
 }
 
 #[test]
@@ -230,7 +265,11 @@ fn matches_the_reference_implementation_for_every_tail_length() {
                 for selected in supported.into_iter().flatten() {
                     let mut hash = seed;
                     assert!(unsafe {
-                        x86::try_mix_x86_32_body(&input[..block_end], &mut hash, selected)
+                        x86_32_x86::try_mix_x86_32_body(
+                            FullBlocks::new(&input[..block_end]).unwrap(),
+                            &mut hash,
+                            selected,
+                        )
                     });
                     assert_eq!(
                         finish_x86_32(&input, hash, block_end),
@@ -241,8 +280,8 @@ fn matches_the_reference_implementation_for_every_tail_length() {
 
                 let mut unchanged = seed;
                 assert!(!unsafe {
-                    x86::try_mix_x86_32_body(
-                        &input[..block_end],
+                    x86_32_x86::try_mix_x86_32_body(
+                        FullBlocks::new(&input[..block_end]).unwrap(),
                         &mut unchanged,
                         dispatch::Backend::Scalar,
                     )
@@ -256,7 +295,10 @@ fn matches_the_reference_implementation_for_every_tail_length() {
             assert_eq!(x86, expected_x86_128, "x86_128 length={length} seed={seed}");
             let block_end = input.len() & !15;
             let mut scalar_x86_128 = [seed; 4];
-            mix_x86_128_body_scalar(&input[..block_end], &mut scalar_x86_128);
+            mix_x86_128_body_scalar(
+                FullBlocks::new(&input[..block_end]).unwrap(),
+                &mut scalar_x86_128,
+            );
             assert_eq!(
                 x86_words_as_u128(finish_x86_128(&input, scalar_x86_128, block_end)),
                 expected_x86_128,

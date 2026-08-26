@@ -27,7 +27,7 @@ fn with_input<T: Ungil>(
 /// Incremental MurmurHash3 x86 32-bit hasher.
 ///
 /// Args:
-///     data: Optional initial contiguous bytes-like data.
+///     data: Optional initial bytes-like data.
 ///     seed: Initial unsigned 32-bit seed.
 ///
 /// Examples:
@@ -50,7 +50,7 @@ impl PyMurmur3X86Hasher32 {
     /// Initialize an incremental x86 32-bit hash state.
     ///
     /// Args:
-    ///     data: Optional initial contiguous bytes-like data.
+    ///     data: Optional initial bytes-like data.
     ///     seed: Initial unsigned 32-bit seed.
     ///
     /// Raises:
@@ -70,7 +70,7 @@ impl PyMurmur3X86Hasher32 {
     /// Append bytes to the hash state.
     ///
     /// Args:
-    ///     data: Contiguous bytes-like data to append.
+    ///     data: Bytes-like data to append.
     ///
     /// Returns:
     ///     None.
@@ -146,7 +146,7 @@ impl PyMurmur3X86Hasher32 {
 /// Incremental MurmurHash3 x86 128-bit hasher.
 ///
 /// Args:
-///     data: Optional initial contiguous bytes-like data.
+///     data: Optional initial bytes-like data.
 ///     seed: Initial unsigned 32-bit seed.
 ///
 /// Examples:
@@ -169,7 +169,7 @@ impl PyMurmur3X86Hasher128 {
     /// Initialize an incremental x86 128-bit hash state.
     ///
     /// Args:
-    ///     data: Optional initial contiguous bytes-like data.
+    ///     data: Optional initial bytes-like data.
     ///     seed: Initial unsigned 32-bit seed.
     ///
     /// Raises:
@@ -189,7 +189,7 @@ impl PyMurmur3X86Hasher128 {
     /// Append bytes to the hash state.
     ///
     /// Args:
-    ///     data: Contiguous bytes-like data to append.
+    ///     data: Bytes-like data to append.
     ///
     /// Returns:
     ///     None.
@@ -265,7 +265,7 @@ impl PyMurmur3X86Hasher128 {
 /// Incremental MurmurHash3 x64 128-bit hasher.
 ///
 /// Args:
-///     data: Optional initial contiguous bytes-like data.
+///     data: Optional initial bytes-like data.
 ///     seed: Initial unsigned 32-bit seed.
 ///
 /// Examples:
@@ -289,7 +289,7 @@ impl PyMurmur3X64Hasher128 {
     /// Initialize an incremental x64 128-bit hash state.
     ///
     /// Args:
-    ///     data: Optional initial contiguous bytes-like data.
+    ///     data: Optional initial bytes-like data.
     ///     seed: Initial unsigned 32-bit seed.
     ///
     /// Raises:
@@ -309,7 +309,7 @@ impl PyMurmur3X64Hasher128 {
     /// Append bytes to the hash state.
     ///
     /// Args:
-    ///     data: Contiguous bytes-like data to append.
+    ///     data: Bytes-like data to append.
     ///
     /// Returns:
     ///     None.

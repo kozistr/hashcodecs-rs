@@ -3,7 +3,7 @@
 use std::arch::aarch64::*;
 
 use super::super::primitives::P32_1;
-use super::{initial_accumulator, long_schedule};
+use super::{LongInput, Secret, initial_accumulator, long_schedule};
 
 #[inline(always)]
 unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {
@@ -52,13 +52,15 @@ unsafe fn scramble(acc: &mut [u64; 8], secret: *const u8) {
 
 #[target_feature(enable = "neon")]
 /// # Safety
-/// The caller must have detected NEON support. `data` must be in XXH3 long
-/// mode and `secret` must contain at least 192 bytes.
-pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    let schedule = long_schedule(data.len());
+/// The caller must have detected NEON support. This kernel is only compiled
+/// for little-endian AArch64, matching XXH3's lane byte order.
+pub(super) unsafe fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+    let data = input.as_bytes();
+    let secret = secret.as_bytes();
+    let schedule = long_schedule(input);
     let mut acc = initial_accumulator();
 
-    for block in 0..schedule.full_blocks {
+    for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         for stripe in 0..16 {
             unsafe {
@@ -72,11 +74,11 @@ pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
 
-    for stripe in 0..schedule.tail_stripes {
+    for stripe in 0..schedule.tail_stripes() {
         unsafe {
             accumulate_stripe(
                 &mut acc,
-                data.as_ptr().add(schedule.tail_offset + stripe * 64),
+                data.as_ptr().add(schedule.tail_offset() + stripe * 64),
                 secret.as_ptr().add(stripe * 8),
             )
         };
@@ -85,7 +87,7 @@ pub(super) unsafe fn accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
     unsafe {
         accumulate_stripe(
             &mut acc,
-            data.as_ptr().add(schedule.last_offset),
+            data.as_ptr().add(schedule.last_offset()),
             secret.as_ptr().add(121),
         )
     };

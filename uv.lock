@@ -180,9 +180,9 @@ wheel-test = [
 
 [package.metadata.requires-dev]
 benchmark = [
-    { name = "mmh3", specifier = ">=5.2.1,<6" },
-    { name = "pybase64", specifier = ">=1.4.3,<2" },
-    { name = "xxhash", specifier = ">=3.6,<4" },
+    { name = "mmh3", specifier = "==5.2.1" },
+    { name = "pybase64", specifier = "==1.4.3" },
+    { name = "xxhash", specifier = "==3.8.1" },
 ]
 dev = [
     { name = "pytest", specifier = "==9.1.1" },

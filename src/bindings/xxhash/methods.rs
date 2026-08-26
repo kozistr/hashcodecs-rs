@@ -80,7 +80,7 @@ Examples:
 Compute canonical XXH3 64-bit hashes for a list of inputs.
 
 Args:
-    items: A list of contiguous bytes-like objects to hash.
+    items: A list of bytes-like objects to hash.
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
@@ -107,7 +107,7 @@ Examples:
 Compute canonical XXH3 128-bit hashes for a list of inputs.
 
 Args:
-    items: A list of contiguous bytes-like objects to hash.
+    items: A list of bytes-like objects to hash.
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
@@ -137,7 +137,7 @@ Inputs and capacity are validated before output is mutated. Bytes after the
 written prefix remain unchanged.
 
 Args:
-    items: A list of contiguous bytes-like objects to hash.
+    items: A list of bytes-like objects to hash.
     output: Destination with at least 8 * len(items) bytes.
     seed: Initial unsigned 64-bit seed shared by every item.
 
@@ -172,7 +172,7 @@ Inputs and capacity are validated before output is mutated. Bytes after the
 written prefix remain unchanged.
 
 Args:
-    items: A list of contiguous bytes-like objects to hash.
+    items: A list of bytes-like objects to hash.
     output: Destination with at least 16 * len(items) bytes.
     seed: Initial unsigned 64-bit seed shared by every item.
 

@@ -24,7 +24,8 @@ use super::{
 ///
 /// The input must be quartet-aligned, use only the standard alphabet, and have
 /// valid trailing padding. Unlike Python's lenient decoder, this Rust API does
-/// not ignore whitespace or other non-alphabet bytes.
+/// not ignore whitespace or other non-alphabet bytes. Non-zero unused bits in
+/// the final quantum are accepted rather than treated as a canonicality error.
 ///
 /// # Arguments
 ///
@@ -54,7 +55,8 @@ pub fn b64decode(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 /// Decodes padded RFC 4648 Base64 with the URL-safe alphabet.
 ///
 /// The input must be quartet-aligned, use only the URL-safe alphabet, and have
-/// valid trailing padding.
+/// valid trailing padding. Non-zero unused bits in the final quantum are
+/// accepted rather than treated as a canonicality error.
 ///
 /// # Arguments
 ///
@@ -259,6 +261,7 @@ pub(crate) fn decode_unpadded_layout(input: &[u8]) -> Result<DecodeLayout, Base6
         .and_then(|length| length.checked_add(tail_len))
         .ok_or(Base64Error::InvalidInput)?;
     Ok(DecodeLayout {
+        input_len: input.len(),
         padding: 0,
         output_len,
     })
@@ -286,7 +289,8 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    debug_assert_eq!(output.len(), layout.output_len);
+    assert_eq!(input.len(), layout.input_len);
+    assert_eq!(output.len(), layout.output_len);
     // The slice has exactly the required initialized storage, so only bounded
     // stores are permitted.
     unsafe { decode_to_ptr_with_layout(input, output.as_mut_ptr(), layout, alphabet, false) }
@@ -300,7 +304,8 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    debug_assert_eq!(output.len(), layout.output_len);
+    assert_eq!(input.len(), layout.input_len);
+    assert_eq!(output.len(), layout.output_len);
     unsafe {
         decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false)
     }
@@ -314,7 +319,8 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    debug_assert_eq!(output.len(), layout.output_len);
+    assert_eq!(input.len(), layout.input_len);
+    assert_eq!(output.len(), layout.output_len);
     unsafe {
         decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, true)
     }
@@ -350,7 +356,8 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    debug_assert_eq!(output.len(), layout.output_len);
+    assert_eq!(input.len(), layout.input_len);
+    assert_eq!(output.len(), layout.output_len);
     // Transactional SIMD error handling writes only complete, validated blocks,
     // so a lenient caller can safely fall back without modifying the suffix.
     unsafe {
@@ -434,6 +441,7 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
 ) -> Result<(), Base64Error> {
     let prefix_len = input.len() / 4 * 4;
     let prefix_layout = DecodeLayout {
+        input_len: prefix_len,
         padding: 0,
         output_len: prefix_len / 4 * 3,
     };
@@ -468,6 +476,7 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
 pub(crate) fn decode_layout(input: &[u8]) -> Result<DecodeLayout, Base64Error> {
     if input.is_empty() {
         return Ok(DecodeLayout {
+            input_len: 0,
             padding: 0,
             output_len: 0,
         });
@@ -482,6 +491,7 @@ pub(crate) fn decode_layout(input: &[u8]) -> Result<DecodeLayout, Base64Error> {
         _ => 0,
     };
     Ok(DecodeLayout {
+        input_len: input.len(),
         padding,
         output_len: input.len() / 4 * 3 - padding,
     })
@@ -489,8 +499,17 @@ pub(crate) fn decode_layout(input: &[u8]) -> Result<DecodeLayout, Base64Error> {
 
 #[derive(Clone, Copy)]
 pub(crate) struct DecodeLayout {
-    pub(crate) padding: usize,
-    pub(crate) output_len: usize,
+    input_len: usize,
+    padding: usize,
+    output_len: usize,
+}
+
+impl DecodeLayout {
+    #[inline(always)]
+    #[cfg(any(feature = "python", test))]
+    pub(crate) fn output_len(self) -> usize {
+        self.output_len
+    }
 }
 
 pub(crate) unsafe fn decode_quad_ptr(

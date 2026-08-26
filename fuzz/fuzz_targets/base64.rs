@@ -1,6 +1,9 @@
 #![no_main]
 
 use base64::Engine;
+use base64::alphabet;
+use base64::engine::DecodePaddingMode;
+use base64::engine::general_purpose::{GeneralPurpose, GeneralPurposeConfig};
 use hashcodecs::base64::{
     b64decode, b64decode_into, b64decode_urlsafe, b64decode_urlsafe_into, b64encode,
     b64encode_into, b64encode_urlsafe, b64encode_urlsafe_into,
@@ -11,6 +14,26 @@ const MAX_INPUT: usize = 1024 * 1024;
 
 fuzz_target!(|bytes: &[u8]| {
     let input = &bytes[..bytes.len().min(MAX_INPUT)];
+    let permissive = GeneralPurposeConfig::new()
+        .with_decode_allow_trailing_bits(true)
+        .with_decode_padding_mode(DecodePaddingMode::RequireCanonical);
+    let standard_decoder = GeneralPurpose::new(&alphabet::STANDARD, permissive);
+    let urlsafe_decoder = GeneralPurpose::new(&alphabet::URL_SAFE, permissive);
+
+    let actual = b64decode(input);
+    let expected = standard_decoder.decode(input);
+    assert_eq!(actual.is_ok(), expected.is_ok());
+    if let (Ok(actual), Ok(expected)) = (actual, expected) {
+        assert_eq!(actual, expected);
+    }
+
+    let actual = b64decode_urlsafe(input);
+    let expected = urlsafe_decoder.decode(input);
+    assert_eq!(actual.is_ok(), expected.is_ok());
+    if let (Ok(actual), Ok(expected)) = (actual, expected) {
+        assert_eq!(actual, expected);
+    }
+
     let standard = base64::engine::general_purpose::STANDARD.encode(input);
     let urlsafe = base64::engine::general_purpose::URL_SAFE.encode(input);
 
@@ -52,10 +75,4 @@ fuzz_target!(|bytes: &[u8]| {
     assert_eq!(&url_decoded[..input.len()], input);
     assert!(url_decoded[input.len()..].iter().all(|byte| *byte == 0xa5));
 
-    if !standard.is_empty() {
-        let mut malformed = standard.into_bytes();
-        let malformed_index = input[0] as usize % malformed.len();
-        malformed[malformed_index] = b'!';
-        let _ = b64decode(&malformed);
-    }
 });

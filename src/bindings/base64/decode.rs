@@ -620,7 +620,7 @@ fn decode_strict_native<'py>(
     };
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
-        pybytes_with_len(py, layout.output_len, |output| {
+        pybytes_with_len(py, layout.output_len(), |output| {
             input.with_bytes(|input| {
                 let output_address = output as usize;
                 let decode = move || {
@@ -729,19 +729,19 @@ fn decode_strict_with_layout_to_ptr(
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    if provided < layout.output_len {
+    if provided < layout.output_len() {
         return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len,
+            required: layout.output_len(),
             provided,
         });
     }
-    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len) };
+    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
     if transactional_errors {
         decode_to_slice_with_layout_and_alphabet_transactional(input, output, layout, alphabet)?;
     } else {
         decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
     }
-    Ok(layout.output_len)
+    Ok(layout.output_len())
 }
 
 fn decode_unpadded<'py>(
@@ -757,7 +757,7 @@ fn decode_unpadded<'py>(
         .map_err(|_| decoding_error(py, "Incorrect padding"))?;
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
-        pybytes_with_len(py, layout.output_len, |output| {
+        pybytes_with_len(py, layout.output_len(), |output| {
             input.with_bytes(|input| {
                 let output_address = output as usize;
                 let decode = move || {
@@ -845,13 +845,13 @@ fn decode_unpadded_with_layout_to_ptr(
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
 ) -> Result<usize, Base64Error> {
-    if provided < layout.output_len {
+    if provided < layout.output_len() {
         return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len,
+            required: layout.output_len(),
             provided,
         });
     }
-    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len) };
+    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
     if transactional_errors {
         decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
             input, output, layout, alphabet,
@@ -859,7 +859,7 @@ fn decode_unpadded_with_layout_to_ptr(
     } else {
         decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
     }
-    Ok(layout.output_len)
+    Ok(layout.output_len())
 }
 
 fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
@@ -1588,8 +1588,8 @@ fn decode_plan_into_inner(
 /// be distinct bytearrays. Each destination keeps its size; only its written
 /// prefix is changed. Processing is fail-fast and non-transactional: an error
 /// leaves earlier destinations modified, and the failing destination may be
-/// partly written. The GIL remains held because outputs are mutable. Do not
-/// share backing storage across different item/output pairs.
+/// partly written. The GIL remains held because outputs are mutable. Inputs are
+/// snapshotted before the first destination write.
 pub(super) fn b64decode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -1610,12 +1610,15 @@ fn b64decode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let length = items.len();
-    let mut pairs = items.into_iter().zip(outputs.iter());
+    let inputs = items
+        .iter()
+        .map(|item| ascii_or_bytes(py, item, "s").map(BytesLike::into_stable_for_batch_output))
+        .collect::<PyResult<Vec<_>>>()?;
+    let length = inputs.len();
+    let mut pairs = inputs.into_iter().zip(outputs.iter());
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, length, |_| {
-        let (item, output) = pairs.next().expect("batch item count is exact");
-        let input = ascii_or_bytes(py, &item, "s")?;
+        let (input, output) = pairs.next().expect("batch item count is exact");
         Ok(PyInt::new(
             py,
             DecodePlan::new(&input, options)

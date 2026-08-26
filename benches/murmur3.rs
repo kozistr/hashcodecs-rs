@@ -7,7 +7,6 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 mod support;
 
 const SIZES: [usize; 4] = [1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
-const SAMPLE_SIZE: usize = 50;
 
 fn data(size: usize) -> Vec<u8> {
     (0..size)
@@ -52,7 +51,6 @@ fn x86_32(c: &mut Criterion) {
         );
         assert_eq!(murmurs::murmur3_x86_32(&input, 42), expected);
         assert_eq!(mm3h::murmurhash3_32_with_seed(&input, 42), expected);
-        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3::murmur3_x86_32(input, 42)
@@ -80,7 +78,6 @@ fn x86_128(c: &mut Criterion) {
             x86_128_as_u128(expected)
         );
         assert_eq!(murmurs::murmur3_x86_128(&input, 42), expected);
-        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3::murmur3_x86_128(input, 42)
@@ -108,7 +105,6 @@ fn x64_128(c: &mut Criterion) {
         assert_eq!(murmurs::murmur3_x64_128(&input, 42), expected);
         assert_eq!(fastmurmur3::murmur3_x64_128(&input, 42), expected_u128);
         assert_eq!(mm3h::murmurhash3_128_with_seed(&input, 42), expected_u128);
-        group.sample_size(SAMPLE_SIZE);
         group.throughput(Throughput::Bytes(size as u64));
         benchmark!(group, size, &input, "hashcodecs", |input: &[u8]| {
             hashcodecs::murmur3::murmur3_x64_128(input, 42)
@@ -133,7 +129,7 @@ criterion_group! {
     name = benches;
     config = Criterion::default()
         .measurement_time(Duration::from_secs(1))
-        .sample_size(30)
+        .sample_size(support::SAMPLE_SIZE)
         .warm_up_time(Duration::from_millis(500));
     targets = murmur3
 }

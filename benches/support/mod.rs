@@ -2,6 +2,8 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+pub const SAMPLE_SIZE: usize = 50;
+
 #[cfg(target_os = "windows")]
 pub fn pin_to_one_cpu() {
     use core::ffi::c_void;

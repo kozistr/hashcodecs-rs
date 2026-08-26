@@ -16,6 +16,9 @@ sampling time per case is at least their product, plus calibration; use lower va
 hashcodecs-only pass, use `--hashcodecs-only --samples 3 --minimum-sample-seconds 0.05` with each Python benchmark
 script.
 
+Each Rust Criterion harness collects 50 samples per case. Pass Criterion's `--sample-size` option for an exploratory
+run with a different count.
+
 ## Python Call Costs
 
 Run `python benchmarks/python_calls.py` to measure positional calls from 0 through 256 bytes in nanoseconds per
@@ -30,10 +33,15 @@ For Python, run the upstream `xxhash` extension beside hashcodecs. Pass 32 equal
 The Rust remainder cases pass two or three equal-size long inputs. Run Python remainder cases with
 `python benchmarks/python_xxhash.py --batch-counts 2 3`.
 
+The Rust mixed benchmarks use `[1024, 1024, 4096, 4096]`, `[240, 240, 241, 241]`, and the reverse boundary order.
+The 1024/4096 case measures adjacent two-item long runs. The 240/241 cases measure both orders across the
+short/long dispatch boundary.
+
 Use the focused one-shot run to cover the AVX2 four-chain boundaries:
 
 ```sh
-cargo bench --bench xxhash -- --sample-size 50 "xxh3_(64|128)/(241|512|768|1024|1536|2048|4096)/hashcodecs"
+cargo bench --bench xxhash -- "xxh3_(64|128)/(240|241|512|768|1024|1536|2048|4096)/hashcodecs"
+cargo bench --bench xxhash -- "xxh3_batch/mixed/.*/hashcodecs_(64|128)"
 ```
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)

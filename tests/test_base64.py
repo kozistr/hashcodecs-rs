@@ -327,6 +327,8 @@ def test_base64_into_variants_and_errors() -> None:
         base64.b64encode_into(b'abc', bytearray(3))
     with pytest.raises(ValueError, match='requires 3 bytes'):
         base64.b64decode_into(b'YWJj', bytearray(2), validate=True)
+    with pytest.raises(ValueError, match='requires 3 bytes'):
+        base64.b64decode_into(b'YWJj', bytearray(2), validate=True, padded=False)
     undersized = bytearray(b'XX')
     with pytest.raises(ValueError, match='requires 3 bytes'):
         base64.b64decode_into(b'Y!WJj', undersized)
@@ -958,6 +960,19 @@ def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
     ]
     assert decoded_storage[:3] == b'def'
     assert decoded_output == b'abc'
+
+    large_storage = bytearray((index * 29 + 7) & 0xFF for index in range(4096))
+    large_input = memoryview(large_storage)
+    expected_later = stdlib_base64.b64encode(large_storage)
+    first_input = b'x' * 3072
+    expected_first = stdlib_base64.b64encode(first_input)
+    large_output = bytearray(len(expected_later))
+    assert base64.b64encode_batch_into([first_input, large_input], [large_storage, large_output]) == [
+        len(expected_first),
+        len(expected_later),
+    ]
+    assert large_storage == expected_first
+    assert large_output == expected_later
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')

@@ -1,20 +1,29 @@
-#[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(any(
+    all(target_arch = "aarch64", target_endian = "little"),
+    target_arch = "x86",
+    target_arch = "x86_64"
+))]
 use crate::backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::Capabilities;
-#[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::SimdBackend;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
+mod scalar;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub(super) mod avx2;
+mod x86;
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod avx512;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod ssse3;
+use x86::{avx2, avx2_batch, avx512, ssse3};
 
 use super::primitives::*;
+
+#[cfg(test)]
+pub(super) fn long_accumulate_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+    scalar::accumulate(input, secret)
+}
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) const X86_BACKEND_PREFERENCE: [SimdBackend; 4] = [
@@ -24,7 +33,113 @@ pub(super) const X86_BACKEND_PREFERENCE: [SimdBackend; 4] = [
     SimdBackend::Ssse3,
 ];
 
-pub(super) fn init_secret_scalar(seed: u64) -> [u8; 192] {
+#[derive(Clone, Copy, Debug)]
+pub(super) struct LongInput<'a>(&'a [u8]);
+
+impl<'a> LongInput<'a> {
+    #[inline]
+    pub(super) fn new(input: &'a [u8]) -> Option<Self> {
+        (input.len() > 240).then_some(Self(input))
+    }
+
+    #[inline(always)]
+    pub(super) fn as_bytes(self) -> &'a [u8] {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(super) fn len(self) -> usize {
+        self.0.len()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct LongBatch<'a, const N: usize>([LongInput<'a>; N]);
+
+impl<'a, const N: usize> LongBatch<'a, N> {
+    #[inline(always)]
+    pub(super) fn into_inputs(self) -> [LongInput<'a>; N] {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(super) fn input(self, index: usize) -> LongInput<'a> {
+        self.0[index]
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct LongRun<'batch, 'input> {
+    inputs: &'batch [&'input [u8]],
+}
+
+impl<'batch, 'input> LongRun<'batch, 'input> {
+    #[inline(always)]
+    pub(super) fn new(inputs: &'batch [&'input [u8]]) -> Option<Self> {
+        let first = LongInput::new(inputs.first()?)?;
+        let run_length = inputs
+            .iter()
+            .take_while(|input| input.len() == first.len())
+            .count();
+        Some(Self {
+            inputs: &inputs[..run_length],
+        })
+    }
+
+    #[inline(always)]
+    pub(super) fn len(self) -> usize {
+        self.inputs.len()
+    }
+
+    #[inline(always)]
+    fn input(self, index: usize) -> LongInput<'input> {
+        LongInput(self.inputs[index])
+    }
+
+    #[inline(always)]
+    pub(super) fn first(self, index: usize) -> LongInput<'input> {
+        self.input(index)
+    }
+
+    #[inline(always)]
+    pub(super) fn batch2(self, index: usize) -> LongBatch<'input, 2> {
+        LongBatch([self.input(index), self.input(index + 1)])
+    }
+
+    #[inline(always)]
+    pub(super) fn batch3(self, index: usize) -> LongBatch<'input, 3> {
+        LongBatch([
+            self.input(index),
+            self.input(index + 1),
+            self.input(index + 2),
+        ])
+    }
+
+    #[inline(always)]
+    pub(super) fn batch4(self, index: usize) -> LongBatch<'input, 4> {
+        LongBatch([
+            self.input(index),
+            self.input(index + 1),
+            self.input(index + 2),
+            self.input(index + 3),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct Secret([u8; 192]);
+
+impl Secret {
+    #[inline(always)]
+    pub(super) fn as_bytes(&self) -> &[u8; 192] {
+        &self.0
+    }
+}
+
+static DEFAULT_SECRET: Secret = Secret(SECRET);
+
+#[inline]
+pub(super) fn init_secret_scalar(seed: u64) -> Secret {
     let mut secret = SECRET;
     for offset in (0..192).step_by(16) {
         let lo = u64le(&SECRET, offset).wrapping_add(seed);
@@ -32,18 +147,13 @@ pub(super) fn init_secret_scalar(seed: u64) -> [u8; 192] {
         secret[offset..offset + 8].copy_from_slice(&lo.to_le_bytes());
         secret[offset + 8..offset + 16].copy_from_slice(&hi.to_le_bytes());
     }
-    secret
+    Secret(secret)
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(test)]
 #[inline]
-pub(super) fn init_secret(seed: u64) -> [u8; 192] {
-    init_secret_with_capabilities(seed, backend::capabilities())
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[inline]
-pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> [u8; 192] {
+pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> Secret {
     if capabilities.supports(SimdBackend::Avx2) {
         unsafe { avx2::init_secret(seed) }
     } else {
@@ -51,48 +161,7 @@ pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilitie
     }
 }
 
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-#[inline]
-pub(super) fn init_secret(seed: u64) -> [u8; 192] {
-    init_secret_scalar(seed)
-}
-
-#[inline(always)]
-pub(super) fn accumulate_scalar(acc: &mut [u64; 8], data: &[u8], secret: &[u8], offset: usize) {
-    for lane in 0..8 {
-        let value = u64le(data, offset + lane * 8);
-        let keyed = value ^ u64le(secret, lane * 8);
-        acc[lane ^ 1] = acc[lane ^ 1].wrapping_add(value);
-        acc[lane] = acc[lane].wrapping_add((keyed as u32 as u64).wrapping_mul(keyed >> 32));
-    }
-}
-
-#[inline(always)]
-pub(super) fn scramble_scalar(acc: &mut [u64; 8], secret: &[u8]) {
-    for (lane, value) in acc.iter_mut().enumerate() {
-        *value ^= *value >> 47;
-        *value ^= u64le(secret, lane * 8);
-        *value = value.wrapping_mul(P32_1);
-    }
-}
-
-pub(super) fn merge(acc: &[u64; 8], secret: &[u8], start: u64) -> u64 {
-    let mut result = start;
-    for lane in 0..4 {
-        result = result.wrapping_add(mulfold(
-            acc[lane * 2] ^ u64le(secret, lane * 16),
-            acc[lane * 2 + 1] ^ u64le(secret, lane * 16 + 8),
-        ));
-    }
-    avalanche(result)
-}
-
-#[inline]
-pub(super) fn initial_accumulator() -> [u64; 8] {
-    [P32_3, P64_1, P64_2, P64_3, P64_4, P32_2, P64_5, P32_1]
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct LongSchedule {
     pub(super) full_blocks: usize,
     pub(super) tail_offset: usize,
@@ -101,7 +170,8 @@ pub(super) struct LongSchedule {
 }
 
 #[inline]
-pub(super) fn long_schedule(length: usize) -> LongSchedule {
+pub(super) fn long_schedule(input: LongInput<'_>) -> LongSchedule {
+    let length = input.len();
     let full_blocks = (length - 1) / 1024;
     let tail_offset = full_blocks * 1024;
     LongSchedule {
@@ -112,47 +182,39 @@ pub(super) fn long_schedule(length: usize) -> LongSchedule {
     }
 }
 
-pub(super) fn long_accumulate_scalar(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    let schedule = long_schedule(data.len());
-    let mut acc = initial_accumulator();
-    for block in 0..schedule.full_blocks {
-        let offset = block * 1024;
-        for stripe in 0..16 {
-            accumulate_scalar(&mut acc, data, &secret[stripe * 8..], offset + stripe * 64);
-        }
-        scramble_scalar(&mut acc, &secret[128..]);
-    }
-    for stripe in 0..schedule.tail_stripes {
-        accumulate_scalar(
-            &mut acc,
-            data,
-            &secret[stripe * 8..],
-            schedule.tail_offset + stripe * 64,
-        );
-    }
-    accumulate_scalar(&mut acc, data, &secret[121..], schedule.last_offset);
-    acc
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    let selected = backend::capabilities().best(&X86_BACKEND_PREFERENCE);
-    // CPU detection above satisfies the selected kernel's target-feature contract.
-    unsafe { accumulate_x86(data, secret, selected) }
+pub(super) fn initial_accumulator() -> [u64; 8] {
+    [P32_3, P64_1, P64_2, P64_3, P64_4, P32_2, P64_5, P32_1]
+}
+
+#[inline(always)]
+pub(super) fn merge(acc: &[u64; 8], secret: &Secret, offset: usize, start: u64) -> u64 {
+    let secret = secret.as_bytes();
+    let mut result = start;
+    for lane in 0..4 {
+        result = result.wrapping_add(mulfold(
+            acc[lane * 2] ^ u64le(secret, offset + lane * 16),
+            acc[lane * 2 + 1] ^ u64le(secret, offset + lane * 16 + 8),
+        ));
+    }
+    avalanche(result)
+}
+
+#[inline(always)]
+pub(super) fn finalize_long_64(length: usize, secret: &Secret, acc: [u64; 8]) -> u64 {
+    merge(&acc, secret, 11, (length as u64).wrapping_mul(P64_1))
+}
+
+#[inline(always)]
+pub(super) fn finalize_long_128(length: usize, secret: &Secret, acc: [u64; 8]) -> [u64; 2] {
+    [
+        merge(&acc, secret, 11, (length as u64).wrapping_mul(P64_1)),
+        merge(&acc, secret, 117, !(length as u64).wrapping_mul(P64_2)),
+    ]
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[inline]
-pub(super) unsafe fn accumulate_x86(data: &[u8], secret: &[u8], backend: SimdBackend) -> [u64; 8] {
-    let Some(kernel) = x86_kernel(backend) else {
-        return long_accumulate_scalar(data, secret);
-    };
-    unsafe { kernel(data, secret) }
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-type X86Kernel = unsafe fn(&[u8], &[u8]) -> [u64; 8];
+type X86Kernel = unsafe fn(LongInput<'_>, &Secret) -> [u64; 8];
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
@@ -165,39 +227,237 @@ pub(super) fn x86_kernel(backend: SimdBackend) -> Option<X86Kernel> {
     }
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(test)]
 #[inline]
-pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    if backend::capabilities().supports(SimdBackend::Neon) {
-        unsafe { aarch64::accumulate(data, secret) }
-    } else {
-        long_accumulate_scalar(data, secret)
+pub(super) unsafe fn accumulate_x86(
+    input: LongInput<'_>,
+    secret: &Secret,
+    backend: SimdBackend,
+) -> [u64; 8] {
+    let Some(kernel) = x86_kernel(backend) else {
+        return scalar::accumulate(input, secret);
+    };
+    unsafe { kernel(input, secret) }
+}
+
+#[derive(Clone, Copy)]
+enum LongBackend {
+    Scalar,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    X86(X86Kernel),
+    #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+    Neon,
+}
+
+pub(super) struct LongEngine {
+    backend: LongBackend,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2: bool,
+}
+
+impl LongEngine {
+    #[inline(always)]
+    pub(super) fn new() -> Self {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            Self::new_with_capabilities(backend::capabilities())
+        }
+
+        #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+        {
+            let backend = if backend::capabilities().supports(crate::backend::SimdBackend::Neon) {
+                LongBackend::Neon
+            } else {
+                LongBackend::Scalar
+            };
+            Self { backend }
+        }
+
+        #[cfg(not(any(
+            all(target_arch = "aarch64", target_endian = "little"),
+            target_arch = "x86",
+            target_arch = "x86_64"
+        )))]
+        Self {
+            backend: LongBackend::Scalar,
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[inline(always)]
+    pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
+        let selected = capabilities.best(&X86_BACKEND_PREFERENCE);
+        let backend = match x86_kernel(selected) {
+            Some(kernel) => LongBackend::X86(kernel),
+            None => LongBackend::Scalar,
+        };
+        Self {
+            backend,
+            avx2: capabilities.supports(SimdBackend::Avx2),
+        }
+    }
+
+    #[inline]
+    pub(super) fn derive_secret(&self, seed: u64) -> Option<Secret> {
+        if seed == 0 {
+            return None;
+        }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2 {
+            return Some(unsafe { avx2::init_secret(seed) });
+        }
+        Some(init_secret_scalar(seed))
+    }
+
+    #[inline(always)]
+    pub(super) fn secret<'a>(&self, derived: &'a Option<Secret>) -> &'a Secret {
+        derived.as_ref().unwrap_or(&DEFAULT_SECRET)
+    }
+
+    #[inline(always)]
+    pub(super) fn accumulate(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+        let backend = self.backend;
+        match backend {
+            LongBackend::Scalar => scalar::accumulate(input, secret),
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            LongBackend::X86(kernel) => unsafe { kernel(input, secret) },
+            #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+            LongBackend::Neon => unsafe { aarch64::accumulate(input, secret) },
+        }
+    }
+
+    #[inline(always)]
+    pub(super) fn accumulate_batch2(
+        &self,
+        inputs: LongBatch<'_, 2>,
+        secret: &Secret,
+    ) -> [[u64; 8]; 2] {
+        if let Some(accumulators) = self.try_accumulate_batch2(inputs, secret) {
+            return accumulators;
+        }
+        let [first, second] = inputs.into_inputs();
+        [
+            self.accumulate(first, secret),
+            self.accumulate(second, secret),
+        ]
+    }
+
+    #[inline(always)]
+    pub(super) fn accumulate_batch3(
+        &self,
+        inputs: LongBatch<'_, 3>,
+        secret: &Secret,
+    ) -> [[u64; 8]; 3] {
+        if let Some(accumulators) = self.try_accumulate_batch3(inputs, secret) {
+            return accumulators;
+        }
+        let [first, second, third] = inputs.into_inputs();
+        [
+            self.accumulate(first, secret),
+            self.accumulate(second, secret),
+            self.accumulate(third, secret),
+        ]
+    }
+
+    #[inline(always)]
+    pub(super) fn accumulate_batch4(
+        &self,
+        inputs: LongBatch<'_, 4>,
+        secret: &Secret,
+    ) -> [[u64; 8]; 4] {
+        if let Some(accumulators) = self.try_accumulate_batch4(inputs, secret) {
+            return accumulators;
+        }
+        let [first, second, third, fourth] = inputs.into_inputs();
+        [
+            self.accumulate(first, secret),
+            self.accumulate(second, secret),
+            self.accumulate(third, secret),
+            self.accumulate(fourth, secret),
+        ]
+    }
+
+    #[inline(always)]
+    pub(super) fn hash<T>(
+        &self,
+        input: LongInput<'_>,
+        secret: &Secret,
+        finalize: impl FnOnce(usize, &Secret, [u64; 8]) -> T,
+    ) -> T {
+        let acc = self.accumulate(input, secret);
+        finalize(input.len(), secret, acc)
+    }
+
+    #[inline(always)]
+    pub(super) fn try_accumulate_batch2(
+        &self,
+        inputs: LongBatch<'_, 2>,
+        secret: &Secret,
+    ) -> Option<[[u64; 8]; 2]> {
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        {
+            let _ = (self, inputs, secret);
+            None
+        }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if !self.avx2 {
+                return None;
+            }
+            Some(unsafe { avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
+        }
+    }
+
+    #[inline(always)]
+    pub(super) fn try_accumulate_batch3(
+        &self,
+        inputs: LongBatch<'_, 3>,
+        secret: &Secret,
+    ) -> Option<[[u64; 8]; 3]> {
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        {
+            let _ = (self, inputs, secret);
+            None
+        }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if !self.avx2 {
+                return None;
+            }
+            Some(unsafe { avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
+        }
+    }
+
+    #[inline(always)]
+    pub(super) fn try_accumulate_batch4(
+        &self,
+        inputs: LongBatch<'_, 4>,
+        secret: &Secret,
+    ) -> Option<[[u64; 8]; 4]> {
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        {
+            let _ = (self, inputs, secret);
+            None
+        }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if !self.avx2 {
+                return None;
+            }
+            Some(unsafe { avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })
+        }
     }
 }
 
-#[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
-#[inline]
-pub(super) fn long_accumulate(data: &[u8], secret: &[u8]) -> [u64; 8] {
-    long_accumulate_scalar(data, secret)
+pub(super) fn xxh3_64_long(input: LongInput<'_>, seed: u64) -> u64 {
+    let engine = LongEngine::new();
+    let derived = engine.derive_secret(seed);
+    engine.hash(input, engine.secret(&derived), finalize_long_64)
 }
 
-pub(super) fn xxh3_64_long(data: &[u8], seed: u64) -> u64 {
-    let secret = (seed != 0).then(|| init_secret(seed));
-    let secret = secret.as_ref().unwrap_or(&SECRET);
-    let acc = long_accumulate(data, secret);
-    merge(&acc, &secret[11..], (data.len() as u64).wrapping_mul(P64_1))
-}
-
-pub(super) fn xxh3_128_long(data: &[u8], seed: u64) -> [u64; 2] {
-    let secret = (seed != 0).then(|| init_secret(seed));
-    let secret = secret.as_ref().unwrap_or(&SECRET);
-    finalize_long_128(data.len(), secret, long_accumulate(data, secret))
-}
-
-#[inline]
-pub(super) fn finalize_long_128(length: usize, secret: &[u8], acc: [u64; 8]) -> [u64; 2] {
-    [
-        merge(&acc, &secret[11..], (length as u64).wrapping_mul(P64_1)),
-        merge(&acc, &secret[117..], !(length as u64).wrapping_mul(P64_2)),
-    ]
+pub(super) fn xxh3_128_long(input: LongInput<'_>, seed: u64) -> [u64; 2] {
+    let engine = LongEngine::new();
+    let derived = engine.derive_secret(seed);
+    engine.hash(input, engine.secret(&derived), finalize_long_128)
 }

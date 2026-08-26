@@ -56,6 +56,12 @@ fn rejects_invalid_input() {
 }
 
 #[test]
+fn rust_decoders_explicitly_accept_noncanonical_trailing_bits() {
+    assert_eq!(b64decode(b"AB==").as_deref(), Ok(&[0][..]));
+    assert_eq!(b64decode_urlsafe(b"AB==").as_deref(), Ok(&[0][..]));
+}
+
+#[test]
 fn matches_the_standard_engine_for_all_short_lengths() {
     for length in 0..=1024 {
         let input: Vec<u8> = (0..length)
@@ -794,13 +800,13 @@ fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
             ),
         ] {
             let layout = decode_unpadded_layout(&encoded).unwrap();
-            assert_eq!(layout.output_len, input.len(), "length={length}");
-            let mut guarded = vec![CANARY; GUARD + layout.output_len + GUARD];
-            let output = &mut guarded[GUARD..GUARD + layout.output_len];
+            assert_eq!(layout.output_len(), input.len(), "length={length}");
+            let mut guarded = vec![CANARY; GUARD + layout.output_len() + GUARD];
+            let output = &mut guarded[GUARD..GUARD + layout.output_len()];
             decode_to_slice_with_unpadded_layout_and_alphabet(&encoded, output, layout, alphabet)
                 .unwrap();
             assert_eq!(output, input, "length={length} alphabet={alphabet:?}");
-            let mut transactional = vec![CANARY; layout.output_len];
+            let mut transactional = vec![CANARY; layout.output_len()];
             decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
                 &encoded,
                 &mut transactional,
@@ -812,7 +818,7 @@ fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
                 transactional, input,
                 "length={length} alphabet={alphabet:?}"
             );
-            let mut direct = vec![CANARY; layout.output_len];
+            let mut direct = vec![CANARY; layout.output_len()];
             unsafe {
                 decode_to_ptr_with_unpadded_layout(&encoded, direct.as_mut_ptr(), layout, alphabet)
             }
@@ -820,7 +826,7 @@ fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
             assert_eq!(direct, input, "length={length} alphabet={alphabet:?}");
             assert!(guarded[..GUARD].iter().all(|&byte| byte == CANARY));
             assert!(
-                guarded[GUARD + layout.output_len..]
+                guarded[GUARD + layout.output_len()..]
                     .iter()
                     .all(|&byte| byte == CANARY)
             );
@@ -854,7 +860,7 @@ fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
                     assert_eq!(
                         decode_to_slice_with_unpadded_layout_and_alphabet(
                             &encoded,
-                            &mut output[..layout.output_len],
+                            &mut output[..layout.output_len()],
                             layout,
                             alphabet.0,
                         ),
@@ -866,7 +872,7 @@ fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
                     assert_eq!(
                         decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
                             &encoded,
-                            &mut output[..layout.output_len],
+                            &mut output[..layout.output_len()],
                             layout,
                             alphabet.0,
                         ),
@@ -904,7 +910,7 @@ fn transactional_decoder_matches_regular_decoder() {
         .collect();
     let encoded = b64encode(&input);
     let layout = decode_layout(encoded.as_bytes()).unwrap();
-    let mut decoded = vec![0xa5; layout.output_len];
+    let mut decoded = vec![0xa5; layout.output_len()];
 
     decode_to_slice_with_layout_and_alphabet_transactional(
         encoded.as_bytes(),
@@ -1049,7 +1055,8 @@ fn padded_decoder_stores_stay_within_four_bytes_of_slack() {
             ),
         ] {
             let layout = decode_layout(encoded.as_bytes()).unwrap();
-            let mut output = vec![CANARY; GUARD + layout.output_len + DECODE_STORE_PADDING + GUARD];
+            let mut output =
+                vec![CANARY; GUARD + layout.output_len() + DECODE_STORE_PADDING + GUARD];
             unsafe {
                 decode_to_ptr_with_layout(
                     encoded.as_bytes(),

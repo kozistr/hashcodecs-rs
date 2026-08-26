@@ -363,7 +363,7 @@ pub(super) fn urlsafe_b64encode_batch<'py>(
 /// be distinct bytearrays. Each destination keeps its size; only its written
 /// prefix is changed. Processing is fail-fast and non-transactional: an error
 /// leaves earlier destinations modified. The GIL remains held because outputs
-/// are mutable. Do not share backing storage across different item/output pairs.
+/// are mutable. Inputs are snapshotted before the first destination write.
 pub(super) fn b64encode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -382,11 +382,16 @@ fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let length = items.len();
-    let mut pairs = items.into_iter().zip(outputs.iter());
+    let inputs = items
+        .iter()
+        .map(|item| {
+            contiguous_bytes_like(py, item, "s").map(BytesLike::into_stable_for_batch_output)
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    let length = inputs.len();
+    let mut pairs = inputs.into_iter().zip(outputs.iter());
     list_from_fn(py, length, |_| {
-        let (item, output) = pairs.next().expect("batch item count is exact");
-        let input = contiguous_bytes_like(py, &item, "s")?;
+        let (input, output) = pairs.next().expect("batch item count is exact");
         Ok(PyInt::new(
             py,
             encode_parsed_into(&input, output, altchars, true, None)?,

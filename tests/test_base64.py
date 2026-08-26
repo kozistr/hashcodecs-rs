@@ -927,6 +927,39 @@ def test_base64_batch_into_alphabets_wrappers_and_alias() -> None:
     assert shared[:3] == b'abc'
 
 
+def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
+    shared = bytearray(b'abcd')
+    encoded = bytearray(8)
+    assert base64.b64encode_batch_into([b'xyz', shared], [shared, encoded]) == [4, 8]
+    assert shared == b'eHl6'
+    assert encoded == b'YWJjZA=='
+
+    shared = bytearray(b'YWJj')
+    decoded = bytearray(3)
+    assert base64.b64decode_batch_into([b'ZGVm', shared], [shared, decoded], validate=True) == [3, 3]
+    assert shared[:3] == b'def'
+    assert decoded == b'abc'
+
+
+def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
+    encoded_storage = bytearray(b'abcd....')
+    encoded_input = memoryview(encoded_storage)[:4]
+    encoded_output = bytearray(8)
+    assert base64.b64encode_batch_into([b'xyz', encoded_input], [encoded_storage, encoded_output]) == [4, 8]
+    assert encoded_storage[:4] == b'eHl6'
+    assert encoded_output == b'YWJjZA=='
+
+    decoded_storage = bytearray(b'YWJj')
+    decoded_input = memoryview(decoded_storage)
+    decoded_output = bytearray(3)
+    assert base64.b64decode_batch_into([b'ZGVm', decoded_input], [decoded_storage, decoded_output], validate=True) == [
+        3,
+        3,
+    ]
+    assert decoded_storage[:3] == b'def'
+    assert decoded_output == b'abc'
+
+
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
 def test_base64_batch_snapshots_altchars_once() -> None:
     encode_altchars = _ChangingBuffer()

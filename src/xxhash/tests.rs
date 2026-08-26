@@ -3,12 +3,10 @@ use crate::backend::{self, SimdBackend};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::long::{
-    X86_BACKEND_PREFERENCE, accumulate_x86, init_secret_with_capabilities, x86_kernel,
+    LongInput, X86_BACKEND_PREFERENCE, accumulate_x86, init_secret_with_capabilities, x86_kernel,
 };
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::long::{init_secret, init_secret_scalar, long_accumulate_scalar};
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::primitives::SECRET;
+use super::long::{init_secret_scalar, long_accumulate_scalar};
 use super::*;
 use core::ffi::c_void;
 
@@ -73,6 +71,26 @@ fn batches_match_one_shot() {
                     [hash as u64, (hash >> 64) as u64]
                 })
                 .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn batches_consume_contiguous_equal_length_runs() {
+    let owned = [300, 300, 17, 512, 512, 241, 241, 241].map(|length| {
+        (0..length)
+            .map(|index| (index as u8).wrapping_mul(43).wrapping_add(length as u8))
+            .collect::<Vec<_>>()
+    });
+    let inputs = owned.each_ref().map(Vec::as_slice);
+    for seed in [0, 0x0123_4567_89ab_cdef] {
+        assert_eq!(
+            xxh3_64_batch(&inputs, seed),
+            inputs.map(|input| xxh3_64(input, seed))
+        );
+        assert_eq!(
+            xxh3_128_batch(&inputs, seed),
+            inputs.map(|input| xxh3_128(input, seed))
         );
     }
 }
@@ -191,16 +209,19 @@ fn every_supported_x86_backend_matches_scalar() {
         assert!(x86_kernel(backend).is_some());
     }
     for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
-        let owned_secret = (seed != 0).then(|| init_secret(seed));
-        let secret = owned_secret.as_ref().unwrap_or(&SECRET);
-        let expected = long_accumulate_scalar(&input, secret);
-        assert_eq!(init_secret(seed), init_secret_scalar(seed));
+        let secret = init_secret_scalar(seed);
+        let long_input = LongInput::new(&input).unwrap();
+        let expected = long_accumulate_scalar(long_input, &secret);
+        assert_eq!(
+            init_secret_with_capabilities(seed, capabilities),
+            init_secret_scalar(seed)
+        );
         assert_eq!(
             init_secret_with_capabilities(seed, scalar),
             init_secret_scalar(seed)
         );
         assert_eq!(
-            unsafe { accumulate_x86(&input, secret, SimdBackend::Scalar) },
+            unsafe { accumulate_x86(long_input, &secret, SimdBackend::Scalar) },
             expected
         );
 
@@ -218,14 +239,15 @@ fn every_supported_x86_backend_matches_scalar() {
             let required = selected;
             let forced = Capabilities::for_backends(&[required]);
             assert_eq!(forced.best(&X86_BACKEND_PREFERENCE), selected);
-            let actual = unsafe { accumulate_x86(&input, secret, selected) };
+            let actual = unsafe { accumulate_x86(long_input, &secret, selected) };
             assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
             if selected == SimdBackend::Avx2 {
                 for length in [241, 512, 768, 1024, 1536, 2048, 4096] {
                     let chain_input = &chain_input[..length];
+                    let long_chain = LongInput::new(chain_input).unwrap();
                     assert_eq!(
-                        unsafe { accumulate_x86(chain_input, secret, selected) },
-                        long_accumulate_scalar(chain_input, secret),
+                        unsafe { accumulate_x86(long_chain, &secret, selected) },
+                        long_accumulate_scalar(long_chain, &secret),
                         "AVX2 four-chain mismatch at {length} bytes for seed {seed:#x}",
                     );
                 }

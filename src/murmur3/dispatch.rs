@@ -7,9 +7,9 @@ pub(super) enum Backend {
     Avx2,
 }
 
-const X86_32_SSE41_MIN: usize = 16;
+pub(super) const X86_32_SSE41_MIN: usize = 16;
 const X86_32_AVX2_MIN: usize = 32;
-const X86_128_AVX2_MIN: usize = 256;
+pub(super) const X86_128_AVX2_MIN: usize = 256;
 const X86_128_SSE41_MIN: usize = 16 * 1024 * 1024;
 const X64_128_SSE41_MIN: usize = 16;
 const X64_128_SSE41_MAX: usize = 8 * 1024 * 1024;

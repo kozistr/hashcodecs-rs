@@ -1,4 +1,4 @@
-use super::long::long_schedule;
+use super::long::{LongInput, long_schedule};
 use super::primitives::{SECRET, u32le, u64le};
 
 #[kani::proof]
@@ -32,8 +32,10 @@ fn little_endian_loads_stay_within_the_slice() {
 #[kani::proof]
 fn long_schedule_keeps_vector_loads_in_bounds() {
     let length: usize = kani::any();
-    kani::assume(length > 240);
-    let schedule = long_schedule(length);
+    kani::assume(length > 240 && length <= 2048);
+    let bytes = [0_u8; 2048];
+    let input = LongInput::new(&bytes[..length]).unwrap();
+    let schedule = long_schedule(input);
 
     let block: usize = kani::any();
     let block_stripe: usize = kani::any();

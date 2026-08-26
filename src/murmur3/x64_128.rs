@@ -1,9 +1,9 @@
+use super::block_buffer::{BlockBuffer, FullBlocks};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::dispatch;
-use super::incremental::BlockBuffer;
 use super::primitives::{fmix64, read_partial_u64_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
+pub(super) mod x86;
 
 pub(super) const X64_128_C1: u64 = 0x87c3_7b91_1142_53d5;
 pub(super) const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
@@ -150,38 +150,53 @@ pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
 
 #[inline(never)]
 pub(super) fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
-    let block_end = key.len() & !15;
+    let (blocks, tail) = FullBlocks::<16>::split(key);
     let mut hashes = [seed; 2];
-    mix_x64_128_body(&key[..block_end], &mut hashes);
-    finish_x64_128(key, hashes, block_end)
+    mix_x64_128_body(blocks, &mut hashes);
+    finish_x64_128_tail(tail, hashes, key.len() as u64)
 }
 
 #[inline]
-pub(super) fn mix_x64_128_body(key: &[u8], hashes: &mut [u64; 2]) {
-    debug_assert!(key.len().is_multiple_of(16));
+pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
+    if blocks.len() == 0 {
+        return;
+    }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x64_128(key.len(), capabilities);
-        if unsafe { x86::try_mix_x64_128_body(key, hashes, selected, capabilities.has_bmi2()) } {
-            return;
-        }
+        let selected = dispatch::x64_128(blocks.len(), capabilities);
+        mix_x64_128_body_with_backend(blocks, hashes, selected, capabilities.has_bmi2());
     }
-    mix_x64_128_body_scalar(key, hashes);
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    mix_x64_128_body_scalar(blocks, hashes);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn mix_x64_128_body_with_backend(
+    blocks: FullBlocks<'_, 16>,
+    hashes: &mut [u64; 2],
+    backend: dispatch::Backend,
+    has_bmi2: bool,
+) {
+    if unsafe { x86::try_mix_x64_128_body(blocks, hashes, backend, has_bmi2) } {
+        return;
+    }
+    mix_x64_128_body_scalar(blocks, hashes);
 }
 
 #[inline(never)]
 #[cfg(test)]
 pub(super) fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
-    let block_end = key.len() & !15;
+    let (blocks, tail) = FullBlocks::<16>::split(key);
     let mut hashes = [seed; 2];
-    mix_x64_128_body_scalar(&key[..block_end], &mut hashes);
-    finish_x64_128(key, hashes, block_end)
+    mix_x64_128_body_scalar(blocks, &mut hashes);
+    finish_x64_128_tail(tail, hashes, key.len() as u64)
 }
 
 #[inline]
-pub(super) fn mix_x64_128_body_scalar(key: &[u8], hashes: &mut [u64; 2]) {
-    debug_assert!(key.len().is_multiple_of(16));
+pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
+    let key = blocks.as_bytes();
     let mut hash1 = hashes[0];
     let mut hash2 = hashes[1];
     let mut input = key.as_ptr();
@@ -204,6 +219,7 @@ pub(super) fn mix_x64_128_body_scalar(key: &[u8], hashes: &mut [u64; 2]) {
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn finish_x64_128(key: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
     finish_x64_128_tail(&key[offset..], hashes, key.len() as u64)
 }

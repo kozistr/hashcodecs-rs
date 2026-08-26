@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,36 +22,54 @@ class CustomBuildHook(BuildHookInterface[Any]):
             return
 
         root = Path(self.root)
-        subprocess.run(
+        wheel_tag = self._wheel_tag()
+        target_dir = root / 'target' / 'hatch' / wheel_tag
+        env = os.environ.copy()
+        env['CARGO_TARGET_DIR'] = str(target_dir)
+        env['PYO3_PYTHON'] = sys.executable
+        result = subprocess.run(
             [
                 'cargo',
                 'build',
+                '--locked',
                 '--manifest-path',
                 str(root / 'Cargo.toml'),
                 '--release',
                 '--features',
                 'extension-module',
+                '--message-format=json-render-diagnostics',
             ],
-            check=True,
+            check=False,
             cwd=root,
+            env=env,
+            stdout=subprocess.PIPE,
+            text=True,
         )
+        result.check_returncode()
 
-        target_dir = Path(os.environ.get('CARGO_TARGET_DIR', root / 'target'))
-        if not target_dir.is_absolute():
-            target_dir = root / target_dir
-        extension = target_dir / 'release' / self._library_name()
+        extension = self._cdylib_artifact(result.stdout)
         build_data['force_include'] = {str(extension): f'hashcodecs/_hashcodecs{self._extension_suffix()}'}
         build_data['pure_python'] = False
-        build_data['tag'] = self._wheel_tag()
+        build_data['tag'] = wheel_tag
 
     @staticmethod
-    def _library_name() -> str:
-        system = platform.system()
-        if system == 'Windows':
-            return 'hashcodecs.dll'
-        if system == 'Darwin':
-            return 'libhashcodecs.dylib'
-        return 'libhashcodecs.so'
+    def _cdylib_artifact(messages: str) -> Path:
+        suffixes = {'.dll', '.dylib', '.so'}
+        for line in messages.splitlines():
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if (
+                message.get('reason') == 'compiler-artifact'
+                and message.get('target', {}).get('name') == 'hashcodecs'
+                and 'cdylib' in message.get('target', {}).get('crate_types', [])
+            ):
+                for filename in message.get('filenames', []):
+                    artifact = Path(filename)
+                    if artifact.suffix in suffixes:
+                        return artifact
+        raise RuntimeError('Cargo did not report the hashcodecs cdylib artifact')
 
     @staticmethod
     def _extension_suffix() -> str:

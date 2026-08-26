@@ -489,10 +489,10 @@ fn invalid_scalar_checkpoint_tail<const URLSAFE: bool, const MIXED: bool>() {
 
             let output_offset = (input_offset * 7 + invalid_index) & 15;
             let output_start = GUARD + output_offset;
-            let mut guarded_output = vec![CANARY; output_start + layout.output_len + GUARD];
+            let mut guarded_output = vec![CANARY; output_start + layout.output_len() + GUARD];
             let result = super::super::decode_to_slice_with_layout_and_alphabet(
                 input,
-                &mut guarded_output[output_start..output_start + layout.output_len],
+                &mut guarded_output[output_start..output_start + layout.output_len()],
                 layout,
                 decode_alphabet::<URLSAFE, MIXED>(),
             );

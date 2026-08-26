@@ -87,6 +87,28 @@ impl BytesLike<'_, '_> {
         matches!(self, Self::Buffer(_))
     }
 
+    /// Make an input independent of every mutable destination in a batch.
+    ///
+    /// A destination may also be the backing store for a later input, including
+    /// through a memoryview. Snapshot every mutable or arbitrary exporter before
+    /// the first write so processing one pair cannot change another pair's input.
+    pub(super) fn into_stable_for_batch_output(self) -> Self {
+        match self {
+            Self::ByteArray(value) => {
+                Self::Owned(with_critical_section(value.as_any(), || unsafe {
+                    bytearray_bytes(value).to_vec()
+                }))
+            }
+            Self::OwnedByteArray(value) => {
+                Self::Owned(with_critical_section(value.as_any(), || unsafe {
+                    bytearray_bytes(&value).to_vec()
+                }))
+            }
+            Self::Buffer(buffer) => Self::Owned(unsafe { buffer.bytes().to_vec() }),
+            stable => stable,
+        }
+    }
+
     #[cfg(Py_GIL_DISABLED)]
     pub(super) fn snapshot_mutable(&self) -> Option<Vec<u8>> {
         match self {

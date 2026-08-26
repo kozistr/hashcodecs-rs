@@ -268,7 +268,7 @@ validation, unpadded input, a custom ignored-byte set, and canonical tail
 bit validation are available for protocols with tighter requirements.
 
 Args:
-    s: ASCII text or contiguous bytes-like Base64 data.
+    s: ASCII text or bytes-like Base64 data.
     altchars: Two characters replacing "+" and "/", or None for the
         standard alphabet.
     validate: Reject non-alphabet bytes when true. The default is lenient
@@ -307,7 +307,7 @@ Non-alphabet characters are discarded in the same lenient manner as
 Python's base64.standard_b64decode function.
 
 Args:
-    s: ASCII text or contiguous bytes-like Base64 data.
+    s: ASCII text or bytes-like Base64 data.
 
 Returns:
     Newly allocated decoded bytes.
@@ -333,7 +333,7 @@ Examples:
 Decode standard Base64 into a reusable bytearray.
 
 Args:
-    s: ASCII text or contiguous bytes-like Base64 data.
+    s: ASCII text or bytes-like Base64 data.
     output: Destination bytearray with room for the decoded result.
 
 Returns:
@@ -437,7 +437,7 @@ the returned prefix remain unchanged. On malformed input, part of the
 destination prefix may already have been modified.
 
 Args:
-    s: ASCII text or contiguous bytes-like Base64 data.
+    s: ASCII text or bytes-like Base64 data.
     output: Destination bytearray with room for the complete result.
     altchars: Two characters replacing "+" and "/", or None for the
         standard alphabet.

@@ -2,6 +2,9 @@
 //!
 //! Allocating functions return owned output, while the `_into` variants write
 //! into caller-provided storage. Decoders reject missing or malformed padding.
+//! They intentionally permit non-zero unused bits in the final quantum, so
+//! inputs such as `AB==` decode successfully; protocols requiring a canonical
+//! representation must validate those trailing bits separately.
 
 mod alphabet;
 mod backend;

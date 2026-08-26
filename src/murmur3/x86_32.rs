@@ -1,9 +1,9 @@
+use super::block_buffer::{BlockBuffer, FullBlocks};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::dispatch;
-use super::incremental::BlockBuffer;
 use super::primitives::{fmix32, read_u32_le};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::x86;
+pub(super) mod x86;
 
 pub(super) const X86_32_C1: u32 = 0xcc9e_2d51;
 pub(super) const X86_32_C2: u32 = 0x1b87_3593;
@@ -142,38 +142,53 @@ impl Default for Murmur3X86Hasher32 {
 ///
 #[inline]
 pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
-    let block_end = key.len() & !3;
+    let (blocks, tail) = FullBlocks::<4>::split(key);
     let mut hash = seed;
-    mix_x86_32_body(&key[..block_end], &mut hash);
-    finish_x86_32(key, hash, block_end)
+    mix_x86_32_body(blocks, &mut hash);
+    finish_x86_32_tail(tail, hash, key.len() as u32)
 }
 
 #[inline]
-pub(super) fn mix_x86_32_body(key: &[u8], hash: &mut u32) {
-    debug_assert!(key.len().is_multiple_of(4));
+pub(super) fn mix_x86_32_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x86_32(key.len(), capabilities);
-        if unsafe { x86::try_mix_x86_32_body(key, hash, selected) } {
+        if blocks.len() < dispatch::X86_32_SSE41_MIN {
+            mix_x86_32_body_scalar(blocks, hash);
             return;
         }
+        let capabilities = crate::backend::capabilities();
+        let selected = dispatch::x86_32(blocks.len(), capabilities);
+        mix_x86_32_body_with_backend(blocks, hash, selected);
     }
-    mix_x86_32_body_scalar(key, hash);
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    mix_x86_32_body_scalar(blocks, hash);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn mix_x86_32_body_with_backend(
+    blocks: FullBlocks<'_, 4>,
+    hash: &mut u32,
+    backend: dispatch::Backend,
+) {
+    if unsafe { x86::try_mix_x86_32_body(blocks, hash, backend) } {
+        return;
+    }
+    mix_x86_32_body_scalar(blocks, hash);
 }
 
 #[inline]
 #[cfg(test)]
 pub(super) fn murmur3_x86_32_scalar(key: &[u8], seed: u32) -> u32 {
+    let (blocks, tail) = FullBlocks::<4>::split(key);
     let mut hash = seed;
-    let block_end = key.len() & !3;
-    mix_x86_32_body_scalar(&key[..block_end], &mut hash);
-    finish_x86_32(key, hash, block_end)
+    mix_x86_32_body_scalar(blocks, &mut hash);
+    finish_x86_32_tail(tail, hash, key.len() as u32)
 }
 
 #[inline]
-pub(super) fn mix_x86_32_body_scalar(key: &[u8], hash: &mut u32) {
-    debug_assert!(key.len().is_multiple_of(4));
+pub(super) fn mix_x86_32_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
+    let key = blocks.as_bytes();
     let mut offset = 0;
     while offset < key.len() {
         let block = read_u32_le(key, offset)
@@ -194,6 +209,7 @@ pub(super) fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
 }
 
 #[inline(always)]
+#[cfg(test)]
 pub(super) fn finish_x86_32(key: &[u8], hash: u32, offset: usize) -> u32 {
     finish_x86_32_tail(&key[offset..], hash, key.len() as u32)
 }

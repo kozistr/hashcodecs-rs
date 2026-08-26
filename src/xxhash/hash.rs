@@ -1,5 +1,4 @@
-use super::long::{finalize_long_128, long_accumulate, merge, xxh3_64_long, xxh3_128_long};
-use super::primitives::P64_1;
+use super::long::{LongInput, xxh3_64_long, xxh3_128_long};
 use super::short::{
     xxh3_64_medium, xxh3_64_midsize, xxh3_64_small, xxh3_128_len_64, xxh3_128_medium,
     xxh3_128_midsize, xxh3_128_small,
@@ -32,24 +31,7 @@ pub fn xxh3_64(input: &[u8], seed: u64) -> u64 {
         0..=16 => xxh3_64_small(input, seed),
         17..=128 => xxh3_64_medium(input, seed),
         129..=240 => xxh3_64_midsize(input, seed),
-        _ => xxh3_64_long(input, seed),
-    }
-}
-
-#[inline]
-pub(super) fn xxh3_64_with_long_secret(input: &[u8], seed: u64, long_secret: &[u8]) -> u64 {
-    match input.len() {
-        0..=16 => xxh3_64_small(input, seed),
-        17..=128 => xxh3_64_medium(input, seed),
-        129..=240 => xxh3_64_midsize(input, seed),
-        _ => {
-            let acc = long_accumulate(input, long_secret);
-            merge(
-                &acc,
-                &long_secret[11..],
-                (input.len() as u64).wrapping_mul(P64_1),
-            )
-        }
+        _ => xxh3_64_long(LongInput::new(input).unwrap(), seed),
     }
 }
 
@@ -84,21 +66,6 @@ pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
         64 => xxh3_128_len_64(input, seed),
         17..=128 => xxh3_128_medium(input, seed),
         129..=240 => xxh3_128_midsize(input, seed),
-        _ => xxh3_128_long(input, seed),
-    }
-}
-
-#[inline]
-pub(super) fn xxh3_128_with_long_secret(input: &[u8], seed: u64, long_secret: &[u8]) -> [u64; 2] {
-    match input.len() {
-        0..=16 => xxh3_128_small(input, seed),
-        64 => xxh3_128_len_64(input, seed),
-        17..=128 => xxh3_128_medium(input, seed),
-        129..=240 => xxh3_128_midsize(input, seed),
-        _ => finalize_long_128(
-            input.len(),
-            long_secret,
-            long_accumulate(input, long_secret),
-        ),
+        _ => xxh3_128_long(LongInput::new(input).unwrap(), seed),
     }
 }

@@ -1,10 +1,10 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::{
-    decode_plan_allocating_inner, decode_plan_into_inner, python_at_least, try_decode_urlsafe_315,
-    try_decode_urlsafe_315_into, warn_legacy_altchars,
-};
+use super::fallback::warn_legacy_altchars;
+use super::native::{try_decode_urlsafe_315, try_decode_urlsafe_315_into};
+use super::{decode_plan_allocating_inner, decode_plan_into_inner};
+use crate::bindings::base64::python_at_least;
 use crate::bindings::buffer::BytesLike;
 
 #[derive(Clone, Copy)]

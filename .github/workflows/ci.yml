@@ -81,6 +81,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Rust / CPython binding coverage / Python 3.10
+            python-version: "3.10"
           - name: Rust / CPython binding coverage
             python-version: "3.12"
           - name: Rust / CPython binding coverage / Python 3.15t

@@ -1,140 +1,61 @@
 use pyo3::ffi;
 use pyo3::types::{PyByteArray, PyList};
 
-use crate::bindings::runtime::catch_unwind_callback;
-
 use super::*;
 
-pub(super) unsafe extern "C" fn standard_b64encode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64encode".as_ptr(),
-            [c"s".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+macro_rules! callback {
+    ($name:ident, $binding:path, |$py:ident, $values:ident| $body:block) => {
+        pub(super) unsafe extern "C" fn $name(
+            _self: *mut ffi::PyObject,
+            args: *const *mut ffi::PyObject,
+            nargs: isize,
+            keywords: *mut ffi::PyObject,
+        ) -> *mut ffi::PyObject {
+            unsafe { $binding.invoke(args, nargs, keywords, |$py, $values| $body) }
+        }
+    };
+}
+
+callback! {
+    standard_b64encode, schema::STANDARD_B64ENCODE, |py, values| {
         return_bound(
             py,
             super::standard_b64encode(py, raw_argument(py, &values[0])),
         )
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64encode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64encode_into".as_ptr(),
-            [c"s".as_ptr(), c"output".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64encode_into, schema::STANDARD_B64ENCODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             super::standard_b64encode_into(py, raw_argument(py, &values[0]), output)
         })();
         return_usize(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64encode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64encode".as_ptr(),
-            [c"s".as_ptr(), c"padded".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64encode, schema::URLSAFE_B64ENCODE, |py, values| {
         let result = truthy_argument(py, values[1], true)
             .and_then(|padded| super::urlsafe_b64encode(py, raw_argument(py, &values[0]), padded));
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64encode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64encode_into".as_ptr(),
-            [c"s".as_ptr(), c"output".as_ptr(), c"padded".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64encode_into, schema::URLSAFE_B64ENCODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             let padded = truthy_argument(py, values[2], true)?;
             super::urlsafe_b64encode_into(py, raw_argument(py, &values[0]), output, padded)
         })();
         return_usize(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64encode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64encode".as_ptr(),
-            [
-                c"s".as_ptr(),
-                c"altchars".as_ptr(),
-                c"padded".as_ptr(),
-                c"wrapcol".as_ptr(),
-            ],
-            2,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64encode, schema::B64ENCODE, |py, values| {
         let result = (|| {
             let padded = truthy_argument(py, values[2], true)?;
             let wrapcol = if values[3].is_null() {
@@ -151,199 +72,74 @@ pub(super) unsafe extern "C" fn b64encode(
             )
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64encode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64encode_batch".as_ptr(),
-            [c"items".as_ptr(), c"altchars".as_ptr()],
-            2,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64encode_batch, schema::B64ENCODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             super::b64encode_batch(py, items, optional_argument(py, &values[1]))
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64encode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64encode_batch_into".as_ptr(),
-            [c"items".as_ptr(), c"outputs".as_ptr(), c"altchars".as_ptr()],
-            3,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64encode_batch_into, schema::B64ENCODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
             super::b64encode_batch_into(py, items, outputs, optional_argument(py, &values[2]))
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64encode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64encode_batch".as_ptr(),
-            [c"items".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64encode_batch, schema::STANDARD_B64ENCODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             super::standard_b64encode_batch(py, items)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64encode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64encode_batch_into".as_ptr(),
-            [c"items".as_ptr(), c"outputs".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64encode_batch_into, schema::STANDARD_B64ENCODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
             super::standard_b64encode_batch_into(py, items, outputs)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64encode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64encode_batch".as_ptr(),
-            [c"items".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64encode_batch, schema::URLSAFE_B64ENCODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             super::urlsafe_b64encode_batch(py, items)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64encode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64encode_batch_into".as_ptr(),
-            [c"items".as_ptr(), c"outputs".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64encode_batch_into, schema::URLSAFE_B64ENCODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
             super::urlsafe_b64encode_batch_into(py, items, outputs)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64encode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64encode_into".as_ptr(),
-            [
-                c"s".as_ptr(),
-                c"output".as_ptr(),
-                c"altchars".as_ptr(),
-                c"padded".as_ptr(),
-                c"wrapcol".as_ptr(),
-            ],
-            3,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64encode_into, schema::B64ENCODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             let padded = truthy_argument(py, values[3], true)?;
@@ -362,35 +158,11 @@ pub(super) unsafe extern "C" fn b64encode_into(
             )
         })();
         return_usize(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64decode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64decode".as_ptr(),
-            [
-                c"s".as_ptr(),
-                c"altchars".as_ptr(),
-                c"validate".as_ptr(),
-                c"padded".as_ptr(),
-                c"ignorechars".as_ptr(),
-                c"canonical".as_ptr(),
-            ],
-            3,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64decode, schema::B64DECODE, |py, values| {
         let result = (|| {
             let validate = if values[2].is_null() {
                 None
@@ -410,228 +182,83 @@ pub(super) unsafe extern "C" fn b64decode(
             )
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64decode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64decode".as_ptr(),
-            [c"s".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64decode, schema::STANDARD_B64DECODE, |py, values| {
         return_bound(
             py,
             super::standard_b64decode(py, raw_argument(py, &values[0])),
         )
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64decode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64decode_into".as_ptr(),
-            [c"s".as_ptr(), c"output".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64decode_into, schema::STANDARD_B64DECODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             super::standard_b64decode_into(py, raw_argument(py, &values[0]), output)
         })();
         return_usize(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64decode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64decode_batch".as_ptr(),
-            [c"items".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64decode_batch, schema::STANDARD_B64DECODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             super::standard_b64decode_batch(py, items)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn standard_b64decode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"standard_b64decode_batch_into".as_ptr(),
-            [c"items".as_ptr(), c"outputs".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    standard_b64decode_batch_into, schema::STANDARD_B64DECODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
             super::standard_b64decode_batch_into(py, items, outputs)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64decode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64decode_batch".as_ptr(),
-            [c"items".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64decode_batch, schema::URLSAFE_B64DECODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             super::urlsafe_b64decode_batch(py, items)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64decode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64decode_batch_into".as_ptr(),
-            [c"items".as_ptr(), c"outputs".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64decode_batch_into, schema::URLSAFE_B64DECODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
             super::urlsafe_b64decode_batch_into(py, items, outputs)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64decode_batch(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64decode_batch".as_ptr(),
-            [
-                c"items".as_ptr(),
-                c"altchars".as_ptr(),
-                c"validate".as_ptr(),
-            ],
-            3,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64decode_batch, schema::B64DECODE_BATCH, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let validate = truthy_argument(py, values[2], false)?;
             super::b64decode_batch(py, items, optional_argument(py, &values[1]), validate)
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64decode_batch_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64decode_batch_into".as_ptr(),
-            [
-                c"items".as_ptr(),
-                c"outputs".as_ptr(),
-                c"altchars".as_ptr(),
-                c"validate".as_ptr(),
-            ],
-            4,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64decode_batch_into, schema::B64DECODE_BATCH_INTO, |py, values| {
         let result = (|| {
             let items = raw_argument(py, &values[0]).cast::<PyList>()?;
             let outputs = raw_argument(py, &values[1]).cast::<PyList>()?;
@@ -645,36 +272,11 @@ pub(super) unsafe extern "C" fn b64decode_batch_into(
             )
         })();
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn b64decode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"b64decode_into".as_ptr(),
-            [
-                c"s".as_ptr(),
-                c"output".as_ptr(),
-                c"altchars".as_ptr(),
-                c"validate".as_ptr(),
-                c"padded".as_ptr(),
-                c"ignorechars".as_ptr(),
-                c"canonical".as_ptr(),
-            ],
-            4,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    b64decode_into, schema::B64DECODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             let validate = if values[3].is_null() {
@@ -696,54 +298,20 @@ pub(super) unsafe extern "C" fn b64decode_into(
             )
         })();
         return_usize(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64decode(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64decode".as_ptr(),
-            [c"s".as_ptr(), c"padded".as_ptr()],
-            1,
-            1,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64decode, schema::URLSAFE_B64DECODE, |py, values| {
         let default = !python_at_least(py, (3, 15));
         let result = truthy_argument(py, values[1], default)
             .and_then(|padded| super::urlsafe_b64decode(py, raw_argument(py, &values[0]), padded));
         return_bound(py, result)
-    })
+    }
 }
 
-pub(super) unsafe extern "C" fn urlsafe_b64decode_into(
-    _self: *mut ffi::PyObject,
-    args: *const *mut ffi::PyObject,
-    nargs: isize,
-    keywords: *mut ffi::PyObject,
-) -> *mut ffi::PyObject {
-    let py = unsafe { Python::assume_attached() };
-    catch_unwind_callback(py, || unsafe {
-        let Some(values) = parse_raw_arguments(
-            args,
-            nargs,
-            keywords,
-            c"urlsafe_b64decode_into".as_ptr(),
-            [c"s".as_ptr(), c"output".as_ptr(), c"padded".as_ptr()],
-            2,
-            2,
-        ) else {
-            return ptr::null_mut();
-        };
+callback! {
+    urlsafe_b64decode_into, schema::URLSAFE_B64DECODE_INTO, |py, values| {
         let result = (|| {
             let output = raw_argument(py, &values[1]).cast::<PyByteArray>()?;
             let default = !python_at_least(py, (3, 15));
@@ -751,5 +319,5 @@ pub(super) unsafe extern "C" fn urlsafe_b64decode_into(
             super::urlsafe_b64decode_into(py, raw_argument(py, &values[0]), output, padded)
         })();
         return_usize(py, result)
-    })
+    }
 }

@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::ptr;
 use std::sync::OnceLock;
 
 use pyo3::PyTypeInfo;
@@ -14,7 +13,6 @@ use self::decode::{
     urlsafe_b64decode, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
     urlsafe_b64decode_into,
 };
-use super::arguments::parse_raw_arguments;
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 #[cfg(not(Py_GIL_DISABLED))]
 use super::objects::exact_bytes_up_to;
@@ -26,6 +24,7 @@ mod callbacks;
 mod decode;
 mod encode;
 mod methods;
+mod schema;
 
 static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
 

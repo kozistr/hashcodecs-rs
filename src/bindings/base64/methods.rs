@@ -3,17 +3,24 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use std::sync::Once;
 
-use super::callbacks::*;
-use super::{METHOD_FLAGS, add_methods, python_at_least};
+use super::add_methods;
+use super::schema::*;
 
-static mut METHODS: [ffi::PyMethodDef; 25] = [
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64encode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64encode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64encode($module, /, s)
+const BINDING_COUNT: usize = 24;
+static mut METHODS: [ffi::PyMethodDef; BINDING_COUNT + 1] =
+    [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];
+
+unsafe fn initialize_methods(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
+    let mut method_count = 0;
+    macro_rules! register {
+        ($binding:ident, $documentation:expr) => {
+            assert!(method_count < BINDING_COUNT, "Base64 method table overflow");
+            unsafe { $binding.register(methods, &mut method_count, version, $documentation) };
+        };
+    }
+    register!(
+        STANDARD_B64ENCODE,
+        cr###"standard_b64encode($module, /, s)
 --
 
 Encode bytes with the padded standard Base64 alphabet.
@@ -29,15 +36,11 @@ Raises:
 
 Examples:
     >>> standard_b64encode(b'hello')
-    b'aGVsbG8='"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64encode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64encode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64encode_into($module, /, s, output)
+    b'aGVsbG8='"###
+    );
+    register!(
+        STANDARD_B64ENCODE_INTO,
+        cr###"standard_b64encode_into($module, /, s, output)
 --
 
 Encode bytes with the standard alphabet into a reusable bytearray.
@@ -58,15 +61,11 @@ Examples:
     >>> standard_b64encode_into(b'hello', output)
     8
     >>> bytes(output)
-    b'aGVsbG8='"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64encode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64encode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64encode($module, /, s, *, padded=True)
+    b'aGVsbG8='"###
+    );
+    register!(
+        URLSAFE_B64ENCODE,
+        cr###"urlsafe_b64encode($module, /, s, *, padded=True)
 --
 
 Encode bytes with the URL-safe Base64 alphabet.
@@ -83,15 +82,11 @@ Raises:
 
 Examples:
     >>> urlsafe_b64encode(bytes([251, 255]), padded=False)
-    b'-_8'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64encode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64encode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64encode_into($module, /, s, output, *, padded=True)
+    b'-_8'"###
+    );
+    register!(
+        URLSAFE_B64ENCODE_INTO,
+        cr###"urlsafe_b64encode_into($module, /, s, output, *, padded=True)
 --
 
 Encode bytes with the URL-safe alphabet into a reusable bytearray.
@@ -113,15 +108,11 @@ Examples:
     >>> urlsafe_b64encode_into(bytes([251, 255]), output)
     4
     >>> bytes(output)
-    b'-_8='"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64encode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64encode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64encode($module, /, s, altchars=None, *, padded=True, wrapcol=0)
+    b'-_8='"###
+    );
+    register!(
+        B64ENCODE,
+        cr###"b64encode($module, /, s, altchars=None, *, padded=True, wrapcol=0)
 --
 
 Encode a bytes-like object as Base64.
@@ -148,15 +139,11 @@ Examples:
     >>> b64encode(b'hello')
     b'aGVsbG8='
     >>> b64encode(b'hello', padded=False, wrapcol=4)
-    b'aGVs\nbG8'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64encode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64encode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64encode_batch($module, /, items, altchars=None)
+    b'aGVs\nbG8'"###
+    );
+    register!(
+        B64ENCODE_BATCH,
+        cr###"b64encode_batch($module, /, items, altchars=None)
 --
 
 Encode a list of bytes-like objects as padded Base64.
@@ -178,15 +165,11 @@ Raises:
 
 Examples:
     >>> b64encode_batch([b'one', b'two'])
-    [b'b25l', b'dHdv']"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64encode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64encode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64encode_batch_into($module, /, items, outputs, altchars=None)
+    [b'b25l', b'dHdv']"###
+    );
+    register!(
+        B64ENCODE_BATCH_INTO,
+        cr###"b64encode_batch_into($module, /, items, outputs, altchars=None)
 --
 
 Encode each item into a matching reusable bytearray.
@@ -214,15 +197,11 @@ Examples:
     >>> b64encode_batch_into([b'one', b'two'], outputs)
     [4, 4]
     >>> [bytes(output) for output in outputs]
-    [b'b25l', b'dHdv']"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64encode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64encode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64encode_into($module, /, s, output, altchars=None, *, padded=True, wrapcol=0)
+    [b'b25l', b'dHdv']"###
+    );
+    register!(
+        B64ENCODE_INTO,
+        cr###"b64encode_into($module, /, s, output, altchars=None, *, padded=True, wrapcol=0)
 --
 
 Encode a bytes-like object as Base64 into a reusable bytearray.
@@ -250,15 +229,9 @@ Examples:
     >>> output = bytearray(12)
     >>> written = b64encode_into(b'hello', output)
     >>> written, bytes(output[:written])
-    (8, b'aGVsbG8=')"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64decode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64decode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64decode($module, /, s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
+    (8, b'aGVsbG8=')"###
+    );
+    register!(B64DECODE, cr###"b64decode($module, /, s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
 --
 
 Decode an ASCII string or bytes-like Base64 value.
@@ -290,15 +263,10 @@ Examples:
     >>> b64decode(b'aGVsbG8=', validate=True)
     b'hello'
     >>> b64decode(b'aGVsbG8', padded=False, canonical=True)
-    b'hello'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64decode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64decode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64decode($module, /, s)
+    b'hello'"###);
+    register!(
+        STANDARD_B64DECODE,
+        cr###"standard_b64decode($module, /, s)
 --
 
 Decode padded Base64 using the standard alphabet.
@@ -319,15 +287,11 @@ Raises:
 
 Examples:
     >>> standard_b64decode(b'aGVsbG8=')
-    b'hello'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64decode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64decode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64decode_into($module, /, s, output)
+    b'hello'"###
+    );
+    register!(
+        STANDARD_B64DECODE_INTO,
+        cr###"standard_b64decode_into($module, /, s, output)
 --
 
 Decode standard Base64 into a reusable bytearray.
@@ -349,15 +313,11 @@ Examples:
     >>> standard_b64decode_into(b'aGVsbG8=', output)
     5
     >>> bytes(output)
-    b'hello'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64decode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64decode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64decode_batch($module, /, items, altchars=None, validate=False)
+    b'hello'"###
+    );
+    register!(
+        B64DECODE_BATCH,
+        cr###"b64decode_batch($module, /, items, altchars=None, validate=False)
 --
 
 Decode a list of padded Base64 values.
@@ -381,15 +341,11 @@ Raises:
 
 Examples:
     >>> b64decode_batch([b'b25l', b'dHdv'], validate=True)
-    [b'one', b'two']"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64decode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64decode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64decode_batch_into($module, /, items, outputs, altchars=None, validate=False)
+    [b'one', b'two']"###
+    );
+    register!(
+        B64DECODE_BATCH_INTO,
+        cr###"b64decode_batch_into($module, /, items, outputs, altchars=None, validate=False)
 --
 
 Decode each padded Base64 item into a matching reusable bytearray.
@@ -419,15 +375,9 @@ Examples:
     >>> b64decode_batch_into([b'b25l', b'dHdv'], outputs, validate=True)
     [3, 3]
     >>> [bytes(output) for output in outputs]
-    [b'one', b'two']"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"b64decode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: b64decode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"b64decode_into($module, /, s, output, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
+    [b'one', b'two']"###
+    );
+    register!(B64DECODE_INTO, cr###"b64decode_into($module, /, s, output, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, ignorechars=['NOT SPECIFIED'], canonical=False)
 --
 
 Decode Base64 data into a reusable bytearray.
@@ -461,15 +411,10 @@ Examples:
     >>> output = bytearray(8)
     >>> written = b64decode_into(b'aGVsbG8=', output, validate=True)
     >>> written, bytes(output[:written])
-    (5, b'hello')"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64decode".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64decode,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64decode($module, /, s, *, padded=True)
+    (5, b'hello')"###);
+    register!(
+        URLSAFE_B64DECODE,
+        cr###"urlsafe_b64decode($module, /, s, *, padded=True)
 --
 
 Decode Base64 using the URL-safe alphabet.
@@ -491,15 +436,11 @@ Raises:
 
 Examples:
     >>> urlsafe_b64decode(b'-_8=', padded=True)
-    b'\xfb\xff'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64decode_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64decode_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64decode_into($module, /, s, output, *, padded=True)
+    b'\xfb\xff'"###
+    );
+    register!(
+        URLSAFE_B64DECODE_INTO,
+        cr###"urlsafe_b64decode_into($module, /, s, output, *, padded=True)
 --
 
 Decode URL-safe Base64 into a reusable bytearray.
@@ -525,154 +466,76 @@ Examples:
     >>> urlsafe_b64decode_into(b'-_8=', output, padded=True)
     2
     >>> bytes(output)
-    b'\xfb\xff'"###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64encode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64encode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64encode_batch($module, /, items)
+    b'\xfb\xff'"###
+    );
+    register!(
+        STANDARD_B64ENCODE_BATCH,
+        cr###"standard_b64encode_batch($module, /, items)
 --
 
-Encode each item with the padded standard Base64 alphabet."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64encode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64encode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64encode_batch_into($module, /, items, outputs)
+Encode each item with the padded standard Base64 alphabet."###
+    );
+    register!(
+        STANDARD_B64ENCODE_BATCH_INTO,
+        cr###"standard_b64encode_batch_into($module, /, items, outputs)
 --
 
-Encode each item into its matching reusable bytearray."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64encode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64encode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64encode_batch($module, /, items)
+Encode each item into its matching reusable bytearray."###
+    );
+    register!(
+        URLSAFE_B64ENCODE_BATCH,
+        cr###"urlsafe_b64encode_batch($module, /, items)
 --
 
-Encode each item with the padded URL-safe Base64 alphabet."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64encode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64encode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64encode_batch_into($module, /, items, outputs)
+Encode each item with the padded URL-safe Base64 alphabet."###
+    );
+    register!(
+        URLSAFE_B64ENCODE_BATCH_INTO,
+        cr###"urlsafe_b64encode_batch_into($module, /, items, outputs)
 --
 
-Encode each item with the URL-safe alphabet into its matching reusable bytearray."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64decode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64decode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64decode_batch($module, /, items)
+Encode each item with the URL-safe alphabet into its matching reusable bytearray."###
+    );
+    register!(
+        STANDARD_B64DECODE_BATCH,
+        cr###"standard_b64decode_batch($module, /, items)
 --
 
-Decode each item with the padded standard Base64 alphabet."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"standard_b64decode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: standard_b64decode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"standard_b64decode_batch_into($module, /, items, outputs)
+Decode each item with the padded standard Base64 alphabet."###
+    );
+    register!(
+        STANDARD_B64DECODE_BATCH_INTO,
+        cr###"standard_b64decode_batch_into($module, /, items, outputs)
 --
 
-Decode each item into its matching reusable bytearray."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64decode_batch".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64decode_batch,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64decode_batch($module, /, items)
+Decode each item into its matching reusable bytearray."###
+    );
+    register!(
+        URLSAFE_B64DECODE_BATCH,
+        cr###"urlsafe_b64decode_batch($module, /, items)
 --
 
-Decode each item with the padded URL-safe Base64 alphabet."###.as_ptr(),
-    },
-    ffi::PyMethodDef {
-        ml_name: c"urlsafe_b64decode_batch_into".as_ptr(),
-        ml_meth: ffi::PyMethodDefPointer {
-            PyCFunctionFastWithKeywords: urlsafe_b64decode_batch_into,
-        },
-        ml_flags: METHOD_FLAGS,
-        ml_doc: cr###"urlsafe_b64decode_batch_into($module, /, items, outputs)
+Decode each item with the padded URL-safe Base64 alphabet."###
+    );
+    register!(
+        URLSAFE_B64DECODE_BATCH_INTO,
+        cr###"urlsafe_b64decode_batch_into($module, /, items, outputs)
 --
 
-Decode each URL-safe item into its matching reusable bytearray."###.as_ptr(),
-    },
-    ffi::PyMethodDef::zeroed(),
-];
+Decode each URL-safe item into its matching reusable bytearray."###
+    );
+    assert_eq!(
+        method_count, BINDING_COUNT,
+        "Base64 method table must match its schema"
+    );
+}
 
 static METHODS_INIT: Once = Once::new();
 
 pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    let use_python_315_docs = python_at_least(module.py(), (3, 15));
-    METHODS_INIT.call_once(|| {
-        if use_python_315_docs {
-            unsafe {
-                (*methods.add(14)).ml_doc = cr"urlsafe_b64decode($module, /, s, *, padded=False)
---
-
-Decode Base64 using the URL-safe alphabet.
-
-Args:
-    s: ASCII text or bytes-like URL-safe Base64 data.
-    padded: Require padding when true; accept an unpadded tail when false.
-
-Returns:
-    Newly allocated decoded bytes.
-
-Raises:
-    binascii.Error: The input has invalid Base64 data or padding.
-    TypeError: s has an unsupported type.
-    ValueError: Text input is not ASCII.
-
-Examples:
-    >>> urlsafe_b64decode(b'-_8')
-    b'\xfb\xff'"
-                    .as_ptr();
-                (*methods.add(15)).ml_doc =
-                    cr"urlsafe_b64decode_into($module, /, s, output, *, padded=False)
---
-
-Decode URL-safe Base64 into a reusable bytearray.
-
-Args:
-    s: ASCII text or bytes-like URL-safe Base64 data.
-    output: Destination bytearray with room for the result.
-    padded: Require padding when true; accept an unpadded tail when false.
-
-Returns:
-    The number of decoded bytes written to output.
-
-Raises:
-    binascii.Error: The input has invalid Base64 data or padding.
-    TypeError: An argument has an unsupported type.
-    ValueError: output is too small or text is not ASCII.
-
-Examples:
-    >>> output = bytearray(2)
-    >>> urlsafe_b64decode_into(b'-_8', output)
-    2"
-                    .as_ptr();
-            }
-        }
-    });
+    let version_info = module.py().version_info();
+    let version = (version_info.major, version_info.minor);
+    METHODS_INIT.call_once(|| unsafe { initialize_methods(methods, version) });
     unsafe { add_methods(module, methods) }
 }

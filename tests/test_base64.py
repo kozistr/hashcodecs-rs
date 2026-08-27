@@ -90,6 +90,40 @@ def test_unpadded_decode_into_rejects_invalid_tails_without_writing_them() -> No
         assert output == bytes([0xA5] * 8)
 
 
+def test_native_decode_into_handles_aliases_and_urlsafe_errors() -> None:
+    assert base64.b64decode(bytearray(b'YWJj'), validate=True, padded=False) == b'abc'
+
+    shared = bytearray(b'Y!WJj...')
+    assert base64.b64decode_into(shared, shared) == 3
+    assert shared == bytearray(b'abcJj...')
+
+    shared = bytearray(b'YWJj')
+    assert base64.b64decode_into(shared, shared, validate=True, padded=False) == 3
+    assert shared == bytearray(b'abcj')
+
+    shared = bytearray(b'AA=')
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(shared, shared, validate=True, padded=False)
+    assert shared == bytearray(b'AA=')
+
+    output = bytearray([0xA5] * 2)
+    assert base64.b64decode_into(b'AA', output, validate=False, padded=False) == 1
+    assert output == bytearray(b'\x00\xa5')
+    assert base64.b64decode_into(b'AA!', output, validate=False, padded=False) == 1
+    assert output == bytearray(b'\x00\xa5')
+
+    for encoded, padded in ((b'-_8=', True), (b'-_8', False)):
+        output = bytearray([0xA5])
+        with pytest.raises(ValueError, match='requires 2 bytes'):
+            base64.b64decode_into(encoded, output, b'-_', validate=True, padded=padded)
+        assert output == bytearray([0xA5])
+
+    output = bytearray([0xA5] * 4)
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(b'-_!', output, b'-_', validate=True, padded=False)
+    assert output == bytearray([0xA5] * 4)
+
+
 def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded = memoryview(b'YWJj')
     payload = memoryview(b'abc')
@@ -808,6 +842,33 @@ def test_python_315_decode_options_are_backported() -> None:
     assert base64.b64decode(b'AA', padded=False, canonical=True) == b'\x00'
     with pytest.raises(binascii.Error):
         base64.b64decode(b'AB', padded=False, canonical=True)
+
+
+def test_advanced_decode_fallback_edge_cases() -> None:
+    assert base64.b64decode(b'@!#8', b'@#', padded=False, ignorechars=b'!') == b'\xfb\xff'
+    output = bytearray([0xA5] * 4)
+    assert base64.b64decode_into(b'@!#8', output, b'@#', padded=False, ignorechars=b'!') == 2
+    assert output == bytearray(b'\xfb\xff\xa5\xa5')
+
+    assert base64.b64decode(b'AA=', padded=False, validate=False, ignorechars=b'!') == b'\x00'
+    with pytest.raises(binascii.Error):
+        base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
+
+    assert base64.b64decode(b'', canonical=True) == b''
+    assert base64.b64decode(b'AAA', padded=False, canonical=True) == b'\x00\x00'
+    assert base64.b64decode(b'AAAA', canonical=True) == b'\x00\x00\x00'
+
+    assert base64.b64decode(b'YWJj', b'@#', validate=True, padded=False) == b'abc'
+    output = bytearray(3)
+    assert base64.b64decode_into(b'YWJj', output, b'@#', validate=True, padded=False) == 3
+    assert output == b'abc'
+
+
+@pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
+def test_legacy_decode_error_preserves_binascii_lookup_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(binascii, 'Error', None)
+    with pytest.raises(TypeError):
+        base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

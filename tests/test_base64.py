@@ -821,6 +821,51 @@ def test_base64_functions_are_native_and_keep_public_metadata() -> None:
         assert function.__doc__
 
 
+def test_base64_binding_schema_exports_stable_signatures() -> None:
+    padded_default = 'False' if PYTHON_315 else 'True'
+    expected = {
+        'b64decode': "(s, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, "
+        "ignorechars=['NOT SPECIFIED'], canonical=False)",
+        'b64decode_batch': '(items, altchars=None, validate=False)',
+        'b64decode_batch_into': '(items, outputs, altchars=None, validate=False)',
+        'b64decode_into': "(s, output, altchars=None, validate=['NOT SPECIFIED'], *, padded=True, "
+        "ignorechars=['NOT SPECIFIED'], canonical=False)",
+        'b64encode': '(s, altchars=None, *, padded=True, wrapcol=0)',
+        'b64encode_batch': '(items, altchars=None)',
+        'b64encode_batch_into': '(items, outputs, altchars=None)',
+        'b64encode_into': '(s, output, altchars=None, *, padded=True, wrapcol=0)',
+        'standard_b64decode': '(s)',
+        'standard_b64decode_batch': '(items)',
+        'standard_b64decode_batch_into': '(items, outputs)',
+        'standard_b64decode_into': '(s, output)',
+        'standard_b64encode': '(s)',
+        'standard_b64encode_batch': '(items)',
+        'standard_b64encode_batch_into': '(items, outputs)',
+        'standard_b64encode_into': '(s, output)',
+        'urlsafe_b64decode': f'(s, *, padded={padded_default})',
+        'urlsafe_b64decode_batch': '(items)',
+        'urlsafe_b64decode_batch_into': '(items, outputs)',
+        'urlsafe_b64decode_into': f'(s, output, *, padded={padded_default})',
+        'urlsafe_b64encode': '(s, *, padded=True)',
+        'urlsafe_b64encode_batch': '(items)',
+        'urlsafe_b64encode_batch_into': '(items, outputs)',
+        'urlsafe_b64encode_into': '(s, output, *, padded=True)',
+    }
+    assert set(expected) == set(base64.__all__)
+    assert {name: str(inspect.signature(getattr(base64, name))) for name in expected} == expected
+
+
+def test_base64_binding_schema_drives_argument_errors() -> None:
+    with pytest.raises(TypeError, match=r"standard_b64encode\(\) missing required argument 's'"):
+        base64.standard_b64encode()
+    with pytest.raises(TypeError, match=r'urlsafe_b64encode\(\) takes at most 1 positional arguments'):
+        base64.urlsafe_b64encode(b'', True)
+    with pytest.raises(TypeError, match=r"standard_b64decode\(\) got an unexpected keyword argument 'unknown'"):
+        base64.standard_b64decode(b'', unknown=True)
+    with pytest.raises(TypeError, match=r"b64encode\(\) got multiple values for argument 's'"):
+        base64.b64encode(b'', s=b'')
+
+
 def test_b64decode_into_signature_does_not_advertise_sentinel_defaults_as_none() -> None:
     parameters = inspect.signature(base64.b64decode_into).parameters
     assert parameters['validate'].default is not None

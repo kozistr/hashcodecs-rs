@@ -47,6 +47,32 @@ def test_xxh3_one_shot_argument_compatibility(function: Callable[..., object]) -
         function(b'hello', 1 << 64)
 
 
+@pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
+def test_xxh3_exact_memoryviews_preserve_layout_and_owner_semantics(function: Callable[..., object]) -> None:
+    for payload in (b'', b'hello', bytes(range(256)) * 16):
+        padded = b'\xa5' + payload + b'\x5a'
+        writable = bytearray(payload)
+        interleaved = bytearray(len(payload) * 2)
+        interleaved[::2] = payload
+        views = (
+            memoryview(payload),
+            memoryview(padded)[1:-1],
+            memoryview(writable),
+            memoryview(writable).toreadonly(),
+            memoryview(interleaved)[::2],
+        )
+        expected = function(payload)
+        assert all(function(view) == expected for view in views)
+
+
+@pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
+def test_xxh3_rejects_released_memoryviews(function: Callable[..., object]) -> None:
+    released = memoryview(b'hello')
+    released.release()
+    with pytest.raises(ValueError, match='operation forbidden on released memoryview object'):
+        function(released)
+
+
 def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     values = [b'', bytearray(b'hello'), memoryview(b'xxhash'), array('B', b'array')]
     assert hashcodecs.xxh3_64_batch(values, 42) == [hashcodecs.xxh3_64(value, 42) for value in values]
@@ -69,17 +95,19 @@ def test_xxh3_long_batch_remainders_match_one_shot(item_count: int) -> None:
 
 
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
-def test_xxh3_bytearray_race_is_serialized() -> None:
+@pytest.mark.parametrize('use_memoryview', [False, True], ids=['bytearray', 'memoryview'])
+def test_xxh3_mutable_input_race_is_serialized(use_memoryview: bool) -> None:
     size = 1024 * 1024
     first = b'a' * size
     second = b'b' * size
     value = bytearray(first)
+    input_value = memoryview(value) if use_memoryview else value
     expected = {hashcodecs.xxh3_64(first), hashcodecs.xxh3_64(second)}
     start = Barrier(2)
 
     def hash_value() -> list[int]:
         start.wait()
-        return [hashcodecs.xxh3_64(value) for _ in range(64)]
+        return [hashcodecs.xxh3_64(input_value) for _ in range(64)]
 
     def mutate_value() -> None:
         start.wait()

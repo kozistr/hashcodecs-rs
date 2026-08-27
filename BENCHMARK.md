@@ -24,7 +24,8 @@ run with a different count.
 Run `python benchmarks/python_calls.py` to measure positional calls from 0 through 256 bytes in nanoseconds per
 call. Use `--keywords` for positional and keyword calls at 64 bytes, or `--thresholds` for latency around the
 GIL-detachment cutoffs. The `--thread-scaling` mode measures aggregate throughput with one, two, and four threads;
-it does not pin the process to one logical CPU.
+it does not pin the process to one logical CPU. Use `--buffer-inputs` to compare 64-byte and 4 KiB XXH3-64 calls
+across bytes, full and sliced memoryviews, writable and non-contiguous views, and `array('B')`.
 
 ## XXH3
 

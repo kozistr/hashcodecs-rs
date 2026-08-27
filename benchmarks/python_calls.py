@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64 as stdlib_base64
 import gc
+from array import array
 from collections.abc import Callable
 
 import mmh3
@@ -25,6 +26,7 @@ import xxhash
 SMALL_SIZES = (0, 1, 8, 16, 32, 64, 128, 240, 256)
 THRESHOLD_SIZES = tuple(size * 1024 for size in (16, 32, 48, 64, 96, 128, 192, 256, 384, 512))
 THREAD_SIZES = tuple(size * 1024 for size in (16, 64, 256, 1024))
+BUFFER_SIZES = (64, 4096)
 Case = tuple[str, int, Callable[[], object], object]
 
 
@@ -95,6 +97,28 @@ def report(name: str, size: int, operation: Callable[[], object], expected: obje
     print(f'{name:15} {call_shape:10} {size_label:>8} {nanoseconds:10.1f} ns/call {rate:7.2f} GB/s')
 
 
+def report_buffer(name: str, payload: bytes, value: object, expected: int) -> None:
+    def operation() -> int:
+        return hashcodecs_xxhash.xxh3_64(value)
+
+    assert operation() == expected
+    print(f'{len(payload):>8} B  {name:20} {latency(operation):9.2f} ns/call')
+
+
+def buffer_inputs(payload: bytes) -> tuple[tuple[str, object], ...]:
+    padded = b'\xa5' + payload + b'\x5a'
+    interleaved = bytearray(len(payload) * 2)
+    interleaved[::2] = payload
+    return (
+        ('bytes', payload),
+        ('memoryview', memoryview(payload)),
+        ('sliced memoryview', memoryview(padded)[1:-1]),
+        ('bytearray view', memoryview(bytearray(payload))),
+        ('noncontiguous view', memoryview(interleaved)[::2]),
+        ("array('B')", array('B', payload)),
+    )
+
+
 def report_threads(name: str, size: int, operation: Callable[[], object], expected: object) -> None:
     assert operation() == expected
     baseline = threaded_throughput(operation, size, 1)
@@ -125,6 +149,11 @@ def main() -> None:
         action='store_true',
         help='measure aggregate throughput with one, two, and four threads',
     )
+    mode.add_argument(
+        '--buffer-inputs',
+        action='store_true',
+        help='compare XXH3-64 call costs across bytes-like input types',
+    )
     add_timing_arguments(parser)
     arguments = parser.parse_args()
     configure_timing(arguments.samples, arguments.minimum_sample_seconds)
@@ -133,6 +162,14 @@ def main() -> None:
         pin_to_one_cpu()
     gc.disable()
     try:
+        if arguments.buffer_inputs:
+            for requested_size in BUFFER_SIZES:
+                payload = data(requested_size)
+                expected = hashcodecs_xxhash.xxh3_64(payload)
+                for name, value in buffer_inputs(payload):
+                    report_buffer(name, payload, value, expected)
+            return
+
         if arguments.keywords:
             for call_shape, keyword_arguments in (('positional', False), ('keyword', True)):
                 for name, size, operation, expected in cases(64, keywords=keyword_arguments):

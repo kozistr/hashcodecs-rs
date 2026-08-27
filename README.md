@@ -188,8 +188,9 @@ uv run --no-project --with . python benchmarks/python_xxhash.py
 ```
 
 The Python benchmarks expose focused modes such as `--into`, `--lenient`, `--bytearray-input`, `--memoryview-input`,
-`--sliced-memoryview-input`, `--incremental`, `--large`, and `--hashcodecs-only`. All scripts also accept `--samples` and
-`--minimum-sample-seconds`; use `--help` on a benchmark script for its supported modes and defaults.
+`--sliced-memoryview-input`, `--buffer-inputs`, `--incremental`, `--large`, and `--hashcodecs-only`. All scripts also
+accept `--samples` and `--minimum-sample-seconds`; use `--help` on a benchmark script for its supported modes and
+defaults.
 
 For the same-ISA Windows XXH3 comparison shown above, rebuild the C baseline with:
 

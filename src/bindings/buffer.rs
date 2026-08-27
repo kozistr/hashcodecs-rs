@@ -8,7 +8,34 @@ use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
+#[cfg(all(not(Py_LIMITED_API), not(any(PyPy, GraalPy))))]
+const MEMORYVIEW_RELEASED: std::ffi::c_int = 0x001;
+#[cfg(all(not(Py_LIMITED_API), not(any(PyPy, GraalPy))))]
+const MEMORYVIEW_C_CONTIGUOUS: std::ffi::c_int = 0x002;
+#[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
+
+/// The prefix of the C layout used by CPython's public non-limited macros.
+///
+/// CPython exposes these fields through `PyMemoryView_GET_BUFFER` and
+/// `PyMemoryView_GET_BASE`. PyO3 intentionally omits the macros, so mirror the
+/// prefix needed to implement them without Python attribute dispatch.
+#[cfg(all(not(Py_LIMITED_API), not(any(PyPy, GraalPy))))]
+#[repr(C)]
+struct CpythonMemoryViewObject {
+    _ob_base: ffi::PyVarObject,
+    _managed_buffer: *mut std::ffi::c_void,
+    _hash: ffi::Py_hash_t,
+    flags: std::ffi::c_int,
+    _exports: ffi::Py_ssize_t,
+    view: ffi::Py_buffer,
+}
+
+struct MemoryViewInfo<'py> {
+    nbytes: usize,
+    c_contiguous: bool,
+    owner: Option<Bound<'py, PyAny>>,
+}
 
 /// A contiguous buffer borrowed directly from an arbitrary exporter.
 ///
@@ -314,35 +341,23 @@ fn exact_memoryview_bytes_like<'a, 'py>(
     memoryview: &Bound<'py, PyMemoryView>,
     require_contiguous: bool,
 ) -> PyResult<BytesLike<'a, 'py>> {
-    let py = memoryview.py();
-    let nbytes = memoryview
-        .getattr(intern!(py, "nbytes"))?
-        .extract::<usize>()?;
-    let try_owner = nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
-    let contiguous = if require_contiguous || try_owner || cfg!(not(Py_GIL_DISABLED)) {
-        memoryview
-            .getattr(intern!(py, "c_contiguous"))?
-            .is_truthy()?
-    } else {
-        false
-    };
+    let info = memoryview_info(memoryview, require_contiguous)?;
 
-    if require_contiguous && !contiguous {
+    if require_contiguous && !info.c_contiguous {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",
         ));
     }
 
-    if contiguous && try_owner {
-        let owner = memoryview.getattr(intern!(py, "obj"))?;
+    if let Some(owner) = info.owner {
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
-            if unsafe { bytes_size(owner.as_ptr()) } == nbytes {
+            if unsafe { bytes_size(owner.as_ptr()) } == info.nbytes {
                 return Ok(BytesLike::OwnedBytes(owner));
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
-            if with_bytearray(&owner, || unsafe { bytearray_size(owner.as_ptr()) }) == nbytes {
+            if with_bytearray(&owner, || unsafe { bytearray_size(owner.as_ptr()) }) == info.nbytes {
                 return Ok(BytesLike::OwnedByteArray(owner));
             }
         }
@@ -353,7 +368,71 @@ fn exact_memoryview_bytes_like<'a, 'py>(
         return Ok(BytesLike::Buffer(buffer));
     }
 
-    copy_memoryview(memoryview, false).map(BytesLike::OwnedBytes)
+    copy_memoryview(memoryview).map(BytesLike::OwnedBytes)
+}
+
+#[cfg(all(not(Py_LIMITED_API), not(any(PyPy, GraalPy))))]
+fn memoryview_info<'py>(
+    memoryview: &Bound<'py, PyMemoryView>,
+    _require_contiguous: bool,
+) -> PyResult<MemoryViewInfo<'py>> {
+    with_critical_section(memoryview.as_any(), || unsafe {
+        // The caller's exact-type check establishes the CPython layout. The
+        // critical section prevents release while the fields are read, and
+        // `from_borrowed_ptr` takes its own reference before that lock ends.
+        let object = &*memoryview.as_ptr().cast::<CpythonMemoryViewObject>();
+        if object.flags & MEMORYVIEW_RELEASED != 0 {
+            return Err(PyValueError::new_err(
+                "operation forbidden on released memoryview object",
+            ));
+        }
+
+        let nbytes = object.view.len as usize;
+        let c_contiguous = object.flags & MEMORYVIEW_C_CONTIGUOUS != 0;
+        let owner = object.view.obj;
+        let owner = if c_contiguous
+            && !owner.is_null()
+            && (ffi::PyBytes_CheckExact(owner) != 0 || ffi::PyByteArray_CheckExact(owner) != 0)
+        {
+            Some(Bound::from_borrowed_ptr(memoryview.py(), owner))
+        } else {
+            None
+        };
+        Ok(MemoryViewInfo {
+            nbytes,
+            c_contiguous,
+            owner,
+        })
+    })
+}
+
+#[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
+fn memoryview_info<'py>(
+    memoryview: &Bound<'py, PyMemoryView>,
+    require_contiguous: bool,
+) -> PyResult<MemoryViewInfo<'py>> {
+    let py = memoryview.py();
+    let nbytes = memoryview
+        .getattr(intern!(py, "nbytes"))?
+        .extract::<usize>()?;
+    let try_owner = nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
+    let c_contiguous = if require_contiguous || try_owner || cfg!(not(Py_GIL_DISABLED)) {
+        memoryview
+            .getattr(intern!(py, "c_contiguous"))?
+            .is_truthy()?
+    } else {
+        false
+    };
+    let owner = if c_contiguous && try_owner {
+        Some(memoryview.getattr(intern!(py, "obj"))?)
+    } else {
+        None
+    };
+    Ok(MemoryViewInfo {
+        nbytes,
+        c_contiguous,
+        owner,
+    })
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
@@ -371,20 +450,8 @@ fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> Option<Borrowed
     None
 }
 
-fn copy_memoryview<'py>(
-    memoryview: &Bound<'py, PyMemoryView>,
-    require_contiguous: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
+fn copy_memoryview<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Bound<'py, PyBytes>> {
     let py = memoryview.py();
-    if require_contiguous
-        && !memoryview
-            .getattr(intern!(py, "c_contiguous"))?
-            .is_truthy()?
-    {
-        return Err(PyBufferError::new_err(
-            "memoryview: underlying buffer is not C-contiguous",
-        ));
-    }
     memoryview
         .call_method0(intern!(py, "tobytes"))?
         .cast_into::<PyBytes>()
@@ -397,4 +464,40 @@ fn type_error(argument: &str) -> PyErr {
 
 fn ascii_error(argument: &str) -> PyErr {
     PyValueError::new_err(format!("{argument} must contain only ASCII characters"))
+}
+
+#[cfg(all(test, not(Py_LIMITED_API), not(any(PyPy, GraalPy))))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpython_memoryview_layout_matches_public_metadata() {
+        Python::initialize();
+        Python::attach(|py| {
+            let owner = PyBytes::new(py, b"abcdef");
+            let memoryview = PyMemoryView::from(owner.as_any()).unwrap();
+            let info = memoryview_info(&memoryview, false).unwrap();
+            assert_eq!(info.nbytes, 6);
+            assert!(info.c_contiguous);
+            assert!(info.owner.unwrap().is(&owner));
+
+            let noncontiguous = py
+                .eval(c"memoryview(b'abcdef')[::2]", None, None)
+                .unwrap()
+                .cast_into::<PyMemoryView>()
+                .unwrap();
+            let info = memoryview_info(&noncontiguous, false).unwrap();
+            assert_eq!(info.nbytes, 3);
+            assert!(!info.c_contiguous);
+            assert!(info.owner.is_none());
+
+            memoryview.call_method0(intern!(py, "release")).unwrap();
+            let error = memoryview_info(&memoryview, false).err().unwrap();
+            assert!(error.is_instance_of::<PyValueError>(py));
+            assert_eq!(
+                error.to_string(),
+                "ValueError: operation forbidden on released memoryview object"
+            );
+        });
+    }
 }

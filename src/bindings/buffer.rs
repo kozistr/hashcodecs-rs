@@ -76,7 +76,7 @@ pub(super) fn with_bytearray<T>(value: &Bound<'_, PyByteArray>, callback: impl F
 }
 
 pub(super) enum BytesLike<'a, 'py> {
-    Bytes(&'a [u8]),
+    Bytes(&'a Bound<'py, PyBytes>),
     ByteArray(&'a Bound<'py, PyByteArray>),
     OwnedBytes(Bound<'py, PyBytes>),
     OwnedByteArray(Bound<'py, PyByteArray>),
@@ -86,10 +86,10 @@ pub(super) enum BytesLike<'a, 'py> {
     Owned(Vec<u8>),
 }
 
-impl BytesLike<'_, '_> {
+impl<'py> BytesLike<'_, 'py> {
     pub(super) fn len(&self) -> usize {
         match self {
-            Self::Bytes(bytes) => bytes.len(),
+            Self::Bytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
             Self::ByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
@@ -112,6 +112,14 @@ impl BytesLike<'_, '_> {
 
     pub(super) fn requires_snapshot_for_output(&self) -> bool {
         matches!(self, Self::Buffer(_))
+    }
+
+    pub(super) fn python_bytes(&self) -> Option<&Bound<'py, PyBytes>> {
+        match self {
+            Self::Bytes(bytes) => Some(bytes),
+            Self::OwnedBytes(bytes) => Some(bytes),
+            _ => None,
+        }
     }
 
     /// Make an input independent of every mutable destination in a batch.
@@ -179,7 +187,7 @@ impl BytesLike<'_, '_> {
     /// The callback must not run arbitrary Python or release the GIL when the input is mutable.
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
-            Self::Bytes(bytes) => callback(bytes),
+            Self::Bytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
             Self::ByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
@@ -233,7 +241,7 @@ impl BytesLike<'_, '_> {
 
     pub(super) fn stable_bytes(&self) -> &[u8] {
         match self {
-            Self::Bytes(bytes) => bytes,
+            Self::Bytes(bytes) => unsafe { bytes_slice(bytes) },
             Self::ByteArray(_) | Self::OwnedByteArray(_) => {
                 unreachable!("mutable bytearrays must be snapshotted before borrowing")
             }
@@ -296,7 +304,7 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
     if PyBytes::is_exact_type_of(value) {
         // Exact builtins cannot override their storage behavior.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
-        return Some(BytesLike::Bytes(unsafe { bytes_slice(bytes) }));
+        return Some(BytesLike::Bytes(bytes));
     }
     if PyByteArray::is_exact_type_of(value) {
         let value = unsafe { value.cast_unchecked::<PyByteArray>() };

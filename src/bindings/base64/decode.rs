@@ -29,7 +29,7 @@ pub(super) use self::batch::{
 
 fn decode_plan_allocating_inner<'py>(
     py: Python<'py>,
-    input: &BytesLike<'_, '_>,
+    input: &BytesLike<'_, 'py>,
     options: DecodeOptions<'_, 'py>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let DecodeOptions {
@@ -191,10 +191,10 @@ pub(super) fn urlsafe_b64decode_into(
         .map(DecodeOutput::into_written)
 }
 
-fn decode_plan_into_inner(
-    py: Python<'_>,
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
+fn decode_plan_into_inner<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, 'py>,
+    output: &Bound<'py, PyByteArray>,
     options: DecodeOptions<'_, '_>,
 ) -> PyResult<usize> {
     let DecodeOptions {

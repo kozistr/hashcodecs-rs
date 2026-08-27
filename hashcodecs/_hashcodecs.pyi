@@ -257,6 +257,10 @@ def b64decode_into(
     the returned prefix remain unchanged. On malformed input, part of the
     destination prefix may already have been modified.
 
+    Native modes decode directly into the destination. Advanced compatibility
+    modes that delegate to binascii allocate temporary decoded bytes before
+    copying them into output.
+
     Args:
         s: ASCII text or bytes-like Base64 data.
         output: Destination bytearray with room for the complete result.

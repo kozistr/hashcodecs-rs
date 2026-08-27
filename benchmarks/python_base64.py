@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64 as stdlib_base64
 import gc
+import sys
 from collections.abc import Callable
 
 import pybase64
@@ -82,8 +83,15 @@ def main() -> None:
         action='store_true',
         help='time MIME-wrapped and noisy lenient decoding',
     )
+    mode.add_argument(
+        '--advanced',
+        action='store_true',
+        help='time Python 3.15 ignorechars, canonical, and custom-alphabet decoding',
+    )
     add_timing_arguments(parser)
     args = parser.parse_args()
+    if args.advanced and sys.version_info < (3, 15):
+        parser.error('--advanced requires Python 3.15 or newer')
     configure_timing(args.samples, args.minimum_sample_seconds)
 
     pin_to_one_cpu()
@@ -93,6 +101,50 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.advanced:
+                noisy = b'!'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
+                unpadded = standard.rstrip(b'=')
+                custom = noisy.translate(bytes.maketrans(b'+/', b'@#'))
+                decoded_output = bytearray(size)
+                benchmark(
+                    'ignorechars decode',
+                    size,
+                    lambda noisy=noisy: hashcodecs_base64.b64decode(noisy, ignorechars=b'!'),
+                    (('stdlib', lambda noisy=noisy: stdlib_base64.b64decode(noisy, ignorechars=b'!')),),
+                )
+                benchmark(
+                    'canonical decode',
+                    size,
+                    lambda unpadded=unpadded: hashcodecs_base64.b64decode(unpadded, padded=False, canonical=True),
+                    (
+                        (
+                            'stdlib',
+                            lambda unpadded=unpadded: stdlib_base64.b64decode(unpadded, padded=False, canonical=True),
+                        ),
+                    ),
+                )
+                benchmark(
+                    'custom decode',
+                    size,
+                    lambda custom=custom: hashcodecs_base64.b64decode(custom, b'@#', ignorechars=b'!'),
+                    (
+                        (
+                            'stdlib',
+                            lambda custom=custom: stdlib_base64.b64decode(custom, b'@#', ignorechars=b'!'),
+                        ),
+                    ),
+                )
+                benchmark_into(
+                    'custom decode into',
+                    size,
+                    lambda custom=custom, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        custom, output, b'@#', ignorechars=b'!'
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                continue
 
             if args.lenient:
                 mime = b'\r\n'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))

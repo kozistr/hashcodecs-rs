@@ -69,7 +69,7 @@ pub(super) fn warn_legacy_altchars(
 
 pub(super) fn decode_with_binascii<'py>(
     py: Python<'py>,
-    input: &BytesLike<'_, '_>,
+    input: &BytesLike<'_, 'py>,
     altchars: Option<[u8; 2]>,
     strict_mode: bool,
     padded: bool,
@@ -109,6 +109,8 @@ pub(super) fn decode_with_binascii<'py>(
     };
     let data = if let Some(translated) = translated.as_deref() {
         PyBytes::new(py, translated)
+    } else if let Some(bytes) = input.python_bytes() {
+        bytes.clone()
     } else {
         unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
     };

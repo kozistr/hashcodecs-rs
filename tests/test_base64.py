@@ -909,6 +909,30 @@ def test_advanced_decode_fallback_edge_cases() -> None:
     assert output == b'abc'
 
 
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 fallback')
+def test_advanced_decode_fallback_reuses_exact_immutable_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = binascii.a2b_base64
+    observed: list[object] = []
+
+    def record_input(data: object, *args: object, **kwargs: object) -> bytes:
+        observed.append(data)
+        return original(data, *args, **kwargs)
+
+    monkeypatch.setattr(binascii, 'a2b_base64', record_input)
+    encoded = b'Y!WJj'
+    assert base64.b64decode(encoded, ignorechars=b'!') == b'abc'
+    assert observed[-1] is encoded
+
+    output = bytearray(3)
+    assert base64.b64decode_into(encoded, output, ignorechars=b'!') == 3
+    assert output == b'abc'
+    assert observed[-1] is encoded
+
+    view = memoryview(encoded)
+    assert base64.b64decode(view, ignorechars=b'!') == b'abc'
+    assert observed[-1] is encoded
+
+
 @pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
 def test_legacy_decode_error_preserves_binascii_lookup_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(binascii, 'Error', None)

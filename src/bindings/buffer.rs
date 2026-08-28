@@ -286,13 +286,6 @@ pub(super) fn contiguous_bytes_like_owned<'py>(
     value: &Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'py, 'py>> {
-    if PyBytes::is_exact_type_of(value) {
-        return value
-            .clone()
-            .cast_into::<PyBytes>()
-            .map(BytesLike::OwnedBytes)
-            .map_err(Into::into);
-    }
     if PyByteArray::is_exact_type_of(value) {
         return value
             .clone()
@@ -328,50 +321,9 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
 }
 
 pub(super) fn ascii_or_bytes_owned<'py>(
-    py: Python<'py>,
     value: &Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'py, 'py>> {
-    if PyBytes::is_exact_type_of(value) {
-        return value
-            .clone()
-            .cast_into::<PyBytes>()
-            .map(BytesLike::OwnedBytes)
-            .map_err(Into::into);
-    }
-    if PyByteArray::is_exact_type_of(value) {
-        return value
-            .clone()
-            .cast_into::<PyByteArray>()
-            .map(BytesLike::OwnedByteArray)
-            .map_err(Into::into);
-    }
-    if PyString::is_exact_type_of(value) {
-        let text = unsafe { value.cast_unchecked::<PyString>() };
-        let text = text.to_str().map_err(|_| ascii_error(argument))?;
-        if !text.is_ascii() {
-            return Err(ascii_error(argument));
-        }
-        return Ok(BytesLike::OwnedBytes(PyBytes::new(py, text.as_bytes())));
-    }
-    if value.is_instance_of::<PyString>() {
-        let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
-        return buffer_bytes_like(&encoded, argument, false);
-    }
-    bytes_like_owned(value, argument)
-}
-
-fn bytes_like_owned<'py>(
-    value: &Bound<'py, PyAny>,
-    argument: &str,
-) -> PyResult<BytesLike<'py, 'py>> {
-    if PyBytes::is_exact_type_of(value) {
-        return value
-            .clone()
-            .cast_into::<PyBytes>()
-            .map(BytesLike::OwnedBytes)
-            .map_err(Into::into);
-    }
     if PyByteArray::is_exact_type_of(value) {
         return value
             .clone()

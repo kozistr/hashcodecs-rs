@@ -1077,6 +1077,11 @@ def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
 
 
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
+    empty_input = memoryview(bytearray(b'x'))[:0]
+    empty_output = bytearray(b'!')
+    assert base64.b64encode_batch_into([empty_input], [empty_output]) == [0]
+    assert empty_output == b'!'
+
     encoded_storage = bytearray(b'abcd....')
     encoded_input = memoryview(encoded_storage)[:4]
     encoded_output = bytearray(8)
@@ -1168,6 +1173,14 @@ def test_base64_batch_into_is_fail_fast_and_non_transactional() -> None:
     encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
     with pytest.raises(TypeError, match='bytes-like object'):
         base64.b64encode_batch_into([b'abc', object()], encoded_outputs)
+    assert encoded_outputs[0] == b'YWJj'
+    assert encoded_outputs[1] == bytearray([0xA5] * 4)
+
+    released = memoryview(b'abc')
+    released.release()
+    encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
+    with pytest.raises(ValueError, match='released memoryview'):
+        base64.b64encode_batch_into([b'abc', released], encoded_outputs)
     assert encoded_outputs[0] == b'YWJj'
     assert encoded_outputs[1] == bytearray([0xA5] * 4)
 

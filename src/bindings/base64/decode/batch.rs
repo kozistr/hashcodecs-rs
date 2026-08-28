@@ -87,7 +87,7 @@ fn b64decode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut prepared = prepare_batch_inputs(py, &items, &outputs, BatchInputKind::AsciiOrBytes)?;
+    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?;
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, items.len(), |index| {
         let output = &outputs[index];

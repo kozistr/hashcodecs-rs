@@ -227,9 +227,9 @@ enum PreparedBatchInput<'py> {
 
 /// Retain only inputs whose buffer acquisition is needed to prove they do not
 /// overlap a destination. Exact immutable values and independent bytearrays
-/// stay on the single-pass path.
+/// stay on the single-pass path, so the owned conversion below only handles
+/// aliased bytearrays and arbitrary buffer exporters.
 fn prepare_batch_inputs<'py>(
-    py: Python<'py>,
     items: &[Bound<'py, PyAny>],
     outputs: &[Bound<'py, PyByteArray>],
     kind: BatchInputKind,
@@ -260,7 +260,7 @@ fn prepare_batch_inputs<'py>(
         }
         let input = match kind {
             BatchInputKind::Contiguous => contiguous_bytes_like_owned(item, "s"),
-            BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(py, item, "s"),
+            BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(item, "s"),
         };
         match input {
             Ok(input) => {
@@ -448,7 +448,7 @@ fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut prepared = prepare_batch_inputs(py, &items, &outputs, BatchInputKind::Contiguous)?;
+    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?;
     list_from_fn(py, items.len(), |index| {
         let output = &outputs[index];
         match prepared

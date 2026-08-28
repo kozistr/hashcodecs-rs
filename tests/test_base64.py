@@ -1,3 +1,4 @@
+import ast
 import base64 as stdlib_base64
 import binascii
 import builtins
@@ -8,6 +9,7 @@ import threading
 import warnings
 from array import array
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -856,6 +858,19 @@ def test_base64_binding_schema_exports_stable_signatures() -> None:
     }
     assert set(expected) == set(base64.__all__)
     assert {name: str(inspect.signature(getattr(base64, name))) for name in expected} == expected
+
+
+def test_base64_binding_schema_exports_complete_typed_documentation() -> None:
+    stub = Path(hashcodecs.__file__).with_name('_hashcodecs.pyi')
+    declarations = ast.parse(stub.read_text(encoding='utf-8'), filename=str(stub))
+    expected = {
+        node.name: ast.get_docstring(node, clean=True)
+        for node in declarations.body
+        if isinstance(node, ast.FunctionDef) and 'b64' in node.name
+    }
+
+    assert set(expected) == set(base64.__all__)
+    assert {name: getattr(base64, name).__doc__ for name in expected} == expected
 
 
 def test_base64_binding_schema_drives_argument_errors() -> None:

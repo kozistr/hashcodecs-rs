@@ -506,47 +506,6 @@ pub(super) fn b64encode_into(
     )
 }
 
-unsafe fn raw_argument<'a, 'py>(
-    py: Python<'py>,
-    value: &'a *mut ffi::PyObject,
-) -> &'a Bound<'py, PyAny> {
-    unsafe { Bound::ref_from_ptr(py, value) }
-}
-
-unsafe fn optional_argument<'a, 'py>(
-    py: Python<'py>,
-    value: &'a *mut ffi::PyObject,
-) -> Option<&'a Bound<'py, PyAny>> {
-    if value.is_null() || *value == unsafe { ffi::Py_None() } {
-        None
-    } else {
-        Some(unsafe { raw_argument(py, value) })
-    }
-}
-
-unsafe fn provided_argument<'a, 'py>(
-    py: Python<'py>,
-    value: &'a *mut ffi::PyObject,
-) -> Option<&'a Bound<'py, PyAny>> {
-    (!value.is_null()).then(|| unsafe { raw_argument(py, value) })
-}
-
-unsafe fn truthy_argument(
-    py: Python<'_>,
-    value: *mut ffi::PyObject,
-    default: bool,
-) -> PyResult<bool> {
-    if value.is_null() {
-        return Ok(default);
-    }
-    let truthy = unsafe { ffi::PyObject_IsTrue(value) };
-    if truthy == -1 {
-        Err(PyErr::fetch(py))
-    } else {
-        Ok(truthy != 0)
-    }
-}
-
 fn return_bound<T: PyTypeInfo>(
     py: Python<'_>,
     result: PyResult<Bound<'_, T>>,

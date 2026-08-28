@@ -201,24 +201,72 @@ mod tests {
     use super::*;
     use crate::backend::Capabilities;
 
-    #[test]
-    fn scalar_batch_engine_processes_and_finalizes_inputs_individually() {
-        let owned = [300, 300, 17, 1024].map(|length| vec![length as u8; length]);
-        let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let engine = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
-        assert!(!engine.has_batch_kernel());
+    fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
+        let mut hashes = Vec::new();
+        batch_each_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
+            hashes.push(hash)
+        });
+        hashes
+    }
 
-        let mut actual = Vec::new();
+    fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]> {
+        let mut hashes = Vec::new();
         batch_each_with_engine(
-            &refs,
+            inputs,
             17,
             xxh3_128,
             finalize_long_128,
-            &engine,
-            &mut |hash| actual.push(hash),
+            engine,
+            &mut |hash| hashes.push(hash),
+        );
+        hashes
+    }
+
+    #[test]
+    fn scalar_batch_engine_processes_and_finalizes_inputs_individually() {
+        let owned = [
+            300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
+        ]
+        .map(|length| vec![length as u8; length]);
+        let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let scalar = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        assert!(!scalar.has_batch_kernel());
+
+        let short = [b"short".as_slice()];
+        assert_eq!(
+            hashes_64_with_engine(&short, &scalar),
+            vec![xxh3_64(short[0], 17)]
         );
         assert_eq!(
-            actual,
+            hashes_128_with_engine(&short, &scalar),
+            vec![xxh3_128(short[0], 17)]
+        );
+
+        assert_eq!(
+            hashes_64_with_engine(&refs, &scalar),
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            hashes_128_with_engine(&refs, &scalar),
+            owned
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let native = LongEngine::new();
+        assert_eq!(
+            hashes_64_with_engine(&refs, &native),
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            hashes_128_with_engine(&refs, &native),
             owned
                 .iter()
                 .map(|input| xxh3_128(input, 17))

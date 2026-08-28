@@ -480,7 +480,8 @@ fn memoryview_info<'py>(
         }
         let nbytes = view.len as usize;
         let data = view.buf.cast();
-        let c_contiguous = ffi::PyBuffer_IsContiguous(&raw const view, b'C'.cast_signed()) != 0;
+        let c_contiguous =
+            ffi::PyBuffer_IsContiguous(&raw const view, b'C' as std::ffi::c_char) != 0;
         let owner = hashcodecs_memoryview_owner(memoryview.as_ptr());
         let owner = if c_contiguous
             && !owner.is_null()

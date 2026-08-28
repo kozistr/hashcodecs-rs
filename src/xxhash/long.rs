@@ -338,6 +338,18 @@ impl LongEngine {
     }
 
     #[inline(always)]
+    pub(super) fn has_batch_kernel(&self) -> bool {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            self.avx2
+        }
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        {
+            false
+        }
+    }
+
+    #[inline(always)]
     pub(super) fn accumulate(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
         let backend = self.backend;
         match backend {

@@ -39,7 +39,7 @@ pub(super) fn encode<'py>(
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
-    if let Some(input) = input.snapshot_mutable() {
+    if let Some(input) = input.snapshot_mutable()? {
         return encode(py, &BytesLike::Owned(input), altchars, padded, wrapcol);
     }
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -72,8 +72,7 @@ pub(super) fn encode_into(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<usize> {
-    if input.aliases(output) || input.requires_snapshot_for_output() {
-        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+    if let Some(input) = input.snapshot_for_output(output)? {
         return encode_slice_into(&input, output, altchars, padded, wrapcol);
     }
     unsafe {

@@ -1,5 +1,7 @@
 use super::hash::{xxh3_64, xxh3_128};
-use super::long::{LongBatch, LongEngine, LongRun, Secret, finalize_long_64, finalize_long_128};
+use super::long::{
+    LongBatch, LongEngine, LongInput, LongRun, Secret, finalize_long_64, finalize_long_128,
+};
 
 macro_rules! emit_long_group {
     ($name:ident, $size:literal, $($acc:ident),+ $(,)?) => {
@@ -33,6 +35,29 @@ where
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
+    batch_each_with_engine(
+        inputs,
+        seed,
+        short,
+        finalize,
+        &LongEngine::new(),
+        &mut output,
+    );
+}
+
+#[inline(always)]
+fn batch_each_with_engine<T, S, F, O>(
+    inputs: &[&[u8]],
+    seed: u64,
+    short: S,
+    finalize: F,
+    engine: &LongEngine,
+    mut output: O,
+) where
+    S: Copy + Fn(&[u8], u64) -> T,
+    F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
+    O: FnMut(T),
+{
     let mut index = 0;
     while index < inputs.len() && inputs[index].len() <= 240 {
         output(short(inputs[index], seed));
@@ -42,9 +67,19 @@ where
         return;
     }
 
-    let engine = LongEngine::new();
     let derived_secret = engine.derive_secret(seed);
     let secret = engine.secret(&derived_secret);
+    if !engine.has_batch_kernel() {
+        while index < inputs.len() {
+            if let Some(input) = LongInput::new(inputs[index]) {
+                output(engine.hash(input, secret, finalize));
+            } else {
+                output(short(inputs[index], seed));
+            }
+            index += 1;
+        }
+        return;
+    }
     while index < inputs.len() {
         let Some(run) = LongRun::new(&inputs[index..]) else {
             output(short(inputs[index], seed));
@@ -83,7 +118,8 @@ where
 /// Computes canonical XXH3 64-bit hashes for a batch without copying inputs.
 ///
 /// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// contiguous equal-size long runs may be processed two to four at a time.
+/// contiguous equal-size long runs may be processed two to four at a time when
+/// the AVX2 batch kernel is available.
 ///
 /// # Arguments
 ///
@@ -122,7 +158,8 @@ pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
 ///
 /// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// contiguous equal-size long runs may be processed two to four at a time.
+/// contiguous equal-size long runs may be processed two to four at a time when
+/// the AVX2 batch kernel is available.
 ///
 /// # Arguments
 ///
@@ -163,6 +200,79 @@ pub(crate) fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMu
 mod tests {
     use super::*;
     use crate::backend::Capabilities;
+
+    fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
+        let mut hashes = Vec::new();
+        batch_each_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
+            hashes.push(hash)
+        });
+        hashes
+    }
+
+    fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]> {
+        let mut hashes = Vec::new();
+        batch_each_with_engine(
+            inputs,
+            17,
+            xxh3_128,
+            finalize_long_128,
+            engine,
+            &mut |hash| hashes.push(hash),
+        );
+        hashes
+    }
+
+    #[test]
+    fn scalar_batch_engine_processes_and_finalizes_inputs_individually() {
+        let owned = [
+            300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
+        ]
+        .map(|length| vec![length as u8; length]);
+        let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let scalar = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        assert!(!scalar.has_batch_kernel());
+
+        let short = [b"short".as_slice()];
+        assert_eq!(
+            hashes_64_with_engine(&short, &scalar),
+            vec![xxh3_64(short[0], 17)]
+        );
+        assert_eq!(
+            hashes_128_with_engine(&short, &scalar),
+            vec![xxh3_128(short[0], 17)]
+        );
+
+        assert_eq!(
+            hashes_64_with_engine(&refs, &scalar),
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            hashes_128_with_engine(&refs, &scalar),
+            owned
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
+
+        let native = LongEngine::new();
+        assert_eq!(
+            hashes_64_with_engine(&refs, &native),
+            owned
+                .iter()
+                .map(|input| xxh3_64(input, 17))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            hashes_128_with_engine(&refs, &native),
+            owned
+                .iter()
+                .map(|input| xxh3_128(input, 17))
+                .collect::<Vec<_>>()
+        );
+    }
 
     #[test]
     fn scalar_engine_falls_back_for_batch_groups() {

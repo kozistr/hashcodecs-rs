@@ -440,7 +440,7 @@ pub(super) fn try_decode_lenient<'py>(
     padded: bool,
 ) -> PyResult<Option<Bound<'py, PyBytes>>> {
     #[cfg(Py_GIL_DISABLED)]
-    if let Some(input) = input.snapshot_mutable() {
+    if let Some(input) = input.snapshot_mutable()? {
         return try_decode_lenient(py, &BytesLike::Owned(input), altchars, padded);
     }
     let writer = BytesWriter::new(py, input.len())?;
@@ -477,8 +477,7 @@ pub(super) fn try_decode_lenient_into(
     continue_after_padding: bool,
 ) -> PyResult<Option<usize>> {
     let table = lenient_decode_table(altchars);
-    if input.aliases(output) || input.requires_snapshot_for_output() {
-        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
+    if let Some(input) = input.snapshot_for_output(output)? {
         return with_bytearray(output, || unsafe {
             decode_lenient_slice_into(
                 &input,
@@ -559,7 +558,7 @@ fn decode_strict_native<'py>(
     alphabet: DecodeAlphabet,
 ) -> PyResult<Result<Bound<'py, PyBytes>, StrictDecodeError>> {
     #[cfg(Py_GIL_DISABLED)]
-    if let Some(input) = input.snapshot_mutable() {
+    if let Some(input) = input.snapshot_mutable()? {
         return decode_strict_native(py, &BytesLike::Owned(input), alphabet);
     }
     let layout = match unsafe { input.with_bytes(decode_layout) } {
@@ -621,16 +620,20 @@ pub(super) fn decode_strict_into(
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
-) -> Result<usize, Base64Error> {
-    if input.aliases(output) || input.requires_snapshot_for_output() {
-        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
-        return decode_strict_slice_into(&input, output, alphabet, transactional_errors);
+) -> PyResult<Result<usize, Base64Error>> {
+    if let Some(input) = input.snapshot_for_output(output)? {
+        return Ok(decode_strict_slice_into(
+            &input,
+            output,
+            alphabet,
+            transactional_errors,
+        ));
     }
-    unsafe {
+    Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_strict_to_ptr(input, output, provided, alphabet, transactional_errors)
         })
-    }
+    })
 }
 
 fn decode_strict_slice_into(
@@ -700,7 +703,7 @@ fn decode_unpadded<'py>(
     alphabet: DecodeAlphabet,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
-    if let Some(input) = input.snapshot_mutable() {
+    if let Some(input) = input.snapshot_mutable()? {
         return decode_unpadded(py, &BytesLike::Owned(input), alphabet);
     }
     let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
@@ -731,16 +734,20 @@ fn decode_unpadded_into(
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
     transactional_errors: bool,
-) -> Result<usize, Base64Error> {
-    if input.aliases(output) || input.requires_snapshot_for_output() {
-        let input = unsafe { input.with_bytes(<[u8]>::to_vec) };
-        return decode_unpadded_slice_into(&input, output, alphabet, transactional_errors);
+) -> PyResult<Result<usize, Base64Error>> {
+    if let Some(input) = input.snapshot_for_output(output)? {
+        return Ok(decode_unpadded_slice_into(
+            &input,
+            output,
+            alphabet,
+            transactional_errors,
+        ));
     }
-    unsafe {
+    Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_unpadded_to_ptr(input, output, provided, alphabet, transactional_errors)
         })
-    }
+    })
 }
 
 fn decode_unpadded_slice_into(
@@ -897,7 +904,7 @@ pub(super) fn decode_unpadded_into_with_altchars(
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
     transactional_errors: bool,
-) -> Result<usize, Base64Error> {
+) -> PyResult<Result<usize, Base64Error>> {
     let translated = altchars
         .filter(|altchars| *altchars != *b"-_")
         .and_then(|altchars| unsafe {
@@ -942,7 +949,7 @@ pub(super) fn try_decode_urlsafe_315_into(
 ) -> PyResult<Option<usize>> {
     let transactional_errors = !strict_mode;
     if padded || !strict_mode {
-        match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
+        match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors)? {
             Ok(written) => return Ok(Some(written)),
             Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
                 return Err(output_too_small(required, provided));
@@ -951,7 +958,7 @@ pub(super) fn try_decode_urlsafe_315_into(
         }
     }
     if !padded {
-        match decode_unpadded_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors) {
+        match decode_unpadded_into(input, output, DecodeAlphabet::UrlSafe, transactional_errors)? {
             Ok(written) => return Ok(Some(written)),
             Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
                 return Err(output_too_small(required, provided));

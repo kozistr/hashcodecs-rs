@@ -2,6 +2,7 @@ fn main() {
     println!("cargo::rustc-check-cfg=cfg(coverage)");
     println!("cargo::rustc-check-cfg=cfg(kani)");
     println!("cargo::rustc-check-cfg=cfg(miri)");
+    println!("cargo::rerun-if-changed=build.rs");
     #[cfg(feature = "python")]
     pyo3_build_config::use_pyo3_cfgs();
 

@@ -150,8 +150,10 @@ Buffer handling follows ownership rather than treating every buffer alike:
 
 - exact `bytes` are borrowed without a copy;
 - exact `bytearray` values are borrowed but never used in detached work;
-- small or sliced memoryviews are copied;
-- full contiguous bytes or bytearray owners can be retained for large memoryviews;
+- contiguous memoryviews are borrowed while execution remains attached to the interpreter;
+- full contiguous `bytes` or `bytearray` owners are retained when their data pointer and length match the view;
+- other memoryviews are copied only when stable ownership is required, including free-threaded execution;
+- reusable Base64 batches snapshot only inputs whose memory range overlaps a destination;
 - immutable Base64 and XXH3 operations at or above 256 KiB may detach from the GIL;
 - immutable MurmurHash3 operations at or above 64 KiB may detach from the GIL;
 - mutable storage never crosses a detached region.

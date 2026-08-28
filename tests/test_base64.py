@@ -167,7 +167,7 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64encode(array('B', b'abc')) == b'YWJj'
     assert base64.b64decode(array('B', b'YWJj'), validate=True) == b'abc'
 
-    large_payload = bytes(range(256)) * 16
+    large_payload = bytes(range(256)) * 256
     large_encoded = stdlib_base64.b64encode(large_payload)
     assert base64.b64encode(memoryview(large_payload)) == large_encoded
     assert base64.b64decode(memoryview(large_encoded), validate=True) == large_payload
@@ -912,6 +912,30 @@ def test_advanced_decode_fallback_edge_cases() -> None:
     assert output == b'abc'
 
 
+def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    observed: list[object] = []
+
+    def record_input(data: object, *args: object, **kwargs: object) -> bytes:
+        observed.append(data)
+        return b''
+
+    monkeypatch.setattr(binascii, 'a2b_base64', record_input)
+
+    encoded = b'abc'
+    assert base64.b64decode(memoryview(encoded)) == b''
+    assert observed[-1] is encoded
+
+    mutable = bytearray(encoded)
+    assert base64.b64decode(memoryview(mutable)) == b''
+    assert observed[-1] == encoded
+    assert isinstance(observed[-1], bytes)
+
+    sliced_owner = b'xabc'
+    assert base64.b64decode(memoryview(sliced_owner)[1:]) == b''
+    assert observed[-1] == encoded
+    assert observed[-1] is not sliced_owner
+
+
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 fallback')
 def test_advanced_decode_fallback_reuses_exact_immutable_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     original = binascii.a2b_base64
@@ -1077,6 +1101,11 @@ def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
 
 
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
+    empty_input = memoryview(bytearray(b'x'))[:0]
+    empty_output = bytearray(b'!')
+    assert base64.b64encode_batch_into([empty_input], [empty_output]) == [0]
+    assert empty_output == b'!'
+
     encoded_storage = bytearray(b'abcd....')
     encoded_input = memoryview(encoded_storage)[:4]
     encoded_output = bytearray(8)
@@ -1164,6 +1193,28 @@ def test_base64_batch_into_is_fail_fast_and_non_transactional() -> None:
     with pytest.raises(binascii.Error):
         base64.b64decode_batch_into([b'YWJj', b'YWJ!'], decoded_outputs, validate=True)
     assert decoded_outputs[0] == b'abc'
+
+    encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
+    with pytest.raises(TypeError, match='bytes-like object'):
+        base64.b64encode_batch_into([b'abc', object()], encoded_outputs)
+    assert encoded_outputs[0] == b'YWJj'
+    assert encoded_outputs[1] == bytearray([0xA5] * 4)
+
+    released = memoryview(b'abc')
+    released.release()
+    encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
+    with pytest.raises(ValueError, match='released memoryview'):
+        base64.b64encode_batch_into([b'abc', released], encoded_outputs)
+    assert encoded_outputs[0] == b'YWJj'
+    assert encoded_outputs[1] == bytearray([0xA5] * 4)
+
+    released = memoryview(b'YWJj')
+    released.release()
+    decoded_outputs = [bytearray([0xA5] * 3), bytearray([0xA5] * 3)]
+    with pytest.raises(ValueError, match='released memoryview'):
+        base64.b64decode_batch_into([b'YWJj', released], decoded_outputs, validate=True)
+    assert decoded_outputs[0] == b'abc'
+    assert decoded_outputs[1] == bytearray([0xA5] * 3)
 
 
 @pytest.mark.parametrize('failure_index', [0, 1, 2])

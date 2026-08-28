@@ -178,6 +178,7 @@ Comparison crates and Python packages are development-only dependencies and are 
 cargo bench --bench base64
 cargo bench --bench murmur3
 cargo bench --bench xxhash
+cargo bench --bench crossover
 
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py

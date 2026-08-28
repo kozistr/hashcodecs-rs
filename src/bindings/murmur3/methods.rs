@@ -21,7 +21,7 @@ MurmurHash3 is a fast non-cryptographic hash. The result is compatible with
 the original x86-32 reference algorithm.
 
 Args:
-    s: Contiguous bytes-like data to hash.
+    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
     seed: Initial unsigned 32-bit seed.
 
 Returns:
@@ -50,7 +50,7 @@ Compute the canonical MurmurHash3 x86 128-bit digest.
 The four result words are serialized as little-endian 32-bit integers.
 
 Args:
-    s: Contiguous bytes-like data to hash.
+    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
     seed: Initial unsigned 32-bit seed.
 
 Returns:
@@ -79,7 +79,7 @@ Compute the canonical MurmurHash3 x64 128-bit digest.
 The two result words are serialized as little-endian 64-bit integers.
 
 Args:
-    s: Contiguous bytes-like data to hash.
+    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
     seed: Initial unsigned 32-bit seed.
 
 Returns:

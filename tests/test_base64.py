@@ -19,6 +19,7 @@ PYTHON_315 = sys.version_info >= (3, 15)
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
+GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
 @pytest.mark.parametrize('payload', [b'', b'a', b'ab', b'abc', bytes(range(256))])
@@ -645,11 +646,13 @@ def test_all_short_payload_lengths_match_cpython() -> None:
         assert base64.urlsafe_b64decode(urlsafe) == payload
 
 
-def test_large_base64_calls_cross_the_gil_release_threshold() -> None:
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+def test_large_base64_calls_release_the_gil(assert_releases_gil: GILProgressAssertion) -> None:
     payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
     encoded = stdlib_base64.b64encode(payload)
-    assert base64.b64encode(payload) == encoded
-    assert base64.b64decode(encoded) == payload
+
+    assert_releases_gil(lambda: base64.b64encode(payload), encoded, 128)
+    assert_releases_gil(lambda: base64.b64decode(encoded, validate=True), payload, 128)
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
@@ -1236,38 +1239,8 @@ def test_base64_batch_exports_docstrings_and_signatures() -> None:
     assert str(inspect.signature(base64.b64decode_batch_into)) == '(items, outputs, altchars=None, validate=False)'
 
 
-def _assert_batch_releases_the_gil(operation: Callable[[], list[bytes]], expected: list[bytes]) -> None:
-    ready = threading.Event()
-    start = threading.Event()
-    progressed = threading.Event()
-
-    def report_progress() -> None:
-        ready.set()
-        if start.wait(timeout=1):
-            progressed.set()
-
-    worker = threading.Thread(target=report_progress)
-    worker.start()
-    assert ready.wait(timeout=1)
-    previous_switch_interval = sys.getswitchinterval()
-    try:
-        # Keep the main thread from yielding between waking the worker and
-        # entering the native call. The worker can then progress only when the
-        # extension explicitly detaches from the interpreter.
-        sys.setswitchinterval(1.0)
-        start.set()
-        result = operation()
-        progressed_during_call = progressed.is_set()
-    finally:
-        sys.setswitchinterval(previous_switch_interval)
-    worker.join(timeout=1)
-
-    assert not worker.is_alive()
-    assert progressed_during_call
-    assert result == expected
-
-
-def test_large_base64_batch_crosses_the_gil_release_threshold() -> None:
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+def test_large_base64_batch_releases_the_gil(assert_releases_gil: GILProgressAssertion) -> None:
     payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
     encoded_item = stdlib_base64.b64encode(payload)
     # Keep both operations long enough for the awakened worker to be scheduled
@@ -1275,5 +1248,5 @@ def test_large_base64_batch_crosses_the_gil_release_threshold() -> None:
     payloads = [payload] * 512
     encoded = [encoded_item] * 512
 
-    _assert_batch_releases_the_gil(lambda: base64.b64encode_batch(payloads), encoded)
-    _assert_batch_releases_the_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads)
+    assert_releases_gil(lambda: base64.b64encode_batch(payloads), encoded, 1)
+    assert_releases_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads, 1)

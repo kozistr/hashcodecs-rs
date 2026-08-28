@@ -512,7 +512,7 @@ def murmur3_32(s: ReadableBuffer, seed: int = 0) -> int:
     the original x86-32 reference algorithm.
 
     Args:
-        s: Contiguous bytes-like data to hash.
+        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -534,7 +534,7 @@ def murmur3_x86_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
     The four result words are serialized as little-endian 32-bit integers.
 
     Args:
-        s: Contiguous bytes-like data to hash.
+        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -556,7 +556,7 @@ def murmur3_x64_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
     The two result words are serialized as little-endian 64-bit integers.
 
     Args:
-        s: Contiguous bytes-like data to hash.
+        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -578,7 +578,7 @@ def xxh3_64(s: ReadableBuffer, seed: int = 0) -> int:
     XXH3 is a non-cryptographic hash designed for speed.
 
     Args:
-        s: Contiguous bytes-like data to hash.
+        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
         seed: Initial unsigned 64-bit seed.
 
     Returns:
@@ -601,7 +601,7 @@ def xxh3_128(s: ReadableBuffer, seed: int = 0) -> int:
     integer. XXH3 is non-cryptographic.
 
     Args:
-        s: Contiguous bytes-like data to hash.
+        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
         seed: Initial unsigned 64-bit seed.
 
     Returns:

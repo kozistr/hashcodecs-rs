@@ -11,6 +11,8 @@ import hashcodecs
 import hashcodecs.xxhash as xxhash
 
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
+XXH3_DETACH_THRESHOLD = 256 * 1024
+GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
 def test_xxh3_functions_keep_public_module_metadata() -> None:
@@ -45,6 +47,17 @@ def test_xxh3_one_shot_argument_compatibility(function: Callable[..., object]) -
         function(b'hello', -1)
     with pytest.raises(OverflowError):
         function(b'hello', 1 << 64)
+
+
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+@pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
+def test_large_xxh3_calls_release_the_gil(
+    function: Callable[..., object],
+    assert_releases_gil: GILProgressAssertion,
+) -> None:
+    payload = bytes(range(256)) * (XXH3_DETACH_THRESHOLD // 256)
+    expected = function(payload, 42)
+    assert_releases_gil(lambda: function(payload, 42), expected, 128)
 
 
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])

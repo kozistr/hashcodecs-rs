@@ -23,7 +23,7 @@ Compute the canonical XXH3 64-bit hash.
 XXH3 is a non-cryptographic hash designed for speed.
 
 Args:
-    s: Contiguous bytes-like data to hash.
+    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
     seed: Initial unsigned 64-bit seed.
 
 Returns:
@@ -53,7 +53,7 @@ The low 64-bit word occupies the least significant half of the returned
 integer. XXH3 is non-cryptographic.
 
 Args:
-    s: Contiguous bytes-like data to hash.
+    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
     seed: Initial unsigned 64-bit seed.
 
 Returns:

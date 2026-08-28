@@ -59,6 +59,10 @@ harness = false
 name = "xxhash"
 harness = false
 
+[[bench]]
+name = "crossover"
+harness = false
+
 [[test]]
 name = "sanitizers"
 path = "tests/sanitizers.rs"

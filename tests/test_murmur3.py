@@ -1,4 +1,5 @@
 import inspect
+import sys
 from array import array
 from collections.abc import Callable
 from typing import Any
@@ -7,6 +8,9 @@ import pytest
 
 import hashcodecs
 import hashcodecs.murmur3 as murmur3
+
+FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
+GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
 def test_murmur3_functions_keep_public_module_metadata() -> None:
@@ -23,6 +27,13 @@ def test_murmur3_known_answers_and_buffer_inputs() -> None:
     assert hashcodecs.murmur3_32(array('B', b'hello')) == 0x248BFA47
     assert hashcodecs.murmur3_x86_128_digest(bytes([1, 2, 3])) == bytes.fromhex('e16401f6334213b5334213b5334213b5')
     assert hashcodecs.murmur3_x64_128_digest(bytes([1, 2, 3])) == bytes.fromhex('a937130eef3e641a659a233c404a4e49')
+
+    noncontiguous = memoryview(b'h.e.l.l.o.')[::2]
+    assert hashcodecs.murmur3_32(noncontiguous) == hashcodecs.murmur3_32(b'hello')
+    assert hashcodecs.murmur3_x86_128_digest(noncontiguous) == hashcodecs.murmur3_x86_128_digest(b'hello')
+    assert hashcodecs.murmur3_x64_128_digest(noncontiguous) == hashcodecs.murmur3_x64_128_digest(b'hello')
+    for constructor in (murmur3.murmur3_x86_32, murmur3.murmur3_x86_128, murmur3.murmur3_x64_128):
+        assert constructor(noncontiguous).digest() == constructor(b'hello').digest()
 
 
 @pytest.mark.parametrize(
@@ -115,12 +126,23 @@ def test_hashlib_style_murmur3_rejects_invalid_inputs(constructor: Callable[...,
         constructor().update([1, 2, 3])
 
 
-def test_large_murmur3_calls_cross_the_gil_release_threshold() -> None:
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+def test_large_murmur3_calls_release_the_gil(assert_releases_gil: GILProgressAssertion) -> None:
     payload = bytes(range(256)) * 257
-    assert hashcodecs.murmur3_32(payload, 42) == hashcodecs.murmur3_32(bytearray(payload), 42)
-    assert hashcodecs.murmur3_x86_128_digest(payload, 42) == hashcodecs.murmur3_x86_128_digest(bytearray(payload), 42)
-    assert hashcodecs.murmur3_x64_128_digest(payload, 42) == hashcodecs.murmur3_x64_128_digest(bytearray(payload), 42)
+    for function in (
+        hashcodecs.murmur3_32,
+        hashcodecs.murmur3_x86_128_digest,
+        hashcodecs.murmur3_x64_128_digest,
+    ):
+        expected = function(payload, 42)
+        assert_releases_gil(lambda function=function: function(payload, 42), expected, 256)
+
     for constructor in (murmur3.murmur3_x86_32, murmur3.murmur3_x86_128, murmur3.murmur3_x64_128):
-        hasher = constructor(seed=42)
-        hasher.update(bytearray(payload))
-        assert hasher.digest() == constructor(payload, 42).digest()
+        expected = constructor(payload, 42).digest()
+
+        def incremental_digest(constructor: Callable[..., Any] = constructor) -> bytes:
+            hasher = constructor(seed=42)
+            hasher.update(payload)
+            return hasher.digest()
+
+        assert_releases_gil(incremental_digest, expected, 256)

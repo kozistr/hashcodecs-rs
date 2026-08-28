@@ -8,33 +8,28 @@ use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
 
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
-#[cfg(all(
-    not(hashcodecs_memoryview_shim),
-    not(Py_LIMITED_API),
-    not(any(PyPy, GraalPy))
-))]
-const MEMORYVIEW_OWNER_THRESHOLD: usize = 0;
-#[cfg(all(not(hashcodecs_memoryview_shim), any(Py_LIMITED_API, PyPy, GraalPy)))]
+#[cfg(not(Py_GIL_DISABLED))]
+// Below the first detach threshold, retaining the acquired buffer avoids a
+// Python attribute lookup without preventing any operation from detaching.
+const MEMORYVIEW_OWNER_THRESHOLD: usize = 64 * 1024;
+#[cfg(all(Py_GIL_DISABLED, any(Py_LIMITED_API, PyPy, GraalPy)))]
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
-
-#[cfg(hashcodecs_memoryview_shim)]
-unsafe extern "C" {
-    fn hashcodecs_memoryview_owner(memoryview: *mut ffi::PyObject) -> *mut ffi::PyObject;
-}
 
 struct MemoryViewInfo<'py> {
     nbytes: usize,
     c_contiguous: bool,
     data: *mut u8,
     owner: Option<Bound<'py, PyAny>>,
+    buffer: BorrowedBuffer<'py>,
 }
 
-/// A contiguous buffer borrowed directly from an arbitrary exporter.
+/// An acquired buffer which releases its export on drop.
 ///
-/// This is only used by GIL-enabled builds. An exporter can expose a
-/// read-only view of storage which remains mutable through another handle, so
-/// the GIL is the synchronization guarantee for unknown exporters. Exact
-/// mutable builtins use critical sections instead.
+/// It is retained for direct processing only when it is C-contiguous and the
+/// build uses the GIL. An exporter can expose a read-only view of storage which
+/// remains mutable through another handle, so the GIL is the synchronization
+/// guarantee for unknown exporters. Exact mutable builtins use critical
+/// sections instead.
 pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
     _python: std::marker::PhantomData<Python<'py>>,
@@ -384,28 +379,33 @@ fn exact_memoryview_bytes_like<'py>(
     memoryview: &Bound<'py, PyMemoryView>,
     require_contiguous: bool,
 ) -> PyResult<BytesLike<'py, 'py>> {
-    let info = memoryview_info(memoryview, require_contiguous)?;
+    let MemoryViewInfo {
+        nbytes,
+        c_contiguous,
+        data,
+        owner,
+        buffer,
+    } = memoryview_info(memoryview)?;
 
-    if require_contiguous && !info.c_contiguous {
+    if require_contiguous && !c_contiguous {
         return Err(PyBufferError::new_err(
             "memoryview: underlying buffer is not C-contiguous",
         ));
     }
 
-    if let Some(owner) = info.owner {
+    if let Some(owner) = owner {
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
             if unsafe {
-                bytes_size(owner.as_ptr()) == info.nbytes
-                    && bytes_data(owner.as_ptr()) == info.data.cast_const()
+                bytes_size(owner.as_ptr()) == nbytes
+                    && bytes_data(owner.as_ptr()) == data.cast_const()
             } {
                 return Ok(BytesLike::OwnedBytes(owner));
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
             if with_bytearray(&owner, || unsafe {
-                bytearray_size(owner.as_ptr()) == info.nbytes
-                    && bytearray_data(owner.as_ptr()) == info.data
+                bytearray_size(owner.as_ptr()) == nbytes && bytearray_data(owner.as_ptr()) == data
             }) {
                 return Ok(BytesLike::OwnedByteArray(owner));
             }
@@ -413,102 +413,51 @@ fn exact_memoryview_bytes_like<'py>(
     }
 
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(buffer) = borrowed_contiguous_buffer(memoryview.as_any()) {
+    if c_contiguous {
         return Ok(BytesLike::Buffer(buffer));
     }
 
+    drop(buffer);
     copy_memoryview(memoryview).map(BytesLike::OwnedBytes)
 }
 
-#[cfg(hashcodecs_memoryview_shim)]
-fn memoryview_info<'py>(
-    memoryview: &Bound<'py, PyMemoryView>,
-    _require_contiguous: bool,
-) -> PyResult<MemoryViewInfo<'py>> {
-    with_critical_section(memoryview.as_any(), || unsafe {
-        let mut view = std::mem::zeroed::<ffi::Py_buffer>();
-        if ffi::PyObject_GetBuffer(memoryview.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) != 0 {
-            return Err(PyErr::fetch(memoryview.py()));
-        }
-        let nbytes = view.len as usize;
-        let data = view.buf.cast();
-        let c_contiguous =
-            ffi::PyBuffer_IsContiguous(&raw const view, b'C' as std::ffi::c_char) != 0;
-        let owner = hashcodecs_memoryview_owner(memoryview.as_ptr());
-        let owner = if c_contiguous
-            && !owner.is_null()
-            && (ffi::PyBytes_CheckExact(owner) != 0 || ffi::PyByteArray_CheckExact(owner) != 0)
-        {
-            Some(Bound::from_borrowed_ptr(memoryview.py(), owner))
-        } else {
-            None
-        };
-        ffi::PyBuffer_Release(&raw mut view);
-        Ok(MemoryViewInfo {
-            nbytes,
-            c_contiguous,
-            data,
-            owner,
-        })
-    })
-}
-
-#[cfg(not(hashcodecs_memoryview_shim))]
-fn memoryview_info<'py>(
-    memoryview: &Bound<'py, PyMemoryView>,
-    require_contiguous: bool,
-) -> PyResult<MemoryViewInfo<'py>> {
+fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<MemoryViewInfo<'py>> {
     let py = memoryview.py();
-    let nbytes = memoryview
-        .getattr(intern!(py, "nbytes"))?
-        .extract::<usize>()?;
-    let try_owner = nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
-    let c_contiguous = if require_contiguous || try_owner || cfg!(not(Py_GIL_DISABLED)) {
-        memoryview
-            .getattr(intern!(py, "c_contiguous"))?
-            .is_truthy()?
-    } else {
-        false
+    let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+    if unsafe { ffi::PyObject_GetBuffer(memoryview.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) }
+        != 0
+    {
+        return Err(PyErr::fetch(py));
+    }
+
+    let buffer = BorrowedBuffer {
+        view,
+        _python: std::marker::PhantomData,
     };
-    let owner = if c_contiguous && try_owner {
+    let nbytes = buffer.len();
+    let data = buffer.view.buf.cast();
+    let c_contiguous = unsafe {
+        ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
+    };
+    #[cfg(not(Py_GIL_DISABLED))]
+    let try_owner = c_contiguous && nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
+    #[cfg(all(Py_GIL_DISABLED, not(any(Py_LIMITED_API, PyPy, GraalPy))))]
+    let try_owner = c_contiguous;
+    #[cfg(all(Py_GIL_DISABLED, any(Py_LIMITED_API, PyPy, GraalPy)))]
+    let try_owner = c_contiguous && nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
+    let owner = if try_owner {
         Some(memoryview.getattr(intern!(py, "obj"))?)
     } else {
         None
     };
-    let data = if owner.is_some() {
-        let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
-        if unsafe { ffi::PyObject_GetBuffer(memoryview.as_ptr(), &mut view, ffi::PyBUF_CONTIG_RO) }
-            != 0
-        {
-            return Err(PyErr::fetch(py));
-        }
-        let data = view.buf.cast();
-        unsafe { ffi::PyBuffer_Release(&mut view) };
-        data
-    } else {
-        std::ptr::null_mut()
-    };
+
     Ok(MemoryViewInfo {
         nbytes,
         c_contiguous,
         data,
         owner,
+        buffer,
     })
-}
-
-#[cfg(not(Py_GIL_DISABLED))]
-fn borrowed_contiguous_buffer<'py>(value: &Bound<'py, PyAny>) -> Option<BorrowedBuffer<'py>> {
-    let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
-
-    if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &mut view, ffi::PyBUF_CONTIG_RO) } == 0 {
-        return Some(BorrowedBuffer {
-            view,
-            _python: std::marker::PhantomData,
-        });
-    }
-
-    unsafe { ffi::PyErr_Clear() };
-    None
 }
 
 fn copy_memoryview<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Bound<'py, PyBytes>> {
@@ -527,33 +476,36 @@ fn ascii_error(argument: &str) -> PyErr {
     PyValueError::new_err(format!("{argument} must contain only ASCII characters"))
 }
 
-#[cfg(all(test, hashcodecs_memoryview_shim))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn cpython_memoryview_shim_reports_public_metadata() {
+    fn memoryview_info_reports_public_metadata() {
         Python::initialize();
         Python::attach(|py| {
-            let owner = PyBytes::new(py, b"abcdef");
+            let owner_data = vec![b'a'; 64 * 1024];
+            let owner = PyBytes::new(py, &owner_data);
             let memoryview = PyMemoryView::from(owner.as_any()).unwrap();
-            let info = memoryview_info(&memoryview, false).unwrap();
-            assert_eq!(info.nbytes, 6);
+            let info = memoryview_info(&memoryview).unwrap();
+            assert_eq!(info.nbytes, owner_data.len());
             assert!(info.c_contiguous);
-            assert!(info.owner.unwrap().is(&owner));
+            assert!(info.owner.as_ref().unwrap().is(&owner));
+            drop(info);
 
             let noncontiguous = py
                 .eval(c"memoryview(b'abcdef')[::2]", None, None)
                 .unwrap()
                 .cast_into::<PyMemoryView>()
                 .unwrap();
-            let info = memoryview_info(&noncontiguous, false).unwrap();
+            let info = memoryview_info(&noncontiguous).unwrap();
             assert_eq!(info.nbytes, 3);
             assert!(!info.c_contiguous);
             assert!(info.owner.is_none());
+            drop(info);
 
             memoryview.call_method0(intern!(py, "release")).unwrap();
-            let error = memoryview_info(&memoryview, false).err().unwrap();
+            let error = memoryview_info(&memoryview).err().unwrap();
             assert!(error.is_instance_of::<PyValueError>(py));
             assert_eq!(
                 error.to_string(),

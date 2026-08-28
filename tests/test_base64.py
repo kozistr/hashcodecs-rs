@@ -167,7 +167,7 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64encode(array('B', b'abc')) == b'YWJj'
     assert base64.b64decode(array('B', b'YWJj'), validate=True) == b'abc'
 
-    large_payload = bytes(range(256)) * 16
+    large_payload = bytes(range(256)) * 256
     large_encoded = stdlib_base64.b64encode(large_payload)
     assert base64.b64encode(memoryview(large_payload)) == large_encoded
     assert base64.b64decode(memoryview(large_encoded), validate=True) == large_payload

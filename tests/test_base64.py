@@ -1165,6 +1165,20 @@ def test_base64_batch_into_is_fail_fast_and_non_transactional() -> None:
         base64.b64decode_batch_into([b'YWJj', b'YWJ!'], decoded_outputs, validate=True)
     assert decoded_outputs[0] == b'abc'
 
+    encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
+    with pytest.raises(TypeError, match='bytes-like object'):
+        base64.b64encode_batch_into([b'abc', object()], encoded_outputs)
+    assert encoded_outputs[0] == b'YWJj'
+    assert encoded_outputs[1] == bytearray([0xA5] * 4)
+
+    released = memoryview(b'YWJj')
+    released.release()
+    decoded_outputs = [bytearray([0xA5] * 3), bytearray([0xA5] * 3)]
+    with pytest.raises(ValueError, match='released memoryview'):
+        base64.b64decode_batch_into([b'YWJj', released], decoded_outputs, validate=True)
+    assert decoded_outputs[0] == b'abc'
+    assert decoded_outputs[1] == bytearray([0xA5] * 3)
+
 
 @pytest.mark.parametrize('failure_index', [0, 1, 2])
 def test_base64_batch_decode_is_fail_fast(failure_index: int) -> None:

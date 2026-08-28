@@ -1,9 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyInt, PyList};
 
-use super::super::{batch_outputs, parse_altchars};
+use super::super::{
+    BatchInputKind, PreparedBatchInput, batch_outputs, parse_altchars, prepare_batch_inputs,
+};
 use super::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
-use crate::bindings::buffer::{BytesLike, ascii_or_bytes};
+use crate::bindings::buffer::ascii_or_bytes;
 use crate::bindings::objects::{list_from_fn, list_items};
 
 /// Decode each ASCII string or bytes-like item and return results in input order.
@@ -63,7 +65,8 @@ pub(in crate::bindings::base64) fn urlsafe_b64decode_batch<'py>(
 /// prefix is changed. Processing is fail-fast and non-transactional: an error
 /// leaves earlier destinations modified, and the failing destination may be
 /// partly written. The GIL remains held because outputs are mutable. Inputs are
-/// snapshotted before the first destination write.
+/// snapshotted before the first destination write only when they overlap a
+/// destination.
 pub(in crate::bindings::base64) fn b64decode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -84,21 +87,31 @@ fn b64decode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let inputs = items
-        .iter()
-        .map(|item| ascii_or_bytes(py, item, "s").map(BytesLike::into_stable_for_batch_output))
-        .collect::<PyResult<Vec<_>>>()?;
-    let length = inputs.len();
-    let mut pairs = inputs.into_iter().zip(outputs.iter());
+    let mut prepared = prepare_batch_inputs(py, &items, &outputs, BatchInputKind::AsciiOrBytes)?;
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
-    list_from_fn(py, length, |_| {
-        let (input, output) = pairs.next().expect("batch item count is exact");
-        Ok(PyInt::new(
-            py,
-            DecodePlan::new(&input, options)
-                .execute(py, DecodeExecution::Into(output))?
-                .into_written(),
-        ))
+    list_from_fn(py, items.len(), |index| {
+        let output = &outputs[index];
+        match prepared
+            .as_mut()
+            .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))
+        {
+            Some(PreparedBatchInput::Ready(input)) => Ok(PyInt::new(
+                py,
+                DecodePlan::new(&input, options)
+                    .execute(py, DecodeExecution::Into(output))?
+                    .into_written(),
+            )),
+            Some(PreparedBatchInput::Failed(error)) => Err(error),
+            Some(PreparedBatchInput::Deferred) | None => {
+                let input = ascii_or_bytes(py, &items[index], "s")?;
+                Ok(PyInt::new(
+                    py,
+                    DecodePlan::new(&input, options)
+                        .execute(py, DecodeExecution::Into(output))?
+                        .into_written(),
+                ))
+            }
+        }
     })
 }
 

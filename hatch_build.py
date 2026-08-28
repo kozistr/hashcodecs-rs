@@ -51,12 +51,29 @@ class CustomBuildHook(BuildHookInterface[Any]):
             stdout=subprocess.PIPE,
             text=True,
         )
+        if result.returncode:
+            self._print_cargo_diagnostics(result.stdout)
         result.check_returncode()
 
         extension = self._cdylib_artifact(result.stdout)
         build_data['force_include'] = {str(extension): f'hashcodecs/_hashcodecs{self._extension_suffix()}'}
         build_data['pure_python'] = False
         build_data['tag'] = wheel_tag
+
+    @staticmethod
+    def _print_cargo_diagnostics(messages: str) -> None:
+        rendered_any = False
+        for line in messages.splitlines():
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rendered = message.get('message', {}).get('rendered')
+            if rendered:
+                sys.stderr.write(rendered)
+                rendered_any = True
+        if not rendered_any:
+            sys.stderr.write(messages)
 
     @staticmethod
     def _cdylib_artifact(messages: str) -> Path:

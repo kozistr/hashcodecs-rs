@@ -220,7 +220,7 @@ fn decode_plan_into_inner<'py>(
     };
 
     let direct = if ignorechars.is_none() && !canonical && (padded || !strict_mode) {
-        decode_strict_into(direct_input, output, alphabet, transactional_errors)
+        decode_strict_into(direct_input, output, alphabet, transactional_errors)?
     } else {
         Err(Base64Error::InvalidInput)
     };
@@ -241,14 +241,14 @@ fn decode_plan_into_inner<'py>(
         && let Some(normalized) = normalize_mime_whitespace(input)?
     {
         let normalized = BytesLike::Owned(normalized);
-        match decode_strict_into(&normalized, output, alphabet, true) {
+        match decode_strict_into(&normalized, output, alphabet, true)? {
             Ok(written) => return Ok(written),
             Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
         }
     }
 
     if !padded && ignorechars.is_none() && !canonical {
-        match decode_unpadded_into_with_altchars(input, output, altchars, transactional_errors) {
+        match decode_unpadded_into_with_altchars(input, output, altchars, transactional_errors)? {
             Ok(written) => return Ok(written),
             Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
                 return Err(output_too_small(required, provided));

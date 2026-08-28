@@ -5,7 +5,7 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyAssertionError, PyMemoryError, PyTypeError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList};
+use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList, PyString};
 
 use self::decode::{
     b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
@@ -13,7 +13,10 @@ use self::decode::{
     urlsafe_b64decode, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
     urlsafe_b64decode_into,
 };
-use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
+use super::buffer::{
+    BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
+    contiguous_bytes_like_owned, with_bytearray,
+};
 #[cfg(not(Py_GIL_DISABLED))]
 use super::objects::exact_bytes_up_to;
 use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_from_fn, list_items};
@@ -53,7 +56,7 @@ fn parse_altchars(
         contiguous_bytes_like(py, value, "altchars")?
     };
     #[cfg(Py_GIL_DISABLED)]
-    let bytes = bytes.into_stable();
+    let bytes = bytes.into_stable()?;
     if bytes.len() != 2 {
         if python_at_least(py, (3, 15)) {
             let value = if allow_text {
@@ -112,7 +115,7 @@ fn prepare_b64encode_altchars(
 
     let bytes = contiguous_bytes_like(py, value, "altchars")?;
     #[cfg(Py_GIL_DISABLED)]
-    let bytes = bytes.into_stable();
+    let bytes = bytes.into_stable()?;
     if bytes.len() != 2 {
         let message = if python_at_least(py, (3, 15)) {
             "alphabet must have length 64"
@@ -208,6 +211,69 @@ fn batch_outputs<'py>(
         parsed.push(output);
     }
     Ok(parsed)
+}
+
+#[derive(Clone, Copy)]
+enum BatchInputKind {
+    Contiguous,
+    AsciiOrBytes,
+}
+
+enum PreparedBatchInput<'py> {
+    Deferred,
+    Ready(BytesLike<'py, 'py>),
+    Failed(PyErr),
+}
+
+/// Retain only inputs whose buffer acquisition is needed to prove they do not
+/// overlap a destination. Exact immutable values and independent bytearrays
+/// stay on the single-pass path.
+fn prepare_batch_inputs<'py>(
+    py: Python<'py>,
+    items: &[Bound<'py, PyAny>],
+    outputs: &[Bound<'py, PyByteArray>],
+    kind: BatchInputKind,
+) -> PyResult<Option<Vec<PreparedBatchInput<'py>>>> {
+    let needs_preparation = |item: &Bound<'py, PyAny>| {
+        if PyBytes::is_exact_type_of(item)
+            || matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>()
+        {
+            return false;
+        }
+        if PyByteArray::is_exact_type_of(item) {
+            return outputs
+                .iter()
+                .any(|output| output.as_ptr() == item.as_ptr());
+        }
+        unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
+    };
+
+    if !items.iter().any(&needs_preparation) {
+        return Ok(None);
+    }
+
+    let mut prepared = batch_results(items.len())?;
+    prepared.extend((0..items.len()).map(|_| PreparedBatchInput::Deferred));
+    for (index, item) in items.iter().enumerate() {
+        if !needs_preparation(item) {
+            continue;
+        }
+        let input = match kind {
+            BatchInputKind::Contiguous => contiguous_bytes_like_owned(item, "s"),
+            BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(py, item, "s"),
+        };
+        match input {
+            Ok(input) => {
+                prepared[index] =
+                    PreparedBatchInput::Ready(input.into_stable_for_batch_outputs(outputs)?);
+            }
+            Err(error) => {
+                prepared[index] = PreparedBatchInput::Failed(error);
+                break;
+            }
+        }
+    }
+    Ok(Some(prepared))
 }
 
 fn encode_parsed<'py>(
@@ -362,7 +428,8 @@ pub(super) fn urlsafe_b64encode_batch<'py>(
 /// be distinct bytearrays. Each destination keeps its size; only its written
 /// prefix is changed. Processing is fail-fast and non-transactional: an error
 /// leaves earlier destinations modified. The GIL remains held because outputs
-/// are mutable. Inputs are snapshotted before the first destination write.
+/// are mutable. Inputs overlapping any destination are snapshotted before the
+/// first destination write.
 pub(super) fn b64encode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -381,20 +448,26 @@ fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items);
     let outputs = batch_outputs(items.len(), outputs)?;
-    let inputs = items
-        .iter()
-        .map(|item| {
-            contiguous_bytes_like(py, item, "s").map(BytesLike::into_stable_for_batch_output)
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    let length = inputs.len();
-    let mut pairs = inputs.into_iter().zip(outputs.iter());
-    list_from_fn(py, length, |_| {
-        let (input, output) = pairs.next().expect("batch item count is exact");
-        Ok(PyInt::new(
-            py,
-            encode_parsed_into(&input, output, altchars, true, None)?,
-        ))
+    let mut prepared = prepare_batch_inputs(py, &items, &outputs, BatchInputKind::Contiguous)?;
+    list_from_fn(py, items.len(), |index| {
+        let output = &outputs[index];
+        match prepared
+            .as_mut()
+            .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))
+        {
+            Some(PreparedBatchInput::Ready(input)) => Ok(PyInt::new(
+                py,
+                encode_parsed_into(&input, output, altchars, true, None)?,
+            )),
+            Some(PreparedBatchInput::Failed(error)) => Err(error),
+            Some(PreparedBatchInput::Deferred) | None => {
+                let input = contiguous_bytes_like(py, &items[index], "s")?;
+                Ok(PyInt::new(
+                    py,
+                    encode_parsed_into(&input, output, altchars, true, None)?,
+                ))
+            }
+        }
     })
 }
 

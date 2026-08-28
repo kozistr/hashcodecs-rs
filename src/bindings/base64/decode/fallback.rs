@@ -77,7 +77,7 @@ pub(super) fn decode_with_binascii<'py>(
     canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
-    if let Some(input) = input.snapshot_mutable() {
+    if let Some(input) = input.snapshot_mutable()? {
         return decode_with_binascii(
             py,
             &BytesLike::Owned(input),

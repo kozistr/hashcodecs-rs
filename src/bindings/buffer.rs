@@ -32,6 +32,7 @@ struct MemoryViewInfo<'py> {
 /// sections instead.
 pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
+    source: *mut ffi::PyObject,
     _python: std::marker::PhantomData<Python<'py>>,
 }
 
@@ -97,11 +98,29 @@ impl<'py> BytesLike<'_, 'py> {
         )
     }
 
-    pub(super) fn python_bytes(&self) -> Option<&Bound<'py, PyBytes>> {
+    pub(super) fn python_bytes(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyBytes>>> {
         match self {
-            Self::Bytes(bytes) => Some(bytes),
-            Self::OwnedBytes(bytes) => Some(bytes),
-            _ => None,
+            Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
+            Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
+            Self::Buffer(buffer) if buffer.view.obj == buffer.source => {
+                // The active export owns `view.obj`, so equality proves that
+                // the exact memoryview source is still alive while it is used.
+                let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.source) };
+                let owner = memoryview.getattr(intern!(py, "obj"))?;
+                if !PyBytes::is_exact_type_of(&owner) {
+                    return Ok(None);
+                }
+                let owner = owner.cast_into::<PyBytes>()?;
+                if unsafe {
+                    bytes_size(owner.as_ptr()) == buffer.len()
+                        && bytes_data(owner.as_ptr()) == buffer.view.buf.cast_const().cast()
+                } {
+                    Ok(Some(owner))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
         }
     }
 
@@ -432,6 +451,7 @@ fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Memor
 
     let buffer = BorrowedBuffer {
         view,
+        source: memoryview.as_ptr(),
         _python: std::marker::PhantomData,
     };
     let nbytes = buffer.len();

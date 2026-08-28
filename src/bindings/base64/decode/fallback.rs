@@ -109,8 +109,8 @@ pub(super) fn decode_with_binascii<'py>(
     };
     let data = if let Some(translated) = translated.as_deref() {
         PyBytes::new(py, translated)
-    } else if let Some(bytes) = input.python_bytes() {
-        bytes.clone()
+    } else if let Some(bytes) = input.python_bytes(py)? {
+        bytes
     } else {
         unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
     };

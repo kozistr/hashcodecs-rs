@@ -769,3 +769,50 @@ unsafe fn decode_lenient_slice_into(
     }
     .ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[test]
+    fn x86_backend_selectors_cover_each_dispatch_tier() {
+        for (avx2, sse2, expected) in [
+            (true, true, alphanumeric_prefix_avx2 as AlphanumericPrefix),
+            (false, true, alphanumeric_prefix_sse2 as AlphanumericPrefix),
+            (
+                false,
+                false,
+                alphanumeric_prefix_scalar as AlphanumericPrefix,
+            ),
+        ] {
+            assert!(std::ptr::fn_addr_eq(
+                select_alphanumeric_prefix_for_x86(avx2, sse2),
+                expected,
+            ));
+        }
+
+        for (avx2, sse2, expected) in [
+            (true, true, translate_bytes_avx2 as TranslateBytes),
+            (false, true, translate_bytes_sse2 as TranslateBytes),
+            (false, false, translate_bytes_scalar as TranslateBytes),
+        ] {
+            assert!(std::ptr::fn_addr_eq(
+                select_translate_bytes_for_x86(avx2, sse2),
+                expected,
+            ));
+        }
+    }
+
+    #[test]
+    fn legacy_lenient_sizing_rejects_incomplete_input() {
+        assert_eq!(
+            lenient_decoded_len(b"A", None, false, false),
+            Err(LenientDecodeError::InvalidInput)
+        );
+        assert_eq!(
+            lenient_decoded_len(b"AA", None, true, false),
+            Err(LenientDecodeError::InvalidInput)
+        );
+    }
+}

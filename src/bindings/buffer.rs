@@ -63,6 +63,46 @@ pub(super) fn with_bytearray<T>(value: &Bound<'_, PyByteArray>, callback: impl F
     with_critical_section(value.as_any(), callback)
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct BufferRange {
+    start: usize,
+    end: usize,
+}
+
+impl BufferRange {
+    fn new(data: *const u8, length: usize) -> Option<Self> {
+        if length == 0 {
+            return None;
+        }
+        let start = data as usize;
+        Some(Self {
+            start,
+            end: start.saturating_add(length),
+        })
+    }
+
+    pub(super) fn for_bytearray(value: &Bound<'_, PyByteArray>) -> Option<Self> {
+        with_bytearray(value, || unsafe {
+            Self::new(
+                bytearray_data(value.as_ptr()),
+                bytearray_size(value.as_ptr()),
+            )
+        })
+    }
+
+    pub(super) fn start(self) -> usize {
+        self.start
+    }
+
+    pub(super) fn end(self) -> usize {
+        self.end
+    }
+
+    pub(super) fn overlaps(self, other: Self) -> bool {
+        self.start < other.end && other.start < self.end
+    }
+}
+
 pub(super) enum BytesLike<'a, 'py> {
     Bytes(&'a Bound<'py, PyBytes>),
     ByteArray(&'a Bound<'py, PyByteArray>),
@@ -124,13 +164,23 @@ impl<'py> BytesLike<'_, 'py> {
         }
     }
 
-    /// Make an input independent of batch destinations which overlap its storage.
-    pub(super) fn into_stable_for_batch_outputs(
-        self,
-        outputs: &[Bound<'_, PyByteArray>],
-    ) -> PyResult<Self> {
-        let needs_snapshot = outputs.iter().any(|output| self.overlaps(output));
-        self.into_snapshot_if(needs_snapshot)
+    pub(super) fn bytearray_identity(&self) -> Option<*mut ffi::PyObject> {
+        match self {
+            Self::ByteArray(value) => Some(value.as_ptr()),
+            Self::OwnedByteArray(value) => Some(value.as_ptr()),
+            _ => None,
+        }
+    }
+
+    pub(super) fn buffer_range(&self) -> Option<BufferRange> {
+        match self {
+            Self::Buffer(buffer) => BufferRange::new(buffer.view.buf.cast(), buffer.len()),
+            _ => None,
+        }
+    }
+
+    pub(super) fn into_snapshot(self) -> PyResult<Self> {
+        self.into_snapshot_if(true)
     }
 
     #[cfg(Py_GIL_DISABLED)]
@@ -245,6 +295,11 @@ impl<'py> BytesLike<'_, 'py> {
     pub(super) fn stable_bytes(&self) -> &[u8] {
         match self {
             Self::Bytes(bytes) => unsafe { bytes_slice(bytes) },
+            #[cfg(not(Py_GIL_DISABLED))]
+            Self::ByteArray(value) => unsafe { bytearray_bytes(value) },
+            #[cfg(not(Py_GIL_DISABLED))]
+            Self::OwnedByteArray(value) => unsafe { bytearray_bytes(value) },
+            #[cfg(Py_GIL_DISABLED)]
             Self::ByteArray(_) | Self::OwnedByteArray(_) => {
                 unreachable!("mutable bytearrays must be snapshotted before borrowing")
             }

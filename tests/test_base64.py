@@ -628,6 +628,61 @@ def test_decode_edge_cases_match_cpython(value: bytes, altchars: bytes | None, v
     assert _into_outcome(mutable, altchars, validate) == expected
 
 
+def test_strict_custom_decode_preserves_detailed_errors_and_capacity_ordering() -> None:
+    def error_outcome(function: Callable[[], object]) -> tuple[type[Exception], str]:
+        try:
+            function()
+        except Exception as error:
+            return type(error), str(error)
+        raise AssertionError('expected decoding to fail')
+
+    for encoded in (b'!!!!', b'AA=A', b'A', b'@@!A'):
+        expected = error_outcome(lambda encoded=encoded: stdlib_base64.b64decode(encoded, b'@#', validate=True))
+        assert error_outcome(lambda encoded=encoded: base64.b64decode(encoded, b'@#', validate=True)) == expected
+        output = bytearray(len(encoded))
+        assert (
+            error_outcome(
+                lambda encoded=encoded, output=output: base64.b64decode_into(encoded, output, b'@#', validate=True)
+            )
+            == expected
+        )
+
+    for encoded, padded, output_size, required in (
+        (b'AA!A', True, 2, 3),
+        (b'AA!', False, 1, 2),
+        (b'====', True, 2, 3),
+    ):
+        output = bytearray([0xA5] * output_size)
+        with pytest.raises(ValueError, match=rf'requires {required} bytes'):
+            base64.b64decode_into(encoded, output, b'=_', validate=True, padded=padded)
+        assert output == bytes([0xA5] * output_size)
+
+
+def test_strict_custom_decode_uses_staged_translation() -> None:
+    payload = bytes((index * 37 + 11) & 0xFF for index in range(16_385))
+    standard = stdlib_base64.b64encode(payload)
+    custom = standard.translate(bytes.maketrans(b'+/', b'@#'))
+
+    assert base64.b64decode(custom, b'@#', validate=True) == payload
+    output = bytearray(len(payload))
+    assert base64.b64decode_into(custom, output, b'@#', validate=True) == len(payload)
+    assert output == payload
+
+    unpadded = custom.rstrip(b'=')
+    assert base64.b64decode(unpadded, b'@#', validate=True, padded=False) == payload
+    output = bytearray(len(payload))
+    assert base64.b64decode_into(unpadded, output, b'@#', validate=True, padded=False) == len(payload)
+    assert output == payload
+
+    valid_prefix = b'@' * 4096
+    expected_prefix = stdlib_base64.b64decode(valid_prefix, b'@#', validate=True)
+    malformed = valid_prefix + b'AA!A'
+    output = bytearray([0xA5] * (len(malformed) // 4 * 3))
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(malformed, output, b'@#', validate=True)
+    assert output[: len(expected_prefix)] == expected_prefix
+
+
 def test_generated_lenient_inputs_match_cpython() -> None:
     generator = random.Random(0xB64DEC0DE)
     alphabet = b'ABab09+/=_! \r\n-@#'
@@ -659,6 +714,8 @@ def test_large_base64_calls_release_the_gil(assert_releases_gil: GILProgressAsse
 
     assert_releases_gil(lambda: base64.b64encode(payload), encoded, 128)
     assert_releases_gil(lambda: base64.b64decode(encoded, validate=True), payload, 128)
+    custom = encoded.translate(bytes.maketrans(b'+/', b'@#'))
+    assert_releases_gil(lambda: base64.b64decode(custom, b'@#', validate=True), payload, 128)
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

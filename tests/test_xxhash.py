@@ -136,6 +136,33 @@ def test_xxh3_mutable_input_race_is_serialized(use_memoryview: bool) -> None:
     assert set(hashes) <= expected
 
 
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+def test_xxh3_batch_mutable_input_race_is_serialized() -> None:
+    size = 1024 * 1024
+    first = b'a' * size
+    second = b'b' * size
+    value = bytearray(first)
+    expected = {hashcodecs.xxh3_64(first), hashcodecs.xxh3_64(second)}
+    start = Barrier(2)
+
+    def hash_value() -> list[int]:
+        start.wait()
+        return [hashcodecs.xxh3_64_batch([value])[0] for _ in range(32)]
+
+    def mutate_value() -> None:
+        start.wait()
+        for index in range(32):
+            value[:] = first if index % 2 else second
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hashes_future = executor.submit(hash_value)
+        mutate_future = executor.submit(mutate_value)
+        hashes = hashes_future.result()
+        mutate_future.result()
+
+    assert set(hashes) <= expected
+
+
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
 def test_xxh3_rejects_non_buffers(function: object) -> None:
     with pytest.raises(TypeError):

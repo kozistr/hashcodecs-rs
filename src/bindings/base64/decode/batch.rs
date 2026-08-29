@@ -90,7 +90,7 @@ fn b64decode_batch_into_parsed<'py>(
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?;
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, items.len(), |index| {
-        let output = &outputs[index];
+        let output = outputs.get(index);
         match prepared
             .as_mut()
             .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))

@@ -33,18 +33,18 @@ fn canonical_unpadded_input(input: &[u8], altchars: Option<[u8; 2]>) -> bool {
     if !matches!(remainder, 2 | 3) {
         return remainder == 0;
     }
-    let Some(&last) = input.last() else {
-        return true;
-    };
+    let last = input[input.len() - 1];
     let value = match altchars {
         Some([_, slash]) if last == slash => Some(63),
         Some([plus, _]) if last == plus => Some(62),
         _ => STANDARD_ALPHABET.iter().position(|&byte| byte == last),
     };
-    value.is_some_and(|value| match remainder {
-        2 => value & 0x0f == 0,
-        3 => value & 0x03 == 0,
-        _ => unreachable!("canonical tail length is two or three"),
+    value.is_some_and(|value| {
+        if remainder == 2 {
+            value & 0x0f == 0
+        } else {
+            value & 0x03 == 0
+        }
     })
 }
 

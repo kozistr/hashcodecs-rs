@@ -1136,22 +1136,10 @@ impl AdvancedDecoder {
 
             let byte = input[source];
             source += 1;
-            let value = self.table[usize::from(byte)];
-            if value < 64 {
-                staging[staged] = STANDARD_ALPHABET[usize::from(value)];
-                symbols += 1;
-                last_value = value;
-                staged += 1;
-                if staged == ADVANCED_STAGING_CAPACITY {
-                    if let Some(translation) = self.translation {
-                        unsafe { translation.apply(&mut staging) };
-                    }
-                    if !validate_advanced_staging(&staging, &mut scratch) {
-                        return None;
-                    }
-                    staged = 0;
-                }
-            }
+            debug_assert!(
+                self.table[usize::from(byte)] >= 64 && self.ignored[usize::from(byte)],
+                "strict special-byte search only returns discarded bytes"
+            );
         }
 
         if staged != 0 {
@@ -1340,21 +1328,10 @@ impl AdvancedDecoder {
 
             let byte = input[source];
             source += 1;
-            let value = self.table[usize::from(byte)];
-            if value < 64 {
-                staging[staged] = STANDARD_ALPHABET[usize::from(value)];
-                symbols += 1;
-                last_value = value;
-                staged += 1;
-                if staged == ADVANCED_STAGING_CAPACITY {
-                    if let Some(translation) = self.translation {
-                        unsafe { translation.apply(&mut staging) };
-                    }
-                    written +=
-                        unsafe { try_decode_advanced_staging(&staging, output.add(written))? };
-                    staged = 0;
-                }
-            }
+            debug_assert!(
+                self.table[usize::from(byte)] >= 64 && self.ignored[usize::from(byte)],
+                "strict special-byte search only returns discarded bytes"
+            );
         }
 
         let mut padding = 0;

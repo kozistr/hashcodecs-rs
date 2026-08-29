@@ -213,14 +213,9 @@ fn decode_advanced_legacy<'py>(
     if canonical && !canonical_padding(&normalized[..data_len]) {
         return Err(decoding_error(py, "Non-zero padding bits"));
     }
-    if !padded && data_len == normalized.len() {
-        normalized.resize(normalized.len() + (4 - data_len % 4) % 4, b'=');
-    } else if !padded {
+    if !padded {
         let required_padding = (4 - data_len % 4) % 4;
-        let present_padding = normalized.len() - data_len;
-        if present_padding < required_padding {
-            normalized.resize(normalized.len() + required_padding - present_padding, b'=');
-        }
+        normalized.resize(normalized.len().max(data_len + required_padding), b'=');
     }
     decode_with_binascii(
         py,

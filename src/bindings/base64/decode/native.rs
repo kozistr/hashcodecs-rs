@@ -1065,6 +1065,9 @@ pub(super) fn decode_advanced_into(
 
 #[cfg(test)]
 mod tests {
+    use pyo3::prelude::*;
+    use pyo3::types::{PyByteArray, PyBytes};
+
     use super::lenient::{
         LenientDecodeError, alphanumeric_prefix_scalar, decode_lenient_to_ptr, decoded_symbol_len,
         is_lenient_symbol, lenient_decode_table, lenient_decoded_len, lenient_symbol_count,
@@ -1072,9 +1075,12 @@ mod tests {
     };
     use super::{
         ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StrictSpecials, Translation,
-        decode_advanced_staging, finish_advanced_staging, stage_advanced_symbols,
-        stage_advanced_value, try_decode_advanced_staging, validate_advanced_staging,
+        decode_advanced_staging, decode_advanced_strict_into, finish_advanced_staging,
+        stage_advanced_symbols, stage_advanced_value, try_decode_advanced_staging,
+        validate_advanced_staging,
     };
+    use crate::base64::Base64Error;
+    use crate::bindings::buffer::BytesLike;
 
     fn advanced_decoder(
         ignored_bytes: &[u8],
@@ -1551,6 +1557,62 @@ mod tests {
             unsafe { decoder.decode_to_ptr(&symbols, output.as_mut_ptr(), true) },
             expected
         );
+    }
+
+    #[test]
+    fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
+        Python::initialize();
+        Python::attach(|py| {
+            let shared = PyByteArray::new(py, b"@#8=");
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::ByteArray(&shared),
+                    &shared,
+                    *b"@#",
+                    true,
+                    false,
+                )
+                .unwrap(),
+                Ok(2)
+            );
+            assert_eq!(&shared.to_vec()[..2], b"\xfb\xff");
+
+            let invalid = PyBytes::new(py, b"AA=");
+            let output = PyByteArray::new(py, &[0xa5; 2]);
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::Bytes(&invalid),
+                    &output,
+                    *b"@#",
+                    false,
+                    false,
+                )
+                .unwrap(),
+                Err(Base64Error::InvalidInput)
+            );
+            assert_eq!(output.to_vec(), [0xa5; 2]);
+
+            let valid = PyBytes::new(py, b"@#8=");
+            let output = PyByteArray::new(py, &[0xa5]);
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::Bytes(&valid),
+                    &output,
+                    *b"@#",
+                    true,
+                    true,
+                )
+                .unwrap(),
+                Err(Base64Error::OutputTooSmall {
+                    required: 2,
+                    provided: 1,
+                })
+            );
+            assert_eq!(output.to_vec(), [0xa5]);
+        });
     }
 
     #[test]

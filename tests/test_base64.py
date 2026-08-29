@@ -1367,6 +1367,27 @@ def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
     assert large_output == expected_later
 
 
+def test_base64_batch_into_reuses_output_ranges_for_generic_buffers() -> None:
+    first_storage = bytearray(b'abcd')
+    second_storage = bytearray(b'efgh....')
+    first_output = bytearray(8)
+
+    assert base64.b64encode_batch_into(
+        [memoryview(first_storage), memoryview(second_storage)[:4]],
+        [first_output, second_storage],
+    ) == [8, 8]
+    assert first_output == b'YWJjZA=='
+    assert second_storage == b'ZWZnaA=='
+
+
+def test_base64_batch_into_snapshots_large_exact_memoryview_owner() -> None:
+    payload = b'a' * 50_000
+    storage = bytearray(stdlib_base64.b64encode(payload))
+
+    assert base64.b64decode_batch_into([memoryview(storage)], [storage], validate=True) == [len(payload)]
+    assert storage[: len(payload)] == payload
+
+
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
 def test_base64_batch_snapshots_altchars_once() -> None:
     encode_altchars = _ChangingBuffer()

@@ -225,20 +225,21 @@ enum PreparedBatchInput<'py> {
     Failed(PyErr),
 }
 
-/// Retain only inputs whose buffer acquisition is needed to prove they do not
-/// overlap a destination. Exact immutable values and independent bytearrays
-/// stay on the single-pass path, so the owned conversion below only handles
-/// aliased bytearrays and arbitrary buffer exporters.
+/// Retain only inputs which must be converted before destination writes. Exact
+/// immutable values and independent bytearrays stay on the single-pass path,
+/// so the owned conversion below only handles aliased bytearrays, string
+/// subclasses with overridable encoding, and arbitrary buffer exporters.
 fn prepare_batch_inputs<'py>(
     items: &[Bound<'py, PyAny>],
     outputs: &[Bound<'py, PyByteArray>],
     kind: BatchInputKind,
 ) -> PyResult<Option<Vec<PreparedBatchInput<'py>>>> {
     let needs_preparation = |item: &Bound<'py, PyAny>| {
-        if PyBytes::is_exact_type_of(item)
-            || matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>()
-        {
+        if PyBytes::is_exact_type_of(item) {
             return false;
+        }
+        if matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>() {
+            return !PyString::is_exact_type_of(item);
         }
         if PyByteArray::is_exact_type_of(item) {
             return outputs

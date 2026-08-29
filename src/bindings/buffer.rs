@@ -351,6 +351,11 @@ pub(super) fn ascii_or_bytes_owned<'py>(
             .map(BytesLike::OwnedByteArray)
             .map_err(Into::into);
     }
+    if value.is_instance_of::<PyString>() {
+        let py = value.py();
+        let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
+        return buffer_bytes_like(&encoded, argument, false);
+    }
     buffer_bytes_like(value, argument, false)
 }
 

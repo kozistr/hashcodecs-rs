@@ -1,37 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" role="img" aria-labelledby="title desc">
-<title id="title">CPython 3.12 URL-safe Base64 throughput</title>
-<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches 22.83 GiB/s encoding and 13.31 GiB/s decoding. Both panels use the same throughput scale. Higher is better.</desc>
+<title id="title">CPython 3.12 standard Base64 throughput</title>
+<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches 23.57 GiB/s encoding and 17.94 GiB/s decoding. Both panels use the same throughput scale. Higher is better.</desc>
 <rect width="100%" height="100%" rx="18" fill="#f7faf9"/>
 <text x="600" y="52" text-anchor="middle" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="750">Python Base64 performance at a glance</text>
-<text x="600" y="84" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">URL-safe · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>
+<text x="600" y="84" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">Standard · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>
 <line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>
 <text x="300.0" y="126" text-anchor="middle" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Encode</text>
-<text x="300.0" y="152" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">56&#215; CPython · 19&#215; pybase64</text>
+<text x="300.0" y="152" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">51&#215; CPython · 2&#215; pybase64</text>
 <text x="144.0" y="210" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">hashcodecs</text>
 <rect x="160.0" y="178" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="160.0" y="178" width="390.0" height="48" rx="8" fill="#007f73"/>
-<text x="538.0" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">22.83</text>
+<rect x="160.0" y="178" width="402.7" height="48" rx="8" fill="#007f73"/>
+<text x="550.7" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">23.57</text>
 <text x="144.0" y="288" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">pybase64</text>
 <rect x="160.0" y="256" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="160.0" y="256" width="20.3" height="48" rx="8" fill="#8f4a73"/>
-<text x="192.3" y="287" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1.19</text>
+<rect x="160.0" y="256" width="224.0" height="48" rx="8" fill="#8f4a73"/>
+<text x="372.0" y="287" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">13.11</text>
 <text x="144.0" y="366" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">CPython</text>
 <rect x="160.0" y="334" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="160.0" y="334" width="7.0" height="48" rx="8" fill="#637083"/>
-<text x="179.0" y="365" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">0.41</text>
+<rect x="160.0" y="334" width="7.9" height="48" rx="8" fill="#637083"/>
+<text x="179.9" y="365" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">0.46</text>
 <text x="900.0" y="126" text-anchor="middle" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="700">Decode</text>
-<text x="900.0" y="152" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">18&#215; CPython · 9&#215; pybase64</text>
+<text x="900.0" y="152" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">17&#215; CPython · 2&#215; pybase64</text>
 <text x="744.0" y="210" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">hashcodecs</text>
 <rect x="760.0" y="178" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="760.0" y="178" width="227.4" height="48" rx="8" fill="#007f73"/>
-<text x="975.4" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">13.31</text>
+<rect x="760.0" y="178" width="306.5" height="48" rx="8" fill="#007f73"/>
+<text x="1054.5" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">17.94</text>
 <text x="744.0" y="288" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">pybase64</text>
 <rect x="760.0" y="256" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="760.0" y="256" width="26.7" height="48" rx="8" fill="#8f4a73"/>
-<text x="798.6" y="287" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1.56</text>
+<rect x="760.0" y="256" width="136.8" height="48" rx="8" fill="#8f4a73"/>
+<text x="908.8" y="287" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">8.01</text>
 <text x="744.0" y="366" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">CPython</text>
 <rect x="760.0" y="334" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="760.0" y="334" width="12.6" height="48" rx="8" fill="#637083"/>
-<text x="784.6" y="365" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">0.74</text>
+<rect x="760.0" y="334" width="18.5" height="48" rx="8" fill="#637083"/>
+<text x="790.5" y="365" text-anchor="start" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">1.08</text>
 <text x="600" y="433" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="12">Intel Core Ultra 7 265K · Windows 10 x64 · pinned CPU · 15 samples</text>
 </svg>

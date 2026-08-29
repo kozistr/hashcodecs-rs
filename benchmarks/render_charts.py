@@ -624,7 +624,7 @@ def render_performance_at_a_glance() -> str:
             tuple(
                 (
                     implementation,
-                    chart_value('base64-python.svg', f'URL-safe {operation.lower()}', '4 KiB', implementation),
+                    chart_value('base64-python.svg', f'Standard {operation.lower()}', '4 KiB', implementation),
                 )
                 for implementation in ('hashcodecs', 'pybase64', 'CPython')
             ),
@@ -645,7 +645,7 @@ def render_performance_at_a_glance() -> str:
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
         ),
-        '<title id="title">CPython 3.12 URL-safe Base64 throughput</title>',
+        '<title id="title">CPython 3.12 standard Base64 throughput</title>',
         (
             '<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches '
             f'{benchmarks[0][1][0][1]:.2f} GiB/s encoding and {benchmarks[1][1][0][1]:.2f} GiB/s decoding. '
@@ -660,7 +660,7 @@ def render_performance_at_a_glance() -> str:
         (
             '<text x="600" y="84" text-anchor="middle" fill="#465263" '
             'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">'
-            'URL-safe · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>'
+            'Standard · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>'
         ),
         '<line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>',
     ]

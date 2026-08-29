@@ -951,28 +951,29 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert observed[-1] is not sliced_owner
 
 
-@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 fallback')
-def test_advanced_decode_fallback_reuses_exact_immutable_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = binascii.a2b_base64
-    observed: list[object] = []
+def test_advanced_decode_success_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError((args, kwargs))
 
-    def record_input(data: object, *args: object, **kwargs: object) -> bytes:
-        observed.append(data)
-        return original(data, *args, **kwargs)
-
-    monkeypatch.setattr(binascii, 'a2b_base64', record_input)
+    monkeypatch.setattr(binascii, 'a2b_base64', unexpected_fallback)
     encoded = b'Y!WJj'
     assert base64.b64decode(encoded, ignorechars=b'!') == b'abc'
-    assert observed[-1] is encoded
 
     output = bytearray(3)
     assert base64.b64decode_into(encoded, output, ignorechars=b'!') == 3
     assert output == b'abc'
-    assert observed[-1] is encoded
+
+    undersized = bytearray([0xA5] * 2)
+    with pytest.raises(ValueError, match='requires 3 bytes'):
+        base64.b64decode_into(encoded, undersized, ignorechars=b'!')
+    assert undersized == bytearray([0xA5] * 2)
+
+    shared = bytearray(encoded)
+    assert base64.b64decode_into(shared, shared, ignorechars=b'!') == 3
+    assert shared[:3] == b'abc'
 
     view = memoryview(encoded)
     assert base64.b64decode(view, ignorechars=b'!') == b'abc'
-    assert observed[-1] is encoded
 
 
 @pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')

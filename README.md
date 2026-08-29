@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="BENCHMARK.md">
-    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="CPython 3.12 URL-safe Base64 encoding and decoding benchmark">
+    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="CPython 3.12 standard Base64 encoding and decoding benchmark">
   </a>
 </p>
 
@@ -25,7 +25,7 @@ Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs`
 
 - Base64 encode and decode with standard, URL-safe, padded, unpadded, wrapped, and canonical modes.
 - MurmurHash3 x86-32, x86-128, and x64-128 with one-shot and incremental APIs.
-- Bit-for-bit compatible XXH3-64 and XXH3-128 with one-shot and native batch APIs.
+- Bit-for-bit compatible XXH3-64 and XXH3-128 with allocating and allocation-free native batch APIs.
 - Caller-managed `*_into` outputs for allocation-sensitive workloads.
 - Runtime dispatch across AVX-512, AVX2, SSE4.1, SSSE3, NEON, and scalar implementations where applicable.
 - Direct CPython buffer handling for `bytes`, `bytearray`, and `memoryview` inputs.
@@ -115,6 +115,15 @@ assert_eq!(
     hashcodecs::xxhash::xxh3_64(b"", 0),
     0x2d06_8005_38d3_94c2
 );
+
+let inputs: &[&[u8]] = &[b"hello", b"world"];
+let mut hashes = [0_u64; 2];
+let mut index = 0;
+hashcodecs::xxhash::xxh3_64_batch_each(inputs, 0, |hash| {
+    hashes[index] = hash;
+    index += 1;
+});
+assert_eq!(index, inputs.len());
 ```
 
 ## Architecture

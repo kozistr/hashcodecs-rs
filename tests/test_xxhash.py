@@ -92,6 +92,47 @@ def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     assert hashcodecs.xxh3_128_batch(values, 42) == [hashcodecs.xxh3_128(value, 42) for value in values]
 
 
+@pytest.mark.parametrize(
+    ('one_shot', 'batch'),
+    [
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch),
+    ],
+)
+def test_xxh3_batch_retains_large_exact_memoryview_owner(
+    one_shot: Callable[..., int],
+    batch: Callable[..., list[int]],
+) -> None:
+    owner = bytearray(bytes(range(256)) * 256)
+    view = memoryview(owner)
+    assert batch([view], 42) == [one_shot(bytes(owner), 42)]
+
+
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+@pytest.mark.parametrize(
+    ('one_shot', 'batch', 'batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch, hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_large_xxh3_batches_release_the_gil(
+    one_shot: Callable[..., int],
+    batch: Callable[..., list[int]],
+    batch_into: Callable[..., int],
+    digest_size: int,
+    assert_releases_gil: GILProgressAssertion,
+) -> None:
+    payload = bytes(range(256)) * (XXH3_DETACH_THRESHOLD // 256)
+    inputs = [payload]
+    expected = [one_shot(payload, 42)]
+    output = bytearray(digest_size)
+
+    assert_releases_gil(lambda: batch(inputs, 42), expected, 128)
+    assert_releases_gil(lambda: batch_into(inputs, output, 42), digest_size, 128)
+    assert output == expected[0].to_bytes(digest_size, 'little')
+
+
 @pytest.mark.parametrize('item_count', range(2, 9))
 def test_xxh3_long_batch_remainders_match_one_shot(item_count: int) -> None:
     large = [bytes((index * 31 + item) & 0xFF for index in range(4097)) for item in range(item_count)]
@@ -125,6 +166,33 @@ def test_xxh3_mutable_input_race_is_serialized(use_memoryview: bool) -> None:
     def mutate_value() -> None:
         start.wait()
         for index in range(64):
+            value[:] = first if index % 2 else second
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hashes_future = executor.submit(hash_value)
+        mutate_future = executor.submit(mutate_value)
+        hashes = hashes_future.result()
+        mutate_future.result()
+
+    assert set(hashes) <= expected
+
+
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+def test_xxh3_batch_mutable_input_race_is_serialized() -> None:
+    size = 1024 * 1024
+    first = b'a' * size
+    second = b'b' * size
+    value = bytearray(first)
+    expected = {hashcodecs.xxh3_64(first), hashcodecs.xxh3_64(second)}
+    start = Barrier(2)
+
+    def hash_value() -> list[int]:
+        start.wait()
+        return [hashcodecs.xxh3_64_batch([value])[0] for _ in range(32)]
+
+    def mutate_value() -> None:
+        start.wait()
+        for index in range(32):
             value[:] = first if index % 2 else second
 
     with ThreadPoolExecutor(max_workers=2) as executor:

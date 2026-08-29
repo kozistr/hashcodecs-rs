@@ -7,43 +7,40 @@ use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, lis
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::objects::{exact_bytes_at, exact_small_bytes};
 use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
-use crate::xxhash::{
-    xxh3_64_batch as xxh3_64_batch_hash, xxh3_64_batch_each, xxh3_128_batch as xxh3_128_batch_hash,
-    xxh3_128_batch_each,
-};
+use crate::xxhash::{xxh3_64_batch_each, xxh3_128_batch_each};
 
 #[cfg(not(Py_GIL_DISABLED))]
-fn exact_small_inputs<'a>(items: &'a Bound<'_, PyList>) -> Option<Vec<&'a [u8]>> {
+fn exact_small_inputs<'a>(items: &'a Bound<'_, PyList>) -> PyResult<Option<Vec<&'a [u8]>>> {
     // The GIL keeps list slots alive for this small-input path. Larger inputs
     // retain owned references before releasing the GIL in the fallback below.
     if !exact_small_bytes(items, XXH3_DETACH_THRESHOLD) {
-        return None;
+        return Ok(None);
     }
-    Some(
-        (0..items.len())
-            .map(|index| unsafe { exact_bytes_at(items, index) })
-            .collect(),
-    )
+    let mut inputs = batch_results(items.len())?;
+    inputs.extend((0..items.len()).map(|index| unsafe { exact_bytes_at(items, index) }));
+    Ok(Some(inputs))
+}
+
+fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
+    let mut results = Vec::new();
+    results
+        .try_reserve_exact(length)
+        .map_err(|_| PyMemoryError::new_err("XXH3 batch is too large"))?;
+    Ok(results)
 }
 
 fn parse_batch<'a, 'py>(
     py: Python<'py>,
     items: &'a [Bound<'py, PyAny>],
 ) -> PyResult<Vec<BytesLike<'a, 'py>>> {
-    let inputs = items
-        .iter()
-        .map(|item| bytes_like(py, item, "items element"))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(inputs
-        .into_iter()
-        .map(|input| {
-            if input.detach_safe() || matches!(input, BytesLike::Buffer(_)) {
-                input
-            } else {
-                BytesLike::Owned(unsafe { input.with_bytes(<[u8]>::to_vec) })
-            }
-        })
-        .collect())
+    let mut inputs = batch_results(items.len())?;
+    for item in items {
+        let input = bytes_like(py, item, "items element")?;
+        #[cfg(Py_GIL_DISABLED)]
+        let input = input.into_stable()?;
+        inputs.push(input);
+    }
+    Ok(inputs)
 }
 
 fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
@@ -53,31 +50,46 @@ fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
     inputs.iter().all(BytesLike::detach_safe) && total >= XXH3_DETACH_THRESHOLD
 }
 
-fn direct_output_safe(inputs: &[BytesLike<'_, '_>], detach: bool) -> bool {
-    !detach
-        && inputs
-            .iter()
-            .all(|input| !matches!(input, BytesLike::Buffer(_)))
+fn direct_output_safe(
+    inputs: &[BytesLike<'_, '_>],
+    output: &Bound<'_, PyByteArray>,
+    detach: bool,
+) -> bool {
+    !detach && inputs.iter().all(|input| !input.overlaps(output))
 }
 
-fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> Vec<&'a [u8]> {
-    inputs.iter().map(BytesLike::stable_bytes).collect()
+fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> PyResult<Vec<&'a [u8]>> {
+    let mut borrowed = batch_results(inputs.len())?;
+    borrowed.extend(inputs.iter().map(BytesLike::stable_bytes));
+    Ok(borrowed)
+}
+
+fn xxh3_64_batch_results(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<u64>> {
+    let mut hashes = batch_results(inputs.len())?;
+    xxh3_64_batch_each(inputs, seed, |hash| hashes.push(hash));
+    Ok(hashes)
+}
+
+fn xxh3_128_batch_results(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<[u64; 2]>> {
+    let mut hashes = batch_results(inputs.len())?;
+    xxh3_128_batch_each(inputs, seed, |hash| hashes.push(hash));
+    Ok(hashes)
 }
 
 fn xxh3_64_hashes(py: Python<'_>, items: &Bound<'_, PyList>, seed: u64) -> PyResult<Vec<u64>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items) {
-        return Ok(xxh3_64_batch_hash(&inputs, seed));
+    if let Some(inputs) = exact_small_inputs(items)? {
+        return xxh3_64_batch_results(&inputs, seed);
     }
     let items = list_items(items);
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
-    let inputs = borrow_batch(&parsed);
-    Ok(if detach {
-        py.detach(|| xxh3_64_batch_hash(&inputs, seed))
+    let inputs = borrow_batch(&parsed)?;
+    if detach {
+        py.detach(|| xxh3_64_batch_results(&inputs, seed))
     } else {
-        xxh3_64_batch_hash(&inputs, seed)
-    })
+        xxh3_64_batch_results(&inputs, seed)
+    }
 }
 
 fn xxh3_128_hashes(
@@ -86,18 +98,18 @@ fn xxh3_128_hashes(
     seed: u64,
 ) -> PyResult<Vec<[u64; 2]>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items) {
-        return Ok(xxh3_128_batch_hash(&inputs, seed));
+    if let Some(inputs) = exact_small_inputs(items)? {
+        return xxh3_128_batch_results(&inputs, seed);
     }
     let items = list_items(items);
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
-    let inputs = borrow_batch(&parsed);
-    Ok(if detach {
-        py.detach(|| xxh3_128_batch_hash(&inputs, seed))
+    let inputs = borrow_batch(&parsed)?;
+    if detach {
+        py.detach(|| xxh3_128_batch_results(&inputs, seed))
     } else {
-        xxh3_128_batch_hash(&inputs, seed)
-    })
+        xxh3_128_batch_results(&inputs, seed)
+    }
 }
 
 fn packed_output_len(
@@ -214,22 +226,22 @@ pub(super) fn xxh3_64_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items) {
+    if let Some(inputs) = exact_small_inputs(items)? {
         return write_direct_64(output, &inputs, seed);
     }
     let items = list_items(items);
     with_bytearray(output, || packed_output_len(output, items.len(), 8))?;
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
-    let direct = direct_output_safe(&parsed, detach);
-    let inputs = borrow_batch(&parsed);
+    let direct = direct_output_safe(&parsed, output, detach);
+    let inputs = borrow_batch(&parsed)?;
     if direct {
         return write_direct_64(output, &inputs, seed);
     }
     let hashes = if detach {
-        py.detach(|| xxh3_64_batch_hash(&inputs, seed))
+        py.detach(|| xxh3_64_batch_results(&inputs, seed))?
     } else {
-        xxh3_64_batch_hash(&inputs, seed)
+        xxh3_64_batch_results(&inputs, seed)?
     };
     with_bytearray(output, || {
         let written = packed_output_len(output, hashes.len(), 8)?;
@@ -245,26 +257,47 @@ pub(super) fn xxh3_128_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items) {
+    if let Some(inputs) = exact_small_inputs(items)? {
         return write_direct_128(output, &inputs, seed);
     }
     let items = list_items(items);
     with_bytearray(output, || packed_output_len(output, items.len(), 16))?;
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
-    let direct = direct_output_safe(&parsed, detach);
-    let inputs = borrow_batch(&parsed);
+    let direct = direct_output_safe(&parsed, output, detach);
+    let inputs = borrow_batch(&parsed)?;
     if direct {
         return write_direct_128(output, &inputs, seed);
     }
     let hashes = if detach {
-        py.detach(|| xxh3_128_batch_hash(&inputs, seed))
+        py.detach(|| xxh3_128_batch_results(&inputs, seed))?
     } else {
-        xxh3_128_batch_hash(&inputs, seed)
+        xxh3_128_batch_results(&inputs, seed)?
     };
     with_bytearray(output, || {
         let written = packed_output_len(output, hashes.len(), 16)?;
         write_packed_128(output, &hashes);
         Ok(written)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_batch_capacity_is_an_error() {
+        assert!(batch_results::<u8>(usize::MAX).is_err());
+    }
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    #[test]
+    fn gil_batch_retains_exact_bytearrays() {
+        Python::initialize();
+        Python::attach(|py| {
+            let items = [PyByteArray::new(py, b"mutable").into_any()];
+            let parsed = parse_batch(py, &items).unwrap();
+            assert!(matches!(parsed.first(), Some(BytesLike::ByteArray(_))));
+        });
+    }
 }

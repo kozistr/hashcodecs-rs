@@ -91,10 +91,10 @@ pub(super) fn decode_with_binascii<'py>(
     let custom_alphabet = altchars.is_some() && ignorechars.is_some();
     let translated = if custom_alphabet {
         None
+    } else if let Some(altchars) = altchars {
+        unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
     } else {
-        altchars.and_then(|altchars| unsafe {
-            input.with_bytes(|input| translate_altchars(input, altchars))
-        })
+        None
     };
     let data = if let Some(translated) = translated.as_deref() {
         PyBytes::new(py, translated)

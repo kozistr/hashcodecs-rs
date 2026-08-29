@@ -6,6 +6,8 @@ use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::super::{output_too_small, pybytes_with_len};
 use super::super::fallback::decoding_error;
+use super::super::plan::DecodeOptions;
+use super::{decode_advanced, decode_advanced_strict_into};
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
@@ -293,9 +295,14 @@ fn decode_unpadded_with_layout_to_ptr(
 pub(in crate::bindings::base64::decode) fn translate_altchars(
     input: &[u8],
     [plus, slash]: [u8; 2],
-) -> Option<Vec<u8>> {
-    let first = memchr::memchr2(plus, slash, input)?;
-    let mut translated = Vec::with_capacity(input.len());
+) -> PyResult<Option<Vec<u8>>> {
+    let Some(first) = memchr::memchr2(plus, slash, input) else {
+        return Ok(None);
+    };
+    let mut translated = Vec::new();
+    translated
+        .try_reserve_exact(input.len())
+        .map_err(|_| PyMemoryError::new_err("Base64 input is too large"))?;
     translated.extend_from_slice(&input[..first]);
     translated.extend(input[first..].iter().map(|&byte| {
         if byte == slash {
@@ -306,7 +313,7 @@ pub(in crate::bindings::base64::decode) fn translate_altchars(
             byte
         }
     }));
-    Some(translated)
+    Ok(Some(translated))
 }
 
 pub(in crate::bindings::base64::decode) fn normalize_mime_whitespace(
@@ -343,15 +350,11 @@ pub(in crate::bindings::base64::decode) fn decode_strict_with_altchars<'py>(
     match altchars {
         None => decode_strict(py, input, DecodeAlphabet::Standard),
         Some([b'-', b'_']) => decode_strict(py, input, DecodeAlphabet::Mixed),
-        Some(altchars) => {
-            let translated =
-                unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
-            if let Some(translated) = translated {
-                decode_strict(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
-            } else {
-                decode_strict(py, input, DecodeAlphabet::Standard)
-            }
-        }
+        Some(altchars) => decode_advanced(
+            py,
+            input,
+            DecodeOptions::new(Some(altchars), Some(true), true, None, false),
+        ),
     }
 }
 
@@ -363,37 +366,58 @@ pub(in crate::bindings::base64::decode) fn decode_unpadded_with_altchars<'py>(
     match altchars {
         None => decode_unpadded(py, input, DecodeAlphabet::Standard),
         Some([b'-', b'_']) => decode_unpadded(py, input, DecodeAlphabet::Mixed),
-        Some(altchars) => {
-            let translated =
-                unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) };
-            if let Some(translated) = translated {
-                decode_unpadded(py, &BytesLike::Owned(translated), DecodeAlphabet::Standard)
-            } else {
-                decode_unpadded(py, input, DecodeAlphabet::Standard)
-            }
-        }
+        Some(altchars) => decode_advanced(
+            py,
+            input,
+            DecodeOptions::new(Some(altchars), Some(true), false, None, false),
+        ),
     }
 }
 
-pub(in crate::bindings::base64::decode) fn decode_unpadded_into_with_altchars(
+pub(in crate::bindings::base64::decode) fn decode_strict_into_with_altchars(
+    py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
     transactional_errors: bool,
 ) -> PyResult<Result<usize, Base64Error>> {
-    let translated = altchars
-        .filter(|altchars| *altchars != *b"-_")
-        .and_then(|altchars| unsafe {
-            input.with_bytes(|input| translate_altchars(input, altchars))
-        })
-        .map(BytesLike::Owned);
-    let direct_input = translated.as_ref().unwrap_or(input);
-    let alphabet = if altchars == Some(*b"-_") {
-        DecodeAlphabet::Mixed
-    } else {
-        DecodeAlphabet::Standard
-    };
-    decode_unpadded_into(direct_input, output, alphabet, transactional_errors)
+    match altchars {
+        None => decode_strict_into(
+            input,
+            output,
+            DecodeAlphabet::Standard,
+            transactional_errors,
+        ),
+        Some([b'-', b'_']) => {
+            decode_strict_into(input, output, DecodeAlphabet::Mixed, transactional_errors)
+        }
+        Some(altchars) => {
+            decode_advanced_strict_into(py, input, output, altchars, true, transactional_errors)
+        }
+    }
+}
+
+pub(in crate::bindings::base64::decode) fn decode_unpadded_into_with_altchars(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    transactional_errors: bool,
+) -> PyResult<Result<usize, Base64Error>> {
+    match altchars {
+        None => decode_unpadded_into(
+            input,
+            output,
+            DecodeAlphabet::Standard,
+            transactional_errors,
+        ),
+        Some([b'-', b'_']) => {
+            decode_unpadded_into(input, output, DecodeAlphabet::Mixed, transactional_errors)
+        }
+        Some(altchars) => {
+            decode_advanced_strict_into(py, input, output, altchars, false, transactional_errors)
+        }
+    }
 }
 
 pub(in crate::bindings::base64::decode) fn try_decode_urlsafe_315<'py>(

@@ -5,9 +5,13 @@ use super::super::{STANDARD_ALPHABET, output_too_small};
 use super::fallback::decoding_error;
 use super::output::BytesWriter;
 use super::plan::DecodeOptions;
-use crate::base64::{DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout};
+use crate::base64::{
+    Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_unpadded_layout,
+    decode_unpadded_layout,
+};
 use crate::bindings::buffer::{BytesLike, contiguous_bytes_like, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
+use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
 mod lenient;
 mod strict;
@@ -16,9 +20,10 @@ pub(super) use lenient::{
     lenient_continues_after_padding, try_decode_lenient, try_decode_lenient_into,
 };
 pub(super) use strict::{
-    decode_strict, decode_strict_into, decode_strict_with_altchars,
-    decode_unpadded_into_with_altchars, decode_unpadded_with_altchars, normalize_mime_whitespace,
-    translate_altchars, try_decode_strict, try_decode_urlsafe_315, try_decode_urlsafe_315_into,
+    decode_strict, decode_strict_into, decode_strict_into_with_altchars,
+    decode_strict_with_altchars, decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
+    normalize_mime_whitespace, translate_altchars, try_decode_strict, try_decode_urlsafe_315,
+    try_decode_urlsafe_315_into,
 };
 
 use lenient::{
@@ -824,6 +829,72 @@ impl AdvancedDecoder {
     }
 }
 
+fn translated_strict_decoded_len(
+    input: &[u8],
+    altchars: [u8; 2],
+    padded: bool,
+) -> Result<usize, Base64Error> {
+    if padded {
+        if altchars.contains(&b'=') {
+            return (input.len() & 3 == 0)
+                .then(|| input.len() / 4 * 3)
+                .ok_or(Base64Error::InvalidInput);
+        }
+        return decode_layout(input).map(|layout| layout.output_len());
+    }
+    if !altchars.contains(&b'=') && input.contains(&b'=') {
+        return Err(Base64Error::InvalidInput);
+    }
+    decode_unpadded_layout(input).map(|layout| layout.output_len())
+}
+
+pub(super) fn decode_advanced_strict_into(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: [u8; 2],
+    padded: bool,
+    transactional_errors: bool,
+) -> PyResult<Result<usize, Base64Error>> {
+    if let Some(input) = input.snapshot_for_output(output)? {
+        return decode_advanced_strict_into(
+            py,
+            &BytesLike::Owned(input),
+            output,
+            altchars,
+            padded,
+            transactional_errors,
+        );
+    }
+    let decoder = AdvancedDecoder::new(
+        py,
+        DecodeOptions::new(Some(altchars), Some(true), padded, None, false),
+    )?;
+    Ok(unsafe {
+        input.with_bytes_and_output(output, |input, output, provided| {
+            if transactional_errors {
+                let Some(required) = decoder.decoded_len(input, false) else {
+                    return Err(Base64Error::InvalidInput);
+                };
+                if provided < required {
+                    return Err(Base64Error::OutputTooSmall { required, provided });
+                }
+                let written = decoder.decode_to_ptr(input, output, false);
+                debug_assert_eq!(written, required);
+                return Ok(written);
+            }
+
+            let required = translated_strict_decoded_len(input, altchars, padded)?;
+            if provided < required {
+                return Err(Base64Error::OutputTooSmall { required, provided });
+            }
+            decoder
+                .decode_checked_to_ptr(input, output, false)
+                .ok_or(Base64Error::InvalidInput)
+        })
+    })
+}
+
 #[inline]
 unsafe fn decode_advanced_staging(input: &[u8], output: *mut u8) -> usize {
     unsafe { try_decode_advanced_staging(input, output) }
@@ -915,12 +986,21 @@ pub(super) fn decode_advanced<'py>(
     let decoder = AdvancedDecoder::new(py, options)?;
     let continue_after_padding = lenient_continues_after_padding(py);
     let writer = BytesWriter::new(py, input.len())?;
-    let output = unsafe { writer.data() };
-    let Some(written) = (unsafe {
+    let output_address = unsafe { writer.data() } as usize;
+    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
+    let result = unsafe {
         input.with_bytes(|input| {
-            decoder.decode_checked_to_ptr(input, output, continue_after_padding)
+            let decode = move || {
+                decoder.decode_checked_to_ptr(
+                    input,
+                    output_address as *mut u8,
+                    continue_after_padding,
+                )
+            };
+            if detach { py.detach(decode) } else { decode() }
         })
-    }) else {
+    };
+    let Some(written) = result else {
         return Err(decoding_error(py, "Incorrect padding"));
     };
     unsafe { writer.finish(py, written) }
@@ -985,6 +1065,9 @@ pub(super) fn decode_advanced_into(
 
 #[cfg(test)]
 mod tests {
+    use pyo3::prelude::*;
+    use pyo3::types::{PyByteArray, PyBytes};
+
     use super::lenient::{
         LenientDecodeError, alphanumeric_prefix_scalar, decode_lenient_to_ptr, decoded_symbol_len,
         is_lenient_symbol, lenient_decode_table, lenient_decoded_len, lenient_symbol_count,
@@ -992,9 +1075,12 @@ mod tests {
     };
     use super::{
         ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StrictSpecials, Translation,
-        decode_advanced_staging, finish_advanced_staging, stage_advanced_symbols,
-        stage_advanced_value, try_decode_advanced_staging, validate_advanced_staging,
+        decode_advanced_staging, decode_advanced_strict_into, finish_advanced_staging,
+        stage_advanced_symbols, stage_advanced_value, try_decode_advanced_staging,
+        validate_advanced_staging,
     };
+    use crate::base64::Base64Error;
+    use crate::bindings::buffer::BytesLike;
 
     fn advanced_decoder(
         ignored_bytes: &[u8],
@@ -1471,6 +1557,62 @@ mod tests {
             unsafe { decoder.decode_to_ptr(&symbols, output.as_mut_ptr(), true) },
             expected
         );
+    }
+
+    #[test]
+    fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
+        Python::initialize();
+        Python::attach(|py| {
+            let shared = PyByteArray::new(py, b"@#8=");
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::ByteArray(&shared),
+                    &shared,
+                    *b"@#",
+                    true,
+                    false,
+                )
+                .unwrap(),
+                Ok(2)
+            );
+            assert_eq!(&shared.to_vec()[..2], b"\xfb\xff");
+
+            let invalid = PyBytes::new(py, b"AA=");
+            let output = PyByteArray::new(py, &[0xa5; 2]);
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::Bytes(&invalid),
+                    &output,
+                    *b"@#",
+                    false,
+                    false,
+                )
+                .unwrap(),
+                Err(Base64Error::InvalidInput)
+            );
+            assert_eq!(output.to_vec(), [0xa5; 2]);
+
+            let valid = PyBytes::new(py, b"@#8=");
+            let output = PyByteArray::new(py, &[0xa5]);
+            assert_eq!(
+                decode_advanced_strict_into(
+                    py,
+                    &BytesLike::Bytes(&valid),
+                    &output,
+                    *b"@#",
+                    true,
+                    true,
+                )
+                .unwrap(),
+                Err(Base64Error::OutputTooSmall {
+                    required: 2,
+                    provided: 1,
+                })
+            );
+            assert_eq!(output.to_vec(), [0xa5]);
+        });
     }
 
     #[test]

@@ -14,7 +14,7 @@ use self::decode::{
     urlsafe_b64decode_into,
 };
 use super::buffer::{
-    BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
+    BufferRange, BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
     contiguous_bytes_like_owned, with_bytearray,
 };
 #[cfg(not(Py_GIL_DISABLED))]
@@ -184,10 +184,60 @@ fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
     Ok(results)
 }
 
+struct BatchOutputs<'py> {
+    outputs: Vec<Bound<'py, PyByteArray>>,
+    identities: HashSet<*mut ffi::PyObject>,
+    ranges: OnceLock<Vec<BufferRange>>,
+}
+
+impl<'py> BatchOutputs<'py> {
+    fn get(&self, index: usize) -> &Bound<'py, PyByteArray> {
+        &self.outputs[index]
+    }
+
+    fn contains_identity(&self, identity: *mut ffi::PyObject) -> bool {
+        self.identities.contains(&identity)
+    }
+
+    fn ranges(&self) -> PyResult<&[BufferRange]> {
+        if let Some(ranges) = self.ranges.get() {
+            return Ok(ranges);
+        }
+        let mut ranges = batch_results(self.outputs.len())?;
+        ranges.extend(self.outputs.iter().filter_map(BufferRange::for_bytearray));
+        ranges.sort_unstable_by_key(|range| range.start());
+        let _ = self.ranges.set(ranges);
+        Ok(self
+            .ranges
+            .get()
+            .expect("Base64 output ranges were initialized"))
+    }
+
+    fn overlaps_range(&self, input: BufferRange) -> PyResult<bool> {
+        let ranges = self.ranges()?;
+        let index = ranges.partition_point(|output| output.start() < input.end());
+        Ok(index != 0 && ranges[index - 1].overlaps(input))
+    }
+
+    fn stabilize(&self, input: BytesLike<'py, 'py>) -> PyResult<BytesLike<'py, 'py>> {
+        let mut aliases_output = input
+            .bytearray_identity()
+            .is_some_and(|identity| self.contains_identity(identity));
+        if !aliases_output && let Some(range) = input.buffer_range() {
+            aliases_output = self.overlaps_range(range)?;
+        }
+        if aliases_output {
+            input.into_snapshot()
+        } else {
+            Ok(input)
+        }
+    }
+}
+
 fn batch_outputs<'py>(
     items_length: usize,
     outputs: &Bound<'py, PyList>,
-) -> PyResult<Vec<Bound<'py, PyByteArray>>> {
+) -> PyResult<BatchOutputs<'py>> {
     if outputs.len() != items_length {
         return Err(PyValueError::new_err(
             "items and outputs must have the same length",
@@ -210,7 +260,11 @@ fn batch_outputs<'py>(
         }
         parsed.push(output);
     }
-    Ok(parsed)
+    Ok(BatchOutputs {
+        outputs: parsed,
+        identities,
+        ranges: OnceLock::new(),
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -231,7 +285,7 @@ enum PreparedBatchInput<'py> {
 /// subclasses with overridable encoding, and arbitrary buffer exporters.
 fn prepare_batch_inputs<'py>(
     items: &[Bound<'py, PyAny>],
-    outputs: &[Bound<'py, PyByteArray>],
+    outputs: &BatchOutputs<'py>,
     kind: BatchInputKind,
 ) -> PyResult<Option<Vec<PreparedBatchInput<'py>>>> {
     let needs_preparation = |item: &Bound<'py, PyAny>| {
@@ -242,9 +296,7 @@ fn prepare_batch_inputs<'py>(
             return !PyString::is_exact_type_of(item);
         }
         if PyByteArray::is_exact_type_of(item) {
-            return outputs
-                .iter()
-                .any(|output| output.as_ptr() == item.as_ptr());
+            return outputs.contains_identity(item.as_ptr());
         }
         unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
     };
@@ -265,8 +317,7 @@ fn prepare_batch_inputs<'py>(
         };
         match input {
             Ok(input) => {
-                prepared[index] =
-                    PreparedBatchInput::Ready(input.into_stable_for_batch_outputs(outputs)?);
+                prepared[index] = PreparedBatchInput::Ready(outputs.stabilize(input)?);
             }
             Err(error) => {
                 prepared[index] = PreparedBatchInput::Failed(error);
@@ -451,7 +502,7 @@ fn b64encode_batch_into_parsed<'py>(
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?;
     list_from_fn(py, items.len(), |index| {
-        let output = &outputs[index];
+        let output = outputs.get(index);
         match prepared
             .as_mut()
             .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))

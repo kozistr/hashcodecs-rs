@@ -9,9 +9,10 @@ use crate::bindings::buffer::{BytesLike, ascii_or_bytes};
 use self::fallback::{canonical_padding, decode_with_binascii, decoding_error};
 use self::native::{
     decode_advanced, decode_advanced_into, decode_strict, decode_strict_into,
-    decode_strict_with_altchars, decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
-    lenient_continues_after_padding, normalize_mime_whitespace, translate_altchars,
-    try_decode_lenient, try_decode_lenient_into, try_decode_strict,
+    decode_strict_into_with_altchars, decode_strict_with_altchars,
+    decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
+    lenient_continues_after_padding, normalize_mime_whitespace, try_decode_lenient,
+    try_decode_lenient_into, try_decode_strict,
 };
 use self::output::copy_decoded_into;
 use self::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
@@ -240,13 +241,6 @@ fn decode_plan_into_inner<'py>(
     } = options;
     let strict_mode = options.strict_mode();
     let transactional_errors = !strict_mode;
-    let translated = altchars
-        .filter(|altchars| *altchars != *b"-_")
-        .and_then(|altchars| unsafe {
-            input.with_bytes(|input| translate_altchars(input, altchars))
-        })
-        .map(BytesLike::Owned);
-    let direct_input = translated.as_ref().unwrap_or(input);
     let alphabet = if altchars == Some(*b"-_") {
         DecodeAlphabet::Mixed
     } else {
@@ -254,7 +248,7 @@ fn decode_plan_into_inner<'py>(
     };
 
     let direct = if ignorechars.is_none() && !canonical && (padded || !strict_mode) {
-        decode_strict_into(direct_input, output, alphabet, transactional_errors)?
+        decode_strict_into_with_altchars(py, input, output, altchars, transactional_errors)?
     } else {
         Err(Base64Error::InvalidInput)
     };
@@ -282,7 +276,8 @@ fn decode_plan_into_inner<'py>(
     }
 
     if !padded && ignorechars.is_none() && !canonical {
-        match decode_unpadded_into_with_altchars(input, output, altchars, transactional_errors)? {
+        match decode_unpadded_into_with_altchars(py, input, output, altchars, transactional_errors)?
+        {
             Ok(written) => return Ok(written),
             Err(Base64Error::OutputTooSmall { required, provided }) if strict_mode => {
                 return Err(output_too_small(required, provided));
@@ -310,7 +305,7 @@ fn decode_plan_into_inner<'py>(
         && canonical
         && !padded
         && unsafe { input.with_bytes(|input| canonical_unpadded_input(input, altchars)) }
-        && let Ok(written) = decode_unpadded_into_with_altchars(input, output, altchars, true)?
+        && let Ok(written) = decode_unpadded_into_with_altchars(py, input, output, altchars, true)?
     {
         return Ok(written);
     }

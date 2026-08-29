@@ -119,9 +119,7 @@ jobs:
           uv build --wheel --out-dir coverage-dist
           uv pip install --python .venv --reinstall --no-index --find-links coverage-dist hashcodecs
           uv run --frozen --no-sync pytest tests
-          if [ "${{ matrix.python-version }}" = "3.12" ]; then
-            cargo test --release --features python --lib
-          fi
+          cargo test --release --features python --lib
           cargo llvm-cov report --release --cobertura --output-path rust-bindings-coverage.xml
 
       - name: Upload Rust binding coverage to Codecov

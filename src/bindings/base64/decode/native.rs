@@ -370,16 +370,25 @@ unsafe fn alphanumeric_prefix_sse2(input: &[u8]) -> usize {
     unsafe { lenient_count_x86::alphanumeric_prefix_sse2(input) }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPrefix {
+    if avx2 {
+        return alphanumeric_prefix_avx2;
+    }
+    if sse2 {
+        return alphanumeric_prefix_sse2;
+    }
+    alphanumeric_prefix_scalar
+}
+
 fn select_alphanumeric_prefix() -> AlphanumericPrefix {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        if std::is_x86_feature_detected!("avx2") {
-            return alphanumeric_prefix_avx2;
-        }
-        if std::is_x86_feature_detected!("sse2") {
-            return alphanumeric_prefix_sse2;
-        }
-    }
+    return select_alphanumeric_prefix_for_x86(
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("sse2"),
+    );
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     alphanumeric_prefix_scalar
 }
 
@@ -423,16 +432,25 @@ unsafe fn translate_bytes_sse2(
     unsafe { lenient_count_x86::translate_sse2(input, source0, target0, source1, target1) };
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn select_translate_bytes_for_x86(avx2: bool, sse2: bool) -> TranslateBytes {
+    if avx2 {
+        return translate_bytes_avx2;
+    }
+    if sse2 {
+        return translate_bytes_sse2;
+    }
+    translate_bytes_scalar
+}
+
 fn select_translate_bytes() -> TranslateBytes {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        if std::is_x86_feature_detected!("avx2") {
-            return translate_bytes_avx2;
-        }
-        if std::is_x86_feature_detected!("sse2") {
-            return translate_bytes_sse2;
-        }
-    }
+    return select_translate_bytes_for_x86(
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("sse2"),
+    );
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     translate_bytes_scalar
 }
 

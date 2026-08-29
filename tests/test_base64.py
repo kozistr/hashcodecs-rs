@@ -973,6 +973,9 @@ def test_advanced_decode_native_staging_and_dispatch_paths() -> None:
     alphanumeric = b'A' * 8192
     assert base64.b64decode(alphanumeric, ignorechars=ignored) == bytes(6144)
 
+    mutable = bytearray(b'Y!WJj')
+    assert base64.b64decode(mutable, ignorechars=b'!') == b'abc'
+
 
 @pytest.mark.parametrize(
     'encoded',

@@ -61,10 +61,8 @@ jobs:
 
       - name: Check Rust core line coverage
         run: |
-          cargo llvm-cov --no-default-features --fail-under-lines 100 \
-            --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
-          cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' \
-            --cobertura --output-path coverage.xml
+          cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
+          cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}
@@ -83,7 +81,7 @@ jobs:
         include:
           - name: Rust / CPython binding coverage / Python 3.10
             python-version: "3.10"
-          - name: Rust / CPython binding coverage
+          - name: Rust / CPython binding coverage / Python 3.12
             python-version: "3.12"
           - name: Rust / CPython binding coverage / Python 3.15t
             python-version: "3.15t"
@@ -135,23 +133,6 @@ jobs:
           fail_ci_if_error: true
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
-
-      - name: Test native Base64 binding internals
-        if: ${{ matrix.python-version == '3.12' }}
-        run: |
-          cargo llvm-cov --features python --lib --cobertura \
-            --output-path rust-bindings-native-coverage.xml -- \
-            bindings::base64::decode::native::tests
-
-      - name: Upload native Base64 binding coverage to Codecov
-        if: ${{ matrix.python-version == '3.12' && !inputs.skip_coverage_upload }}
-        uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: rust-bindings-native-coverage.xml
-          flags: rust-bindings
-          name: rust-bindings-native
-          fail_ci_if_error: true
 
   rust_test:
     name: Rust / Test

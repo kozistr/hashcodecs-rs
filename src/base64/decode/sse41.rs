@@ -16,6 +16,7 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
 ) -> Result<(usize, usize), Base64Error> {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 64 <= input.len() {
         let (first, first_errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         let (second, second_errors) =
@@ -28,24 +29,31 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
             _mm_or_si128(first_errors, second_errors),
             _mm_or_si128(third_errors, fourth_errors),
         );
+
         if _mm_testz_si128(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         unsafe { S::store_12(output.add(destination), pack_16_indices(first)) };
         unsafe { S::store_12(output.add(destination + 12), pack_16_indices(second)) };
         unsafe { S::store_12(output.add(destination + 24), pack_16_indices(third)) };
         unsafe { S::store_12(output.add(destination + 36), pack_16_indices(fourth)) };
+
         source += 64;
         destination += 48;
     }
+
     while source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if _mm_testz_si128(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         unsafe { S::store_12(output.add(destination), pack_16_indices(indices)) };
+
         source += 16;
         destination += 12;
     }
+
     Ok((source, destination))
 }

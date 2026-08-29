@@ -47,6 +47,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
 
     let mut source = 0;
     let mut destination = 0;
+
     while source + 128 <= input.len() {
         let (first, first_invalid) = unsafe {
             decode_64(
@@ -64,16 +65,20 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 decode_shuffle,
             )
         };
+
         if first_invalid | second_invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, first) };
         unsafe {
             _mm512_mask_storeu_epi8(output.add(destination + 48).cast(), OUTPUT_MASK_48, second)
         };
+
         source += 128;
         destination += 96;
     }
+
     while source + 64 <= input.len() {
         let (decoded, invalid) = unsafe {
             decode_64(
@@ -83,10 +88,13 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 decode_shuffle,
             )
         };
+
         if invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, decoded) };
+
         source += 64;
         destination += 48;
     }

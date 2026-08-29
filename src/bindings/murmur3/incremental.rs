@@ -24,360 +24,132 @@ fn with_input<T: Ungil>(
     }
 }
 
-/// Incremental MurmurHash3 x86 32-bit hasher.
-///
-/// Args:
-///     data: Optional initial bytes-like data.
-///     seed: Initial unsigned 32-bit seed.
-///
-/// Examples:
-///     >>> hasher = murmur3_x86_32(b'hello', seed=7)
-///     >>> hasher.update(b' world')
-///     >>> hasher.hexdigest() == hasher.digest().hex()
-///     True
-#[pyclass(
-    name = "murmur3_x86_32",
-    module = "hashcodecs.murmur3",
-    skip_from_py_object
-)]
-#[derive(Clone)]
-pub(in crate::bindings) struct PyMurmur3X86Hasher32 {
-    state: Murmur3X86Hasher32,
-}
-
-#[pymethods]
-impl PyMurmur3X86Hasher32 {
-    /// Initialize an incremental x86 32-bit hash state.
-    ///
-    /// Args:
-    ///     data: Optional initial bytes-like data.
-    ///     seed: Initial unsigned 32-bit seed.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like or seed is not an integer.
-    ///     OverflowError: seed is outside 0 <= seed < 2**32.
-    #[new]
-    #[pyo3(signature = (data=None, seed=0))]
-    fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
-        let mut state = Murmur3X86Hasher32::new(seed);
-        if let Some(data) = data {
-            let input = bytes_like(py, data, "data")?;
-            with_input(py, &input, |input| state.update(input));
+macro_rules! define_python_hasher {
+    (
+        $class:ident,
+        $state:ty,
+        $python_name:literal,
+        $summary:literal,
+        $digest_size:literal,
+        $block_size:literal,
+        $digest:expr $(,)?
+    ) => {
+        #[doc = concat!("Incremental MurmurHash3 ", $summary, " hasher.\n\n")]
+        #[doc = "Args:\n    data: Optional initial bytes-like data.\n    seed: Initial unsigned 32-bit seed.\n\n"]
+        #[doc = concat!(
+            "Examples:\n    >>> hasher = ",
+            $python_name,
+            "(b'hello', seed=7)\n    >>> hasher.update(b' world')\n    >>> len(hasher.digest())\n    ",
+            stringify!($digest_size),
+        )]
+        #[pyclass(
+            name = $python_name,
+            module = "hashcodecs.murmur3",
+            skip_from_py_object
+        )]
+        #[derive(Clone)]
+        pub(in crate::bindings) struct $class {
+            state: $state,
         }
-        Ok(Self { state })
-    }
 
-    /// Append bytes to the hash state.
-    ///
-    /// Args:
-    ///     data: Bytes-like data to append.
-    ///
-    /// Returns:
-    ///     None.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like.
-    ///
-    /// Examples:
-    ///     >>> hasher = murmur3_x86_32()
-    ///     >>> hasher.update(b'hello')
-    fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        let input = bytes_like(py, data, "data")?;
-        with_input(py, &input, |input| self.state.update(input));
-        Ok(())
-    }
+        #[pymethods]
+        impl $class {
+            /// Initialize an incremental hash state.
+            ///
+            /// Args:
+            ///     data: Optional initial bytes-like data.
+            ///     seed: Initial unsigned 32-bit seed.
+            ///
+            /// Raises:
+            ///     TypeError: data is not bytes-like or seed is not an integer.
+            ///     OverflowError: seed is outside 0 <= seed < 2**32.
+            #[new]
+            #[pyo3(signature = (data=None, seed=0))]
+            fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
+                let mut state = <$state>::new(seed);
+                if let Some(data) = data {
+                    let input = bytes_like(py, data, "data")?;
+                    with_input(py, &input, |input| state.update(input));
+                }
+                Ok(Self { state })
+            }
 
-    /// Return the current digest without consuming the state.
-    ///
-    /// Returns:
-    ///     A four-byte little-endian digest.
-    ///
-    /// Examples:
-    ///     >>> len(murmur3_x86_32(b'hello').digest())
-    ///     4
-    fn digest<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.state.digest().to_le_bytes())
-    }
+            /// Append bytes to the hash state.
+            ///
+            /// Args:
+            ///     data: Bytes-like data to append.
+            ///
+            /// Raises:
+            ///     TypeError: data is not bytes-like.
+            fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
+                let input = bytes_like(py, data, "data")?;
+                with_input(py, &input, |input| self.state.update(input));
+                Ok(())
+            }
 
-    /// Return the current digest as lowercase hexadecimal text.
-    ///
-    /// Returns:
-    ///     An eight-character hexadecimal string.
-    ///
-    /// Examples:
-    ///     >>> murmur3_x86_32(b'hello').hexdigest()
-    ///     '47fa8b24'
-    fn hexdigest(&self) -> String {
-        hex_digest(&self.state.digest().to_le_bytes())
-    }
+            /// Return the current digest without consuming the state.
+            fn digest<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+                let digest = ($digest)(&self.state);
+                PyBytes::new(py, &digest)
+            }
 
-    /// Return an independent copy of the current hash state.
-    ///
-    /// Returns:
-    ///     A hasher with the same state.
-    ///
-    /// Examples:
-    ///     >>> original = murmur3_x86_32(b'prefix')
-    ///     >>> original.copy().digest() == original.digest()
-    ///     True
-    fn copy(&self) -> Self {
-        self.clone()
-    }
+            /// Return the current digest as lowercase hexadecimal text.
+            fn hexdigest(&self) -> String {
+                hex_digest(&($digest)(&self.state))
+            }
 
-    #[getter]
-    /// The digest size in bytes (4).
-    const fn digest_size(&self) -> usize {
-        4
-    }
+            /// Return an independent copy of the current hash state.
+            fn copy(&self) -> Self {
+                self.clone()
+            }
 
-    #[getter]
-    /// The algorithm block size in bytes (4).
-    const fn block_size(&self) -> usize {
-        4
-    }
+            #[getter]
+            /// The digest size in bytes.
+            const fn digest_size(&self) -> usize {
+                $digest_size
+            }
 
-    #[getter]
-    /// The algorithm name.
-    const fn name(&self) -> &'static str {
-        "murmur3_x86_32"
-    }
-}
+            #[getter]
+            /// The algorithm block size in bytes.
+            const fn block_size(&self) -> usize {
+                $block_size
+            }
 
-/// Incremental MurmurHash3 x86 128-bit hasher.
-///
-/// Args:
-///     data: Optional initial bytes-like data.
-///     seed: Initial unsigned 32-bit seed.
-///
-/// Examples:
-///     >>> hasher = murmur3_x86_128(b'hello', seed=7)
-///     >>> hasher.update(b' world')
-///     >>> len(hasher.digest())
-///     16
-#[pyclass(
-    name = "murmur3_x86_128",
-    module = "hashcodecs.murmur3",
-    skip_from_py_object
-)]
-#[derive(Clone)]
-pub(in crate::bindings) struct PyMurmur3X86Hasher128 {
-    state: Murmur3X86Hasher128,
-}
-
-#[pymethods]
-impl PyMurmur3X86Hasher128 {
-    /// Initialize an incremental x86 128-bit hash state.
-    ///
-    /// Args:
-    ///     data: Optional initial bytes-like data.
-    ///     seed: Initial unsigned 32-bit seed.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like or seed is not an integer.
-    ///     OverflowError: seed is outside 0 <= seed < 2**32.
-    #[new]
-    #[pyo3(signature = (data=None, seed=0))]
-    fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
-        let mut state = Murmur3X86Hasher128::new(seed);
-        if let Some(data) = data {
-            let input = bytes_like(py, data, "data")?;
-            with_input(py, &input, |input| state.update(input));
+            #[getter]
+            /// The algorithm name.
+            const fn name(&self) -> &'static str {
+                $python_name
+            }
         }
-        Ok(Self { state })
-    }
-
-    /// Append bytes to the hash state.
-    ///
-    /// Args:
-    ///     data: Bytes-like data to append.
-    ///
-    /// Returns:
-    ///     None.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like.
-    ///
-    /// Examples:
-    ///     >>> hasher = murmur3_x86_128()
-    ///     >>> hasher.update(b'hello')
-    fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        let input = bytes_like(py, data, "data")?;
-        with_input(py, &input, |input| self.state.update(input));
-        Ok(())
-    }
-
-    /// Return the current digest without consuming the state.
-    ///
-    /// Returns:
-    ///     A 16-byte digest containing four little-endian 32-bit words.
-    ///
-    /// Examples:
-    ///     >>> len(murmur3_x86_128(b'hello').digest())
-    ///     16
-    fn digest<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &x86_128_digest(self.state.digest()))
-    }
-
-    /// Return the current digest as lowercase hexadecimal text.
-    ///
-    /// Returns:
-    ///     A 32-character hexadecimal string.
-    ///
-    /// Examples:
-    ///     >>> len(murmur3_x86_128(b'hello').hexdigest())
-    ///     32
-    fn hexdigest(&self) -> String {
-        hex_digest(&x86_128_digest(self.state.digest()))
-    }
-
-    /// Return an independent copy of the current hash state.
-    ///
-    /// Returns:
-    ///     A hasher with the same state.
-    ///
-    /// Examples:
-    ///     >>> original = murmur3_x86_128(b'prefix')
-    ///     >>> original.copy().digest() == original.digest()
-    ///     True
-    fn copy(&self) -> Self {
-        self.clone()
-    }
-
-    #[getter]
-    /// The digest size in bytes (16).
-    const fn digest_size(&self) -> usize {
-        16
-    }
-
-    #[getter]
-    /// The algorithm block size in bytes (16).
-    const fn block_size(&self) -> usize {
-        16
-    }
-
-    #[getter]
-    /// The algorithm name.
-    const fn name(&self) -> &'static str {
-        "murmur3_x86_128"
-    }
+    };
 }
 
-/// Incremental MurmurHash3 x64 128-bit hasher.
-///
-/// Args:
-///     data: Optional initial bytes-like data.
-///     seed: Initial unsigned 32-bit seed.
-///
-/// Examples:
-///     >>> hasher = murmur3_x64_128(b'hello', seed=7)
-///     >>> checkpoint = hasher.copy()
-///     >>> hasher.update(b' world')
-///     >>> hasher.digest() != checkpoint.digest()
-///     True
-#[pyclass(
-    name = "murmur3_x64_128",
-    module = "hashcodecs.murmur3",
-    skip_from_py_object
-)]
-#[derive(Clone)]
-pub(in crate::bindings) struct PyMurmur3X64Hasher128 {
-    state: Murmur3X64Hasher128,
-}
+define_python_hasher!(
+    PyMurmur3X86Hasher32,
+    Murmur3X86Hasher32,
+    "murmur3_x86_32",
+    "x86 32-bit",
+    4,
+    4,
+    |state: &Murmur3X86Hasher32| state.digest().to_le_bytes(),
+);
 
-#[pymethods]
-impl PyMurmur3X64Hasher128 {
-    /// Initialize an incremental x64 128-bit hash state.
-    ///
-    /// Args:
-    ///     data: Optional initial bytes-like data.
-    ///     seed: Initial unsigned 32-bit seed.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like or seed is not an integer.
-    ///     OverflowError: seed is outside 0 <= seed < 2**32.
-    #[new]
-    #[pyo3(signature = (data=None, seed=0))]
-    fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
-        let mut state = Murmur3X64Hasher128::new(seed);
-        if let Some(data) = data {
-            let input = bytes_like(py, data, "data")?;
-            with_input(py, &input, |input| state.update(input));
-        }
-        Ok(Self { state })
-    }
+define_python_hasher!(
+    PyMurmur3X86Hasher128,
+    Murmur3X86Hasher128,
+    "murmur3_x86_128",
+    "x86 128-bit",
+    16,
+    16,
+    |state: &Murmur3X86Hasher128| x86_128_digest(state.digest()),
+);
 
-    /// Append bytes to the hash state.
-    ///
-    /// Args:
-    ///     data: Bytes-like data to append.
-    ///
-    /// Returns:
-    ///     None.
-    ///
-    /// Raises:
-    ///     TypeError: data is not bytes-like.
-    ///
-    /// Examples:
-    ///     >>> hasher = murmur3_x64_128()
-    ///     >>> hasher.update(b'hello')
-    fn update(&mut self, py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        let input = bytes_like(py, data, "data")?;
-        with_input(py, &input, |input| self.state.update(input));
-        Ok(())
-    }
-
-    /// Return the current digest without consuming the state.
-    ///
-    /// Returns:
-    ///     A 16-byte digest containing two little-endian 64-bit words.
-    ///
-    /// Examples:
-    ///     >>> len(murmur3_x64_128(b'hello').digest())
-    ///     16
-    fn digest<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &x64_128_digest(self.state.digest()))
-    }
-
-    /// Return the current digest as lowercase hexadecimal text.
-    ///
-    /// Returns:
-    ///     A 32-character hexadecimal string.
-    ///
-    /// Examples:
-    ///     >>> len(murmur3_x64_128(b'hello').hexdigest())
-    ///     32
-    fn hexdigest(&self) -> String {
-        hex_digest(&x64_128_digest(self.state.digest()))
-    }
-
-    /// Return an independent copy of the current hash state.
-    ///
-    /// Returns:
-    ///     A hasher with the same state.
-    ///
-    /// Examples:
-    ///     >>> original = murmur3_x64_128(b'prefix')
-    ///     >>> original.copy().digest() == original.digest()
-    ///     True
-    fn copy(&self) -> Self {
-        self.clone()
-    }
-
-    #[getter]
-    /// The digest size in bytes (16).
-    const fn digest_size(&self) -> usize {
-        16
-    }
-
-    #[getter]
-    /// The algorithm block size in bytes (16).
-    const fn block_size(&self) -> usize {
-        16
-    }
-
-    #[getter]
-    /// The algorithm name.
-    const fn name(&self) -> &'static str {
-        "murmur3_x64_128"
-    }
-}
+define_python_hasher!(
+    PyMurmur3X64Hasher128,
+    Murmur3X64Hasher128,
+    "murmur3_x64_128",
+    "x64 128-bit",
+    16,
+    16,
+    |state: &Murmur3X64Hasher128| x64_128_digest(state.digest()),
+);

@@ -8,11 +8,10 @@ use crate::bindings::buffer::{BytesLike, ascii_or_bytes};
 
 use self::fallback::{canonical_padding, decode_with_binascii, decoding_error};
 use self::native::{
-    decode_strict, decode_strict_into, decode_strict_with_altchars,
-    decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
+    decode_advanced, decode_advanced_into, decode_strict, decode_strict_into,
+    decode_strict_with_altchars, decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
     lenient_continues_after_padding, normalize_mime_whitespace, translate_altchars,
-    try_decode_advanced, try_decode_advanced_into, try_decode_lenient, try_decode_lenient_into,
-    try_decode_strict,
+    try_decode_lenient, try_decode_lenient_into, try_decode_strict,
 };
 use self::output::copy_decoded_into;
 use self::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
@@ -149,10 +148,8 @@ fn decode_plan_allocating_inner<'py>(
             Err(_) => {}
         }
     }
-    if (ignorechars.is_some() || canonical)
-        && let Some(output) = try_decode_advanced(py, input, options)?
-    {
-        return Ok(output);
+    if ignorechars.is_some() || canonical {
+        return decode_advanced(py, input, options);
     }
     decode_with_binascii(
         py,
@@ -318,10 +315,8 @@ fn decode_plan_into_inner<'py>(
         return Ok(written);
     }
 
-    if (ignorechars.is_some() || canonical)
-        && let Some(written) = try_decode_advanced_into(py, input, output, options)?
-    {
-        return Ok(written);
+    if ignorechars.is_some() || canonical {
+        return decode_advanced_into(py, input, output, options);
     }
 
     let decoded = decode_with_binascii(

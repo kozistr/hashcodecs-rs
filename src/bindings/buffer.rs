@@ -129,26 +129,19 @@ impl<'py> BytesLike<'_, 'py> {
         self,
         outputs: &[Bound<'_, PyByteArray>],
     ) -> PyResult<Self> {
-        if outputs.iter().any(|output| self.overlaps(output)) {
-            return self.try_snapshot().map(Self::Owned);
-        }
-        Ok(self)
+        let needs_snapshot = outputs.iter().any(|output| self.overlaps(output));
+        self.into_snapshot_if(needs_snapshot)
     }
 
     #[cfg(Py_GIL_DISABLED)]
     pub(super) fn snapshot_mutable(&self) -> PyResult<Option<Vec<u8>>> {
-        if matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_)) {
-            return self.try_snapshot().map(Some);
-        }
-        Ok(None)
+        self.snapshot_if(self.is_mutable_bytearray())
     }
 
     #[cfg(Py_GIL_DISABLED)]
     pub(super) fn into_stable(self) -> PyResult<Self> {
-        if matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_)) {
-            return self.try_snapshot().map(Self::Owned);
-        }
-        Ok(self)
+        let needs_snapshot = self.is_mutable_bytearray();
+        self.into_snapshot_if(needs_snapshot)
     }
 
     pub(super) fn overlaps(&self, output: &Bound<'_, PyByteArray>) -> bool {
@@ -171,10 +164,23 @@ impl<'py> BytesLike<'_, 'py> {
         &self,
         output: &Bound<'_, PyByteArray>,
     ) -> PyResult<Option<Vec<u8>>> {
-        if self.overlaps(output) {
-            return self.try_snapshot().map(Some);
+        self.snapshot_if(self.overlaps(output))
+    }
+
+    #[cfg(Py_GIL_DISABLED)]
+    fn is_mutable_bytearray(&self) -> bool {
+        matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_))
+    }
+
+    fn snapshot_if(&self, needed: bool) -> PyResult<Option<Vec<u8>>> {
+        needed.then(|| self.try_snapshot()).transpose()
+    }
+
+    fn into_snapshot_if(self, needed: bool) -> PyResult<Self> {
+        match self.snapshot_if(needed)? {
+            Some(snapshot) => Ok(Self::Owned(snapshot)),
+            None => Ok(self),
         }
-        Ok(None)
     }
 
     fn try_snapshot(&self) -> PyResult<Vec<u8>> {

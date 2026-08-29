@@ -5,7 +5,7 @@ use pyo3::types::{PyBytes, PyDict, PyType};
 
 use super::super::{STANDARD_ALPHABET, python_at_least};
 use super::native::translate_altchars;
-use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
+use crate::bindings::buffer::BytesLike;
 
 pub(super) fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
     match py
@@ -88,17 +88,6 @@ pub(super) fn decode_with_binascii<'py>(
             canonical,
         );
     }
-    if !python_at_least(py, (3, 15)) && (!padded || ignorechars.is_some() || canonical) {
-        return decode_advanced_legacy(
-            py,
-            input,
-            altchars,
-            strict_mode,
-            padded,
-            ignorechars,
-            canonical,
-        );
-    }
     let custom_alphabet = altchars.is_some() && ignorechars.is_some();
     let translated = if custom_alphabet {
         None
@@ -146,86 +135,6 @@ pub(super) fn decode_with_binascii<'py>(
         decode.call((data,), Some(&kwargs))?
     };
     output.cast_into::<PyBytes>().map_err(Into::into)
-}
-
-fn decode_advanced_legacy<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
-    ignorechars: Option<&Bound<'py, PyAny>>,
-    canonical: bool,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let mut ignored = [false; 256];
-    if let Some(ignorechars) = ignorechars {
-        let ignorechars = contiguous_bytes_like(py, ignorechars, "ignorechars")?;
-        unsafe {
-            ignorechars.with_bytes(|bytes| {
-                for &byte in bytes {
-                    ignored[usize::from(byte)] = true;
-                }
-            })
-        };
-    }
-
-    let mut decode_map = [-1_i16; 256];
-    for (value, &byte) in STANDARD_ALPHABET[..62].iter().enumerate() {
-        decode_map[usize::from(byte)] = value as i16;
-    }
-    let custom_alphabet = altchars.is_some() && ignorechars.is_some();
-    if !custom_alphabet {
-        decode_map[usize::from(b'+')] = 62;
-        decode_map[usize::from(b'/')] = 63;
-    }
-    if let Some([plus, slash]) = altchars {
-        decode_map[usize::from(plus)] = 62;
-        decode_map[usize::from(slash)] = 63;
-    }
-
-    let mut normalized = Vec::with_capacity(input.len() + 2);
-    unsafe {
-        input.with_bytes(|input| {
-            for &byte in input {
-                let value = decode_map[usize::from(byte)];
-                if value >= 0 {
-                    normalized.push(STANDARD_ALPHABET[value as usize]);
-                } else if byte == b'=' {
-                    normalized.push(byte);
-                } else if strict_mode && !ignored[usize::from(byte)] {
-                    return Err(decoding_error(py, "Only base64 data is allowed"));
-                }
-            }
-            Ok(())
-        })
-    }?;
-
-    let data_len = normalized
-        .iter()
-        .position(|&byte| byte == b'=')
-        .unwrap_or(normalized.len());
-    if !padded && strict_mode && data_len != normalized.len() {
-        return Err(decoding_error(py, "Padding not allowed"));
-    }
-    if data_len % 4 == 1 {
-        return Err(decoding_error(py, "Incorrect padding"));
-    }
-    if canonical && !canonical_padding(&normalized[..data_len]) {
-        return Err(decoding_error(py, "Non-zero padding bits"));
-    }
-    if !padded {
-        let required_padding = (4 - data_len % 4) % 4;
-        normalized.resize(normalized.len().max(data_len + required_padding), b'=');
-    }
-    decode_with_binascii(
-        py,
-        &BytesLike::Owned(normalized),
-        None,
-        strict_mode,
-        true,
-        None,
-        false,
-    )
 }
 
 pub(super) fn canonical_padding(input: &[u8]) -> bool {

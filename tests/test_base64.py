@@ -1069,7 +1069,7 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert output == b'\x00'
 
 
-def test_advanced_decode_success_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_advanced_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
     def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
         raise AssertionError((args, kwargs))
 
@@ -1093,16 +1093,23 @@ def test_advanced_decode_success_bypasses_binascii(monkeypatch: pytest.MonkeyPat
     view = memoryview(encoded)
     assert base64.b64decode(view, ignorechars=b'!') == b'abc'
 
+    with pytest.raises(binascii.Error):
+        base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
+    unchanged = bytearray([0xA5] * 4)
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(b'A!', unchanged, padded=False, validate=False, ignorechars=b'!')
+    assert unchanged == bytearray([0xA5] * 4)
 
-@pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
+
+@pytest.mark.skipif(PYTHON_315, reason='exercises the backported pre-3.15 error path')
 def test_legacy_decode_error_preserves_binascii_lookup_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(binascii, 'Error', None)
     with pytest.raises(TypeError):
         base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
 
 
-@pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
-def test_legacy_decode_fallback_delegates_data_after_unpadded_padding_errors() -> None:
+@pytest.mark.skipif(PYTHON_315, reason='exercises the backported pre-3.15 error path')
+def test_legacy_decode_rejects_data_after_unpadded_padding_errors() -> None:
     encoded = b'=A'
     with pytest.raises(binascii.Error):
         base64.b64decode(encoded, padded=False, validate=False, ignorechars=b'!')

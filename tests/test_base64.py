@@ -1099,12 +1099,14 @@ def test_legacy_decode_error_preserves_binascii_lookup_failures(monkeypatch: pyt
 
 
 @pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
-def test_legacy_decode_fallback_handles_data_after_unpadded_padding() -> None:
-    encoded = b'AAA=AA'
-    assert base64.b64decode(encoded, padded=False, validate=False, ignorechars=b'!') == b'\x00\x00'
+def test_legacy_decode_fallback_delegates_data_after_unpadded_padding_errors() -> None:
+    encoded = b'=A'
+    with pytest.raises(binascii.Error):
+        base64.b64decode(encoded, padded=False, validate=False, ignorechars=b'!')
     output = bytearray([0xA5] * 4)
-    assert base64.b64decode_into(encoded, output, padded=False, validate=False, ignorechars=b'!') == 2
-    assert output == bytearray(b'\x00\x00\xa5\xa5')
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(encoded, output, padded=False, validate=False, ignorechars=b'!')
+    assert output == bytearray([0xA5] * 4)
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

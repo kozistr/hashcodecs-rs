@@ -6,6 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
+use super::tables::{PACK_SHUFFLE, STANDARD_OFFSETS, URLSAFE_OFFSETS};
 use super::x86_contracts::{Decoder, Store};
 
 #[target_feature(enable = "ssse3")]
@@ -62,7 +63,7 @@ pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, _
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
-    let offsets = _mm_setr_epi8(0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
+    let offsets = unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) };
     (
         _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices)),
         errors,
@@ -81,7 +82,7 @@ pub(super) unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __
         0x33,
     );
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
-    let offsets = _mm_setr_epi8(0, 0, 17, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
+    let offsets = unsafe { _mm_loadu_si128(URLSAFE_OFFSETS.as_ptr().cast()) };
     let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, high_nibbles));
     let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
     let correction = _mm_and_si128(underscore, _mm_set1_epi8(33));
@@ -102,7 +103,7 @@ pub(super) unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m1
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
-    let offsets = _mm_setr_epi8(0, 16, 19, 4, -65, -65, -71, -71, 0, 0, 0, 0, 0, 0, 0, 0);
+    let offsets = unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) };
     let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices));
     let dash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'-' as i8));
     let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
@@ -137,7 +138,7 @@ pub(super) fn errors_are_zero_ssse3(errors: __m128i) -> bool {
 pub(super) fn pack_16_indices(indices: __m128i) -> __m128i {
     let merged = _mm_maddubs_epi16(indices, _mm_set1_epi32(0x0140_0140));
     let packed = _mm_madd_epi16(merged, _mm_set1_epi32(0x0001_1000));
-    let shuffle = _mm_setr_epi8(2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, -1, -1, -1, -1);
+    let shuffle = unsafe { _mm_loadu_si128(PACK_SHUFFLE.as_ptr().cast()) };
     _mm_shuffle_epi8(packed, shuffle)
 }
 #[target_feature(enable = "ssse3")]

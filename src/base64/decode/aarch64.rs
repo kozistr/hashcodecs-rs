@@ -3,6 +3,7 @@
 use std::arch::aarch64::*;
 
 use super::super::Base64Error;
+use super::tables::{STANDARD_OFFSETS, URLSAFE_OFFSETS};
 
 const STANDARD_HIGH_CLASSES: [u8; 16] = [
     0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
@@ -19,8 +20,6 @@ const URLSAFE_LOW_CLASSES: [u8; 16] = [
 const MIXED_LOW_CLASSES: [u8; 16] = [
     0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b, 0x32,
 ];
-const STANDARD_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
-const URLSAFE_OFFSETS: [u8; 16] = [0, 0, 17, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
 const MIXED_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 17, 224, 0, 0, 0, 0, 0, 0];
 
 // Amortize the horizontal reduction without scanning an unbounded amount of

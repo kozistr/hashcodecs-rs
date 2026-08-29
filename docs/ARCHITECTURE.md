@@ -150,9 +150,14 @@ Buffer handling follows ownership rather than treating every buffer alike:
 
 - exact `bytes` are borrowed without a copy;
 - exact `bytearray` values are borrowed but never used in detached work;
-- contiguous memoryviews are borrowed while execution remains attached to the interpreter;
-- full contiguous `bytes` or `bytearray` owners are retained when their data pointer and length match the view;
-- other memoryviews are copied only when stable ownership is required, including free-threaded execution;
+- on GIL-enabled builds, contiguous memoryviews—including small and sliced views—are borrowed while execution remains
+  attached to the interpreter;
+- full contiguous `bytes` or `bytearray` owners are retained when their data pointer and length match the view, which
+  also avoids copies on free-threaded builds;
+- other views are flattened into stable bytes when their layout is non-contiguous or stable ownership is required,
+  including sliced views on free-threaded builds;
+- Base64 encoding still requires C-contiguous input, while hashing and Base64 decoding accept and flatten
+  non-contiguous views;
 - reusable Base64 batches snapshot only inputs whose memory range overlaps a destination;
 - immutable Base64 and XXH3 operations at or above 256 KiB may detach from the GIL;
 - immutable MurmurHash3 operations at or above 64 KiB may detach from the GIL;
@@ -172,9 +177,10 @@ Wheel tests execute the installed package, while coverage paths map that install
 package.
 
 The 100% Rust line-coverage gate continues to measure the Rust core without default features. Separate Linux
-coverage jobs build instrumented CPython extensions for Python 3.12 and free-threaded Python 3.15, run the Python
-suite through them, and merge the binding-layer Rust coverage under a `rust-bindings` flag. The feature-gated
-binding layer remains outside the core percentage, the sanitizer jobs, Miri interpretation, and Kani proofs.
+coverage jobs build instrumented CPython extensions for Python 3.10, Python 3.12, and free-threaded Python 3.15,
+run both the Python suite and Rust binding unit tests, and merge the binding-layer Rust coverage under a
+`rust-bindings` flag. The feature-gated binding layer remains outside the core percentage, the sanitizer jobs, Miri
+interpretation, and Kani proofs.
 
 ## Correctness and Safety
 

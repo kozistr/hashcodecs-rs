@@ -31,17 +31,24 @@ test:
     cargo test --features python
     uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
 
+test-build:
+    uv run --frozen --no-sync pytest build_tests
+
 coverage:
     cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
 
 test-release:
     cargo test --release --features python
 
-# Run the fast local quality gates, including a strict documentation build.
-check: format-check lint test docs-build
+# Build and verify a wheel from an extracted source distribution.
+verify-sdist:
+    uv run --frozen --no-sync python tools/verify_sdist.py
 
-# Run every pre-commit gate from AGENT.md.
-full-check: check test-release coverage
+# Run the fast local quality gates, including build-tool tests and a strict documentation build.
+check: format-check lint test test-build docs-build
+
+# Run every pre-commit gate from AGENT.md, including extracted-sdist verification.
+full-check: check test-release coverage verify-sdist
 
 build:
     uv build

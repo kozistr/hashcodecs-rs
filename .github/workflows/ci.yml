@@ -333,6 +333,36 @@ jobs:
       - name: Check generated API metadata
         run: uv run --frozen --no-sync python tools/generate_api_metadata.py --check
 
+      - name: Test Python build tooling
+        run: uv run --frozen --no-sync pytest build_tests
+
+  python_sdist:
+    name: Python / Source Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          python-version: "3.12"
+          cache-dependency-glob: uv.lock
+
+      - name: Build and test extracted source distribution
+        run: python tools/verify_sdist.py
+
   python_test:
     name: Python / Test / ${{ matrix.name }}
     strategy:

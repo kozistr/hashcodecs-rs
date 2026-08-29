@@ -109,6 +109,10 @@ def test_native_decode_into_handles_aliases_and_urlsafe_errors() -> None:
         base64.b64decode_into(shared, shared, validate=True, padded=False)
     assert shared == bytearray(b'AA=')
 
+    shared = bytearray(b'IJ!ZZ0')
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(shared, shared)
+
     output = bytearray([0xA5] * 2)
     assert base64.b64decode_into(b'AA', output, validate=False, padded=False) == 1
     assert output == bytearray(b'\x00\xa5')
@@ -1250,6 +1254,23 @@ def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
     assert base64.b64decode_batch_into([b'ZGVm', shared], [shared, decoded], validate=True) == [3, 3]
     assert shared[:3] == b'def'
     assert decoded == b'abc'
+
+    shared = bytearray(b'ZGVm')
+    decoded = bytearray(3)
+    observed: list[bytes] = []
+
+    class AliasedString(str):
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytearray:
+            observed.append(bytes(shared))
+            return shared
+
+    assert base64.b64decode_batch_into([b'YWJj', AliasedString('ignored')], [shared, decoded], validate=True) == [
+        3,
+        3,
+    ]
+    assert observed == [b'ZGVm']
+    assert shared[:3] == b'abc'
+    assert decoded == b'def'
 
 
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:

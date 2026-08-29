@@ -61,10 +61,8 @@ jobs:
 
       - name: Check Rust core line coverage
         run: |
-          cargo llvm-cov --no-default-features --fail-under-lines 100 \
-            --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
-          cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' \
-            --cobertura --output-path coverage.xml
+          cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
+          cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}
@@ -83,7 +81,7 @@ jobs:
         include:
           - name: Rust / CPython binding coverage / Python 3.10
             python-version: "3.10"
-          - name: Rust / CPython binding coverage
+          - name: Rust / CPython binding coverage / Python 3.12
             python-version: "3.12"
           - name: Rust / CPython binding coverage / Python 3.15t
             python-version: "3.15t"

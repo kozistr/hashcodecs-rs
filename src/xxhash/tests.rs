@@ -37,6 +37,23 @@ fn batches_match_one_shot() {
     assert_eq!(xxh3_64_batch(&values, 42), values.map(|v| xxh3_64(v, 42)));
     assert_eq!(xxh3_128_batch(&values, 42), values.map(|v| xxh3_128(v, 42)));
 
+    let mut hashes_64 = [0; 3];
+    let mut hashes_128 = [[0; 2]; 3];
+    let mut index = 0;
+    xxh3_64_batch_each(&values, 42, |hash| {
+        hashes_64[index] = hash;
+        index += 1;
+    });
+    assert_eq!(index, values.len());
+    let mut index = 0;
+    xxh3_128_batch_each(&values, 42, |hash| {
+        hashes_128[index] = hash;
+        index += 1;
+    });
+    assert_eq!(index, values.len());
+    assert_eq!(hashes_64, values.map(|value| xxh3_64(value, 42)));
+    assert_eq!(hashes_128, values.map(|value| xxh3_128(value, 42)));
+
     let mixed_owned = [17, 129, 241, 300].map(|length| {
         (0..length)
             .map(|index| (index as u8).wrapping_mul(19).wrapping_add(7))

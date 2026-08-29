@@ -716,6 +716,26 @@ def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[
         (b'AP', None, {'padded': False, 'canonical': True}),
         (b'@#8', b'@#', {'padded': False, 'ignorechars': b''}),
         (b'++8=', b'-_', {'ignorechars': b''}),
+        (b'AA==', None, {'ignorechars': b'!$%&'}),
+        (b'AAA=', None, {'ignorechars': b'!$%&'}),
+        (b'AA==A', None, {'ignorechars': b'!$%&'}),
+        (b'AA~=', None, {'ignorechars': b'!$%&'}),
+        (b'A===', None, {'ignorechars': b'!$%&'}),
+        (b'AA=', None, {'ignorechars': b'!$%&'}),
+        (b'AB==', None, {'ignorechars': b'!$%&', 'canonical': True}),
+        (b'AA==', None, {'padded': False, 'ignorechars': b'!$%&'}),
+        (b'AA==!', None, {'ignorechars': b'!'}),
+        (b'AAA=', None, {'ignorechars': b'!'}),
+        (b'AA==A', None, {'ignorechars': b'!'}),
+        (b'AA==~', None, {'ignorechars': b'!'}),
+        (b'A===', None, {'ignorechars': b'!'}),
+        (b'AA=', None, {'ignorechars': b'!'}),
+        (b'AB==', None, {'ignorechars': b'!', 'canonical': True}),
+        (b'AA==', None, {'padded': False, 'ignorechars': b'!'}),
+        (b'A', None, {'validate': False, 'ignorechars': b'!$%&'}),
+        (b'AA', None, {'validate': False, 'ignorechars': b'!$%&'}),
+        (b'AB==', None, {'validate': False, 'ignorechars': b'!$%&', 'canonical': True}),
+        (b'AA==AAAA', None, {'validate': False, 'ignorechars': b'!$%&'}),
     ],
 )
 def test_python_315_decode_options_match_cpython(
@@ -927,6 +947,100 @@ def test_advanced_decode_fallback_edge_cases() -> None:
     assert output == b'abc'
 
 
+def test_advanced_decode_native_staging_and_dispatch_paths() -> None:
+    payload = bytes(range(256)) * 32 + b'native advanced decoder tail'
+    encoded = stdlib_base64.b64encode(payload)
+
+    translated = encoded.translate(bytes.maketrans(b'+/', b'@#'))
+    fast_input = b'!'.join(translated[index : index + 97] for index in range(0, len(translated), 97))
+    assert base64.b64decode(fast_input, b'@#', ignorechars=b'!') == payload
+    fast_output = bytearray(len(payload))
+    assert base64.b64decode_into(fast_input, fast_output, b'@#', ignorechars=b'!') == len(payload)
+    assert fast_output == payload
+
+    ignored = b'!$%&'
+    generic_input = ignored.join(encoded[index : index + 89] for index in range(0, len(encoded), 89))
+    assert base64.b64decode(generic_input, ignorechars=ignored) == payload
+    generic_output = bytearray(len(payload))
+    assert base64.b64decode_into(generic_input, generic_output, ignorechars=ignored) == len(payload)
+    assert generic_output == payload
+
+    assert base64.b64decode(generic_input, validate=False, ignorechars=ignored) == payload
+    lenient_output = bytearray(len(payload))
+    assert base64.b64decode_into(generic_input, lenient_output, validate=False, ignorechars=ignored) == len(payload)
+    assert lenient_output == payload
+
+    alphanumeric = b'A' * 8192
+    assert base64.b64decode(alphanumeric, ignorechars=ignored) == bytes(6144)
+
+    mutable = bytearray(b'Y!WJj')
+    assert base64.b64decode(mutable, ignorechars=b'!') == b'abc'
+
+
+@pytest.mark.parametrize(
+    'encoded',
+    [
+        b'AAAA?',
+        b'A' * 4095 + b'?',
+    ],
+)
+def test_advanced_decode_native_rejects_invalid_staging(encoded: bytes) -> None:
+    with pytest.raises(binascii.Error):
+        base64.b64decode(encoded, ignorechars=b'!')
+    output = bytearray([0xA5] * len(encoded))
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(encoded, output, ignorechars=b'!')
+    assert output == bytes([0xA5] * len(encoded))
+
+
+@pytest.mark.parametrize('ignorechars', [b'', b'!', b'!?', b'!?~'])
+def test_advanced_decode_native_special_search_widths(ignorechars: bytes) -> None:
+    encoded = b'Y' + ignorechars + b'WJj'
+    assert base64.b64decode(encoded, b'@#', ignorechars=ignorechars) == b'abc'
+    output = bytearray(3)
+    assert base64.b64decode_into(encoded, output, b'@#', ignorechars=ignorechars) == 3
+    assert output == b'abc'
+
+
+def test_advanced_decode_native_single_altchar_translation() -> None:
+    assert base64.b64decode(b'@@8=', b'@/', ignorechars=b'') == b'\xfb\xef'
+    output = bytearray(2)
+    assert base64.b64decode_into(b'@@8=', output, b'@/', ignorechars=b'') == 2
+    assert output == b'\xfb\xef'
+
+
+def test_canonical_unpadded_decode_direct_paths() -> None:
+    assert base64.b64decode(b'AAAA', padded=False, canonical=True) == b'\x00\x00\x00'
+    output = bytearray(3)
+    assert base64.b64decode_into(b'AAAA', output, padded=False, canonical=True) == 3
+    assert output == b'\x00\x00\x00'
+
+    for encoded in (b'A@', b'AA#'):
+        with pytest.raises(binascii.Error):
+            base64.b64decode(encoded, b'@#', padded=False, canonical=True)
+
+
+def test_lenient_unpadded_decode_into_checks_final_output_size() -> None:
+    with pytest.raises(ValueError, match='requires 1 bytes'):
+        base64.b64decode_into(b'AA', bytearray(), validate=False, padded=False)
+
+
+def test_advanced_lenient_padding_matches_the_running_cpython() -> None:
+    encoded = b'AA==AAAA'
+    kwargs: dict[str, object] = {'validate': False, 'ignorechars': b'!$%&'}
+    stdlib_kwargs = kwargs if PYTHON_315 else {'validate': False}
+    expected = _decode_keyword_outcome(stdlib_base64.b64decode, encoded, None, stdlib_kwargs)
+    assert _decode_keyword_outcome(base64.b64decode, encoded, None, kwargs) == expected
+
+    output = bytearray(len(encoded))
+    try:
+        written = base64.b64decode_into(encoded, output, **kwargs)
+        actual: bytes | type[Exception] = bytes(output[:written])
+    except Exception as error:
+        actual = type(error)
+    assert actual == expected
+
+
 def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pytest.MonkeyPatch) -> None:
     observed: list[object] = []
 
@@ -950,29 +1064,34 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert observed[-1] == encoded
     assert observed[-1] is not sliced_owner
 
+    output = bytearray(1)
+    assert base64.b64decode_into(memoryview(encoded), output) == 0
+    assert output == b'\x00'
 
-@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 fallback')
-def test_advanced_decode_fallback_reuses_exact_immutable_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = binascii.a2b_base64
-    observed: list[object] = []
 
-    def record_input(data: object, *args: object, **kwargs: object) -> bytes:
-        observed.append(data)
-        return original(data, *args, **kwargs)
+def test_advanced_decode_success_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError((args, kwargs))
 
-    monkeypatch.setattr(binascii, 'a2b_base64', record_input)
+    monkeypatch.setattr(binascii, 'a2b_base64', unexpected_fallback)
     encoded = b'Y!WJj'
     assert base64.b64decode(encoded, ignorechars=b'!') == b'abc'
-    assert observed[-1] is encoded
 
     output = bytearray(3)
     assert base64.b64decode_into(encoded, output, ignorechars=b'!') == 3
     assert output == b'abc'
-    assert observed[-1] is encoded
+
+    undersized = bytearray([0xA5] * 2)
+    with pytest.raises(ValueError, match='requires 3 bytes'):
+        base64.b64decode_into(encoded, undersized, ignorechars=b'!')
+    assert undersized == bytearray([0xA5] * 2)
+
+    shared = bytearray(encoded)
+    assert base64.b64decode_into(shared, shared, ignorechars=b'!') == 3
+    assert shared[:3] == b'abc'
 
     view = memoryview(encoded)
     assert base64.b64decode(view, ignorechars=b'!') == b'abc'
-    assert observed[-1] is encoded
 
 
 @pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
@@ -980,6 +1099,17 @@ def test_legacy_decode_error_preserves_binascii_lookup_failures(monkeypatch: pyt
     monkeypatch.setattr(binascii, 'Error', None)
     with pytest.raises(TypeError):
         base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
+
+
+@pytest.mark.skipif(PYTHON_315, reason='exercises the pre-3.15 compatibility fallback')
+def test_legacy_decode_fallback_delegates_data_after_unpadded_padding_errors() -> None:
+    encoded = b'=A'
+    with pytest.raises(binascii.Error):
+        base64.b64decode(encoded, padded=False, validate=False, ignorechars=b'!')
+    output = bytearray([0xA5] * 4)
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(encoded, output, padded=False, validate=False, ignorechars=b'!')
+    assert output == bytearray([0xA5] * 4)
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

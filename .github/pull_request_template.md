@@ -10,8 +10,7 @@
 
 <!-- List the commands you ran and their results. Include benchmark commands for performance changes. -->
 
-- `just check`
-- `just test`
+- `just full-check`
 
 ## Scope
 

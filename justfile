@@ -34,11 +34,14 @@ test:
 coverage:
     cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
 
+test-release:
+    cargo test --release --features python
+
 # Run the fast local quality gates, including a strict documentation build.
 check: format-check lint test docs-build
 
 # Run every pre-commit gate from AGENT.md.
-full-check: check coverage
+full-check: check test-release coverage
 
 build:
     uv build

@@ -2,7 +2,7 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyByteArray, PyBytes};
 
-use super::{output_too_small, parse_altchars};
+use super::{STANDARD_ALPHABET, output_too_small, parse_altchars};
 use crate::base64::{Base64Error, DecodeAlphabet};
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes};
 
@@ -11,7 +11,8 @@ use self::native::{
     decode_strict, decode_strict_into, decode_strict_with_altchars,
     decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
     lenient_continues_after_padding, normalize_mime_whitespace, translate_altchars,
-    try_decode_lenient, try_decode_lenient_into, try_decode_strict,
+    try_decode_advanced, try_decode_advanced_into, try_decode_lenient, try_decode_lenient_into,
+    try_decode_strict,
 };
 use self::output::copy_decoded_into;
 use self::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
@@ -26,6 +27,26 @@ pub(super) use self::batch::{
     b64decode_batch, b64decode_batch_into, standard_b64decode_batch, standard_b64decode_batch_into,
     urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
 };
+
+fn canonical_unpadded_input(input: &[u8], altchars: Option<[u8; 2]>) -> bool {
+    let remainder = input.len() % 4;
+    if !matches!(remainder, 2 | 3) {
+        return remainder == 0;
+    }
+    let last = input[input.len() - 1];
+    let value = match altchars {
+        Some([_, slash]) if last == slash => Some(63),
+        Some([plus, _]) if last == plus => Some(62),
+        _ => STANDARD_ALPHABET.iter().position(|&byte| byte == last),
+    };
+    value.is_some_and(|value| {
+        if remainder == 2 {
+            value & 0x0f == 0
+        } else {
+            value & 0x03 == 0
+        }
+    })
+}
 
 fn decode_plan_allocating_inner<'py>(
     py: Python<'py>,
@@ -116,6 +137,22 @@ fn decode_plan_allocating_inner<'py>(
         if let Some(output) = try_decode_lenient(py, input, altchars, padded)? {
             return Ok(output);
         }
+    }
+    if ignorechars.is_none()
+        && canonical
+        && !padded
+        && unsafe { input.with_bytes(|input| canonical_unpadded_input(input, altchars)) }
+    {
+        match decode_unpadded_with_altchars(py, input, altchars) {
+            Ok(output) => return Ok(output),
+            Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
+            Err(_) => {}
+        }
+    }
+    if (ignorechars.is_some() || canonical)
+        && let Some(output) = try_decode_advanced(py, input, options)?
+    {
+        return Ok(output);
     }
     decode_with_binascii(
         py,
@@ -268,6 +305,21 @@ fn decode_plan_into_inner<'py>(
             padded,
             lenient_continues_after_padding(py),
         )?
+    {
+        return Ok(written);
+    }
+
+    if ignorechars.is_none()
+        && canonical
+        && !padded
+        && unsafe { input.with_bytes(|input| canonical_unpadded_input(input, altchars)) }
+        && let Ok(written) = decode_unpadded_into_with_altchars(input, output, altchars, true)?
+    {
+        return Ok(written);
+    }
+
+    if (ignorechars.is_some() || canonical)
+        && let Some(written) = try_decode_advanced_into(py, input, output, options)?
     {
         return Ok(written);
     }

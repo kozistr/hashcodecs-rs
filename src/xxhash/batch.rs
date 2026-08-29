@@ -149,9 +149,27 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     hashes
 }
 
-#[cfg(feature = "python")]
+/// Computes canonical XXH3 64-bit hashes for a batch and sends each result to a sink.
+///
+/// This is the allocation-free counterpart to [`xxh3_64_batch`]. Results are
+/// passed to `output` in input order, while seed-derived setup and eligible
+/// equal-size long-input traversal are shared by the batch.
+///
+/// # Examples
+///
+///     use hashcodecs::xxhash::xxh3_64_batch_each;
+///
+///     let inputs: &[&[u8]] = &[b"one", b"two"];
+///     let mut hashes = [0; 2];
+///     let mut index = 0;
+///     xxh3_64_batch_each(inputs, 7, |hash| {
+///         hashes[index] = hash;
+///         index += 1;
+///     });
+///     assert_eq!(index, inputs.len());
+///
 #[inline]
-pub(crate) fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
+pub fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
     batch_each(inputs, seed, xxh3_64, finalize_long_64, output);
 }
 
@@ -190,9 +208,26 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     hashes
 }
 
-#[cfg(feature = "python")]
+/// Computes canonical XXH3 128-bit hashes for a batch and sends each result to a sink.
+///
+/// This is the allocation-free counterpart to [`xxh3_128_batch`]. Results are
+/// passed to `output` in input order as `[low64, high64]` word pairs.
+///
+/// # Examples
+///
+///     use hashcodecs::xxhash::xxh3_128_batch_each;
+///
+///     let inputs: &[&[u8]] = &[b"one", b"two"];
+///     let mut hashes = [[0; 2]; 2];
+///     let mut index = 0;
+///     xxh3_128_batch_each(inputs, 7, |hash| {
+///         hashes[index] = hash;
+///         index += 1;
+///     });
+///     assert_eq!(index, inputs.len());
+///
 #[inline]
-pub(crate) fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
+pub fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
     batch_each(inputs, seed, xxh3_128, finalize_long_128, output);
 }
 

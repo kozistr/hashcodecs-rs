@@ -49,6 +49,7 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
     }
     Ok((source, destination))
 }
+
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, __m128i) {
     let value = unsafe { _mm_loadu_si128(input.cast()) };
@@ -141,12 +142,14 @@ pub(super) fn pack_16_indices(indices: __m128i) -> __m128i {
     let shuffle = unsafe { _mm_loadu_si128(PACK_SHUFFLE.as_ptr().cast()) };
     _mm_shuffle_epi8(packed, shuffle)
 }
+
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn store_12_exact(output: *mut u8, value: __m128i) {
     unsafe { _mm_storel_epi64(output.cast(), value) };
     let remaining = _mm_cvtsi128_si32(_mm_srli_si128(value, 8));
     unsafe { output.add(8).cast::<i32>().write_unaligned(remaining) };
 }
+
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn store_12_padded(output: *mut u8, value: __m128i) {
     unsafe { _mm_storeu_si128(output.cast(), value) };

@@ -85,9 +85,11 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
                 table,
             )
         };
+
         source += 192;
         destination += 256;
     }
+
     while source + 48 <= input.len() {
         unsafe {
             encode_48(

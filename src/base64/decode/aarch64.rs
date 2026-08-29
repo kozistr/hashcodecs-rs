@@ -58,18 +58,23 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONA
     let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
     let mut source = 0;
     let mut destination = 0;
+
     if TRANSACTIONAL_ERRORS {
         while source + 64 <= input.len() {
             let (decoded, errors) =
                 unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
+
             if vmaxvq_u8(errors) != 0 {
                 return Err(Base64Error::InvalidInput);
             }
+
             unsafe { store_decoded_64(output.add(destination), decoded) };
+
             source += 64;
             destination += 48;
         }
     }
+
     while source + 64 <= input.len() {
         let bulk_remaining = (input.len() - source) & !63;
         let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
@@ -77,8 +82,11 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONA
         while source < chunk_end {
             let (decoded, block_errors) =
                 unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
+
             errors = vorrq_u8(errors, block_errors);
+
             unsafe { store_decoded_64(output.add(destination), decoded) };
+
             source += 64;
             destination += 48;
         }
@@ -86,6 +94,7 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONA
             return Err(Base64Error::InvalidInput);
         }
     }
+
     while source + 16 <= input.len() {
         unsafe {
             decode_16::<URLSAFE, MIXED>(
@@ -94,9 +103,11 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONA
                 tables,
             )?
         };
+
         source += 16;
         destination += 12;
     }
+
     Ok((source, destination))
 }
 
@@ -115,6 +126,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
 
     let mut indices_array = [0_u8; 16];
     unsafe { vst1q_u8(indices_array.as_mut_ptr(), indices) };
+
     for group in 0..4 {
         let source = group * 4;
         let destination = group * 3;
@@ -122,6 +134,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
         let second = indices_array[source + 1];
         let third = indices_array[source + 2];
         let fourth = indices_array[source + 3];
+
         unsafe {
             output.add(destination).write((first << 2) | (second >> 4));
             output
@@ -130,6 +143,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
             output.add(destination + 2).write((third << 6) | fourth);
         }
     }
+
     Ok(())
 }
 
@@ -154,6 +168,7 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
         vorrq_u8(vshlq_n_u8::<4>(second), vshrq_n_u8::<2>(third)),
         vorrq_u8(vshlq_n_u8::<6>(third), fourth),
     );
+
     (decoded, errors)
 }
 
@@ -175,6 +190,7 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
         vqtbl1q_u8(tables.high_classes, high_nibbles),
         vqtbl1q_u8(tables.low_classes, low_nibbles),
     );
+
     let offset_indices = if MIXED {
         let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
         let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
@@ -188,11 +204,14 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
     } else {
         high_nibbles
     };
+
     let mut indices = vaddq_u8(value, vqtbl1q_u8(tables.offsets, offset_indices));
+
     if URLSAFE && !MIXED {
         let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
         indices = vaddq_u8(indices, vandq_u8(underscore, vdupq_n_u8(33)));
     }
+
     (indices, errors)
 }
 
@@ -214,6 +233,7 @@ unsafe fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTable
             &STANDARD_OFFSETS,
         )
     };
+
     unsafe {
         DecodeTables {
             high_classes: vld1q_u8(high_classes.as_ptr()),

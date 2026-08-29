@@ -17,6 +17,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 ) -> Result<(usize, usize), Base64Error> {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_32(input.as_ptr().add(source)) };
         let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
@@ -43,6 +44,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         source += 128;
         destination += 96;
     }
+
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
         if _mm256_testz_si256(errors, errors) == 0 {
@@ -58,6 +60,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         source += 32;
         destination += 24;
     }
+
     // At most one 16-byte block remains after the AVX2 loops. Decode it
     // directly so the bulk SSSE3 entry point does not sit on the AVX2 hot path.
     if source + 16 <= input.len() {
@@ -71,6 +74,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     }
     Ok((source, destination))
 }
+
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
@@ -82,11 +86,13 @@ pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, _
         0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x2a, 0x2b, 0x2b, 0x2b,
         0x2a,
     );
+
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
     let offset_indices = _mm256_add_epi8(high_nibbles, slash);
     let offsets =
         _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) });
+
     (
         _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices)),
         errors,
@@ -105,11 +111,14 @@ pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __
         0x33,
     );
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+
     let offsets =
         _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(URLSAFE_OFFSETS.as_ptr().cast()) });
+
     let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, high_nibbles));
     let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
     let correction = _mm256_and_si256(underscore, _mm256_set1_epi8(33));
+
     (_mm256_add_epi8(indices, correction), errors)
 }
 
@@ -124,6 +133,7 @@ pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m2
         0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b,
         0x32,
     );
+
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
     let offset_indices = _mm256_add_epi8(high_nibbles, slash);
@@ -158,20 +168,26 @@ fn classify_ascii_avx2(
 fn pack_32(indices: __m256i) -> __m256i {
     let merged = _mm256_maddubs_epi16(indices, _mm256_set1_epi32(0x0140_0140));
     let packed = _mm256_madd_epi16(merged, _mm256_set1_epi32(0x0001_1000));
+
     let shuffle =
         _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(PACK_SHUFFLE.as_ptr().cast()) });
+
     _mm256_shuffle_epi8(packed, shuffle)
 }
+
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
     let lower = _mm256_castsi256_si128(value);
     let upper = _mm256_extracti128_si256(value, 1);
+
     // The first store's four lane-padding bytes are replaced by the second.
     unsafe { _mm_storeu_si128(output.cast(), lower) };
     unsafe { _mm_storel_epi64(output.add(12).cast(), upper) };
+
     let remaining = _mm_cvtsi128_si32(_mm_srli_si128(upper, 8));
     unsafe { output.add(20).cast::<i32>().write_unaligned(remaining) };
 }
+
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn store_24_padded(output: *mut u8, value: __m256i) {
     unsafe { _mm_storeu_si128(output.cast(), _mm256_castsi256_si128(value)) };

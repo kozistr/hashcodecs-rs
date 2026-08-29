@@ -25,6 +25,7 @@ struct EncodeAvx2Constants {
     c51: __m256i,
     c25: __m256i,
 }
+
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     unsafe { encode_avx2_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) }
@@ -47,6 +48,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     // actual load offset avoids forming a pointer before the start of `input`.
     let mut load_offset = 20;
     let mut destination = 32;
+
     // A group needs four 32-byte shifted loads for 96 logical input bytes.
     // `input.len() - load_offset - 8` is an equivalent division form of the
     // final-load bound `load_offset + 104 <= input.len()`.
@@ -71,10 +73,12 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
                     )
                 };
             }
+
             load_offset += groups * 96;
             destination += groups * 128;
         }
     }
+
     // The helper's fixed call and register-save costs outweigh its scheduling
     // benefit on small inputs. This loop is also the 32-bit x86 fallback.
     #[cfg(target_arch = "x86")]
@@ -90,6 +94,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
         load_offset += 96;
         destination += 128;
     }
+
     while load_offset + 32 <= input.len() {
         let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), encoded) };
@@ -99,6 +104,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
 
     // The shifted load is four bytes behind the logical source position.
     let source = load_offset + 4;
+
     // Keep the final SIMD block VEX-encoded. Entering the legacy-encoded
     // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
     if source + 16 <= input.len() {
@@ -165,6 +171,7 @@ unsafe fn encode_96_shifted<const URLSAFE: bool>(
             store_32(output.add(96), fourth);
         }
     }
+
     // Streaming stores are weakly ordered with respect to later loads/stores.
     // SAFETY: the fence has no memory-safety preconditions.
     unsafe { _mm_sfence() };
@@ -185,6 +192,7 @@ fn encode_avx2_constants(urlsafe: bool) -> EncodeAvx2Constants {
             -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
         )
     };
+
     EncodeAvx2Constants {
         reshuffle: _mm256_set_epi8(
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
@@ -209,6 +217,7 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
         _mm256_and_si256(shuffled, constants.field_mask),
         constants.field_mul,
     );
+
     let indices = _mm256_or_si256(aligned, fields);
     let lut_index = _mm256_sub_epi8(
         _mm256_subs_epu8(indices, constants.c51),
@@ -239,6 +248,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
         5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14, 1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7,
         10, 9, 11, 10,
     );
+
     let higher_mask = _mm256_set1_epi32(0x0fc0_fc00);
     let higher_multiplier = _mm256_set1_epi32(0x0400_0040);
     let lower_mask = _mm256_set1_epi32(0x003f_03f0);
@@ -353,6 +363,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
         );
     }
 }
+
 #[target_feature(enable = "avx2")]
 unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
@@ -363,8 +374,10 @@ unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let higher = unsafe { mulhi_epu16_exact_avx2_128(higher, _mm_set1_epi32(0x0400_0040)) };
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
     let lower = unsafe { mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010)) };
+
     ascii_from_indices_avx2_128::<URLSAFE>(_mm_or_si128(higher, lower))
 }
+
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
@@ -421,6 +434,7 @@ fn encode_24_shifted_value<const URLSAFE: bool>(shifted: __m256i) -> __m256i {
     let higher = unsafe { mulhi_epu16_exact(higher, _mm256_set1_epi32(0x0400_0040)) };
     let lower = _mm256_and_si256(value, _mm256_set1_epi32(0x003f_03f0));
     let lower = unsafe { mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010)) };
+
     ascii_from_indices_avx2::<URLSAFE>(_mm256_or_si256(higher, lower))
 }
 
@@ -455,6 +469,7 @@ unsafe fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i 
     }
     value
 }
+
 #[target_feature(enable = "avx2")]
 fn ascii_from_indices_avx2_128<const URLSAFE: bool>(indices: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));

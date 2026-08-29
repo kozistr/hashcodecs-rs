@@ -40,6 +40,8 @@ Changelog = "https://github.com/kozistr/hashcodecs-rs/blob/main/CHANGELOG.md"
 wheel-test = ["pytest==9.1.1"]
 dev = [
     { include-group = "wheel-test" },
+    "hatchling>=1.27,<2",
+    "packaging>=26,<27",
     "pytest-cov>=7,<8",
     "ruff>=0.16,<0.17",
 ]

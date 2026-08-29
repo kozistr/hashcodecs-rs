@@ -11,6 +11,7 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
     } else {
         STANDARD_ALPHABET
     };
+
     let table = uint8x16x4_t(
         unsafe { vld1q_u8(alphabet.as_ptr()) },
         unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
@@ -20,6 +21,7 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
 
     let mut source = 0;
     let mut destination = 0;
+
     while source + 192 <= input.len() {
         unsafe { encode_48(input.as_ptr().add(source), output.add(destination), table) };
         unsafe {
@@ -43,16 +45,21 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
                 table,
             )
         };
+
         source += 192;
         destination += 256;
     }
+
     while source + 48 <= input.len() {
         unsafe { encode_48(input.as_ptr().add(source), output.add(destination), table) };
+
         source += 48;
         destination += 64;
     }
+
     if source + 24 <= input.len() {
         unsafe { encode_24(input.as_ptr().add(source), output.add(destination), table) };
+
         source += 24;
     }
     source
@@ -72,6 +79,7 @@ unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
         vdup_n_u8(0x3f),
     );
     let fourth = vand_u8(input.2, vdup_n_u8(0x3f));
+
     unsafe {
         vst4_u8(
             output,
@@ -99,6 +107,7 @@ unsafe fn encode_48(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
         vdupq_n_u8(0x3f),
     );
     let fourth = vandq_u8(input.2, vdupq_n_u8(0x3f));
+
     unsafe {
         vst4q_u8(
             output,

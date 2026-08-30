@@ -25,6 +25,8 @@ def build_sdist(project_root: Path, destination: Path) -> Path:
         'uv',
         'build',
         '--sdist',
+        '--python',
+        sys.executable,
         '--no-sources',
         '--out-dir',
         str(destination),
@@ -73,7 +75,7 @@ def verify_sdist(archive_path: Path, workspace: Path) -> None:
     venv = workspace / 'venv'
 
     run('cargo', 'test', '--lib', '--locked', cwd=source_root)
-    run('uv', 'build', '--wheel', '--out-dir', str(wheel_dir), cwd=source_root)
+    run('uv', 'build', '--wheel', '--python', sys.executable, '--out-dir', str(wheel_dir), cwd=source_root)
     run('uv', 'venv', '--python', sys.executable, str(venv), cwd=workspace)
 
     python = venv_python(venv)

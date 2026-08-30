@@ -92,6 +92,21 @@ def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     assert hashcodecs.xxh3_128_batch(values, 42) == [hashcodecs.xxh3_128(value, 42) for value in values]
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires the Python-level buffer protocol')
+def test_xxh3_acquires_generic_exporters_directly() -> None:
+    class BufferHook:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __buffer__(self, flags: int) -> memoryview:
+            self.calls += 1
+            return memoryview(b'h.e.l.l.o.')[::2]
+
+    value = BufferHook()
+    assert hashcodecs.xxh3_64(value) == hashcodecs.xxh3_64(b'hello')
+    assert value.calls == 1
+
+
 @pytest.mark.parametrize(
     ('one_shot', 'batch'),
     [

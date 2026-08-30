@@ -32,7 +32,7 @@ struct MemoryViewInfo<'py> {
 /// sections instead.
 pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
-    source: *mut ffi::PyObject,
+    memoryview_source: *mut ffi::PyObject,
     _python: std::marker::PhantomData<Python<'py>>,
 }
 
@@ -142,10 +142,13 @@ impl<'py> BytesLike<'_, 'py> {
         match self {
             Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
             Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
-            Self::Buffer(buffer) if buffer.view.obj == buffer.source => {
+            Self::Buffer(buffer)
+                if !buffer.memoryview_source.is_null()
+                    && buffer.view.obj == buffer.memoryview_source =>
+            {
                 // The active export owns `view.obj`, so equality proves that
                 // the exact memoryview source is still alive while it is used.
-                let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.source) };
+                let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.memoryview_source) };
                 let owner = memoryview.getattr(intern!(py, "obj"))?;
                 if !PyBytes::is_exact_type_of(&owner) {
                     return Ok(None);
@@ -453,11 +456,24 @@ fn buffer_bytes_like<'py>(
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         return Err(type_error(argument));
     }
-    // A memoryview owns the export acquired here. Subsequent contiguity checks
-    // and borrowing operate on that view instead of invoking the exporter a
-    // second time, and an exporter-defined exception remains intact.
-    let memoryview = PyMemoryView::from(value)?;
-    exact_memoryview_bytes_like(&memoryview, require_contiguous)
+    with_critical_section(value, || {
+        let buffer = acquire_buffer(value, std::ptr::null_mut())?;
+        let c_contiguous = unsafe {
+            ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
+        };
+        if require_contiguous && !c_contiguous {
+            return Err(PyBufferError::new_err(
+                "memoryview: underlying buffer is not C-contiguous",
+            ));
+        }
+
+        #[cfg(not(Py_GIL_DISABLED))]
+        if c_contiguous {
+            return Ok(BytesLike::Buffer(buffer));
+        }
+
+        copy_buffer(value.py(), &buffer).map(BytesLike::OwnedBytes)
+    })
 }
 
 fn exact_memoryview_bytes_like<'py>(
@@ -508,18 +524,7 @@ fn exact_memoryview_bytes_like<'py>(
 
 fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<MemoryViewInfo<'py>> {
     let py = memoryview.py();
-    let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
-    if unsafe { ffi::PyObject_GetBuffer(memoryview.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) }
-        != 0
-    {
-        return Err(PyErr::fetch(py));
-    }
-
-    let buffer = BorrowedBuffer {
-        view,
-        source: memoryview.as_ptr(),
-        _python: std::marker::PhantomData,
-    };
+    let buffer = acquire_buffer(memoryview.as_any(), memoryview.as_ptr())?;
     let nbytes = buffer.len();
     let data = buffer.view.buf.cast();
     let c_contiguous = unsafe {
@@ -543,6 +548,43 @@ fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Memor
         data,
         owner,
         buffer,
+    })
+}
+
+fn acquire_buffer<'py>(
+    value: &Bound<'py, PyAny>,
+    memoryview_source: *mut ffi::PyObject,
+) -> PyResult<BorrowedBuffer<'py>> {
+    let py = value.py();
+    let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+    if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) } != 0 {
+        return Err(PyErr::fetch(py));
+    }
+
+    Ok(BorrowedBuffer {
+        view,
+        memoryview_source,
+        _python: std::marker::PhantomData,
+    })
+}
+
+fn copy_buffer<'py>(py: Python<'py>, buffer: &BorrowedBuffer<'_>) -> PyResult<Bound<'py, PyBytes>> {
+    PyBytes::new_with(py, buffer.len(), |bytes| {
+        let result = unsafe {
+            ffi::PyBuffer_ToContiguous(
+                bytes.as_mut_ptr().cast(),
+                #[cfg(Py_3_11)]
+                &raw const buffer.view,
+                #[cfg(not(Py_3_11))]
+                (&raw const buffer.view).cast_mut(),
+                buffer.view.len,
+                b'C' as std::ffi::c_char,
+            )
+        };
+        if result != 0 {
+            return Err(PyErr::fetch(py));
+        }
+        Ok(())
     })
 }
 

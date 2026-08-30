@@ -19,8 +19,7 @@ def report(
     upstream: Callable[[], object],
     hashcodecs_only: bool,
 ) -> None:
-    if not hashcodecs_only:
-        assert ours() == upstream()
+    assert ours() == upstream()
     ours_rate = throughput(ours, input_size)
     if hashcodecs_only:
         print(f'{name:20} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')

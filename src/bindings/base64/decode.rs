@@ -103,13 +103,13 @@ fn decode_plan_allocating_inner<'py>(
             return match decode_unpadded_with_altchars(py, input, altchars) {
                 Ok(output) => Ok(output),
                 Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
-                Err(_) => decode_with_binascii(py, input, altchars, true, false, None, false),
+                Err(_) => decode_with_binascii(py, input, altchars, true, false),
             };
         }
         return match decode_strict_with_altchars(py, input, altchars) {
             Ok(output) => Ok(output),
             Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
-            Err(_) => decode_with_binascii(py, input, altchars, true, true, None, false),
+            Err(_) => decode_with_binascii(py, input, altchars, true, true),
         };
     }
 
@@ -156,15 +156,7 @@ fn decode_plan_allocating_inner<'py>(
     if ignorechars.is_some() || canonical {
         return decode_advanced(py, input, options);
     }
-    decode_with_binascii(
-        py,
-        input,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )
+    decode_with_binascii(py, input, altchars, strict_mode, padded)
 }
 
 pub(super) fn b64decode<'py>(
@@ -349,15 +341,7 @@ fn decode_plan_into_inner<'py>(
         return decode_advanced_into(py, input, output, options);
     }
 
-    let decoded = decode_with_binascii(
-        py,
-        input,
-        altchars,
-        strict_mode,
-        padded,
-        ignorechars,
-        canonical,
-    )?;
+    let decoded = decode_with_binascii(py, input, altchars, strict_mode, padded)?;
     copy_decoded_into(&decoded, output)
 }
 

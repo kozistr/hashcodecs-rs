@@ -1,7 +1,9 @@
+import ast
 import inspect
 import sys
 from array import array
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,6 +18,18 @@ GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 def test_murmur3_functions_keep_public_module_metadata() -> None:
     for name in murmur3.__all__:
         assert getattr(murmur3, name).__module__ == 'hashcodecs.murmur3'
+
+
+def test_murmur3_classes_keep_generated_docstrings() -> None:
+    stub = Path(hashcodecs.__file__).with_name('_hashcodecs.pyi')
+    declarations = ast.parse(stub.read_text(encoding='utf-8'), filename=str(stub))
+    expected = {
+        node.name: ast.get_docstring(node, clean=True)
+        for node in declarations.body
+        if isinstance(node, ast.ClassDef) and node.name.startswith('murmur3_')
+    }
+
+    assert {name: getattr(murmur3, name).__doc__ for name in expected} == expected
 
 
 def test_murmur3_known_answers_and_buffer_inputs() -> None:

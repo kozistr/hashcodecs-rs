@@ -41,8 +41,8 @@ short/long dispatch boundary.
 Use the focused one-shot run to cover the AVX2 four-chain boundaries:
 
 ```sh
-cargo bench --bench xxhash -- "xxh3_(64|128)/(240|241|512|768|1024|1536|2048|4096)/hashcodecs"
-cargo bench --bench xxhash -- "xxh3_batch/mixed/.*/hashcodecs_(64|128)"
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_(64|128)/(240|241|512|768|1024|1536|2048|4096)/hashcodecs"
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_batch/mixed/.*/hashcodecs_(64|128)"
 ```
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
@@ -66,9 +66,10 @@ noisy cases insert `!` at the same boundaries. Both cases measure returned bytes
 
 ## Python Memoryview Inputs
 
-Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length views with a
-nonzero starting offset. The latter covers the copy/stabilization path used by slices while keeping the encoded data
-identical.
+Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length contiguous views
+with a nonzero starting offset. Full views can recover their exact immutable owner at detachment sizes; slices cover
+offset-buffer handling, which borrows under the GIL and stabilizes the input in free-threaded builds. The encoded data
+remains identical.
 
 [![Python Base64 memoryview inputs](docs/benchmarks/base64-python-memoryview.svg)](docs/benchmarks/base64-python-memoryview.svg)
 

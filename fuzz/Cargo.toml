@@ -34,3 +34,5 @@ path = "fuzz_targets/xxhash.rs"
 test = false
 doc = false
 bench = false
+
+[workspace]

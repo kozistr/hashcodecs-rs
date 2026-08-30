@@ -45,9 +45,9 @@ Benchmarks pin one logical CPU, validate results before timing, and are not run 
 when comparing a change.
 
 ```sh
-cargo bench --bench base64
-cargo bench --bench murmur3
-cargo bench --bench xxhash
+cargo bench --manifest-path benches/Cargo.toml --bench base64
+cargo bench --manifest-path benches/Cargo.toml --bench murmur3
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py

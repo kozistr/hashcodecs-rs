@@ -28,22 +28,51 @@ where
     }
 }
 
+pub(super) fn list_from_callback<'py, T>(
+    py: Python<'py>,
+    length: usize,
+    populate: impl FnOnce(&mut dyn FnMut(Bound<'py, T>)),
+) -> PyResult<Bound<'py, PyList>>
+where
+    T: PyTypeInfo,
+{
+    let py_length = ffi::Py_ssize_t::try_from(length)
+        .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
+    unsafe {
+        let list: Bound<'py, PyList> =
+            Bound::from_owned_ptr_or_err(py, ffi::PyList_New(py_length))?.cast_into_unchecked();
+        let mut index = 0;
+        populate(&mut |item| {
+            assert!(index < length, "list callback produced too many items");
+            // PyList_SET_ITEM steals the new reference. Uninitialized slots stay
+            // null until populated, so dropping a partial list remains safe.
+            ffi::PyList_SET_ITEM(list.as_ptr(), index as ffi::Py_ssize_t, item.into_ptr());
+            index += 1;
+        });
+        assert_eq!(index, length, "list callback produced too few items");
+        Ok(list)
+    }
+}
+
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn exact_bytes_up_to<'py>(
     items: &Bound<'py, PyList>,
     max_length: usize,
-) -> Option<Vec<Bound<'py, PyBytes>>> {
+) -> PyResult<Option<Vec<Bound<'py, PyBytes>>>> {
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
-        let mut values = Vec::with_capacity(length as usize);
+        let mut values = Vec::new();
+        values
+            .try_reserve_exact(length as usize)
+            .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index);
             if ffi::PyBytes_CheckExact(item) == 0 || ffi::Py_SIZE(item) as usize > max_length {
-                return None;
+                return Ok(None);
             }
             values.push(Bound::from_borrowed_ptr(items.py(), item).cast_into_unchecked());
         }
-        Some(values)
+        Ok(Some(values))
     }
 }
 
@@ -75,18 +104,24 @@ pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usi
     }
 }
 
-pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> Vec<Bound<'py, PyAny>> {
+pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let length = items.len();
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(length)
+        .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
     #[cfg(Py_GIL_DISABLED)]
-    return items.iter().collect();
+    {
+        values.extend(items.iter());
+        return Ok(values);
+    }
     #[cfg(not(Py_GIL_DISABLED))]
     unsafe {
-        let length = ffi::PyList_GET_SIZE(items.as_ptr()) as usize;
-        let mut values = Vec::with_capacity(length);
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
             values.push(Bound::from_borrowed_ptr(items.py(), item));
         }
-        values
+        Ok(values)
     }
 }
 

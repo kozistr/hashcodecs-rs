@@ -44,7 +44,7 @@ The crate groups code into layered modules within one crate:
 - algorithm-specific Python adapters depend on the Rust APIs and shared binding policies;
 - `bindings/mod.rs` is a composition root and contains no parsing, buffer, or execution policy.
 
-Shared state machines own their invariants. For example, `murmur3/incremental.rs` keeps the pending block and its
+Shared state machines own their invariants. For example, `murmur3/block_buffer.rs` keeps the pending block and its
 length together, so each incremental hasher cannot represent an inconsistent tail. At the CPython boundary,
 `objects.rs` contains raw object access, `buffer.rs` owns borrowing and copying decisions, `arguments.rs` owns
 call-shape parsing, and `runtime.rs` owns GIL-detachment and native function registration.

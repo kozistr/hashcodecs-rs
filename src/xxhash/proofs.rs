@@ -1,4 +1,4 @@
-use super::long::{LongInput, long_schedule};
+use super::long_inputs::{LongInput, build_long_input_schedule};
 use super::primitives::{SECRET, u32le, u64le};
 
 #[kani::proof]
@@ -35,7 +35,7 @@ fn long_schedule_keeps_vector_loads_in_bounds() {
     kani::assume(length > 240 && length <= 2048);
     let bytes = [0_u8; 2048];
     let input = LongInput::new(&bytes[..length]).unwrap();
-    let schedule = long_schedule(input);
+    let schedule = build_long_input_schedule(input);
 
     let block: usize = kani::any();
     let block_stripe: usize = kani::any();

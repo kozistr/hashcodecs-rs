@@ -421,8 +421,8 @@ unsafe fn encode_24_shifted<const URLSAFE: bool>(input: *const u8) -> __m256i {
 
 #[target_feature(enable = "avx2")]
 fn encode_24_shifted_value<const URLSAFE: bool>(shifted: __m256i) -> __m256i {
-    // The low lane's payload starts four bytes into the vector; the high
-    // lane's payload starts at byte zero. This arrangement lets every block
+    // The low lane's payload starts four bytes into the vector.
+    // The high lane's payload starts at byte zero. This arrangement lets every block
     // after the first avoid a cross-lane VPERMD.
     let shuffle = _mm256_setr_epi8(
         5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14, 1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7,

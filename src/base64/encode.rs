@@ -11,23 +11,22 @@ pub(super) mod cache;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) mod ssse3;
 
-use super::dispatch::encode_simd_ptr;
-use super::output::{initialized_output, uninitialized_output};
+use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
+use super::runtime_dispatch::encode_with_runtime_backend;
 use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
-/// Encodes bytes with the padded RFC 4648 standard Base64 alphabet.
+/// Encodes input with the padded RFC 4648 standard Base64 alphabet.
 ///
-/// Runtime CPU dispatch selects the fastest supported in-crate backend. The
-/// returned string contains only ASCII characters and always includes the
-/// padding required to complete its final four-character group.
+/// Runtime dispatch selects the highest-priority supported backend. The function returns ASCII text.
+/// The function adds padding when the final input group is incomplete.
 ///
 /// # Arguments
 ///
-/// * input - The bytes to encode.
+/// * `input` - Contains the bytes to encode.
 ///
 /// # Returns
 ///
-/// A newly allocated Base64 string using + and / for values 62 and 63.
+/// The function returns a new Base64 string. The string uses `+` and `/` for values 62 and 63.
 ///
 /// # Examples
 ///
@@ -40,18 +39,18 @@ pub fn b64encode(input: &[u8]) -> String {
     b64encode_with_alphabet(input, false)
 }
 
-/// Encodes bytes with the padded RFC 4648 URL-safe Base64 alphabet.
+/// Encodes input with the padded RFC 4648 URL-safe Base64 alphabet.
 ///
-/// The URL-safe alphabet substitutes - and _ for + and /. Runtime CPU dispatch
-/// selects the fastest supported in-crate backend.
+/// The URL-safe alphabet uses `-` and `_` instead of `+` and `/`.
+/// Runtime dispatch selects the highest-priority supported backend.
 ///
 /// # Arguments
 ///
-/// * input - The bytes to encode.
+/// * `input` - Contains the bytes to encode.
 ///
 /// # Returns
 ///
-/// A newly allocated, padded URL-safe Base64 string.
+/// The function returns a new padded URL-safe Base64 string.
 ///
 /// # Examples
 ///
@@ -64,16 +63,16 @@ pub fn b64encode_urlsafe(input: &[u8]) -> String {
     b64encode_with_alphabet(input, true)
 }
 
-/// Calculates the encoded length of padded Base64 without encoding any data.
+/// Returns the encoded length of padded Base64 without encoding the input.
 ///
 /// # Arguments
 ///
-/// * input_len - The number of source bytes.
+/// * `input_len` - Specifies the number of input bytes.
 ///
 /// # Returns
 ///
-/// Some(length) for the required output size, or None if rounding to complete
-/// four-character groups would overflow usize.
+/// The function returns `Some(length)` for the required output size.
+/// It returns `None` if four-character group rounding overflows `usize`.
 ///
 /// # Examples
 ///
@@ -88,24 +87,24 @@ pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
     groups.checked_mul(4)
 }
 
-/// Encodes into a caller-provided destination using the standard alphabet.
+/// Encodes input into caller-provided storage with the standard alphabet.
 ///
-/// The destination may be larger than necessary. On success, the returned value
-/// is the initialized prefix length; bytes after that prefix are left unchanged.
+/// The destination can contain more space than the result requires.
+/// The function returns the number of bytes that it writes. It does not change bytes after this prefix.
 ///
 /// # Arguments
 ///
-/// * input - The bytes to encode.
-/// * output - Storage for the complete padded Base64 result.
+/// * `input` - Contains the bytes to encode.
+/// * `output` - Provides storage for the complete padded Base64 result.
 ///
 /// # Returns
 ///
-/// The number of bytes written to the start of output.
+/// The function returns the number of bytes that it writes to the start of `output`.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::OutputTooSmall before writing when output is shorter
-/// than the value reported by b64encoded_len.
+/// The function returns `Base64Error::OutputTooSmall` before it writes if `output` is too short.
+/// Use `b64encoded_len` to get the required length.
 ///
 /// # Examples
 ///
@@ -121,23 +120,23 @@ pub fn b64encode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
     b64encode_into_with_alphabet(input, output, false)
 }
 
-/// Encodes into a caller-provided destination using the URL-safe alphabet.
+/// Encodes input into caller-provided storage with the URL-safe alphabet.
 ///
-/// The destination may be larger than necessary. On success, the returned value
-/// is the initialized prefix length; bytes after that prefix are left unchanged.
+/// The destination can contain more space than the result requires.
+/// The function returns the number of bytes that it writes. It does not change bytes after this prefix.
 ///
 /// # Arguments
 ///
-/// * input - The bytes to encode.
-/// * output - Storage for the complete padded URL-safe Base64 result.
+/// * `input` - Contains the bytes to encode.
+/// * `output` - Provides storage for the complete padded URL-safe Base64 result.
 ///
 /// # Returns
 ///
-/// The number of bytes written to the start of output.
+/// The function returns the number of bytes that it writes to the start of `output`.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::OutputTooSmall before writing when output is too short.
+/// The function returns `Base64Error::OutputTooSmall` before it writes if `output` is too short.
 ///
 /// # Examples
 ///
@@ -173,11 +172,11 @@ fn b64encode_into_with_alphabet(
 #[inline]
 fn b64encode_with_alphabet(input: &[u8], urlsafe: bool) -> String {
     let output_len = encoded_len(input.len());
-    let mut output = uninitialized_output(output_len);
+    let mut output = allocate_uninitialized_output(output_len);
     // The output allocation contains exactly `output_len` writable bytes.
     unsafe { encode_to_ptr(input, output.as_mut_ptr().cast(), urlsafe) };
-    // Every output byte is initialized by `encode_to_ptr`.
-    let output = unsafe { initialized_output(output, output_len) };
+    // `encode_to_ptr` initializes every output byte.
+    let output = unsafe { assume_output_initialized(output, output_len) };
 
     // The encoder writes only ASCII Base64 characters.
     unsafe { String::from_utf8_unchecked(output) }
@@ -191,7 +190,7 @@ pub(crate) fn encoded_len(input_len: usize) -> usize {
 #[inline]
 pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
     debug_assert_eq!(output.len(), encoded_len(input.len()));
-    // The exact output length was checked above.
+    // The check above confirmed the exact output length.
     unsafe { encode_to_ptr(input, output.as_mut_ptr(), urlsafe) };
 }
 
@@ -202,7 +201,7 @@ pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool)
         return;
     }
 
-    let input_offset = unsafe { encode_simd_ptr(input, output, urlsafe) };
+    let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe) };
     unsafe {
         encode_scalar_ptr(
             &input[input_offset..],
@@ -230,8 +229,8 @@ pub(crate) unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: b
     let input_ptr = input.as_ptr();
     let mut source = 0;
     let mut destination = 0;
-    // `input_ptr` comes from the live slice above. Each raw read is guarded by the
-    // loop or tail length check, avoiding a separate slice bounds check per byte.
+    // `input_ptr` comes from the live slice above. The loop or tail length check guards each raw read.
+    // This structure avoids a separate slice bounds check for each byte.
     while source + 6 <= input_len {
         let (first, second) = unsafe {
             let block = input_ptr.add(source);

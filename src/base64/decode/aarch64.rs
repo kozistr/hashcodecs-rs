@@ -23,7 +23,7 @@ const MIXED_LOW_CLASSES: [u8; 16] = [
 const MIXED_OFFSETS: [u8; 16] = [0, 16, 19, 4, 191, 191, 185, 185, 17, 224, 0, 0, 0, 0, 0, 0];
 
 // Amortize the horizontal reduction without scanning an unbounded amount of
-// input after the first invalid byte. This is measured in encoded input bytes.
+// input after the first invalid byte. This constant counts encoded input bytes.
 pub(crate) const DECODE_ERROR_CHECK_INTERVAL: usize = 4 * 1024;
 
 #[derive(Clone, Copy)]

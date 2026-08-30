@@ -61,8 +61,8 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         destination += 24;
     }
 
-    // At most one 16-byte block remains after the AVX2 loops. Decode it
-    // directly so the bulk SSSE3 entry point does not sit on the AVX2 hot path.
+    // At most one 16-byte block remains after the AVX2 loops. Decode this block here.
+    // This keeps the bulk SSSE3 entry point off the AVX2 hot path.
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if !errors_are_zero_ssse3(errors) {
@@ -155,7 +155,7 @@ fn classify_ascii_avx2(
     high_classes: __m128i,
     low_classes: __m128i,
 ) -> (__m256i, __m256i) {
-    // Invalid high/low nibble pairs share a class bit; valid pairs produce zero.
+    // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
     let mask = _mm256_set1_epi8(0x0f);
     let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), mask);
     let low_nibbles = _mm256_and_si256(value, mask);
@@ -180,7 +180,7 @@ pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
     let lower = _mm256_castsi256_si128(value);
     let upper = _mm256_extracti128_si256(value, 1);
 
-    // The first store's four lane-padding bytes are replaced by the second.
+    // The second store replaces the first store's four lane-padding bytes.
     unsafe { _mm_storeu_si128(output.cast(), lower) };
     unsafe { _mm_storel_epi64(output.add(12).cast(), upper) };
 

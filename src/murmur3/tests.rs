@@ -32,32 +32,62 @@ fn x64_words_as_u128(words: [u64; 2]) -> u128 {
 fn dispatch_thresholds_are_explicit_and_feature_gated() {
     use crate::backend::{Capabilities, SimdBackend as Simd};
     use dispatch::Backend::{Avx2, Scalar, Sse41};
-    let caps = |backend| Capabilities::for_backends(&[backend]);
+    let caps = |backend| Capabilities::from_supported_backends(&[backend]);
 
-    assert_eq!(dispatch::x86_32(15, caps(Simd::Avx2)), Scalar);
-    assert_eq!(dispatch::x86_32(31, caps(Simd::Avx2)), Scalar);
-    assert_eq!(dispatch::x86_32(16, caps(Simd::Sse41)), Sse41);
-    assert_eq!(dispatch::x86_32(32, caps(Simd::Avx2)), Avx2);
-    assert_eq!(dispatch::x86_32(usize::MAX, caps(Simd::Scalar)), Scalar);
-
-    assert_eq!(dispatch::x86_128(255, caps(Simd::Avx2)), Scalar);
-    assert_eq!(dispatch::x86_128(256, caps(Simd::Avx2)), Avx2);
     assert_eq!(
-        dispatch::x86_128(16 * 1024 * 1024 - 1, caps(Simd::Sse41)),
+        dispatch::select_x86_32_backend(15, caps(Simd::Avx2)),
         Scalar
     );
     assert_eq!(
-        dispatch::x86_128(16 * 1024 * 1024, caps(Simd::Sse41)),
+        dispatch::select_x86_32_backend(31, caps(Simd::Avx2)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x86_32_backend(16, caps(Simd::Sse41)),
         Sse41
     );
-    assert_eq!(dispatch::x86_128(usize::MAX, caps(Simd::Scalar)), Scalar);
-
-    assert_eq!(dispatch::x64_128(15, caps(Simd::Avx2)), Scalar);
-    assert_eq!(dispatch::x64_128(16, caps(Simd::Sse41)), Sse41);
-    assert_eq!(dispatch::x64_128(32, caps(Simd::Avx2)), Avx2);
-    assert_eq!(dispatch::x64_128(8 * 1024 * 1024, caps(Simd::Sse41)), Sse41);
+    assert_eq!(dispatch::select_x86_32_backend(32, caps(Simd::Avx2)), Avx2);
     assert_eq!(
-        dispatch::x64_128(8 * 1024 * 1024 + 1, caps(Simd::Sse41)),
+        dispatch::select_x86_32_backend(usize::MAX, caps(Simd::Scalar)),
+        Scalar
+    );
+
+    assert_eq!(
+        dispatch::select_x86_128_backend(255, caps(Simd::Avx2)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(256, caps(Simd::Avx2)),
+        Avx2
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(16 * 1024 * 1024 - 1, caps(Simd::Sse41)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(16 * 1024 * 1024, caps(Simd::Sse41)),
+        Sse41
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(usize::MAX, caps(Simd::Scalar)),
+        Scalar
+    );
+
+    assert_eq!(
+        dispatch::select_x64_128_backend(15, caps(Simd::Avx2)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(16, caps(Simd::Sse41)),
+        Sse41
+    );
+    assert_eq!(dispatch::select_x64_128_backend(32, caps(Simd::Avx2)), Avx2);
+    assert_eq!(
+        dispatch::select_x64_128_backend(8 * 1024 * 1024, caps(Simd::Sse41)),
+        Sse41
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(8 * 1024 * 1024 + 1, caps(Simd::Sse41)),
         Scalar
     );
 }

@@ -11,9 +11,9 @@ def b64encode(
 ) -> bytes:
     """Encode a bytes-like object as Base64.
 
-    The standard RFC 4648 alphabet is used unless altchars replaces its "+"
-    and "/" characters. Padding and fixed-width line wrapping can be
-    controlled for protocols that require a particular wire format.
+    The function uses the standard RFC 4648 alphabet by default. ``altchars``
+    can replace the "+" and "/" characters. Use ``padded`` and ``wrapcol``
+    to select the wire format.
 
     Args:
         s: Contiguous bytes-like data to encode.
@@ -23,7 +23,7 @@ def b64encode(
         wrapcol: Maximum encoded characters per line. Zero disables wrapping.
 
     Returns:
-        Newly allocated Base64-encoded bytes.
+        New Base64-encoded bytes.
 
     Raises:
         TypeError: An argument has an unsupported type.
@@ -40,8 +40,9 @@ def b64encode(
 def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None = None) -> list[bytes]:
     """Encode a list of bytes-like objects as padded Base64.
 
-    Every item uses the same alphabet and results preserve input order. The
-    operation stops at the first invalid item and discards partial results.
+    Every item uses the same alphabet. The result order matches the input
+    order. The function stops at the first invalid item and discards the
+    partial result list.
 
     Args:
         items: A list of contiguous bytes-like objects to encode.
@@ -49,7 +50,7 @@ def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None
             standard alphabet.
 
     Returns:
-        One newly allocated Base64 byte string per input item.
+        One new Base64 byte string for each input item.
 
     Raises:
         TypeError: items is not a list or an item is not bytes-like.
@@ -68,9 +69,9 @@ def b64encode_batch_into(
 ) -> list[int]:
     """Encode each item into a matching reusable bytearray.
 
-    The two lists must have equal length and every destination must be a
-    distinct bytearray. Processing is fail-fast and non-transactional, so
-    earlier destinations remain modified when a later item fails.
+    The two lists must have equal length. Each destination must be a different
+    bytearray. The function stops at the first error. If an item fails, the
+    function does not restore destinations that it changed.
 
     Args:
         items: A list of contiguous bytes-like objects to encode.
@@ -79,12 +80,14 @@ def b64encode_batch_into(
             standard alphabet.
 
     Returns:
-        The number of bytes written to each destination, in input order.
+        The number of bytes that the function writes to each destination, in
+        input order.
 
     Raises:
         TypeError: A container, input item, or destination has an invalid type.
-        ValueError: The list lengths differ, a destination is repeated or too
-            small, or altchars is not exactly two bytes.
+        ValueError: The list lengths differ, two entries use the same
+            destination, a destination is too small, or altchars is not exactly
+            two bytes.
 
     Examples:
         >>> outputs = [bytearray(4), bytearray(4)]
@@ -105,8 +108,8 @@ def b64encode_into(
 ) -> int:
     """Encode a bytes-like object as Base64 into a reusable bytearray.
 
-    The destination keeps its size. Only the returned prefix is overwritten;
-    bytes after that prefix remain unchanged.
+    The destination keeps its size. The function changes only the prefix that
+    the return value identifies. It does not change bytes after that prefix.
 
     Args:
         s: Contiguous bytes-like data to encode.
@@ -117,7 +120,7 @@ def b64encode_into(
         wrapcol: Maximum encoded characters per line. Zero disables wrapping.
 
     Returns:
-        The number of bytes written to output.
+        The number of bytes that the function writes to output.
 
     Raises:
         TypeError: An argument has an unsupported type.
@@ -143,23 +146,23 @@ def b64decode(
 ) -> bytes:
     """Decode an ASCII string or bytes-like Base64 value.
 
-    By default this follows Python's lenient Base64 behavior. Strict alphabet
-    validation, unpadded input, a custom ignored-byte set, and canonical tail
-    bit validation are available for protocols with tighter requirements.
+    By default, the function uses Python's lenient Base64 behavior. The options
+    can require strict alphabet checks, canonical tail bits, or padded input.
+    The options can also select the ignored bytes.
 
     Args:
         s: ASCII text or bytes-like Base64 data.
         altchars: Two characters replacing "+" and "/", or None for the
             standard alphabet.
-        validate: Reject non-alphabet bytes when true. The default is lenient
-            unless ignorechars is supplied.
-        padded: Require normal padding and quartet alignment when true; accept
-            a final unpadded quantum when false.
+        validate: If true, reject bytes outside the alphabet. The function uses
+            lenient mode by default unless the caller supplies ignorechars.
+        padded: If true, require normal padding and complete four-byte groups.
+            If false, accept a final group without padding.
         ignorechars: Bytes permitted outside the alphabet in lenient mode.
         canonical: Reject non-zero unused bits in the final Base64 quantum.
 
     Returns:
-        Newly allocated decoded bytes.
+        New decoded bytes.
 
     Raises:
         binascii.Error: The input has invalid Base64 data, padding, or tail bits.
@@ -181,8 +184,9 @@ def b64decode_batch(
 ) -> list[bytes]:
     """Decode a list of padded Base64 values.
 
-    Every item uses the same alphabet and validation mode. Results preserve
-    input order; an invalid item aborts the operation without a partial list.
+    Every item uses the same alphabet and validation mode. The result order
+    matches the input order. An invalid item stops the function. The function
+    does not return a partial list.
 
     Args:
         items: A list of ASCII strings or bytes-like Base64 values.
@@ -191,7 +195,7 @@ def b64decode_batch(
         validate: Reject bytes outside the selected alphabet when true.
 
     Returns:
-        One newly allocated decoded byte string per input item.
+        One new decoded byte string for each input item.
 
     Raises:
         binascii.Error: An item contains invalid Base64 data or padding.
@@ -212,9 +216,9 @@ def b64decode_batch_into(
 ) -> list[int]:
     """Decode each padded Base64 item into a matching reusable bytearray.
 
-    Destinations retain their size and only their written prefixes change.
-    Processing is fail-fast and non-transactional: earlier destinations remain
-    modified, and the failing destination may be partly written.
+    Each destination keeps its size. The function changes only written
+    prefixes. The function stops at the first error. It does not restore prior
+    destinations. It can change part of the failing destination.
 
     Args:
         items: A list of ASCII strings or bytes-like Base64 values.
@@ -224,13 +228,15 @@ def b64decode_batch_into(
         validate: Reject bytes outside the selected alphabet when true.
 
     Returns:
-        The number of decoded bytes written to each destination.
+        The number of decoded bytes that the function writes to each
+        destination.
 
     Raises:
         binascii.Error: An item contains invalid Base64 data or padding.
         TypeError: A container, item, or destination has an invalid type.
-        ValueError: The lists differ in length, a destination is repeated or too
-            small, text is not ASCII, or altchars is not length two.
+        ValueError: The lists differ in length or two entries use the same
+            destination. The function also raises this error if a destination
+            is too small, text is not ASCII, or altchars is not length two.
 
     Examples:
         >>> outputs = [bytearray(3), bytearray(3)]
@@ -253,27 +259,28 @@ def b64decode_into(
 ) -> int:
     """Decode Base64 data into a reusable bytearray.
 
-    The options match b64decode. The destination keeps its size and bytes after
-    the returned prefix remain unchanged. On malformed input, part of the
-    destination prefix may already have been modified.
+    The options match b64decode. The destination keeps its size. The function
+    does not change bytes after the returned prefix. Malformed input can change
+    part of the destination prefix.
 
-    Native modes, including advanced ignore-character and canonical modes,
-    decode directly into the destination without a temporary decoded buffer.
+    All native modes decode into the destination. This includes custom
+    ignore-character and canonical modes. These modes do not allocate a
+    temporary decoded buffer.
 
     Args:
         s: ASCII text or bytes-like Base64 data.
         output: Destination bytearray with room for the complete result.
         altchars: Two characters replacing "+" and "/", or None for the
             standard alphabet.
-        validate: Reject non-alphabet bytes when true. The default is lenient
-            unless ignorechars is supplied.
-        padded: Require padding and quartet alignment when true; accept a final
-            unpadded quantum when false.
+        validate: If true, reject bytes outside the alphabet. The function uses
+            lenient mode by default unless the caller supplies ignorechars.
+        padded: If true, require padding and complete four-byte groups. If
+            false, accept a final group without padding.
         ignorechars: Bytes permitted outside the alphabet in lenient mode.
         canonical: Reject non-zero unused bits in the final Base64 quantum.
 
     Returns:
-        The number of decoded bytes written to output.
+        The number of decoded bytes that the function writes to output.
 
     Raises:
         binascii.Error: The input has invalid Base64 data, padding, or tail bits.
@@ -296,7 +303,7 @@ def standard_b64encode(s: ReadableBuffer) -> bytes:
         s: Contiguous bytes-like data to encode.
 
     Returns:
-        Newly allocated Base64 bytes using "+" and "/".
+        New Base64 bytes that use "+" and "/".
 
     Raises:
         TypeError: s is not a contiguous bytes-like object.
@@ -315,7 +322,7 @@ def standard_b64encode_into(s: ReadableBuffer, output: bytearray) -> int:
         output: Destination bytearray with room for the padded result.
 
     Returns:
-        The number of bytes written to output.
+        The number of bytes that the function writes to output.
 
     Raises:
         TypeError: An argument has an unsupported type.
@@ -349,14 +356,14 @@ def standard_b64decode_batch_into(items: list[str | ReadableBuffer], outputs: li
 def standard_b64decode(s: str | ReadableBuffer) -> bytes:
     """Decode padded Base64 using the standard alphabet.
 
-    Non-alphabet characters are discarded in the same lenient manner as
+    The function discards bytes outside the alphabet. This behavior matches
     Python's base64.standard_b64decode function.
 
     Args:
         s: ASCII text or bytes-like Base64 data.
 
     Returns:
-        Newly allocated decoded bytes.
+        New decoded bytes.
 
     Raises:
         binascii.Error: The remaining Base64 data has invalid padding.
@@ -377,7 +384,7 @@ def standard_b64decode_into(s: str | ReadableBuffer, output: bytearray) -> int:
         output: Destination bytearray with room for the decoded result.
 
     Returns:
-        The number of decoded bytes written to output.
+        The number of decoded bytes that the function writes to output.
 
     Raises:
         binascii.Error: The input has invalid Base64 padding.
@@ -417,7 +424,7 @@ def urlsafe_b64encode(s: ReadableBuffer, *, padded: bool = True) -> bytes:
         padded: Append trailing "=" padding when required.
 
     Returns:
-        Newly allocated Base64 bytes using "-" and "_".
+        New Base64 bytes that use "-" and "_".
 
     Raises:
         TypeError: s is not a contiguous bytes-like object.
@@ -437,7 +444,7 @@ def urlsafe_b64encode_into(s: ReadableBuffer, output: bytearray, *, padded: bool
         padded: Append trailing "=" padding when required.
 
     Returns:
-        The number of bytes written to output.
+        The number of bytes that the function writes to output.
 
     Raises:
         TypeError: An argument has an unsupported type.
@@ -455,15 +462,16 @@ def urlsafe_b64encode_into(s: ReadableBuffer, output: bytearray, *, padded: bool
 def urlsafe_b64decode(s: str | ReadableBuffer, *, padded: bool = ...) -> bytes:
     """Decode Base64 using the URL-safe alphabet.
 
-    The padded default follows CPython: true through Python 3.14 and false from
-    Python 3.15 onward.
+    CPython uses true as the padded default through Python 3.14. CPython uses
+    false from Python 3.15.
 
     Args:
         s: ASCII text or bytes-like URL-safe Base64 data.
-        padded: Require padding when true; accept an unpadded tail when false.
+        padded: If true, require padding. If false, accept a final group without
+            padding.
 
     Returns:
-        Newly allocated decoded bytes.
+        New decoded bytes.
 
     Raises:
         binascii.Error: The input has invalid Base64 data or padding.
@@ -479,16 +487,17 @@ def urlsafe_b64decode(s: str | ReadableBuffer, *, padded: bool = ...) -> bytes:
 def urlsafe_b64decode_into(s: str | ReadableBuffer, output: bytearray, *, padded: bool = ...) -> int:
     """Decode URL-safe Base64 into a reusable bytearray.
 
-    The padded default follows CPython: true through Python 3.14 and false from
-    Python 3.15 onward.
+    CPython uses true as the padded default through Python 3.14. CPython uses
+    false from Python 3.15.
 
     Args:
         s: ASCII text or bytes-like URL-safe Base64 data.
         output: Destination bytearray with room for the decoded result.
-        padded: Require padding when true; accept an unpadded tail when false.
+        padded: If true, require padding. If false, accept a final group without
+            padding.
 
     Returns:
-        The number of decoded bytes written to output.
+        The number of decoded bytes that the function writes to output.
 
     Raises:
         binascii.Error: The input has invalid Base64 data or padding.
@@ -507,11 +516,12 @@ def urlsafe_b64decode_into(s: str | ReadableBuffer, output: bytearray, *, padded
 def murmur3_32(s: ReadableBuffer, seed: int = 0) -> int:
     """Compute the canonical MurmurHash3 x86 32-bit hash.
 
-    MurmurHash3 is a fast non-cryptographic hash. The result is compatible with
-    the original x86-32 reference algorithm.
+    MurmurHash3 does not provide cryptographic security. The result matches the
+    original x86-32 reference algorithm.
 
     Args:
-        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+        s: Bytes-like data to hash. The function flattens supported
+            non-contiguous views.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -530,10 +540,12 @@ def murmur3_32(s: ReadableBuffer, seed: int = 0) -> int:
 def murmur3_x86_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
     """Compute the canonical MurmurHash3 x86 128-bit digest.
 
-    The four result words are serialized as little-endian 32-bit integers.
+    The function serializes the four result words as little-endian 32-bit
+    integers.
 
     Args:
-        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+        s: Bytes-like data to hash. The function flattens supported
+            non-contiguous views.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -552,10 +564,12 @@ def murmur3_x86_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
 def murmur3_x64_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
     """Compute the canonical MurmurHash3 x64 128-bit digest.
 
-    The two result words are serialized as little-endian 64-bit integers.
+    The function serializes the two result words as little-endian 64-bit
+    integers.
 
     Args:
-        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+        s: Bytes-like data to hash. The function flattens supported
+            non-contiguous views.
         seed: Initial unsigned 32-bit seed.
 
     Returns:
@@ -574,10 +588,11 @@ def murmur3_x64_128_digest(s: ReadableBuffer, seed: int = 0) -> bytes:
 def xxh3_64(s: ReadableBuffer, seed: int = 0) -> int:
     """Compute the canonical XXH3 64-bit hash.
 
-    XXH3 is a non-cryptographic hash designed for speed.
+    XXH3 does not provide cryptographic security.
 
     Args:
-        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+        s: Bytes-like data to hash. The function flattens supported
+            non-contiguous views.
         seed: Initial unsigned 64-bit seed.
 
     Returns:
@@ -596,11 +611,12 @@ def xxh3_64(s: ReadableBuffer, seed: int = 0) -> int:
 def xxh3_128(s: ReadableBuffer, seed: int = 0) -> int:
     """Compute the canonical XXH3 128-bit hash.
 
-    The low 64-bit word occupies the least significant half of the returned
-    integer. XXH3 is non-cryptographic.
+    The returned integer stores the low 64-bit word in its least significant
+    half. XXH3 does not provide cryptographic security.
 
     Args:
-        s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+        s: Bytes-like data to hash. The function flattens supported
+            non-contiguous views.
         seed: Initial unsigned 64-bit seed.
 
     Returns:
@@ -624,7 +640,8 @@ def xxh3_64_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
-        One unsigned 64-bit integer per item, in input order.
+        The function returns one unsigned 64-bit integer for each item, in input
+        order.
 
     Raises:
         TypeError: The container, an item, or seed has an invalid type.
@@ -639,8 +656,8 @@ def xxh3_64_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
 def xxh3_64_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int = 0) -> int:
     """Write XXH3 64-bit hashes as packed little-endian bytes.
 
-    Inputs and capacity are validated before output is mutated. Bytes after the
-    written prefix remain unchanged.
+    The function checks all inputs and the output capacity before it changes
+    output. It does not change bytes after the written prefix.
 
     Args:
         items: A list of bytes-like objects to hash.
@@ -648,7 +665,7 @@ def xxh3_64_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
-        The total number of bytes written.
+        The total number of bytes that the function writes.
 
     Raises:
         TypeError: A container, item, destination, or seed has an invalid type.
@@ -672,7 +689,8 @@ def xxh3_128_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
-        One unsigned 128-bit integer per item, in input order.
+        The function returns one unsigned 128-bit integer for each item, in
+        input order.
 
     Raises:
         TypeError: The container, an item, or seed has an invalid type.
@@ -687,8 +705,8 @@ def xxh3_128_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
 def xxh3_128_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int = 0) -> int:
     """Write XXH3 128-bit hashes as packed little-endian bytes.
 
-    Inputs and capacity are validated before output is mutated. Bytes after the
-    written prefix remain unchanged.
+    The function checks all inputs and the output capacity before it changes
+    output. It does not change bytes after the written prefix.
 
     Args:
         items: A list of bytes-like objects to hash.
@@ -696,7 +714,7 @@ def xxh3_128_batch_into(items: list[ReadableBuffer], output: bytearray, seed: in
         seed: Initial unsigned 64-bit seed shared by every item.
 
     Returns:
-        The total number of bytes written.
+        The total number of bytes that the function writes.
 
     Raises:
         TypeError: A container, item, destination, or seed has an invalid type.
@@ -741,10 +759,10 @@ class murmur3_x86_32:
         ...
 
     def update(self, data: ReadableBuffer) -> None:
-        """Append bytes to the hash state.
+        """Add bytes to the hash state.
 
         Args:
-            data: Bytes-like data to append.
+            data: Bytes-like data to add.
 
         Returns:
             None.
@@ -759,7 +777,7 @@ class murmur3_x86_32:
         ...
 
     def digest(self) -> bytes:
-        """Return the current digest without consuming the state.
+        """Return the current digest without changing the state.
 
         Returns:
             A four-byte little-endian digest.
@@ -839,10 +857,10 @@ class murmur3_x86_128:
         ...
 
     def update(self, data: ReadableBuffer) -> None:
-        """Append bytes to the hash state.
+        """Add bytes to the hash state.
 
         Args:
-            data: Bytes-like data to append.
+            data: Bytes-like data to add.
 
         Returns:
             None.
@@ -857,7 +875,7 @@ class murmur3_x86_128:
         ...
 
     def digest(self) -> bytes:
-        """Return the current digest without consuming the state.
+        """Return the current digest without changing the state.
 
         Returns:
             A 16-byte digest of four little-endian 32-bit words.
@@ -938,10 +956,10 @@ class murmur3_x64_128:
         ...
 
     def update(self, data: ReadableBuffer) -> None:
-        """Append bytes to the hash state.
+        """Add bytes to the hash state.
 
         Args:
-            data: Bytes-like data to append.
+            data: Bytes-like data to add.
 
         Returns:
             None.
@@ -956,7 +974,7 @@ class murmur3_x64_128:
         ...
 
     def digest(self) -> bytes:
-        """Return the current digest without consuming the state.
+        """Return the current digest without changing the state.
 
         Returns:
             A 16-byte digest of two little-endian 64-bit words.

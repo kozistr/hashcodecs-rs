@@ -1,6 +1,6 @@
 # MurmurHash3 API Reference
 
-The functions and incremental hashers below are rendered from the authoritative typed API declaration.
+This reference uses the authoritative typed API declaration for all functions and incremental hashers.
 
 ::: hashcodecs._hashcodecs
     options:

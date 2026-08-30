@@ -1,7 +1,9 @@
+//! Manage uninitialized Base64 output allocations.
+
 use core::mem::{ManuallyDrop, MaybeUninit};
 
 #[inline]
-pub(super) fn uninitialized_output(length: usize) -> Vec<MaybeUninit<u8>> {
+pub(super) fn allocate_uninitialized_output(length: usize) -> Vec<MaybeUninit<u8>> {
     let mut output = Vec::with_capacity(length);
     // `MaybeUninit<u8>` permits every bit pattern, including uninitialized memory.
     unsafe { output.set_len(length) };
@@ -9,9 +11,12 @@ pub(super) fn uninitialized_output(length: usize) -> Vec<MaybeUninit<u8>> {
 }
 
 #[inline]
-pub(super) unsafe fn initialized_output(output: Vec<MaybeUninit<u8>>, length: usize) -> Vec<u8> {
+pub(super) unsafe fn assume_output_initialized(
+    output: Vec<MaybeUninit<u8>>,
+    length: usize,
+) -> Vec<u8> {
     debug_assert!(length <= output.len());
     let mut output = ManuallyDrop::new(output);
-    // The caller guarantees that every byte in the returned prefix was written.
+    // The caller guarantees that an operation wrote every byte in the returned prefix.
     unsafe { Vec::from_raw_parts(output.as_mut_ptr().cast(), length, output.capacity()) }
 }

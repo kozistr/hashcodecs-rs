@@ -1,7 +1,7 @@
 # Base64 API Reference
 
-The functions below are rendered from the authoritative typed API declaration. They describe the exact call signatures
-and behavior exposed by `hashcodecs.base64`.
+This reference uses the authoritative typed API declaration. It shows the exact signatures and behavior of
+`hashcodecs.base64`.
 
 ::: hashcodecs._hashcodecs
     options:

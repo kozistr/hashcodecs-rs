@@ -15,32 +15,30 @@ mod tables;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) mod x86_contracts;
 
-use super::dispatch::decode_simd_ptr;
-use super::output::{initialized_output, uninitialized_output};
+use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
+use super::runtime_dispatch::decode_with_runtime_backend;
 use super::{
     Base64Error, DECODE_STORE_PADDING, DecodeAlphabet, INVALID_VALUE, MIXED_DECODE,
     STANDARD_DECODE, URLSAFE_DECODE,
 };
 
-/// Decodes padded RFC 4648 Base64 with the standard alphabet.
+/// Decodes padded RFC 4648 Base64 input with the standard alphabet.
 ///
-/// The input must be quartet-aligned, use only the standard alphabet, and have
-/// valid trailing padding. Unlike Python's lenient decoder, this Rust API does
-/// not ignore whitespace or other non-alphabet bytes. Non-zero unused bits in
-/// the final quantum are accepted rather than treated as a canonicality error.
+/// The input must contain complete four-byte groups and valid trailing padding.
+/// This Rust API rejects whitespace and bytes outside the standard alphabet.
+/// The function accepts nonzero unused bits in the final quantum.
 ///
 /// # Arguments
 ///
-/// * input - The padded standard Base64 bytes to decode.
+/// * `input` - Contains the padded standard Base64 bytes to decode.
 ///
 /// # Returns
 ///
-/// A newly allocated vector containing the decoded bytes.
+/// The function returns a new vector that contains the decoded bytes.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::InvalidInput for invalid characters, padding, or
-/// quartet alignment.
+/// The function returns `Base64Error::InvalidInput` for invalid characters, padding, or group alignment.
 ///
 /// # Examples
 ///
@@ -54,24 +52,22 @@ pub fn b64decode(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
     b64decode_with_alphabet(input, false)
 }
 
-/// Decodes padded RFC 4648 Base64 with the URL-safe alphabet.
+/// Decodes padded RFC 4648 Base64 input with the URL-safe alphabet.
 ///
-/// The input must be quartet-aligned, use only the URL-safe alphabet, and have
-/// valid trailing padding. Non-zero unused bits in the final quantum are
-/// accepted rather than treated as a canonicality error.
+/// The input must contain complete four-byte groups and valid trailing padding.
+/// The input must use the URL-safe alphabet. The function accepts nonzero unused bits in the final quantum.
 ///
 /// # Arguments
 ///
-/// * input - The padded URL-safe Base64 bytes to decode.
+/// * `input` - Contains the padded URL-safe Base64 bytes to decode.
 ///
 /// # Returns
 ///
-/// A newly allocated vector containing the decoded bytes.
+/// The function returns a new vector that contains the decoded bytes.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::InvalidInput for invalid characters, padding, or
-/// quartet alignment.
+/// The function returns `Base64Error::InvalidInput` for invalid characters, padding, or group alignment.
 ///
 /// # Examples
 ///
@@ -84,24 +80,22 @@ pub fn b64decode_urlsafe(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
     b64decode_with_alphabet(input, true)
 }
 
-/// Calculates the decoded length of structurally valid padded Base64.
+/// Returns the decoded length for padded Base64 with a valid structure.
 ///
-/// This function validates quartet alignment and the placement and count of
-/// trailing = bytes. It does not validate alphabet characters; that happens
-/// while decoding.
+/// This function checks group alignment and the location and count of trailing `=` bytes.
+/// It checks alphabet characters during decoding, not during this length calculation.
 ///
 /// # Arguments
 ///
-/// * input - Padded Base64 whose output length is required.
+/// * `input` - Contains the padded Base64 input to measure.
 ///
 /// # Returns
 ///
-/// The exact decoded byte length.
+/// The function returns the exact decoded byte length.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::InvalidInput when the length or padding layout is
-/// invalid.
+/// The function returns `Base64Error::InvalidInput` if the length or padding layout is invalid.
 ///
 /// # Examples
 ///
@@ -119,26 +113,25 @@ pub fn b64decoded_len(input: &[u8]) -> Result<usize, Base64Error> {
     Ok(layout.output_len)
 }
 
-/// Decodes standard padded Base64 into a caller-provided destination.
+/// Decodes padded standard Base64 input into caller-provided storage.
 ///
-/// The destination may be larger than necessary. On success, the returned value
-/// is the initialized prefix length; bytes after that prefix are left unchanged.
-/// If the input is invalid, the destination prefix may have been modified.
+/// The destination can contain more space than the result requires.
+/// The function returns the number of bytes that it writes. It does not change bytes after this prefix.
+/// Invalid input can change part of the destination prefix.
 ///
 /// # Arguments
 ///
-/// * input - The padded standard Base64 bytes to decode.
-/// * output - Storage for the complete decoded result.
+/// * `input` - Contains the padded standard Base64 bytes to decode.
+/// * `output` - Provides storage for the complete decoded result.
 ///
 /// # Returns
 ///
-/// The number of decoded bytes written to the start of output.
+/// The function returns the number of decoded bytes that it writes to the start of `output`.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::OutputTooSmall before decoding if output is too short.
-/// Returns Base64Error::InvalidInput for invalid Base64; in that case a prefix
-/// of output may already have changed.
+/// The function returns `Base64Error::OutputTooSmall` before decoding if `output` is too short.
+/// It returns `Base64Error::InvalidInput` for invalid Base64. This error can occur after the function changes a prefix.
 ///
 /// # Examples
 ///
@@ -154,26 +147,25 @@ pub fn b64decode_into(input: &[u8], output: &mut [u8]) -> Result<usize, Base64Er
     b64decode_into_with_alphabet(input, output, false)
 }
 
-/// Decodes URL-safe padded Base64 into a caller-provided destination.
+/// Decodes padded URL-safe Base64 input into caller-provided storage.
 ///
-/// The destination may be larger than necessary. On success, the returned value
-/// is the initialized prefix length; bytes after that prefix are left unchanged.
-/// If the input is invalid, the destination prefix may have been modified.
+/// The destination can contain more space than the result requires.
+/// The function returns the number of bytes that it writes. It does not change bytes after this prefix.
+/// Invalid input can change part of the destination prefix.
 ///
 /// # Arguments
 ///
-/// * input - The padded URL-safe Base64 bytes to decode.
-/// * output - Storage for the complete decoded result.
+/// * `input` - Contains the padded URL-safe Base64 bytes to decode.
+/// * `output` - Provides storage for the complete decoded result.
 ///
 /// # Returns
 ///
-/// The number of decoded bytes written to the start of output.
+/// The function returns the number of decoded bytes that it writes to the start of `output`.
 ///
 /// # Errors
 ///
-/// Returns Base64Error::OutputTooSmall before decoding if output is too short.
-/// Returns Base64Error::InvalidInput for invalid Base64; in that case a prefix
-/// of output may already have changed.
+/// The function returns `Base64Error::OutputTooSmall` before decoding if `output` is too short.
+/// It returns `Base64Error::InvalidInput` for invalid Base64. This error can occur after the function changes a prefix.
 ///
 /// # Examples
 ///
@@ -222,7 +214,7 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     } else {
         layout.output_len
     };
-    let mut output = uninitialized_output(allocation_len);
+    let mut output = allocate_uninitialized_output(allocation_len);
     let alphabet = if urlsafe {
         DecodeAlphabet::UrlSafe
     } else {
@@ -239,11 +231,11 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
             padded_stores,
         )?
     };
-    // The result prefix is fully initialized; the private padding is discarded.
-    Ok(unsafe { initialized_output(output, layout.output_len) })
+    // The decoder initializes the result prefix. The function discards the private padding.
+    Ok(unsafe { assume_output_initialized(output, layout.output_len) })
 }
 
-/// Returns the layout for Base64 input whose final padding is omitted.
+/// Returns the layout for Base64 input without final padding.
 ///
 /// The returned layout models the missing padding without allocating or
 /// inspecting the input bytes. Alphabet validation remains part of decoding.
@@ -293,8 +285,8 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet(
 ) -> Result<(), Base64Error> {
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
-    // The slice has exactly the required initialized storage, so only bounded
-    // stores are permitted.
+    // The slice contains exactly the required initialized storage.
+    // The decoder must keep all stores within this slice.
     unsafe { decode_to_ptr_with_layout(input, output.as_mut_ptr(), layout, alphabet, false) }
 }
 
@@ -360,8 +352,8 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
 ) -> Result<(), Base64Error> {
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
-    // Transactional SIMD error handling writes only complete, validated blocks,
-    // so a lenient caller can safely fall back without modifying the suffix.
+    // Transactional SIMD error handling writes only complete, validated blocks.
+    // A lenient caller can use its fallback without changing the suffix.
     unsafe {
         decode_to_ptr_with_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false, true)
     }
@@ -386,7 +378,7 @@ unsafe fn decode_to_ptr_with_layout_mode(
         (0, 0)
     } else {
         unsafe {
-            decode_simd_ptr(
+            decode_with_runtime_backend(
                 &input[..simd_len],
                 output,
                 alphabet,

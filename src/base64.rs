@@ -1,19 +1,17 @@
-//! Padded standard and URL-safe Base64 encoding and decoding.
+//! This module encodes and decodes padded standard or URL-safe Base64 data.
 //!
-//! Allocating functions return owned output, while the `_into` variants write
-//! into caller-provided storage. Decoders reject missing or malformed padding.
-//! They intentionally permit non-zero unused bits in the final quantum, so
-//! inputs such as `AB==` decode successfully; protocols requiring a canonical
-//! representation must validate those trailing bits separately.
+//! Functions without an `_into` suffix allocate their output. Functions with this suffix write to caller-provided storage.
+//! Decoders reject missing or malformed padding. They accept nonzero unused bits in the final quantum.
+//! For example, the decoders accept `AB==`. Protocols that require canonical data must check the unused bits.
 
 mod alphabet;
 mod backend;
 mod decode;
 mod encode;
 mod error;
-mod output;
+mod output_buffer;
 
-mod dispatch;
+mod runtime_dispatch;
 
 pub use decode::{
     b64decode, b64decode_into, b64decode_urlsafe, b64decode_urlsafe_into, b64decoded_len,

@@ -5,7 +5,9 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::long::{LongInput, Secret, initial_accumulator, long_schedule};
+use crate::xxhash::long_inputs::{
+    LongInput, Secret, build_long_input_schedule, initial_accumulator,
+};
 use crate::xxhash::primitives::P32_1;
 
 #[repr(align(64))]
@@ -54,13 +56,13 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
 #[target_feature(enable = "ssse3")]
 /// # Safety
 /// The caller must have detected SSSE3 support.
-pub(in crate::xxhash::long) unsafe fn accumulate(
+pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     input: LongInput<'_>,
     secret: &Secret,
 ) -> [u64; 8] {
     let data = input.as_bytes();
     let secret = secret.as_bytes();
-    let schedule = long_schedule(input);
+    let schedule = build_long_input_schedule(input);
     let mut acc = AlignedAccumulator(initial_accumulator());
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;

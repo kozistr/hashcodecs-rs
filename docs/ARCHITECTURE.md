@@ -23,9 +23,9 @@ The scalar implementations set the portability and correctness baseline. Runtime
 | Path | Responsibility |
 | --- | --- |
 | `src/backend.rs` | Process-wide CPU capability detection shared by dispatchers. |
-| `src/base64.rs`, `src/base64/` | Base64 façade; encode/decode operations; alphabets; output ownership; dispatch; scalar and SIMD kernels. |
-| `src/murmur3.rs`, `src/murmur3/` | MurmurHash3 façade; x86-32, x86-128, and x64-128 variants; incremental buffering; dispatch. |
-| `src/xxhash.rs`, `src/xxhash/` | XXH3 façade; short-input formulas; long-input accumulation; batching; scalar and SIMD kernels. |
+| `src/base64.rs`, `src/base64/` | Base64 public API, operations, alphabets, output buffers, runtime dispatch, and kernels. |
+| `src/murmur3.rs`, `src/murmur3/` | MurmurHash3 public API, variants, incremental buffers, and dispatch. |
+| `src/xxhash.rs`, `src/xxhash/` | XXH3 public API, length-specific formulas, long-input accumulation, batching, and kernels. |
 | `src/bindings/mod.rs` | CPython extension composition root for public functions and classes. |
 | `src/bindings/arguments.rs`, `objects.rs`, `runtime.rs` | Shared CPython parsing, object access, function registration, and GIL policy. |
 | `src/bindings/{base64,murmur3,xxhash}/` | Algorithm-specific CPython adapters. |
@@ -61,7 +61,7 @@ implementation under `src/<algorithm>/`. The implementation follows the algorith
 | --- | --- | --- |
 | Base64 | `encode` and `decode`, then ISA kernel | Encoding and decoding have separate validation, sizing, and kernel flows; flat ISA files keep hot-path ownership visible. |
 | MurmurHash3 | `x86_32`, `x86_128`, and `x64_128` | Each canonical variant owns one-shot hashing, incremental state, tail handling, and finalization. |
-| XXH3 | `short`, `long`, and `batch` | XXH3-64 and XXH3-128 share primitives and the long-input accumulator. |
+| XXH3 | `short_inputs`, `long_inputs`, and `batch` | XXH3-64 and XXH3-128 share primitives and the long-input accumulator. |
 
 The modules share dependency direction and visibility rules, while each algorithm uses a file layout suited to its
 implementation. Hot paths use direct calls and static dispatch; module boundaries add no runtime traits or heap allocation.
@@ -80,8 +80,8 @@ value, which keeps feature detection out of individual calls. Explicit checks gu
 
 ### Base64
 
-`base64.rs` reexports the public operations and error type. `alphabet.rs` owns lookup tables, `output.rs` owns
-allocation initialization, and the `encode` and `decode` modules own their operation flows. Their architecture
+`base64.rs` reexports the public operations and error type. `alphabet.rs` owns lookup tables.
+`output_buffer.rs` owns allocation initialization. The `encode` and `decode` modules own their operation flows. Their architecture
 kernels are flat operation children such as `encode/avx2.rs`, `encode/ssse3.rs`, `decode/sse41.rs`, and
 `decode/aarch64.rs`; `decode/x86_contracts.rs` holds contracts shared by multiple x86 decoders. The runtime backend
 prefers AVX-512 VBMI, AVX2, SSE4.1, SSSE3, NEON, then scalar when supported. Scalar code handles short inputs and
@@ -111,10 +111,10 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 
 ### XXH3
 
-`hash.rs` selects the canonical length class, `short.rs` contains the 0-240-byte formulas, and `long.rs` owns
-secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
-`long/{aarch64,avx2,avx512,ssse3}.rs` contains the ISA kernels beside the scalar long-input flow and its CPU
-selection. Those kernels handle inputs longer than 240 bytes.
+`one_shot.rs` selects the input-length class. `short_inputs.rs` contains the formulas for 0 to 240 bytes.
+`long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
+`long_inputs/aarch64.rs` and `long_inputs/x86/` contain the ISA kernels.
+The scalar long-input flow and backend selection use the same module. These kernels handle inputs longer than 240 bytes.
 
 The AVX2 one-shot kernel splits each full 1,024-byte block across four accumulator chains. It also splits tails
 that contain at least four stripes, including the final overlapping stripe. The kernel reduces the chains before

@@ -1,7 +1,6 @@
-//! Fast binary codecs with portable APIs and runtime SIMD dispatch.
+//! This crate implements binary codecs and non-cryptographic hashes.
 //!
-//! Base64 and XXH3 dispatch among in-crate AVX-512, AVX2, SSE4.1, SSSE3, NEON,
-//! and scalar kernels at runtime.
+//! The runtime selects an in-crate AVX-512, AVX2, SSE4.1, SSSE3, NEON, or scalar kernel.
 //!
 //! # Rust API
 //!
@@ -19,8 +18,8 @@
 
 #![deny(missing_docs)]
 
-// Python extension builds use mimalloc without imposing an allocator on Rust consumers.
-// Native allocators and CPU intrinsics are outside Kani's and Miri's interpreters.
+// Python extension builds use mimalloc. Rust crate consumers keep their selected allocator.
+// Kani and Miri cannot interpret native allocators or CPU intrinsics.
 #[cfg(all(feature = "extension-module", not(any(kani, miri))))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

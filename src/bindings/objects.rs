@@ -20,8 +20,8 @@ where
         let list: Bound<'py, PyList> =
             Bound::from_owned_ptr_or_err(py, ffi::PyList_New(length))?.cast_into_unchecked();
         for index in 0..length {
-            // PyList_SET_ITEM steals the new reference. The list is not
-            // published until every slot has been initialized.
+            // PyList_SET_ITEM steals the new reference.
+            // The function publishes the list after PyList_SET_ITEM initializes every slot.
             ffi::PyList_SET_ITEM(list.as_ptr(), index, item(index as usize)?.into_ptr());
         }
         Ok(list)

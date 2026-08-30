@@ -48,6 +48,14 @@ fn canonical_unpadded_input(input: &[u8], altchars: Option<[u8; 2]>) -> bool {
     })
 }
 
+fn empty_ignorechars(ignorechars: Option<&Bound<'_, PyAny>>) -> bool {
+    ignorechars.is_some_and(|value| {
+        value
+            .cast::<PyBytes>()
+            .is_ok_and(|bytes| bytes.as_bytes().is_empty())
+    })
+}
+
 fn decode_plan_allocating_inner<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, 'py>,
@@ -61,11 +69,7 @@ fn decode_plan_allocating_inner<'py>(
         ..
     } = options;
     let strict_mode = options.strict_mode();
-    let empty_ignorechars = ignorechars.is_some_and(|value| {
-        value
-            .cast::<PyBytes>()
-            .is_ok_and(|bytes| bytes.as_bytes().is_empty())
-    });
+    let empty_ignorechars = empty_ignorechars(ignorechars);
     if altchars.is_none()
         && padded
         && ignorechars.is_none_or(|_| empty_ignorechars)
@@ -246,6 +250,37 @@ fn decode_plan_into_inner<'py>(
     } else {
         DecodeAlphabet::Standard
     };
+
+    let empty_ignorechars = empty_ignorechars(ignorechars);
+    if altchars.is_none()
+        && padded
+        && ignorechars.is_none_or(|_| empty_ignorechars)
+        && (canonical || empty_ignorechars)
+    {
+        let canonical_input = !canonical
+            || unsafe {
+                input.with_bytes(|input| {
+                    let padding =
+                        usize::from(input.ends_with(b"=")) + usize::from(input.ends_with(b"=="));
+                    let data = &input[..input.len().saturating_sub(padding)];
+                    data.last().is_none_or(|last| {
+                        !STANDARD_ALPHABET.contains(last) || canonical_padding(data)
+                    })
+                })
+            };
+        if canonical_input
+            && let Ok(written) = decode_strict_into(
+                input,
+                output,
+                DecodeAlphabet::Standard,
+                // Any prefix written before a rejected attempt is fully
+                // validated and safe for the advanced fallback to overwrite.
+                true,
+            )?
+        {
+            return Ok(written);
+        }
+    }
 
     let direct = if ignorechars.is_none() && !canonical && (padded || !strict_mode) {
         decode_strict_into_with_altchars(py, input, output, altchars, transactional_errors)?

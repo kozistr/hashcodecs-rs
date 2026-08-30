@@ -1008,6 +1008,33 @@ def test_advanced_decode_fallback_edge_cases() -> None:
     assert output == b'abc'
 
 
+@pytest.mark.parametrize(
+    'kwargs',
+    [
+        {'canonical': True},
+        {'ignorechars': b''},
+        {'validate': False, 'ignorechars': b''},
+    ],
+)
+def test_standard_decode_into_strict_fast_paths(kwargs: dict[str, object]) -> None:
+    payload = bytes(range(256)) * 64
+    encoded = stdlib_base64.b64encode(payload)
+    output = bytearray([0xA5] * (len(payload) + 16))
+
+    assert base64.b64decode_into(encoded, output, **kwargs) == len(payload)
+    assert output[: len(payload)] == payload
+    assert output[len(payload) :] == bytes([0xA5] * 16)
+
+    malformed = bytearray([0xA5] * 8)
+    if kwargs.get('validate') is False:
+        assert base64.b64decode_into(b'AB==!', malformed, **kwargs) == 1
+        assert malformed == b'\x00' + bytes([0xA5] * 7)
+    else:
+        with pytest.raises(binascii.Error):
+            base64.b64decode_into(b'AB==!', malformed, **kwargs)
+        assert malformed == bytes([0xA5] * 8)
+
+
 def test_advanced_decode_native_staging_and_dispatch_paths() -> None:
     payload = bytes(range(256)) * 32 + b'native advanced decoder tail'
     encoded = stdlib_base64.b64encode(payload)

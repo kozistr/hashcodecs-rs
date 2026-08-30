@@ -6,23 +6,53 @@ use super::super::primitives::P32_1;
 use super::{LongInput, Secret, initial_accumulator, long_schedule};
 
 #[inline(always)]
+unsafe fn compiler_guard(mut value: uint64x2_t) -> uint64x2_t {
+    unsafe {
+        std::arch::asm!(
+            "/* {value:v} */",
+            value = inout(vreg) value,
+            options(nomem, nostack, preserves_flags),
+        )
+    };
+    value
+}
+
+#[inline(always)]
 unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {
-    for vector in 0..4 {
+    for vector in (0..4).step_by(2) {
         let byte_offset = vector * 16;
+        let next_byte_offset = byte_offset + 16;
         let acc_offset = vector * 2;
 
         unsafe {
-            let input = vreinterpretq_u64_u8(vld1q_u8(data.add(byte_offset)));
-            let key = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
+            let input_lo = vreinterpretq_u64_u8(vld1q_u8(data.add(byte_offset)));
+            let input_hi = vreinterpretq_u64_u8(vld1q_u8(data.add(next_byte_offset)));
+            let key_lo = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
+            let key_hi = vreinterpretq_u64_u8(vld1q_u8(secret.add(next_byte_offset)));
 
-            let keyed = veorq_u64(input, key);
-            let product = vmull_u32(vmovn_u64(keyed), vshrn_n_u64::<32>(keyed));
-            let swapped = vextq_u64::<1>(input, input);
+            let keyed_lo = veorq_u64(input_lo, key_lo);
+            let keyed_hi = veorq_u64(input_hi, key_hi);
+            let unzipped = vuzpq_u32(
+                vreinterpretq_u32_u64(keyed_lo),
+                vreinterpretq_u32_u64(keyed_hi),
+            );
+            let low_words = unzipped.0;
+            let high_words = unzipped.1;
 
-            let acc_offset_ptr = acc.as_mut_ptr().add(acc_offset);
-            let old = vld1q_u64(acc_offset_ptr);
+            let swapped_lo = vextq_u64::<1>(input_lo, input_lo);
+            let swapped_hi = vextq_u64::<1>(input_hi, input_hi);
+            // Keep LLVM from lengthening the multiply dependency chain by
+            // folding the swapped-data addition into the accumulator first.
+            let sum_lo = compiler_guard(vmlal_u32(
+                swapped_lo,
+                vget_low_u32(low_words),
+                vget_low_u32(high_words),
+            ));
+            let sum_hi = compiler_guard(vmlal_high_u32(swapped_hi, low_words, high_words));
 
-            vst1q_u64(acc_offset_ptr, vaddq_u64(vaddq_u64(old, swapped), product))
+            let acc_ptr = acc.as_mut_ptr().add(acc_offset);
+            vst1q_u64(acc_ptr, vaddq_u64(vld1q_u64(acc_ptr), sum_lo));
+            vst1q_u64(acc_ptr.add(2), vaddq_u64(vld1q_u64(acc_ptr.add(2)), sum_hi));
         }
     }
 }

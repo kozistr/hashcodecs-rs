@@ -119,7 +119,7 @@ fn premix_sse41(blocks: __m128i) -> __m128i {
 
 #[inline(always)]
 /// # Safety
-/// The selected backend must be supported by the current CPU.
+/// The current CPU must support the selected backend.
 pub(in crate::murmur3) unsafe fn try_mix_x86_32_body(
     blocks: FullBlocks<'_, 4>,
     hash: &mut u32,

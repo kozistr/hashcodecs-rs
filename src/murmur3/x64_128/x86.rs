@@ -164,8 +164,8 @@ fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
 
 #[inline(always)]
 /// # Safety
-/// The selected backend and BMI2 flag must describe features available on the
-/// current CPU.
+/// The current CPU must support the selected backend.
+/// The BMI2 flag must match the current CPU.
 pub(in crate::murmur3) unsafe fn try_mix_x64_128_body(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u64; 2],

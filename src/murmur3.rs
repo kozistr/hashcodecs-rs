@@ -1,7 +1,6 @@
-//! MurmurHash3 reference-compatible functions with runtime SIMD dispatch.
+//! This module implements reference-compatible MurmurHash3 functions.
 //!
-//! SIMD kernels premix independent input words in parallel. The canonical
-//! loop-carried state transitions remain ordered exactly as specified.
+//! SIMD kernels mix independent input words in parallel. The kernels keep the specified order for dependent state transitions.
 
 mod block_buffer;
 mod primitives;

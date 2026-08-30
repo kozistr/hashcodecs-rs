@@ -1,3 +1,5 @@
+//! Process XXH3 inputs that contain more than 240 bytes.
+
 #[cfg(any(
     all(target_arch = "aarch64", target_endian = "little"),
     target_arch = "x86",
@@ -21,7 +23,7 @@ use x86::{avx2, avx2_batch, avx512, ssse3};
 use super::primitives::*;
 
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
-pub(super) fn long_accumulate_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     scalar::accumulate(input, secret)
 }
 
@@ -139,7 +141,7 @@ impl Secret {
 static DEFAULT_SECRET: Secret = Secret(SECRET);
 
 #[inline]
-pub(super) fn init_secret_scalar(seed: u64) -> Secret {
+pub(super) fn initialize_secret_scalar(seed: u64) -> Secret {
     let mut secret = SECRET;
     for offset in (0..192).step_by(16) {
         let lo = u64le(&SECRET, offset).wrapping_add(seed);
@@ -153,11 +155,11 @@ pub(super) fn init_secret_scalar(seed: u64) -> Secret {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[cfg(test)]
 #[inline]
-pub(super) fn init_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> Secret {
+pub(super) fn initialize_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> Secret {
     if capabilities.supports(SimdBackend::Avx2) {
         unsafe { avx2::init_secret(seed) }
     } else {
-        init_secret_scalar(seed)
+        initialize_secret_scalar(seed)
     }
 }
 
@@ -192,7 +194,7 @@ impl LongSchedule {
 }
 
 #[inline]
-pub(super) fn long_schedule(input: LongInput<'_>) -> LongSchedule {
+pub(super) fn build_long_input_schedule(input: LongInput<'_>) -> LongSchedule {
     let length = input.len();
     let full_blocks = (length - 1) / 1024;
     let tail_offset = full_blocks * 1024;
@@ -240,7 +242,7 @@ type X86Kernel = unsafe fn(LongInput<'_>, &Secret) -> [u64; 8];
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn x86_kernel(backend: SimdBackend) -> Option<X86Kernel> {
+pub(super) fn select_x86_accumulation_kernel(backend: SimdBackend) -> Option<X86Kernel> {
     match backend {
         SimdBackend::Ssse3 | SimdBackend::Sse41 => Some(ssse3::accumulate),
         SimdBackend::Avx2 => Some(avx2::accumulate),
@@ -257,7 +259,7 @@ pub(super) unsafe fn accumulate_x86(
     secret: &Secret,
     backend: SimdBackend,
 ) -> [u64; 8] {
-    let Some(kernel) = x86_kernel(backend) else {
+    let Some(kernel) = select_x86_accumulation_kernel(backend) else {
         return scalar::accumulate(input, secret);
     };
     unsafe { kernel(input, secret) }
@@ -309,8 +311,8 @@ impl LongEngine {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
-        let selected = capabilities.best(&X86_BACKEND_PREFERENCE);
-        let backend = match x86_kernel(selected) {
+        let selected = capabilities.select_supported_backend(&X86_BACKEND_PREFERENCE);
+        let backend = match select_x86_accumulation_kernel(selected) {
             Some(kernel) => LongBackend::X86(kernel),
             None => LongBackend::Scalar,
         };
@@ -329,7 +331,7 @@ impl LongEngine {
         if self.avx2 {
             return Some(unsafe { avx2::init_secret(seed) });
         }
-        Some(init_secret_scalar(seed))
+        Some(initialize_secret_scalar(seed))
     }
 
     #[inline(always)]
@@ -484,13 +486,13 @@ impl LongEngine {
     }
 }
 
-pub(super) fn xxh3_64_long(input: LongInput<'_>, seed: u64) -> u64 {
+pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
     let engine = LongEngine::new();
     let derived = engine.derive_secret(seed);
     engine.hash(input, engine.secret(&derived), finalize_long_64)
 }
 
-pub(super) fn xxh3_128_long(input: LongInput<'_>, seed: u64) -> [u64; 2] {
+pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 2] {
     let engine = LongEngine::new();
     let derived = engine.derive_secret(seed);
     engine.hash(input, engine.secret(&derived), finalize_long_128)

@@ -20,10 +20,11 @@ static mut METHODS: [ffi::PyMethodDef; 7] = [
 
 Compute the canonical XXH3 64-bit hash.
 
-XXH3 is a non-cryptographic hash designed for speed.
+XXH3 does not provide cryptographic security.
 
 Args:
-    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
     seed: Initial unsigned 64-bit seed.
 
 Returns:
@@ -49,11 +50,12 @@ Examples:
 
 Compute the canonical XXH3 128-bit hash.
 
-The low 64-bit word occupies the least significant half of the returned
-integer. XXH3 is non-cryptographic.
+The returned integer stores the low 64-bit word in its least significant
+half. XXH3 does not provide cryptographic security.
 
 Args:
-    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
     seed: Initial unsigned 64-bit seed.
 
 Returns:
@@ -84,7 +86,8 @@ Args:
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
-    One unsigned 64-bit integer per item, in input order.
+    The function returns one unsigned 64-bit integer for each item, in input
+    order.
 
 Raises:
     TypeError: The container, an item, or seed has an invalid type.
@@ -111,7 +114,8 @@ Args:
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
-    One unsigned 128-bit integer per item, in input order.
+    The function returns one unsigned 128-bit integer for each item, in
+    input order.
 
 Raises:
     TypeError: The container, an item, or seed has an invalid type.
@@ -133,8 +137,8 @@ Examples:
 
 Write XXH3 64-bit hashes as packed little-endian bytes.
 
-Inputs and capacity are validated before output is mutated. Bytes after the
-written prefix remain unchanged.
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
 
 Args:
     items: A list of bytes-like objects to hash.
@@ -142,7 +146,7 @@ Args:
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
-    The total number of bytes written.
+    The total number of bytes that the function writes.
 
 Raises:
     TypeError: A container, item, destination, or seed has an invalid type.
@@ -168,8 +172,8 @@ Examples:
 
 Write XXH3 128-bit hashes as packed little-endian bytes.
 
-Inputs and capacity are validated before output is mutated. Bytes after the
-written prefix remain unchanged.
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
 
 Args:
     items: A list of bytes-like objects to hash.
@@ -177,7 +181,7 @@ Args:
     seed: Initial unsigned 64-bit seed shared by every item.
 
 Returns:
-    The total number of bytes written.
+    The total number of bytes that the function writes.
 
 Raises:
     TypeError: A container, item, destination, or seed has an invalid type.

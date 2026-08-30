@@ -121,7 +121,7 @@ pub(super) fn classify_ascii_ssse3(
     high_classes: __m128i,
     low_classes: __m128i,
 ) -> (__m128i, __m128i) {
-    // Invalid high/low nibble pairs share a class bit; valid pairs produce zero.
+    // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
     let mask = _mm_set1_epi8(0x0f);
     let high_nibbles = _mm_and_si128(_mm_srli_epi16(value, 4), mask);
     let low_nibbles = _mm_and_si128(value, mask);

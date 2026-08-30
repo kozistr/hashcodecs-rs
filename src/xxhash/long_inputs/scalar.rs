@@ -1,4 +1,4 @@
-use super::{LongInput, Secret, initial_accumulator, long_schedule};
+use super::{LongInput, Secret, build_long_input_schedule, initial_accumulator};
 use crate::xxhash::primitives::P32_1;
 
 #[inline(always)]
@@ -41,7 +41,7 @@ fn scramble(acc: &mut [u64; 8], secret: &Secret) {
 
 pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     let data = input.as_bytes();
-    let schedule = long_schedule(input);
+    let schedule = build_long_input_schedule(input);
     let mut acc = initial_accumulator();
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;

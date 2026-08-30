@@ -5,7 +5,7 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::super::{LongInput, Secret, long_schedule};
+use super::super::{LongInput, Secret, build_long_input_schedule};
 use super::avx2::{accumulate_registers, finish, initial, scramble_registers};
 
 macro_rules! define_accumulate_batch {
@@ -16,14 +16,14 @@ macro_rules! define_accumulate_batch {
         /// # Safety
         /// The caller must have detected AVX2 support. All inputs must have the
         /// same length.
-        pub(in crate::xxhash::long) unsafe fn $name(
+        pub(in crate::xxhash::long_inputs) unsafe fn $name(
             inputs: [LongInput<'_>; $size],
             secret: &Secret,
         ) -> [[u64; 8]; $size] {
             let data = inputs.map(LongInput::as_bytes);
             let secret = secret.as_bytes();
             $(let mut $acc = unsafe { initial() };)+
-            let schedule = long_schedule(inputs[0]);
+            let schedule = build_long_input_schedule(inputs[0]);
 
             for block in 0..schedule.full_blocks() {
                 let offset = block * 1024;

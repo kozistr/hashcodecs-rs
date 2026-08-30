@@ -1,7 +1,7 @@
-use super::hash::{xxh3_64, xxh3_128};
-use super::long::{
+use super::long_inputs::{
     LongBatch, LongEngine, LongInput, LongRun, Secret, finalize_long_64, finalize_long_128,
 };
+use super::one_shot::{xxh3_64, xxh3_128};
 
 macro_rules! emit_long_group {
     ($name:ident, $size:literal, $($acc:ident),+ $(,)?) => {
@@ -27,9 +27,9 @@ emit_long_group!(emit_long_group2, 2, acc0, acc1);
 emit_long_group!(emit_long_group3, 3, acc0, acc1, acc2);
 emit_long_group!(emit_long_group4, 4, acc0, acc1, acc2, acc3);
 
-/// Shared monomorphized traversal for returned vectors and callback consumers.
+/// Runs one batch loop for vector outputs and callback outputs.
 #[inline(always)]
-fn batch_each<T, S, F, O>(inputs: &[&[u8]], seed: u64, short: S, finalize: F, mut output: O)
+fn hash_each_input<T, S, F, O>(inputs: &[&[u8]], seed: u64, short: S, finalize: F, mut output: O)
 where
     S: Copy + Fn(&[u8], u64) -> T,
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
@@ -45,7 +45,7 @@ where
     }
 
     let engine = LongEngine::new();
-    batch_each_with_engine(
+    hash_each_input_with_engine(
         &inputs[index..],
         seed,
         short,
@@ -56,7 +56,7 @@ where
 }
 
 #[inline(always)]
-fn batch_each_with_engine<T, S, F, O>(
+fn hash_each_input_with_engine<T, S, F, O>(
     inputs: &[&[u8]],
     seed: u64,
     short: S,
@@ -127,18 +127,17 @@ fn batch_each_with_engine<T, S, F, O>(
 
 /// Computes canonical XXH3 64-bit hashes for a batch without copying inputs.
 ///
-/// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// contiguous equal-size long runs may be processed two to four at a time when
-/// the AVX2 batch kernel is available.
+/// The result order matches the input order. The function shares seed setup across the batch.
+/// The AVX2 kernel can process two to four adjacent long inputs of equal size at one time.
 ///
 /// # Arguments
 ///
-/// * inputs - Borrowed byte slices to hash in order.
-/// * seed - The initial unsigned 64-bit seed shared by every input.
+/// * `inputs` - Contains the borrowed byte slices to hash in order.
+/// * `seed` - Specifies one initial unsigned 64-bit seed for all inputs.
 ///
 /// # Returns
 ///
-/// One canonical 64-bit hash per input.
+/// The function returns one canonical 64-bit hash for each input.
 ///
 /// # Examples
 ///
@@ -153,17 +152,16 @@ fn batch_each_with_engine<T, S, F, O>(
 #[inline]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let mut hashes = Vec::with_capacity(inputs.len());
-    batch_each(inputs, seed, xxh3_64, finalize_long_64, |hash| {
+    hash_each_input(inputs, seed, xxh3_64, finalize_long_64, |hash| {
         hashes.push(hash)
     });
     hashes
 }
 
-/// Computes canonical XXH3 64-bit hashes for a batch and sends each result to a sink.
+/// Computes canonical XXH3 64-bit hashes and sends each result to a callback.
 ///
-/// This is the allocation-free counterpart to [`xxh3_64_batch`]. Results are
-/// passed to `output` in input order, while seed-derived setup and eligible
-/// equal-size long-input traversal are shared by the batch.
+/// This function does not allocate a result vector. It calls `output` once for each input, in input order.
+/// The function shares seed setup and eligible long-input processing across the batch.
 ///
 /// # Examples
 ///
@@ -180,24 +178,23 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
 ///
 #[inline]
 pub fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
-    batch_each(inputs, seed, xxh3_64, finalize_long_64, output);
+    hash_each_input(inputs, seed, xxh3_64, finalize_long_64, output);
 }
 
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
 ///
-/// Results preserve input order. Seed-derived setup is shared by the batch, and
-/// contiguous equal-size long runs may be processed two to four at a time when
-/// the AVX2 batch kernel is available.
+/// The result order matches the input order. The function shares seed setup across the batch.
+/// The AVX2 kernel can process two to four adjacent long inputs of equal size at one time.
 ///
 /// # Arguments
 ///
-/// * inputs - Borrowed byte slices to hash in order.
-/// * seed - The initial unsigned 64-bit seed shared by every input.
+/// * `inputs` - Contains the borrowed byte slices to hash in order.
+/// * `seed` - Specifies one initial unsigned 64-bit seed for all inputs.
 ///
 /// # Returns
 ///
-/// One `[low64, high64]` word pair per input. Each pair follows the same
-/// contract as [`crate::xxhash::xxh3_128`].
+/// The function returns one `[low64, high64]` word pair for each input.
+/// Each pair follows the contract for [`crate::xxhash::xxh3_128`].
 ///
 /// # Examples
 ///
@@ -212,16 +209,16 @@ pub fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) 
 #[inline]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let mut hashes = Vec::with_capacity(inputs.len());
-    batch_each(inputs, seed, xxh3_128, finalize_long_128, |hash| {
+    hash_each_input(inputs, seed, xxh3_128, finalize_long_128, |hash| {
         hashes.push(hash)
     });
     hashes
 }
 
-/// Computes canonical XXH3 128-bit hashes for a batch and sends each result to a sink.
+/// Computes canonical XXH3 128-bit hashes and sends each result to a callback.
 ///
-/// This is the allocation-free counterpart to [`xxh3_128_batch`]. Results are
-/// passed to `output` in input order as `[low64, high64]` word pairs.
+/// This function does not allocate a result vector.
+/// It calls `output` for each input, in input order, with a `[low64, high64]` word pair.
 ///
 /// # Examples
 ///
@@ -238,7 +235,7 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
 ///
 #[inline]
 pub fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
-    batch_each(inputs, seed, xxh3_128, finalize_long_128, output);
+    hash_each_input(inputs, seed, xxh3_128, finalize_long_128, output);
 }
 
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
@@ -248,7 +245,7 @@ mod tests {
 
     fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
         let mut hashes = Vec::new();
-        batch_each_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
+        hash_each_input_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
             hashes.push(hash)
         });
         hashes
@@ -256,7 +253,7 @@ mod tests {
 
     fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]> {
         let mut hashes = Vec::new();
-        batch_each_with_engine(
+        hash_each_input_with_engine(
             inputs,
             17,
             xxh3_128,
@@ -274,7 +271,7 @@ mod tests {
         ]
         .map(|length| vec![length as u8; length]);
         let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let scalar = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        let scalar = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
         assert!(!scalar.has_batch_kernel());
 
         let short = [b"short".as_slice()];
@@ -325,7 +322,7 @@ mod tests {
         let refs = owned.each_ref().map(Vec::as_slice);
         let run = LongRun::new(&refs).unwrap();
         let inputs = run.batch2(0);
-        let engine = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
         let derived = engine.derive_secret(17);
         let mut actual = Vec::new();
         emit_long_group2(
@@ -345,7 +342,7 @@ mod tests {
                 .collect::<Vec<_>>()
         );
 
-        let engine = LongEngine::new_with_capabilities(Capabilities::for_backends(&[]));
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
         let derived = engine.derive_secret(17);
         let mut actual = Vec::new();
         emit_long_group2(

@@ -70,10 +70,10 @@ macro_rules! define_python_hasher {
                 Ok(Self { state })
             }
 
-            /// Append bytes to the hash state.
+            /// Add bytes to the hash state.
             ///
             /// Args:
-            ///     data: Bytes-like data to append.
+            ///     data: Bytes-like data to add.
             ///
             /// Raises:
             ///     TypeError: data is not bytes-like.
@@ -83,7 +83,7 @@ macro_rules! define_python_hasher {
                 Ok(())
             }
 
-            /// Return the current digest without consuming the state.
+            /// Return the current digest without changing the state.
             fn digest<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
                 let digest = ($digest)(&self.state);
                 PyBytes::new(py, &digest)

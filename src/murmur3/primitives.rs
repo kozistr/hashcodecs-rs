@@ -29,8 +29,7 @@ pub(super) fn read_u16_le(input: &[u8], offset: usize) -> u16 {
 #[inline(always)]
 pub(super) fn read_u32_le(input: &[u8], offset: usize) -> u32 {
     debug_assert!(offset + 4 <= input.len());
-    // The checked conversion still compiles to one unaligned load when the
-    // caller's surrounding loop proves the bounds.
+    // The caller's loop checks the bounds. The compiler still emits one unaligned load for this conversion.
     u32::from_le_bytes(
         input[offset..offset + 4]
             .try_into()
@@ -41,7 +40,7 @@ pub(super) fn read_u32_le(input: &[u8], offset: usize) -> u32 {
 #[inline(always)]
 pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
     debug_assert!(offset + 8 <= input.len());
-    // See read_u32_le; from_le_bytes also normalizes endian.
+    // The `read_u32_le` comment describes the same bound check. `from_le_bytes` also normalizes byte order.
     u64::from_le_bytes(
         input[offset..offset + 8]
             .try_into()

@@ -1,3 +1,5 @@
+//! Select MurmurHash3 backends from the input length and CPU capabilities.
+
 use crate::backend::{Capabilities, SimdBackend};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,7 +18,7 @@ const X64_128_SSE41_MAX: usize = 8 * 1024 * 1024;
 const X64_128_AVX2_MIN: usize = 32;
 
 #[inline(always)]
-pub(super) fn x86_32(length: usize, capabilities: Capabilities) -> Backend {
+pub(super) fn select_x86_32_backend(length: usize, capabilities: Capabilities) -> Backend {
     if capabilities.supports(SimdBackend::Avx2) && length >= X86_32_AVX2_MIN {
         Backend::Avx2
     } else if capabilities.supports(SimdBackend::Sse41) && length >= X86_32_SSE41_MIN {
@@ -27,7 +29,7 @@ pub(super) fn x86_32(length: usize, capabilities: Capabilities) -> Backend {
 }
 
 #[inline(always)]
-pub(super) fn x86_128(length: usize, capabilities: Capabilities) -> Backend {
+pub(super) fn select_x86_128_backend(length: usize, capabilities: Capabilities) -> Backend {
     if capabilities.supports(SimdBackend::Avx2) && length >= X86_128_AVX2_MIN {
         Backend::Avx2
     } else if capabilities.supports(SimdBackend::Sse41) && length >= X86_128_SSE41_MIN {
@@ -38,7 +40,7 @@ pub(super) fn x86_128(length: usize, capabilities: Capabilities) -> Backend {
 }
 
 #[inline(always)]
-pub(super) fn x64_128(length: usize, capabilities: Capabilities) -> Backend {
+pub(super) fn select_x64_128_backend(length: usize, capabilities: Capabilities) -> Backend {
     if capabilities.supports(SimdBackend::Avx2) && length >= X64_128_AVX2_MIN {
         Backend::Avx2
     } else if capabilities.supports(SimdBackend::Sse41)

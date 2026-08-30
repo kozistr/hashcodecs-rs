@@ -1,6 +1,6 @@
 # Performance
 
-`hashcodecs` selects the best supported implementation at runtime. On x86 and x86-64, Base64 can use AVX-512 VBMI,
+`hashcodecs` selects the highest-priority supported implementation at runtime. On x86 and x86-64, Base64 can use AVX-512 VBMI,
 AVX2, SSE4.1, or SSSE3; on AArch64 it can use NEON. MurmurHash3 and the long-input XXH3 paths similarly select
 available vector backends. Every path has a scalar fallback.
 

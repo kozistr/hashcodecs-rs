@@ -5,7 +5,9 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use crate::xxhash::long::{LongInput, Secret, initial_accumulator, long_schedule};
+use crate::xxhash::long_inputs::{
+    LongInput, Secret, build_long_input_schedule, initial_accumulator,
+};
 use crate::xxhash::primitives::{P32_1, SECRET};
 
 #[repr(align(64))]
@@ -21,7 +23,7 @@ pub(super) struct Accumulator {
 #[target_feature(enable = "avx2")]
 /// # Safety
 /// The caller must have detected AVX2 support.
-pub(in crate::xxhash::long) unsafe fn init_secret(seed: u64) -> Secret {
+pub(in crate::xxhash::long_inputs) unsafe fn init_secret(seed: u64) -> Secret {
     let negative = 0_u64.wrapping_sub(seed);
     let delta = _mm256_set_epi64x(negative as i64, seed as i64, negative as i64, seed as i64);
     let mut output = [0_u8; 192];
@@ -247,13 +249,13 @@ unsafe fn accumulate_tail_chains(
 #[target_feature(enable = "avx2")]
 /// # Safety
 /// The caller must have detected AVX2 support.
-pub(in crate::xxhash::long) unsafe fn accumulate(
+pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     input: LongInput<'_>,
     secret: &Secret,
 ) -> [u64; 8] {
     let data = input.as_bytes();
     let secret = secret.as_bytes();
-    let schedule = long_schedule(input);
+    let schedule = build_long_input_schedule(input);
     let mut acc = unsafe { initial() };
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;

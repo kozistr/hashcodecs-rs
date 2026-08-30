@@ -17,11 +17,12 @@ static mut METHODS: [ffi::PyMethodDef; 4] = [
 
 Compute the canonical MurmurHash3 x86 32-bit hash.
 
-MurmurHash3 is a fast non-cryptographic hash. The result is compatible with
-the original x86-32 reference algorithm.
+MurmurHash3 does not provide cryptographic security. The result matches the
+original x86-32 reference algorithm.
 
 Args:
-    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
     seed: Initial unsigned 32-bit seed.
 
 Returns:
@@ -47,10 +48,12 @@ Examples:
 
 Compute the canonical MurmurHash3 x86 128-bit digest.
 
-The four result words are serialized as little-endian 32-bit integers.
+The function serializes the four result words as little-endian 32-bit
+integers.
 
 Args:
-    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
     seed: Initial unsigned 32-bit seed.
 
 Returns:
@@ -76,10 +79,12 @@ Examples:
 
 Compute the canonical MurmurHash3 x64 128-bit digest.
 
-The two result words are serialized as little-endian 64-bit integers.
+The function serializes the two result words as little-endian 64-bit
+integers.
 
 Args:
-    s: Bytes-like data to hash. Supported non-contiguous views are flattened.
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
     seed: Initial unsigned 32-bit seed.
 
 Returns:

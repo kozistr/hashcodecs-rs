@@ -23,13 +23,11 @@ struct MemoryViewInfo<'py> {
     buffer: BorrowedBuffer<'py>,
 }
 
-/// An acquired buffer which releases its export on drop.
+/// Holds an acquired buffer and releases its export when the value drops.
 ///
-/// It is retained for direct processing only when it is C-contiguous and the
-/// build uses the GIL. An exporter can expose a read-only view of storage which
-/// remains mutable through another handle, so the GIL is the synchronization
-/// guarantee for unknown exporters. Exact mutable builtins use critical
-/// sections instead.
+/// The binding processes this buffer without a copy if it is C-contiguous and the build uses the GIL.
+/// Another handle can mutate storage behind a read-only view. The GIL synchronizes access for unknown exporters.
+/// Critical sections synchronize exact mutable builtins.
 pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
     memoryview_source: *mut ffi::PyObject,
@@ -146,8 +144,8 @@ impl<'py> BytesLike<'_, 'py> {
                 if !buffer.memoryview_source.is_null()
                     && buffer.view.obj == buffer.memoryview_source =>
             {
-                // The active export owns `view.obj`, so equality proves that
-                // the exact memoryview source is still alive while it is used.
+                // The active export owns `view.obj`.
+                // Equality proves that the exact memoryview source remains alive during access.
                 let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.memoryview_source) };
                 let owner = memoryview.getattr(intern!(py, "obj"))?;
                 if !PyBytes::is_exact_type_of(&owner) {

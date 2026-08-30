@@ -1,4 +1,4 @@
-//! Base64 backend policy built on the process-wide CPU capability snapshot.
+//! Select a Base64 backend from the detected CPU features.
 
 use std::sync::OnceLock;
 
@@ -19,7 +19,7 @@ pub(super) enum Backend {
 
 #[derive(Clone, Copy)]
 pub(super) struct RuntimeBackend {
-    pub(super) kind: Backend,
+    pub(super) backend: Backend,
     cached_input_limit: Option<usize>,
 }
 
@@ -43,16 +43,16 @@ impl RuntimeBackend {
     }
 }
 
-static BACKEND: OnceLock<RuntimeBackend> = OnceLock::new();
+static SELECTED_BACKEND: OnceLock<RuntimeBackend> = OnceLock::new();
 
 #[inline]
-pub(super) fn selected() -> RuntimeBackend {
-    *BACKEND.get_or_init(detect)
+pub(super) fn selected_backend() -> RuntimeBackend {
+    *SELECTED_BACKEND.get_or_init(detect_runtime_backend)
 }
 
-fn detect() -> RuntimeBackend {
+fn detect_runtime_backend() -> RuntimeBackend {
     RuntimeBackend {
-        kind: select(cpu::capabilities()),
+        backend: select_backend(cpu::capabilities()),
         #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
         cached_input_limit: cache::cached_input_limit(),
         #[cfg(all(target_arch = "x86_64", any(kani, miri)))]
@@ -63,8 +63,8 @@ fn detect() -> RuntimeBackend {
 }
 
 #[inline]
-pub(super) fn select(capabilities: Capabilities) -> Backend {
-    match capabilities.best(&[
+pub(super) fn select_backend(capabilities: Capabilities) -> Backend {
+    match capabilities.select_supported_backend(&[
         SimdBackend::Avx512Vbmi,
         SimdBackend::Avx2,
         SimdBackend::Sse41,

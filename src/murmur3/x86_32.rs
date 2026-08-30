@@ -8,12 +8,11 @@ pub(super) mod x86;
 pub(super) const X86_32_C1: u32 = 0xcc9e_2d51;
 pub(super) const X86_32_C2: u32 = 0x1b87_3593;
 
-/// Incremental state for the canonical MurmurHash3 x86 32-bit algorithm.
+/// Stores incremental state for the canonical MurmurHash3 x86 32-bit algorithm.
 ///
-/// Data can be supplied in any chunk sizes. Cloning the value creates an
-/// independent checkpoint, and digest does not consume or reset the state.
-/// MurmurHash3 is non-cryptographic and must not be used where collision or
-/// preimage resistance is required.
+/// Call `update` with chunks of any size. A clone provides an independent checkpoint.
+/// The `digest` method does not consume or reset the state.
+/// MurmurHash3 does not provide collision resistance or preimage resistance.
 ///
 /// # Examples
 ///
@@ -33,15 +32,15 @@ pub struct Murmur3X86Hasher32 {
 }
 
 impl Murmur3X86Hasher32 {
-    /// Creates an empty x86 32-bit hasher with the supplied seed.
+    /// Creates an empty x86 32-bit hasher with the specified seed.
     ///
     /// # Arguments
     ///
-    /// * seed - The initial unsigned 32-bit hash seed.
+    /// * `seed` - Specifies the initial unsigned 32-bit hash seed.
     ///
     /// # Returns
     ///
-    /// A hasher ready to receive bytes through update.
+    /// The function returns a hasher that can receive bytes through `update`.
     ///
     /// # Examples
     ///
@@ -59,18 +58,17 @@ impl Murmur3X86Hasher32 {
         }
     }
 
-    /// Appends bytes to the hash state.
+    /// Adds bytes to the hash state.
     ///
-    /// Calling update multiple times is equivalent to hashing the concatenated
-    /// input in one call.
+    /// Multiple `update` calls produce the same result as one call with the combined input.
     ///
     /// # Arguments
     ///
-    /// * input - The next bytes in the message.
+    /// * `input` - Contains the next message bytes.
     ///
     /// # Returns
     ///
-    /// This method returns unit and leaves the hasher ready for more input.
+    /// The method returns unit. The hasher can receive more input after this call.
     ///
     /// # Examples
     ///
@@ -92,11 +90,11 @@ impl Murmur3X86Hasher32 {
 
     /// Computes the current 32-bit digest without consuming the state.
     ///
-    /// More data may be appended after this call.
+    /// You can add more data after this call.
     ///
     /// # Returns
     ///
-    /// The canonical unsigned x86 32-bit MurmurHash3 value.
+    /// The method returns the canonical unsigned x86 32-bit MurmurHash3 value.
     ///
     /// # Examples
     ///
@@ -121,17 +119,16 @@ impl Default for Murmur3X86Hasher32 {
 
 /// Computes the canonical MurmurHash3 x86 32-bit hash in one call.
 ///
-/// MurmurHash3 is designed for fast hash tables and data processing, not for
-/// cryptographic security.
+/// MurmurHash3 does not provide cryptographic security.
 ///
 /// # Arguments
 ///
-/// * key - The bytes to hash.
-/// * seed - The initial unsigned 32-bit seed.
+/// * `input` - Contains the bytes to hash.
+/// * `seed` - Specifies the initial unsigned 32-bit seed.
 ///
 /// # Returns
 ///
-/// The canonical unsigned 32-bit result from the original x86 algorithm.
+/// The function returns the canonical unsigned 32-bit result from the original x86 algorithm.
 ///
 /// # Examples
 ///
@@ -141,11 +138,11 @@ impl Default for Murmur3X86Hasher32 {
 ///     assert_ne!(murmur3_x86_32(b"hello", 1), murmur3_x86_32(b"hello", 0));
 ///
 #[inline]
-pub fn murmur3_x86_32(key: &[u8], seed: u32) -> u32 {
-    let (blocks, tail) = FullBlocks::<4>::split(key);
+pub fn murmur3_x86_32(input: &[u8], seed: u32) -> u32 {
+    let (blocks, tail) = FullBlocks::<4>::split(input);
     let mut hash = seed;
     mix_x86_32_body(blocks, &mut hash);
-    finish_x86_32_tail(tail, hash, key.len() as u32)
+    finish_x86_32_tail(tail, hash, input.len() as u32)
 }
 
 #[inline]
@@ -157,7 +154,7 @@ pub(super) fn mix_x86_32_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
             return;
         }
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x86_32(blocks.len(), capabilities);
+        let selected = dispatch::select_x86_32_backend(blocks.len(), capabilities);
         mix_x86_32_body_with_backend(blocks, hash, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

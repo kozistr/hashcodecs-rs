@@ -8,13 +8,12 @@ use super::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
 use crate::bindings::buffer::ascii_or_bytes;
 use crate::bindings::objects::{list_from_fn, list_items};
 
-/// Decode each ASCII string or bytes-like item and return results in input order.
+/// Decode each ASCII string or bytes-like item and return the results in input order.
 ///
 /// ``items`` must be a list. ``altchars`` and ``validate`` apply to every item.
-/// Processing is fail-fast: an error discards the partial result and is raised
-/// immediately. Processing is single-threaded. Immutable items of at least
-/// 256 KiB release the GIL independently; smaller and mutable items do not. Do
-/// not mutate ``items`` concurrently while this function is running.
+/// The function stops at the first error and discards the partial result list.
+/// The function uses one thread. It releases the GIL for each immutable item of at least 256 KiB.
+/// It retains the GIL for smaller or mutable items. Do not change ``items`` during the call.
 pub(in crate::bindings::base64) fn b64decode_batch<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -58,15 +57,13 @@ pub(in crate::bindings::base64) fn urlsafe_b64decode_batch<'py>(
     b64decode_batch_parsed(py, items, Some(*b"-_"), false)
 }
 
-/// Decode each item into its matching reusable bytearray and return byte counts.
+/// Decode each item into its matching bytearray and return the byte counts.
 ///
-/// ``items`` and ``outputs`` must be equal-length lists, and destinations must
-/// be distinct bytearrays. Each destination keeps its size; only its written
-/// prefix is changed. Processing is fail-fast and non-transactional: an error
-/// leaves earlier destinations modified, and the failing destination may be
-/// partly written. The GIL remains held because outputs are mutable. Inputs are
-/// snapshotted before the first destination write only when they overlap a
-/// destination.
+/// ``items`` and ``outputs`` must be lists of equal length. Each destination must be a different bytearray.
+/// Each destination keeps its size. The function changes only the written prefix.
+/// The function stops at the first error. It does not restore destinations that it changed.
+/// It can change part of the failing destination. The function retains the GIL because outputs are mutable.
+/// It copies all inputs that overlap a destination before it writes to the first destination.
 pub(in crate::bindings::base64) fn b64decode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,

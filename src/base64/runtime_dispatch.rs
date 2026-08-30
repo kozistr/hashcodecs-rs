@@ -1,3 +1,5 @@
+//! Select and call Base64 SIMD kernels at runtime.
+
 use super::backend::{self, Backend};
 #[cfg(target_arch = "aarch64")]
 use super::decode::aarch64 as decode_aarch64;
@@ -10,21 +12,25 @@ use super::encode::aarch64 as encode_aarch64;
 use super::{Base64Error, DecodeAlphabet};
 
 #[inline]
-pub(super) unsafe fn encode_simd_ptr(input: &[u8], output: *mut u8, urlsafe: bool) -> usize {
-    let backend = backend::selected();
+pub(super) unsafe fn encode_with_runtime_backend(
+    input: &[u8],
+    output: *mut u8,
+    urlsafe: bool,
+) -> usize {
+    let selection = backend::selected_backend();
     unsafe {
         encode_with_backend_ptr(
             input,
             output,
-            backend.kind,
+            selection.backend,
             urlsafe,
-            backend.use_streaming_stores(input.len(), output),
+            selection.use_streaming_stores(input.len(), output),
         )
     }
 }
 
 #[inline]
-pub(super) unsafe fn decode_simd_ptr(
+pub(super) unsafe fn decode_with_runtime_backend(
     input: &[u8],
     output: *mut u8,
     alphabet: DecodeAlphabet,
@@ -35,7 +41,7 @@ pub(super) unsafe fn decode_simd_ptr(
         decode_with_backend_ptr_mode(
             input,
             output,
-            backend::selected().kind,
+            backend::selected_backend().backend,
             alphabet,
             padded_stores,
             transactional_errors,

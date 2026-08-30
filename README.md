@@ -19,7 +19,7 @@
 SIMD-accelerated Base64, MurmurHash3, and XXH3 for Python and Rust.
 
 Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs` accepts `bytes`, `bytearray`, and
-`memoryview`, selects the best available SIMD backend, and exposes batch and reusable-buffer APIs.
+`memoryview`, selects the highest-priority supported SIMD backend, and exposes batch and reusable-buffer APIs.
 
 ## Features
 
@@ -128,13 +128,12 @@ assert_eq!(index, inputs.len());
 
 ## Architecture
 
-The Rust core owns algorithm behavior and SIMD dispatch. A substantial CPython layer handles argument parsing, buffer
-ownership, reusable outputs, and GIL decisions; root-level Python modules provide typed public exports without
-adding per-call wrappers.
+The Rust core owns algorithm behavior and SIMD dispatch. The CPython layer handles argument parsing, buffers,
+reusable outputs, and GIL decisions. Root-level Python modules provide typed exports without per-call wrappers.
 
-Each Rust algorithm exposes a small public façade. Base64 groups internals by encode and decode operation and
+Each Rust algorithm exposes a small public module. Base64 groups internals by encode and decode operation and
 places ISA kernels such as `encode/avx2.rs` and `decode/ssse3.rs` under their operation. MurmurHash3 groups code by
-canonical variant. XXH3 uses processing-stage modules, with long-input ISA kernels under `xxhash/long/`.
+canonical variant. XXH3 uses processing-stage modules. Long-input ISA kernels are under `xxhash/long_inputs/`.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout, dispatch model, algorithm data flows,
 CPython boundary, and safety invariants.

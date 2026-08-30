@@ -8,11 +8,10 @@ pub(super) mod x86;
 pub(super) const X64_128_C1: u64 = 0x87c3_7b91_1142_53d5;
 pub(super) const X64_128_C2: u64 = 0x4cf5_ad43_2745_937f;
 
-/// Incremental state for the canonical MurmurHash3 x64 128-bit algorithm.
+/// Stores incremental state for the canonical MurmurHash3 x64 128-bit algorithm.
 ///
-/// Input may be split at arbitrary byte boundaries. The two digest words are
-/// ordered exactly like the original reference implementation. MurmurHash3 is
-/// non-cryptographic.
+/// Call `update` with chunks of any size. The function orders the two digest words like the reference implementation.
+/// MurmurHash3 does not provide cryptographic security.
 ///
 /// # Examples
 ///
@@ -32,15 +31,15 @@ pub struct Murmur3X64Hasher128 {
 }
 
 impl Murmur3X64Hasher128 {
-    /// Creates an empty x64 128-bit hasher with the supplied seed.
+    /// Creates an empty x64 128-bit hasher with the specified seed.
     ///
     /// # Arguments
     ///
-    /// * seed - The initial unsigned 32-bit seed applied to both lanes.
+    /// * `seed` - Specifies the initial unsigned 32-bit seed for both lanes.
     ///
     /// # Returns
     ///
-    /// A hasher ready to receive bytes through update.
+    /// The function returns a hasher that can receive bytes through `update`.
     ///
     /// # Examples
     ///
@@ -58,18 +57,17 @@ impl Murmur3X64Hasher128 {
         }
     }
 
-    /// Appends bytes to the hash state.
+    /// Adds bytes to the hash state.
     ///
-    /// Calling update multiple times is equivalent to hashing the concatenated
-    /// input in one call.
+    /// Multiple `update` calls produce the same result as one call with the combined input.
     ///
     /// # Arguments
     ///
-    /// * input - The next bytes in the message.
+    /// * `input` - Contains the next message bytes.
     ///
     /// # Returns
     ///
-    /// This method returns unit and leaves the hasher ready for more input.
+    /// The method returns unit. The hasher can receive more input after this call.
     ///
     /// # Examples
     ///
@@ -93,7 +91,7 @@ impl Murmur3X64Hasher128 {
     ///
     /// # Returns
     ///
-    /// Two 64-bit words in canonical low-to-high reference order.
+    /// The method returns two 64-bit words in canonical low-to-high reference order.
     ///
     /// # Examples
     ///
@@ -120,14 +118,13 @@ impl Default for Murmur3X64Hasher128 {
 ///
 /// # Arguments
 ///
-/// * key - The bytes to hash.
-/// * seed - The initial unsigned 32-bit seed applied to both lanes.
+/// * `input` - Contains the bytes to hash.
+/// * `seed` - Specifies the initial unsigned 32-bit seed for both lanes.
 ///
 /// # Returns
 ///
-/// Two unsigned 64-bit words in canonical low-to-high reference order. To
-/// serialize the digest used by the Python API, concatenate each word's
-/// little-endian bytes.
+/// The function returns two unsigned 64-bit words in canonical low-to-high reference order.
+/// To create the Python API digest, concatenate the little-endian bytes from each word.
 ///
 /// # Examples
 ///
@@ -144,16 +141,16 @@ impl Default for Murmur3X64Hasher128 {
 ///     );
 ///
 #[inline(always)]
-pub fn murmur3_x64_128(key: &[u8], seed: u32) -> [u64; 2] {
-    murmur3_x64_128_inner(key, seed as u64)
+pub fn murmur3_x64_128(input: &[u8], seed: u32) -> [u64; 2] {
+    murmur3_x64_128_inner(input, seed as u64)
 }
 
 #[inline(never)]
-pub(super) fn murmur3_x64_128_inner(key: &[u8], seed: u64) -> [u64; 2] {
-    let (blocks, tail) = FullBlocks::<16>::split(key);
+pub(super) fn murmur3_x64_128_inner(input: &[u8], seed: u64) -> [u64; 2] {
+    let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 2];
     mix_x64_128_body(blocks, &mut hashes);
-    finish_x64_128_tail(tail, hashes, key.len() as u64)
+    finish_x64_128_tail(tail, hashes, input.len() as u64)
 }
 
 #[inline]
@@ -164,7 +161,7 @@ pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x64_128(blocks.len(), capabilities);
+        let selected = dispatch::select_x64_128_backend(blocks.len(), capabilities);
         mix_x64_128_body_with_backend(blocks, hashes, selected, capabilities.has_bmi2());
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

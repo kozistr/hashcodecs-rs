@@ -8,11 +8,10 @@ pub(super) mod x86;
 pub(super) const X86_128_C1: [u32; 4] = [0x239b_961b, 0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93];
 pub(super) const X86_128_C2: [u32; 4] = [0xab0e_9789, 0x38b3_4ae5, 0xa1e3_8b93, 0x239b_961b];
 
-/// Incremental state for the canonical MurmurHash3 x86 128-bit algorithm.
+/// Stores incremental state for the canonical MurmurHash3 x86 128-bit algorithm.
 ///
-/// Input may be split at arbitrary byte boundaries. The four digest words are
-/// ordered exactly like the original reference implementation. MurmurHash3 is
-/// non-cryptographic.
+/// Call `update` with chunks of any size. The function orders the four digest words like the reference implementation.
+/// MurmurHash3 does not provide cryptographic security.
 ///
 /// # Examples
 ///
@@ -32,15 +31,15 @@ pub struct Murmur3X86Hasher128 {
 }
 
 impl Murmur3X86Hasher128 {
-    /// Creates an empty x86 128-bit hasher with the supplied seed.
+    /// Creates an empty x86 128-bit hasher with the specified seed.
     ///
     /// # Arguments
     ///
-    /// * seed - The initial unsigned 32-bit seed applied to all four lanes.
+    /// * `seed` - Specifies the initial unsigned 32-bit seed for all four lanes.
     ///
     /// # Returns
     ///
-    /// A hasher ready to receive bytes through update.
+    /// The function returns a hasher that can receive bytes through `update`.
     ///
     /// # Examples
     ///
@@ -58,18 +57,17 @@ impl Murmur3X86Hasher128 {
         }
     }
 
-    /// Appends bytes to the hash state.
+    /// Adds bytes to the hash state.
     ///
-    /// Calling update multiple times is equivalent to hashing the concatenated
-    /// input in one call.
+    /// Multiple `update` calls produce the same result as one call with the combined input.
     ///
     /// # Arguments
     ///
-    /// * input - The next bytes in the message.
+    /// * `input` - Contains the next message bytes.
     ///
     /// # Returns
     ///
-    /// This method returns unit and leaves the hasher ready for more input.
+    /// The method returns unit. The hasher can receive more input after this call.
     ///
     /// # Examples
     ///
@@ -93,7 +91,7 @@ impl Murmur3X86Hasher128 {
     ///
     /// # Returns
     ///
-    /// Four 32-bit words in canonical low-to-high reference order.
+    /// The method returns four 32-bit words in canonical low-to-high reference order.
     ///
     /// # Examples
     ///
@@ -120,14 +118,13 @@ impl Default for Murmur3X86Hasher128 {
 ///
 /// # Arguments
 ///
-/// * key - The bytes to hash.
-/// * seed - The initial unsigned 32-bit seed applied to all four lanes.
+/// * `input` - Contains the bytes to hash.
+/// * `seed` - Specifies the initial unsigned 32-bit seed for all four lanes.
 ///
 /// # Returns
 ///
-/// Four unsigned 32-bit words in canonical low-to-high reference order. To
-/// serialize the digest used by the Python API, concatenate each word's
-/// little-endian bytes.
+/// The function returns four unsigned 32-bit words in canonical low-to-high reference order.
+/// To create the Python API digest, concatenate the little-endian bytes from each word.
 ///
 /// # Examples
 ///
@@ -144,11 +141,11 @@ impl Default for Murmur3X86Hasher128 {
 ///     );
 ///
 #[inline]
-pub fn murmur3_x86_128(key: &[u8], seed: u32) -> [u32; 4] {
-    let (blocks, tail) = FullBlocks::<16>::split(key);
+pub fn murmur3_x86_128(input: &[u8], seed: u32) -> [u32; 4] {
+    let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 4];
     mix_x86_128_body(blocks, &mut hashes);
-    finish_x86_128_tail(tail, hashes, key.len() as u32)
+    finish_x86_128_tail(tail, hashes, input.len() as u32)
 }
 
 #[inline]
@@ -201,7 +198,7 @@ pub(super) fn mix_x86_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]
             return;
         }
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::x86_128(blocks.len(), capabilities);
+        let selected = dispatch::select_x86_128_backend(blocks.len(), capabilities);
         mix_x86_128_body_with_backend(blocks, hashes, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

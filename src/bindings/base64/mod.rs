@@ -279,10 +279,13 @@ enum PreparedBatchInput<'py> {
     Failed(PyErr),
 }
 
-/// Retain only inputs which must be converted before destination writes. Exact
-/// immutable values and independent bytearrays stay on the single-pass path,
-/// so the owned conversion below only handles aliased bytearrays, string
-/// subclasses with overridable encoding, and arbitrary buffer exporters.
+/// Convert only inputs that destination writes can invalidate.
+/// Exact immutable values and independent bytearrays remain on the single-pass path.
+/// The conversion handles these inputs:
+///
+/// * aliased bytearrays
+/// * string subclasses that can override encoding
+/// * other buffer exporters
 fn prepare_batch_inputs<'py>(
     items: &[Bound<'py, PyAny>],
     outputs: &BatchOutputs<'py>,
@@ -413,13 +416,12 @@ pub(super) fn b64encode<'py>(
     encode::encode(py, &input, altchars, padded, wrapcol)
 }
 
-/// Encode each bytes-like item and return results in input order.
+/// Encode each bytes-like item and return the results in input order.
 ///
-/// ``items`` must be a list. ``altchars`` applies to every item. Processing is
-/// fail-fast: an error discards the partial result and is raised immediately.
-/// Processing is single-threaded. Immutable items of at least 256 KiB release
-/// the GIL independently; smaller and mutable items do not. Do not mutate
-/// ``items`` concurrently while this function is running.
+/// ``items`` must be a list. ``altchars`` applies to every item.
+/// The function stops at the first error and discards the partial result list.
+/// The function uses one thread. It releases the GIL for each immutable item of at least 256 KiB.
+/// It retains the GIL for smaller or mutable items. Do not change ``items`` during the call.
 pub(super) fn b64encode_batch<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
@@ -474,14 +476,13 @@ pub(super) fn urlsafe_b64encode_batch<'py>(
     b64encode_batch_parsed(py, items, Some(*b"-_"))
 }
 
-/// Encode each item into its matching reusable bytearray and return byte counts.
+/// Encode each item into its matching bytearray and return the byte counts.
 ///
-/// ``items`` and ``outputs`` must be equal-length lists, and destinations must
-/// be distinct bytearrays. Each destination keeps its size; only its written
-/// prefix is changed. Processing is fail-fast and non-transactional: an error
-/// leaves earlier destinations modified. The GIL remains held because outputs
-/// are mutable. Inputs overlapping any destination are snapshotted before the
-/// first destination write.
+/// ``items`` and ``outputs`` must be lists of equal length. Each destination must be a different bytearray.
+/// Each destination keeps its size. The function changes only the written prefix.
+/// The function stops at the first error. It does not restore destinations that it changed.
+/// The function retains the GIL because outputs are mutable.
+/// It copies all inputs that overlap a destination before it writes to the first destination.
 pub(super) fn b64encode_batch_into<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,

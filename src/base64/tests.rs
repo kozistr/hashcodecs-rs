@@ -1,10 +1,10 @@
 use super::alphabet::decode_table;
-use super::backend::{Backend, is_supported as backend_supported};
+use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::decode::{self as decode_backend, x86_contracts};
-use super::dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::encode as encode_backend;
+use super::runtime_dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 use super::*;
 use crate::backend::{Capabilities, SimdBackend};
 
@@ -12,7 +12,7 @@ use crate::backend::{Capabilities, SimdBackend};
 mod aarch64;
 
 fn select_backend(backend: SimdBackend) -> Backend {
-    backend::select(Capabilities::for_backends(&[backend]))
+    backend::select_backend(Capabilities::from_supported_backends(&[backend]))
 }
 use base64::Engine;
 
@@ -194,7 +194,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(select_backend(SimdBackend::Avx2), Backend::Avx2);
     assert_eq!(select_backend(SimdBackend::Avx512), Backend::Scalar);
     assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512);
-    assert!(backend_supported(Backend::Scalar));
+    assert!(backend::is_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),
         "invalid Base64 input"
@@ -228,7 +228,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
         Backend::Avx512,
     ]
     .into_iter()
-    .filter(|backend| !backend_supported(*backend))
+    .filter(|candidate| !backend::is_supported(*candidate))
     {
         let mut encoded_guard = vec![0xa5; expected.len()];
         assert_eq!(
@@ -262,7 +262,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
         Backend::Avx512,
     ]
     .into_iter()
-    .filter(|backend| backend_supported(*backend))
+    .filter(|candidate| backend::is_supported(*candidate))
     {
         let expected_offsets = (expected.len(), input.len());
 
@@ -366,7 +366,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx512_decoder_tail_boundaries_match_scalar_output() {
-    if !backend_supported(Backend::Avx512) {
+    if !backend::is_supported(Backend::Avx512) {
         return;
     }
 
@@ -394,7 +394,7 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
-    if !backend_supported(Backend::Avx2) {
+    if !backend::is_supported(Backend::Avx2) {
         return;
     }
 
@@ -474,7 +474,7 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
-    if !backend_supported(Backend::Avx2) {
+    if !backend::is_supported(Backend::Avx2) {
         return;
     }
 
@@ -541,7 +541,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
         Backend::Avx512,
     ]
     .into_iter()
-    .filter(|backend| backend_supported(*backend))
+    .filter(|candidate| backend::is_supported(*candidate))
     {
         for (alphabet, table) in [
             (DecodeAlphabet::Standard, &STANDARD_DECODE),
@@ -595,7 +595,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_streaming_encoder_matches_scalar() {
-    if !backend_supported(Backend::Avx2) {
+    if !backend::is_supported(Backend::Avx2) {
         return;
     }
 
@@ -982,7 +982,7 @@ fn buffer_apis_respect_exact_slice_boundaries() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_interior_stores_respect_exact_slice_boundaries() {
-    if !backend_supported(Backend::Avx2) {
+    if !backend::is_supported(Backend::Avx2) {
         return;
     }
 
@@ -1078,7 +1078,7 @@ fn padded_decoder_stores_stay_within_four_bytes_of_slack() {
         }
     }
 
-    let has_ssse3 = backend_supported(Backend::Ssse3);
+    let has_ssse3 = backend::is_supported(Backend::Ssse3);
     let input: Vec<u8> = (0..96).map(|value| value as u8).collect();
     for (encoded, alphabet) in [
         (b64encode(&input), DecodeAlphabet::Standard),

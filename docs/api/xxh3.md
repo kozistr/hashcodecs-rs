@@ -1,6 +1,6 @@
 # XXH3 API Reference
 
-The functions below are rendered from the authoritative typed API declaration.
+This reference uses the authoritative typed API declaration for all functions.
 
 ::: hashcodecs._hashcodecs
     options:

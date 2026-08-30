@@ -26,8 +26,8 @@ pub(super) const SECRET: [u8; 192] = [
 
 #[inline(always)]
 pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
-    // Length-class dispatch proves this range in optimized callers; checked
-    // indexing keeps the helper itself safe if a future caller is wrong.
+    // Length-class dispatch checks this range before optimized callers run.
+    // Checked indexing keeps this helper safe if a future caller supplies an invalid range.
     u32::from_le_bytes(
         s[o..o + 4]
             .try_into()
@@ -37,7 +37,7 @@ pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
 
 #[inline(always)]
 pub(super) fn u64le(s: &[u8], o: usize) -> u64 {
-    // See u32le; this is the same invariant for an eight-byte word.
+    // The `u32le` comment describes the same invariant for a four-byte word.
     u64::from_le_bytes(
         s[o..o + 8]
             .try_into()

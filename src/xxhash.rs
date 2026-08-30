@@ -1,22 +1,19 @@
-//! In-tree XXH3 implementation.
+//! This module implements XXH3 without an external codec crate.
 //!
-//! This module follows the public xxHash algorithm specification. The scalar
-//! core is the portability baseline; architecture-specific accumulation is
-//! deliberately kept behind dispatch points so unsupported CPUs never execute
-//! instructions they cannot run.
+//! The implementation follows the public xxHash algorithm specification. The scalar kernels provide the portability baseline.
+//! Runtime dispatch prevents a CPU from executing unsupported SIMD instructions.
 //!
-//! The 128-bit functions return `[low64, high64]`, matching the field order of
-//! the official xxHash `XXH128_hash_t` result. This pair contains numeric words,
-//! not serialized bytes; choose and document a byte order at protocol boundaries.
+//! The 128-bit functions return `[low64, high64]`. This order matches the official `XXH128_hash_t` result.
+//! The pair contains numeric words, not serialized bytes. Select and document a byte order at each protocol boundary.
 
 mod batch;
-mod hash;
-mod long;
+mod long_inputs;
+mod one_shot;
 mod primitives;
-mod short;
+mod short_inputs;
 
 pub use batch::{xxh3_64_batch, xxh3_64_batch_each, xxh3_128_batch, xxh3_128_batch_each};
-pub use hash::{xxh3_64, xxh3_128};
+pub use one_shot::{xxh3_64, xxh3_128};
 
 #[cfg(all(test, miri))]
 mod miri_tests;

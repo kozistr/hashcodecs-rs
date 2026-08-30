@@ -186,7 +186,7 @@ fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
 
 #[inline(always)]
 /// # Safety
-/// The selected backend must be supported by the current CPU.
+/// The current CPU must support the selected backend.
 pub(in crate::murmur3) unsafe fn try_mix_x86_128_body(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u32; 4],

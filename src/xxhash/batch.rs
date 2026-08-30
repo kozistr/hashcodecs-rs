@@ -35,12 +35,22 @@ where
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
+    let mut index = 0;
+    while index < inputs.len() && inputs[index].len() <= 240 {
+        output(short(inputs[index], seed));
+        index += 1;
+    }
+    if index == inputs.len() {
+        return;
+    }
+
+    let engine = LongEngine::new();
     batch_each_with_engine(
-        inputs,
+        &inputs[index..],
         seed,
         short,
         finalize,
-        &LongEngine::new(),
+        &engine,
         &mut output,
     );
 }

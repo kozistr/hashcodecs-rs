@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
-from packaging.tags import sys_tags
+from packaging.tags import Tag, mac_platforms, sys_tags
 
 
 class CustomBuildHook(BuildHookInterface[Any]):
@@ -22,7 +22,7 @@ class CustomBuildHook(BuildHookInterface[Any]):
             return
 
         root = Path(self.root)
-        wheel_tag = self._wheel_tag()
+        build_tag = str(next(sys_tags()))
         env = os.environ.copy()
         configured_target_dir = env.get('CARGO_TARGET_DIR') or env.get('CARGO_LLVM_COV_TARGET_DIR')
         if configured_target_dir:
@@ -30,7 +30,7 @@ class CustomBuildHook(BuildHookInterface[Any]):
             if not target_dir.is_absolute():
                 target_dir = root / target_dir
         else:
-            target_dir = root / 'target' / 'hatch' / wheel_tag
+            target_dir = root / 'target' / 'hatch' / build_tag
         env['CARGO_TARGET_DIR'] = str(target_dir)
         env['PYO3_PYTHON'] = sys.executable
         result = subprocess.run(
@@ -58,7 +58,7 @@ class CustomBuildHook(BuildHookInterface[Any]):
         extension = self._cdylib_artifact(result.stdout)
         build_data['force_include'] = {str(extension): f'hashcodecs/_hashcodecs{self._extension_suffix()}'}
         build_data['pure_python'] = False
-        build_data['tag'] = wheel_tag
+        build_data['tag'] = self._wheel_tag(extension)
 
     @staticmethod
     def _print_cargo_diagnostics(messages: str) -> None:
@@ -99,5 +99,40 @@ class CustomBuildHook(BuildHookInterface[Any]):
         return '.pyd' if platform.system() == 'Windows' else '.so'
 
     @staticmethod
-    def _wheel_tag() -> str:
-        return str(next(sys_tags()))
+    def _wheel_tag(extension: Path) -> str:
+        tag = next(sys_tags())
+        if platform.system() != 'Darwin':
+            return str(tag)
+
+        deployment_target = CustomBuildHook._macos_deployment_target(extension)
+        platform_tag = next(mac_platforms(version=deployment_target, arch=platform.machine()))
+        return str(Tag(tag.interpreter, tag.abi, platform_tag))
+
+    @staticmethod
+    def _macos_deployment_target(extension: Path) -> tuple[int, int]:
+        result = subprocess.run(
+            ['otool', '-l', str(extension)],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        return CustomBuildHook._parse_macos_deployment_target(result.stdout)
+
+    @staticmethod
+    def _parse_macos_deployment_target(load_commands: str) -> tuple[int, int]:
+        command = ''
+        version_field = {'LC_BUILD_VERSION': 'minos', 'LC_VERSION_MIN_MACOSX': 'version'}
+        for line in load_commands.splitlines():
+            fields = line.split()
+            if len(fields) != 2:
+                continue
+            name, value = fields
+            if name == 'cmd':
+                command = value
+                continue
+            if name != version_field.get(command):
+                continue
+            parts = value.split('.')
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                return int(parts[0]), int(parts[1])
+        raise RuntimeError('otool did not report a macOS deployment target')

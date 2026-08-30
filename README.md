@@ -184,10 +184,10 @@ Read the focused cases, commands, and values in [BENCHMARK.md](BENCHMARK.md). Re
 Comparison crates and Python packages are development-only dependencies and are not included in consumer builds.
 
 ```sh
-cargo bench --bench base64
-cargo bench --bench murmur3
-cargo bench --bench xxhash
-cargo bench --bench crossover
+cargo bench --manifest-path benches/Cargo.toml --bench base64
+cargo bench --manifest-path benches/Cargo.toml --bench murmur3
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash
+cargo bench --manifest-path benches/Cargo.toml --bench crossover
 
 uv sync --group benchmark --no-install-project
 uv run --no-project --with . python benchmarks/python_base64.py
@@ -207,7 +207,7 @@ For the same-ISA Windows XXH3 comparison shown above, rebuild the C baseline wit
 ```powershell
 $env:CFLAGS='/O2 /arch:AVX2'
 cargo clean -p xxhash-c-sys
-cargo bench --bench xxhash
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 ```
 
 ## Performance snapshot

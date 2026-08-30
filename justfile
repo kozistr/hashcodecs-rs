@@ -54,10 +54,10 @@ build:
     uv build
 
 bench-base64:
-    cargo bench --bench base64
+    cargo bench --manifest-path benches/Cargo.toml --bench base64
 
 bench-murmur3:
-    cargo bench --bench murmur3
+    cargo bench --manifest-path benches/Cargo.toml --bench murmur3
 
 bench-xxhash:
-    cargo bench --bench xxhash
+    cargo bench --manifest-path benches/Cargo.toml --bench xxhash

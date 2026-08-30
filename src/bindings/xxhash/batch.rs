@@ -3,7 +3,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use crate::bindings::buffer::{BytesLike, bytes_like, with_bytearray};
-use crate::bindings::objects::{bytearray_data, bytearray_size, list_from_fn, list_items};
+use crate::bindings::objects::{
+    bytearray_data, bytearray_size, list_from_callback, list_from_fn, list_items,
+};
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::objects::{exact_bytes_at, exact_small_bytes};
 use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
@@ -76,40 +78,22 @@ fn xxh3_128_batch_results(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<[u64; 2]>
     Ok(hashes)
 }
 
-fn xxh3_64_hashes(py: Python<'_>, items: &Bound<'_, PyList>, seed: u64) -> PyResult<Vec<u64>> {
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return xxh3_64_batch_results(&inputs, seed);
-    }
-    let items = list_items(items);
-    let parsed = parse_batch(py, &items)?;
-    let detach = batch_detach_safe(&parsed);
-    let inputs = borrow_batch(&parsed)?;
-    if detach {
-        py.detach(|| xxh3_64_batch_results(&inputs, seed))
-    } else {
-        xxh3_64_batch_results(&inputs, seed)
-    }
+fn xxh3_64_list<'py>(py: Python<'py>, inputs: &[&[u8]], seed: u64) -> PyResult<Bound<'py, PyList>> {
+    list_from_callback(py, inputs.len(), |append| {
+        xxh3_64_batch_each(inputs, seed, |hash| append(PyInt::new(py, hash)));
+    })
 }
 
-fn xxh3_128_hashes(
-    py: Python<'_>,
-    items: &Bound<'_, PyList>,
+fn xxh3_128_list<'py>(
+    py: Python<'py>,
+    inputs: &[&[u8]],
     seed: u64,
-) -> PyResult<Vec<[u64; 2]>> {
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return xxh3_128_batch_results(&inputs, seed);
-    }
-    let items = list_items(items);
-    let parsed = parse_batch(py, &items)?;
-    let detach = batch_detach_safe(&parsed);
-    let inputs = borrow_batch(&parsed)?;
-    if detach {
-        py.detach(|| xxh3_128_batch_results(&inputs, seed))
-    } else {
-        xxh3_128_batch_results(&inputs, seed)
-    }
+) -> PyResult<Bound<'py, PyList>> {
+    list_from_callback(py, inputs.len(), |append| {
+        xxh3_128_batch_each(inputs, seed, |[low, high]| {
+            append(PyInt::new(py, (u128::from(high) << 64) | u128::from(low)));
+        });
+    })
 }
 
 fn packed_output_len(
@@ -199,7 +183,18 @@ pub(super) fn xxh3_64_batch<'py>(
     items: &Bound<'py, PyList>,
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
-    let hashes = xxh3_64_hashes(py, items, seed)?;
+    #[cfg(not(Py_GIL_DISABLED))]
+    if let Some(inputs) = exact_small_inputs(items)? {
+        return xxh3_64_list(py, &inputs, seed);
+    }
+    let items = list_items(items)?;
+    let parsed = parse_batch(py, &items)?;
+    let detach = batch_detach_safe(&parsed);
+    let inputs = borrow_batch(&parsed)?;
+    if !detach {
+        return xxh3_64_list(py, &inputs, seed);
+    }
+    let hashes = py.detach(|| xxh3_64_batch_results(&inputs, seed))?;
     let mut hashes = hashes.into_iter();
     list_from_fn(py, hashes.len(), |_| {
         Ok(PyInt::new(py, hashes.next().expect("hash count is exact")))
@@ -211,7 +206,18 @@ pub(super) fn xxh3_128_batch<'py>(
     items: &Bound<'py, PyList>,
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
-    let hashes = xxh3_128_hashes(py, items, seed)?;
+    #[cfg(not(Py_GIL_DISABLED))]
+    if let Some(inputs) = exact_small_inputs(items)? {
+        return xxh3_128_list(py, &inputs, seed);
+    }
+    let items = list_items(items)?;
+    let parsed = parse_batch(py, &items)?;
+    let detach = batch_detach_safe(&parsed);
+    let inputs = borrow_batch(&parsed)?;
+    if !detach {
+        return xxh3_128_list(py, &inputs, seed);
+    }
+    let hashes = py.detach(|| xxh3_128_batch_results(&inputs, seed))?;
     let mut hashes = hashes.into_iter();
     list_from_fn(py, hashes.len(), |_| {
         let [low, high] = hashes.next().expect("hash count is exact");
@@ -229,7 +235,7 @@ pub(super) fn xxh3_64_batch_into(
     if let Some(inputs) = exact_small_inputs(items)? {
         return write_direct_64(output, &inputs, seed);
     }
-    let items = list_items(items);
+    let items = list_items(items)?;
     with_bytearray(output, || packed_output_len(output, items.len(), 8))?;
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);
@@ -260,7 +266,7 @@ pub(super) fn xxh3_128_batch_into(
     if let Some(inputs) = exact_small_inputs(items)? {
         return write_direct_128(output, &inputs, seed);
     }
-    let items = list_items(items);
+    let items = list_items(items)?;
     with_bytearray(output, || packed_output_len(output, items.len(), 16))?;
     let parsed = parse_batch(py, &items)?;
     let detach = batch_detach_safe(&parsed);

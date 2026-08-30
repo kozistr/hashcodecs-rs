@@ -249,7 +249,7 @@ fn batch_outputs<'py>(
     identities
         .try_reserve(outputs.len())
         .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-    for (index, output) in list_items(outputs).into_iter().enumerate() {
+    for (index, output) in list_items(outputs)?.into_iter().enumerate() {
         let output = output
             .cast_into::<PyByteArray>()
             .map_err(|_| PyTypeError::new_err(format!("outputs[{index}] must be a bytearray")))?;
@@ -435,7 +435,7 @@ fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(items) = exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX) {
+    if let Some(items) = exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX)? {
         // Validation retains every input before allocating the output list.
         // Creating a GC-tracked Python object can run finalizers which mutate
         // the original list.
@@ -446,7 +446,7 @@ fn b64encode_batch_parsed<'py>(
             encode::encode_exact(py, item.as_bytes(), altchars, true, None)
         });
     }
-    let items = list_items(items);
+    let items = list_items(items)?;
     let length = items.len();
     let mut items = items.into_iter();
     list_from_fn(py, length, |_| {
@@ -498,7 +498,7 @@ fn b64encode_batch_into_parsed<'py>(
     outputs: &Bound<'py, PyList>,
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
-    let items = list_items(items);
+    let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?;
     list_from_fn(py, items.len(), |index| {

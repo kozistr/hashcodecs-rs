@@ -73,25 +73,12 @@ pub(super) fn decode_with_binascii<'py>(
     altchars: Option<[u8; 2]>,
     strict_mode: bool,
     padded: bool,
-    ignorechars: Option<&Bound<'py, PyAny>>,
-    canonical: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_with_binascii(
-            py,
-            &BytesLike::Owned(input),
-            altchars,
-            strict_mode,
-            padded,
-            ignorechars,
-            canonical,
-        );
+        return decode_with_binascii(py, &BytesLike::Owned(input), altchars, strict_mode, padded);
     }
-    let custom_alphabet = altchars.is_some() && ignorechars.is_some();
-    let translated = if custom_alphabet {
-        None
-    } else if let Some(altchars) = altchars {
+    let translated = if let Some(altchars) = altchars {
         unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
     } else {
         None
@@ -111,18 +98,6 @@ pub(super) fn decode_with_binascii<'py>(
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
         kwargs.set_item("padded", padded)?;
-        kwargs.set_item("canonical", canonical)?;
-        if let Some(ignorechars) = ignorechars {
-            kwargs.set_item("ignorechars", ignorechars)?;
-        } else {
-            kwargs.set_item("ignorechars", b"")?;
-        }
-        if let Some([plus, slash]) = altchars.filter(|_| custom_alphabet) {
-            let mut alphabet = *STANDARD_ALPHABET;
-            alphabet[62] = plus;
-            alphabet[63] = slash;
-            kwargs.set_item("alphabet", PyBytes::new(py, &alphabet))?;
-        }
         decode.call((data,), Some(&kwargs))?
     } else if !python_at_least(py, (3, 11)) {
         if strict_mode && !strict_base64_310(input) {

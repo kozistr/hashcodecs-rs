@@ -31,7 +31,7 @@ fn b64decode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
-    let items = list_items(items);
+    let items = list_items(items)?;
     let length = items.len();
     let mut items = items.into_iter();
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
@@ -85,7 +85,7 @@ fn b64decode_batch_into_parsed<'py>(
     altchars: Option<[u8; 2]>,
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
-    let items = list_items(items);
+    let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?;
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);

@@ -1,0 +1,37 @@
+[package]
+name = "hashcodecs-benchmarks"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dev-dependencies]
+base64 = "=0.23.1"
+base64-turbo = "=0.3.0"
+criterion = { version = "=0.8.2", default-features = false, features = ["cargo_bench_support"] }
+fastmurmur3 = "=0.2.0"
+hashcodecs = { path = ".." }
+mimalloc = "=0.1.52"
+mm3h = "=0.1.3"
+murmur3 = "=0.5.2"
+murmurs = "=1.0.5"
+xxhash-c-sys = "=0.8.7"
+
+[[bench]]
+name = "base64"
+path = "base64.rs"
+harness = false
+
+[[bench]]
+name = "murmur3"
+path = "murmur3.rs"
+harness = false
+
+[[bench]]
+name = "xxhash"
+path = "xxhash.rs"
+harness = false
+
+[[bench]]
+name = "crossover"
+path = "crossover.rs"
+harness = false

@@ -28,7 +28,13 @@ def benchmark(
     )
 
 
-def benchmark_ours(name: str, input_size: int, ours: Callable[[], object]) -> None:
+def benchmark_ours(
+    name: str,
+    input_size: int,
+    ours: Callable[[], object],
+    reference: Callable[[], object],
+) -> None:
+    assert ours() == reference()
     ours_rate = throughput(ours, input_size)
     print(f'{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
@@ -105,7 +111,7 @@ def main() -> None:
                 )
             for name, ours, reference in cases:
                 if args.hashcodecs_only:
-                    benchmark_ours(name, size, ours)
+                    benchmark_ours(name, size, ours, reference)
                 else:
                     benchmark(name, size, ours, reference)
     finally:

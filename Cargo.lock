@@ -197,18 +197,29 @@ name = "hashcodecs"
 version = "1.2.1"
 dependencies = [
  "base64",
- "base64-turbo",
- "criterion",
- "fastmurmur3",
  "memchr",
  "mimalloc",
- "mm3h",
  "murmur3",
- "murmurs",
  "pyo3",
  "pyo3-build-config",
  "xxhash-c-sys",
  "xxhash-rust",
+]
+
+[[package]]
+name = "hashcodecs-benchmarks"
+version = "0.0.0"
+dependencies = [
+ "base64",
+ "base64-turbo",
+ "criterion",
+ "fastmurmur3",
+ "hashcodecs",
+ "mimalloc",
+ "mm3h",
+ "murmur3",
+ "murmurs",
+ "xxhash-c-sys",
 ]
 
 [[package]]

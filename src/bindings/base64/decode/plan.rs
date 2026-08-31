@@ -51,51 +51,12 @@ pub(super) struct DecodePlan<'a, 'buffer, 'py> {
     options: DecodeOptions<'a, 'py>,
 }
 
-pub(super) enum DecodeExecution<'a, 'py> {
-    Allocate,
-    Into(&'a Bound<'py, PyByteArray>),
-}
-
-pub(super) enum DecodeOutput<'py> {
-    Bytes(Bound<'py, PyBytes>),
-    Written(usize),
-}
-
-impl<'py> DecodeOutput<'py> {
-    pub(super) fn into_bytes(self) -> Bound<'py, PyBytes> {
-        match self {
-            Self::Bytes(output) => output,
-            Self::Written(_) => unreachable!("allocating decode returns bytes"),
-        }
-    }
-
-    pub(super) fn into_written(self) -> usize {
-        match self {
-            Self::Written(written) => written,
-            Self::Bytes(_) => unreachable!("decode-into returns a byte count"),
-        }
-    }
-}
-
 impl<'a, 'buffer, 'py> DecodePlan<'a, 'buffer, 'py> {
     pub(super) fn new(input: &'a BytesLike<'buffer, 'py>, options: DecodeOptions<'a, 'py>) -> Self {
         Self { input, options }
     }
 
-    pub(super) fn execute(
-        self,
-        py: Python<'py>,
-        execution: DecodeExecution<'a, 'py>,
-    ) -> PyResult<DecodeOutput<'py>> {
-        match execution {
-            DecodeExecution::Allocate => self.execute_allocating(py).map(DecodeOutput::Bytes),
-            DecodeExecution::Into(output) => {
-                self.execute_into(py, output).map(DecodeOutput::Written)
-            }
-        }
-    }
-
-    fn execute_allocating(self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub(super) fn execute_allocating(self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let options = self.options;
         if options.ignorechars.is_none()
             && !options.canonical
@@ -119,7 +80,11 @@ impl<'a, 'buffer, 'py> DecodePlan<'a, 'buffer, 'py> {
         Ok(output)
     }
 
-    fn execute_into(self, py: Python<'py>, output: &Bound<'py, PyByteArray>) -> PyResult<usize> {
+    pub(super) fn execute_into(
+        self,
+        py: Python<'py>,
+        output: &Bound<'py, PyByteArray>,
+    ) -> PyResult<usize> {
         // Every decoder attempt and the warning scan must observe the same input.
         if let Some(input) = self.input.snapshot_for_output(output)? {
             let input = BytesLike::OwnedVec(input);

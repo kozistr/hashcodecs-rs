@@ -15,7 +15,7 @@ use self::native::{
     try_decode_lenient_into, try_decode_strict,
 };
 use self::output::copy_decoded_into;
-use self::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
+use self::plan::{DecodeOptions, DecodePlan};
 
 mod batch;
 mod fallback;
@@ -171,9 +171,7 @@ pub(super) fn b64decode<'py>(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
-    DecodePlan::new(&input, options)
-        .execute(py, DecodeExecution::Allocate)
-        .map(DecodeOutput::into_bytes)
+    DecodePlan::new(&input, options).execute_allocating(py)
 }
 
 /// Decode with the standard Base64 alphabet.
@@ -182,9 +180,7 @@ pub(super) fn standard_b64decode<'py>(
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(&input, DecodeOptions::standard())
-        .execute(py, DecodeExecution::Allocate)
-        .map(DecodeOutput::into_bytes)
+    DecodePlan::new(&input, DecodeOptions::standard()).execute_allocating(py)
 }
 
 /// Decode standard Base64 into a reusable output.
@@ -194,9 +190,7 @@ pub(super) fn standard_b64decode_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(&input, DecodeOptions::standard())
-        .execute(py, DecodeExecution::Into(output))
-        .map(DecodeOutput::into_written)
+    DecodePlan::new(&input, DecodeOptions::standard()).execute_into(py, output)
 }
 
 pub(super) fn urlsafe_b64decode<'py>(
@@ -205,9 +199,7 @@ pub(super) fn urlsafe_b64decode<'py>(
     padded: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(&input, DecodeOptions::urlsafe(padded))
-        .execute(py, DecodeExecution::Allocate)
-        .map(DecodeOutput::into_bytes)
+    DecodePlan::new(&input, DecodeOptions::urlsafe(padded)).execute_allocating(py)
 }
 
 pub(super) fn urlsafe_b64decode_into(
@@ -217,9 +209,7 @@ pub(super) fn urlsafe_b64decode_into(
     padded: bool,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(&input, DecodeOptions::urlsafe(padded))
-        .execute(py, DecodeExecution::Into(output))
-        .map(DecodeOutput::into_written)
+    DecodePlan::new(&input, DecodeOptions::urlsafe(padded)).execute_into(py, output)
 }
 
 fn decode_plan_into_inner<'py>(
@@ -359,7 +349,5 @@ pub(super) fn b64decode_into(
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
     let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
-    DecodePlan::new(&input, options)
-        .execute(py, DecodeExecution::Into(output))
-        .map(DecodeOutput::into_written)
+    DecodePlan::new(&input, options).execute_into(py, output)
 }

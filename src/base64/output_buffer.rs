@@ -4,10 +4,7 @@ use core::mem::{ManuallyDrop, MaybeUninit};
 
 #[inline]
 pub(super) fn allocate_uninitialized_output(length: usize) -> Vec<MaybeUninit<u8>> {
-    let mut output = Vec::with_capacity(length);
-    // `MaybeUninit<u8>` permits every bit pattern, including uninitialized memory.
-    unsafe { output.set_len(length) };
-    output
+    Box::<[u8]>::new_uninit_slice(length).into_vec()
 }
 
 #[inline]

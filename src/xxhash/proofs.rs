@@ -1,5 +1,5 @@
 use super::long_inputs::{LongInput, build_long_input_schedule};
-use super::primitives::{SECRET, u32le, u64le};
+use super::primitives::{SECRET, read_u32_le, read_u64_le};
 
 #[kani::proof]
 fn little_endian_loads_stay_within_the_slice() {
@@ -25,8 +25,8 @@ fn little_endian_loads_stay_within_the_slice() {
         bytes[offset64 + 6],
         bytes[offset64 + 7],
     ]);
-    assert_eq!(u32le(&bytes, offset32), expected32);
-    assert_eq!(u64le(&bytes, offset64), expected64);
+    assert_eq!(read_u32_le(&bytes, offset32), expected32);
+    assert_eq!(read_u64_le(&bytes, offset64), expected64);
 }
 
 #[kani::proof]

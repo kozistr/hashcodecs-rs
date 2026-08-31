@@ -127,7 +127,7 @@ fn decode_plan_allocating_inner<'py>(
         if padded
             && let Some(alphabet) = direct
             && let Some(normalized) = normalize_mime_whitespace(input)?
-            && let Some(output) = try_decode_strict(py, &BytesLike::Owned(normalized), alphabet)?
+            && let Some(output) = try_decode_strict(py, &BytesLike::OwnedVec(normalized), alphabet)?
         {
             return Ok(output);
         }
@@ -295,7 +295,7 @@ fn decode_plan_into_inner<'py>(
         && matches!(altchars, None | Some([b'-', b'_']))
         && let Some(normalized) = normalize_mime_whitespace(input)?
     {
-        let normalized = BytesLike::Owned(normalized);
+        let normalized = BytesLike::OwnedVec(normalized);
         match decode_strict_into(&normalized, output, alphabet, true)? {
             Ok(written) => return Ok(written),
             Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}

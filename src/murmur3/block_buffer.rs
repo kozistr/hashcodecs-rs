@@ -21,7 +21,7 @@ impl<'a, const BLOCK_SIZE: usize> FullBlocks<'a, BLOCK_SIZE> {
     }
 
     #[inline(always)]
-    pub(super) fn len(self) -> usize {
+    pub(super) fn byte_len(self) -> usize {
         self.0.len()
     }
 }
@@ -60,7 +60,7 @@ impl<const BLOCK_SIZE: usize> BlockBuffer<BLOCK_SIZE> {
         }
 
         let (blocks, remaining) = FullBlocks::split(input);
-        if blocks.len() != 0 {
+        if blocks.byte_len() != 0 {
             consume(blocks);
         }
         self.bytes[..remaining.len()].copy_from_slice(remaining);

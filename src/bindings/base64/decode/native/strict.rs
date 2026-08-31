@@ -32,7 +32,7 @@ fn decode_strict_native<'py>(
 ) -> PyResult<Result<Bound<'py, PyBytes>, StrictDecodeError>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_strict_native(py, &BytesLike::Owned(input), alphabet);
+        return decode_strict_native(py, &BytesLike::OwnedVec(input), alphabet);
     }
     let layout = match unsafe { input.with_bytes(decode_layout) } {
         Ok(layout) => layout,
@@ -177,7 +177,7 @@ fn decode_unpadded<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_unpadded(py, &BytesLike::Owned(input), alphabet);
+        return decode_unpadded(py, &BytesLike::OwnedVec(input), alphabet);
     }
     let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
         .map_err(|_| decoding_error(py, "Incorrect padding"))?;

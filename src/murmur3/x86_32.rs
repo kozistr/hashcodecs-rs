@@ -149,12 +149,12 @@ pub fn murmur3_x86_32(input: &[u8], seed: u32) -> u32 {
 pub(super) fn mix_x86_32_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        if blocks.len() < dispatch::X86_32_SSE41_MIN {
+        if blocks.byte_len() < dispatch::X86_32_SSE41_MIN {
             mix_x86_32_body_scalar(blocks, hash);
             return;
         }
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::select_x86_32_backend(blocks.len(), capabilities);
+        let selected = dispatch::select_x86_32_backend(blocks.byte_len(), capabilities);
         mix_x86_32_body_with_backend(blocks, hash, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

@@ -34,7 +34,7 @@ pub(super) unsafe fn decode_with_runtime_backend(
     input: &[u8],
     output: *mut u8,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
     transactional_errors: bool,
 ) -> Result<(usize, usize), Base64Error> {
     unsafe {
@@ -43,7 +43,7 @@ pub(super) unsafe fn decode_with_runtime_backend(
             output,
             backend::selected_backend().backend,
             alphabet,
-            padded_stores,
+            output_has_store_slack,
             transactional_errors,
         )
     }
@@ -127,7 +127,7 @@ type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
     match backend {
-        Backend::Avx512 => Some(encode_backend::avx512::encode::<URLSAFE>),
+        Backend::Avx512Vbmi => Some(encode_backend::avx512::encode::<URLSAFE>),
         Backend::Avx2 => Some(encode_backend::avx2::encode_avx2::<URLSAFE>),
         Backend::Sse41 | Backend::Ssse3 => Some(encode_backend::ssse3::encode_ssse3::<URLSAFE>),
         Backend::Scalar | Backend::Neon => None,
@@ -153,12 +153,21 @@ pub(super) unsafe fn decode_with_backend_ptr(
     output: *mut u8,
     backend: Backend,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
 ) -> Result<(usize, usize), Base64Error> {
     if !backend::is_supported(backend) {
         return Ok((0, 0));
     }
-    unsafe { decode_with_backend_ptr_mode(input, output, backend, alphabet, padded_stores, false) }
+    unsafe {
+        decode_with_backend_ptr_mode(
+            input,
+            output,
+            backend,
+            alphabet,
+            output_has_store_slack,
+            false,
+        )
+    }
 }
 
 #[inline]
@@ -167,19 +176,19 @@ unsafe fn decode_with_backend_ptr_mode(
     output: *mut u8,
     backend: Backend,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
     transactional_errors: bool,
 ) -> Result<(usize, usize), Base64Error> {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let _ = transactional_errors;
-        unsafe { decode_x86_alphabet(input, output, backend, alphabet, padded_stores) }
+        unsafe { decode_x86_alphabet(input, output, backend, alphabet, output_has_store_slack) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            let _ = padded_stores;
+            let _ = output_has_store_slack;
             return unsafe {
                 if transactional_errors {
                     match alphabet {
@@ -213,7 +222,7 @@ unsafe fn decode_with_backend_ptr_mode(
             output,
             backend,
             alphabet,
-            padded_stores,
+            output_has_store_slack,
             transactional_errors,
         );
         Ok((0, 0))
@@ -227,7 +236,7 @@ unsafe fn decode_x86_alphabet(
     output: *mut u8,
     backend: Backend,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
 ) -> Result<(usize, usize), Base64Error> {
     match alphabet {
         DecodeAlphabet::Standard => unsafe {
@@ -235,11 +244,16 @@ unsafe fn decode_x86_alphabet(
                 input,
                 output,
                 backend,
-                padded_stores,
+                output_has_store_slack,
             )
         },
         DecodeAlphabet::UrlSafe => unsafe {
-            decode_x86_store::<x86_contracts::UrlSafeDecoder>(input, output, backend, padded_stores)
+            decode_x86_store::<x86_contracts::UrlSafeDecoder>(
+                input,
+                output,
+                backend,
+                output_has_store_slack,
+            )
         },
         DecodeAlphabet::Mixed => unsafe {
             decode_x86::<x86_contracts::MixedDecoder, x86_contracts::ExactStore>(
@@ -255,9 +269,9 @@ unsafe fn decode_x86_store<A: x86_contracts::Decoder>(
     input: &[u8],
     output: *mut u8,
     backend: Backend,
-    padded_stores: bool,
+    output_has_store_slack: bool,
 ) -> Result<(usize, usize), Base64Error> {
-    if padded_stores {
+    if output_has_store_slack {
         unsafe { decode_x86::<A, x86_contracts::PaddedStore>(input, output, backend) }
     } else {
         unsafe { decode_x86::<A, x86_contracts::ExactStore>(input, output, backend) }
@@ -286,7 +300,7 @@ fn decode_x86_kernel<A: x86_contracts::Decoder, S: x86_contracts::Store>(
     backend: Backend,
 ) -> Option<DecodeKernel> {
     match backend {
-        Backend::Avx512 => Some(decode_backend::avx512::decode::<A, S>),
+        Backend::Avx512Vbmi => Some(decode_backend::avx512::decode::<A, S>),
         Backend::Avx2 => Some(decode_backend::avx2::decode_avx2::<A, S>),
         Backend::Sse41 => Some(decode_backend::sse41::decode_sse41::<A, S>),
         Backend::Ssse3 => Some(decode_backend::ssse3::decode_ssse3::<A, S>),
@@ -302,7 +316,7 @@ mod tests {
     #[test]
     fn every_x86_backend_resolves_without_running_unsupported_instructions() {
         for backend in [
-            Backend::Avx512,
+            Backend::Avx512Vbmi,
             Backend::Avx2,
             Backend::Sse41,
             Backend::Ssse3,

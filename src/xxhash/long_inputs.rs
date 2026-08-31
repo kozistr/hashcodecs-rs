@@ -144,8 +144,8 @@ static DEFAULT_SECRET: Secret = Secret(SECRET);
 pub(super) fn initialize_secret_scalar(seed: u64) -> Secret {
     let mut secret = SECRET;
     for offset in (0..192).step_by(16) {
-        let lo = u64le(&SECRET, offset).wrapping_add(seed);
-        let hi = u64le(&SECRET, offset + 8).wrapping_sub(seed);
+        let lo = read_u64_le(&SECRET, offset).wrapping_add(seed);
+        let hi = read_u64_le(&SECRET, offset + 8).wrapping_sub(seed);
         secret[offset..offset + 8].copy_from_slice(&lo.to_le_bytes());
         secret[offset + 8..offset + 16].copy_from_slice(&hi.to_le_bytes());
     }
@@ -216,9 +216,9 @@ pub(super) fn merge(acc: &[u64; 8], secret: &Secret, offset: usize, start: u64) 
     let secret = secret.as_bytes();
     let mut result = start;
     for lane in 0..4 {
-        result = result.wrapping_add(mulfold(
-            acc[lane * 2] ^ u64le(secret, offset + lane * 16),
-            acc[lane * 2 + 1] ^ u64le(secret, offset + lane * 16 + 8),
+        result = result.wrapping_add(mul_fold(
+            acc[lane * 2] ^ read_u64_le(secret, offset + lane * 16),
+            acc[lane * 2 + 1] ^ read_u64_le(secret, offset + lane * 16 + 8),
         ));
     }
     avalanche(result)
@@ -277,7 +277,7 @@ enum LongBackend {
 pub(super) struct LongEngine {
     backend: LongBackend,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    avx2: bool,
+    avx2_available: bool,
 }
 
 impl LongEngine {
@@ -318,7 +318,7 @@ impl LongEngine {
         };
         Self {
             backend,
-            avx2: capabilities.supports(SimdBackend::Avx2),
+            avx2_available: capabilities.supports(SimdBackend::Avx2),
         }
     }
 
@@ -328,7 +328,7 @@ impl LongEngine {
             return None;
         }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        if self.avx2 {
+        if self.avx2_available {
             return Some(unsafe { avx2::init_secret(seed) });
         }
         Some(initialize_secret_scalar(seed))
@@ -343,7 +343,7 @@ impl LongEngine {
     pub(super) fn has_batch_kernel(&self) -> bool {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            self.avx2
+            self.avx2_available
         }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
         {
@@ -438,7 +438,7 @@ impl LongEngine {
         }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if !self.avx2 {
+            if !self.avx2_available {
                 return None;
             }
             Some(unsafe { avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
@@ -458,7 +458,7 @@ impl LongEngine {
         }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if !self.avx2 {
+            if !self.avx2_available {
                 return None;
             }
             Some(unsafe { avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
@@ -478,7 +478,7 @@ impl LongEngine {
         }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if !self.avx2 {
+            if !self.avx2_available {
                 return None;
             }
             Some(unsafe { avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })

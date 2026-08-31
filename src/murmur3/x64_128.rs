@@ -155,13 +155,13 @@ pub(super) fn murmur3_x64_128_inner(input: &[u8], seed: u64) -> [u64; 2] {
 
 #[inline]
 pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
-    if blocks.len() == 0 {
+    if blocks.byte_len() == 0 {
         return;
     }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::select_x64_128_backend(blocks.len(), capabilities);
+        let selected = dispatch::select_x64_128_backend(blocks.byte_len(), capabilities);
         mix_x64_128_body_with_backend(blocks, hashes, selected, capabilities.has_bmi2());
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

@@ -193,7 +193,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
     assert_eq!(select_backend(SimdBackend::Sse41), Backend::Sse41);
     assert_eq!(select_backend(SimdBackend::Avx2), Backend::Avx2);
     assert_eq!(select_backend(SimdBackend::Avx512), Backend::Scalar);
-    assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512);
+    assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512Vbmi);
     assert!(backend::is_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),
@@ -225,7 +225,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
         Backend::Ssse3,
         Backend::Sse41,
         Backend::Avx2,
-        Backend::Avx512,
+        Backend::Avx512Vbmi,
     ]
     .into_iter()
     .filter(|candidate| !backend::is_supported(*candidate))
@@ -259,7 +259,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
         Backend::Ssse3,
         Backend::Sse41,
         Backend::Avx2,
-        Backend::Avx512,
+        Backend::Avx512Vbmi,
     ]
     .into_iter()
     .filter(|candidate| backend::is_supported(*candidate))
@@ -366,7 +366,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx512_decoder_tail_boundaries_match_scalar_output() {
-    if !backend::is_supported(Backend::Avx512) {
+    if !backend::is_supported(Backend::Avx512Vbmi) {
         return;
     }
 
@@ -376,7 +376,7 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
         let (consumed, written) = decode_with_backend(
             &encoded,
             &mut decoded,
-            Backend::Avx512,
+            Backend::Avx512Vbmi,
             DecodeAlphabet::Standard,
         )
         .unwrap();
@@ -538,7 +538,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
         Backend::Ssse3,
         Backend::Sse41,
         Backend::Avx2,
-        Backend::Avx512,
+        Backend::Avx512Vbmi,
     ]
     .into_iter()
     .filter(|candidate| backend::is_supported(*candidate))
@@ -551,7 +551,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
             for byte in 0..=u8::MAX {
                 // AVX-512 falls through to AVX2 unless it receives a complete 64-byte block.
                 let encoded_len = match backend {
-                    Backend::Avx512 => 64,
+                    Backend::Avx512Vbmi => 64,
                     Backend::Avx2 => 128,
                     _ => 16,
                 };

@@ -665,7 +665,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
 ) -> PyResult<Option<Bound<'py, PyBytes>>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return try_decode_lenient(py, &BytesLike::Owned(input), altchars, padded);
+        return try_decode_lenient(py, &BytesLike::OwnedVec(input), altchars, padded);
     }
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;

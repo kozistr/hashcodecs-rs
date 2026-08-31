@@ -25,7 +25,7 @@ pub(super) const SECRET: [u8; 192] = [
 ];
 
 #[inline(always)]
-pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
+pub(super) fn read_u32_le(s: &[u8], o: usize) -> u32 {
     // Length-class dispatch checks this range before optimized callers run.
     // Checked indexing keeps this helper safe if a future caller supplies an invalid range.
     u32::from_le_bytes(
@@ -36,8 +36,8 @@ pub(super) fn u32le(s: &[u8], o: usize) -> u32 {
 }
 
 #[inline(always)]
-pub(super) fn u64le(s: &[u8], o: usize) -> u64 {
-    // The `u32le` comment describes the same invariant for a four-byte word.
+pub(super) fn read_u64_le(s: &[u8], o: usize) -> u64 {
+    // The `read_u32_le` comment describes the same invariant for a four-byte word.
     u64::from_le_bytes(
         s[o..o + 8]
             .try_into()
@@ -46,7 +46,7 @@ pub(super) fn u64le(s: &[u8], o: usize) -> u64 {
 }
 
 #[inline(always)]
-pub(super) fn mulfold(a: u64, b: u64) -> u64 {
+pub(super) fn mul_fold(a: u64, b: u64) -> u64 {
     let p = (a as u128) * (b as u128);
     p as u64 ^ (p >> 64) as u64
 }
@@ -77,8 +77,15 @@ pub(super) fn rrmxmx(mut h: u64, len: usize) -> u64 {
 }
 
 #[inline(always)]
-pub(super) fn mix16(data: &[u8], doff: usize, secret: &[u8], soff: usize, seed: u64) -> u64 {
-    let lo = u64le(data, doff) ^ u64le(secret, soff).wrapping_add(seed);
-    let hi = u64le(data, doff + 8) ^ u64le(secret, soff + 8).wrapping_sub(seed);
-    mulfold(lo, hi)
+pub(super) fn mix16(
+    data: &[u8],
+    data_offset: usize,
+    secret: &[u8],
+    secret_offset: usize,
+    seed: u64,
+) -> u64 {
+    let lo = read_u64_le(data, data_offset) ^ read_u64_le(secret, secret_offset).wrapping_add(seed);
+    let hi = read_u64_le(data, data_offset + 8)
+        ^ read_u64_le(secret, secret_offset + 8).wrapping_sub(seed);
+    mul_fold(lo, hi)
 }

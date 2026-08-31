@@ -6,7 +6,7 @@ Pin one logical CPU. Run each case in one thread. Collect 50 Rust samples and 15
 baseline with AVX2, the backend that hashcodecs selects on this host. Higher throughput wins.
 
 Build the Python wheel with CPython 3.12 and the full C API. Keep competitor values from the latest comparison run.
-Use `uv run python benchmarks/render_charts.py` to render the charts. Read exact values in
+Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
 ## Timing Controls
@@ -128,3 +128,27 @@ Pass `bytearray` inputs to the Base64 API.
 Pass `bytearray` inputs to the MurmurHash3 API.
 
 [![Mutable Python MurmurHash3 inputs](docs/benchmarks/murmur3-python-mutable.svg)](docs/benchmarks/murmur3-python-mutable.svg)
+
+## Reproduction
+
+Run the benchmark
+
+```
+uv sync --python 3.12 --frozen --group benchmark --no-install-project
+
+uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_base64.py --hashcodecs-only
+
+uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_base64_batch.py --hashcodecs-only
+
+uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_murmur3.py --hashcodecs-only
+
+uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_murmur3.py --hashcodecs-only --incremental
+
+uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_xxhash.py --hashcodecs-only
+```
+
+Update the documentation
+
+```
+uv run --python 3.12 --no-project python benchmarks/render_charts.py
+```

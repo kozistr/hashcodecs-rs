@@ -845,7 +845,7 @@ pub(super) fn decode_advanced_strict_into(
     if let Some(input) = input.snapshot_for_output(output)? {
         return decode_advanced_strict_into(
             py,
-            &BytesLike::Owned(input),
+            &BytesLike::OwnedVec(input),
             output,
             altchars,
             padded,
@@ -967,7 +967,7 @@ pub(in crate::bindings::base64::decode) fn decode_advanced<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced(py, &BytesLike::Owned(input), options);
+        return decode_advanced(py, &BytesLike::OwnedVec(input), options);
     }
     let decoder = AdvancedDecoder::new(py, options)?;
     let continue_after_padding = lenient_continues_after_padding(py);
@@ -1019,7 +1019,7 @@ pub(in crate::bindings::base64::decode) fn decode_advanced_into(
 ) -> PyResult<usize> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced_into(py, &BytesLike::Owned(input), output, options);
+        return decode_advanced_into(py, &BytesLike::OwnedVec(input), output, options);
     }
     let decoder = AdvancedDecoder::new(py, options)?;
     let continue_after_padding = lenient_continues_after_padding(py);

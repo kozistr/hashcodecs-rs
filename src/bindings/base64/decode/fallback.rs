@@ -76,7 +76,13 @@ pub(super) fn decode_with_binascii<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_with_binascii(py, &BytesLike::Owned(input), altchars, strict_mode, padded);
+        return decode_with_binascii(
+            py,
+            &BytesLike::OwnedVec(input),
+            altchars,
+            strict_mode,
+            padded,
+        );
     }
     let translated = if let Some(altchars) = altchars {
         unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?

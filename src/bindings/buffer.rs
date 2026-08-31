@@ -109,7 +109,7 @@ pub(super) enum BytesLike<'a, 'py> {
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
     Buffer(BorrowedBuffer<'py>),
     Text(&'a str),
-    Owned(Vec<u8>),
+    OwnedVec(Vec<u8>),
 }
 
 impl<'py> BytesLike<'_, 'py> {
@@ -125,7 +125,7 @@ impl<'py> BytesLike<'_, 'py> {
             }
             Self::Buffer(buffer) => buffer.len(),
             Self::Text(text) => text.len(),
-            Self::Owned(bytes) => bytes.len(),
+            Self::OwnedVec(bytes) => bytes.len(),
         }
     }
 
@@ -207,7 +207,7 @@ impl<'py> BytesLike<'_, 'py> {
                     bytearray_size(output.as_ptr()),
                 )
             }),
-            Self::Bytes(_) | Self::OwnedBytes(_) | Self::Text(_) | Self::Owned(_) => false,
+            Self::Bytes(_) | Self::OwnedBytes(_) | Self::Text(_) | Self::OwnedVec(_) => false,
         }
     }
 
@@ -229,7 +229,7 @@ impl<'py> BytesLike<'_, 'py> {
 
     fn into_snapshot_if(self, needed: bool) -> PyResult<Self> {
         match self.snapshot_if(needed)? {
-            Some(snapshot) => Ok(Self::Owned(snapshot)),
+            Some(snapshot) => Ok(Self::OwnedVec(snapshot)),
             None => Ok(self),
         }
     }
@@ -251,7 +251,7 @@ impl<'py> BytesLike<'_, 'py> {
             }),
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
-            Self::Owned(bytes) => callback(bytes),
+            Self::OwnedVec(bytes) => callback(bytes),
         }
     }
 
@@ -307,7 +307,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedBytes(bytes) => bytes.as_bytes(),
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
-            Self::Owned(bytes) => bytes,
+            Self::OwnedVec(bytes) => bytes,
         }
     }
 }

@@ -14,7 +14,7 @@ pub(super) enum Backend {
     Ssse3,
     Sse41,
     Avx2,
-    Avx512,
+    Avx512Vbmi,
 }
 
 #[derive(Clone, Copy)]
@@ -71,7 +71,7 @@ pub(super) fn select_backend(capabilities: Capabilities) -> Backend {
         SimdBackend::Ssse3,
         SimdBackend::Neon,
     ]) {
-        SimdBackend::Avx512Vbmi => Backend::Avx512,
+        SimdBackend::Avx512Vbmi => Backend::Avx512Vbmi,
         SimdBackend::Avx2 => Backend::Avx2,
         SimdBackend::Sse41 => Backend::Sse41,
         SimdBackend::Ssse3 => Backend::Ssse3,
@@ -88,7 +88,7 @@ pub(super) fn is_supported(backend: Backend) -> bool {
         Backend::Ssse3 => SimdBackend::Ssse3,
         Backend::Sse41 => SimdBackend::Sse41,
         Backend::Avx2 => SimdBackend::Avx2,
-        Backend::Avx512 => SimdBackend::Avx512Vbmi,
+        Backend::Avx512Vbmi => SimdBackend::Avx512Vbmi,
     };
     cpu::capabilities().supports(required)
 }

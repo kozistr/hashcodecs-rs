@@ -122,7 +122,7 @@ impl<'a, 'buffer, 'py> DecodePlan<'a, 'buffer, 'py> {
     fn execute_into(self, py: Python<'py>, output: &Bound<'py, PyByteArray>) -> PyResult<usize> {
         // Every decoder attempt and the warning scan must observe the same input.
         if let Some(input) = self.input.snapshot_for_output(output)? {
-            let input = BytesLike::Owned(input);
+            let input = BytesLike::OwnedVec(input);
             return DecodePlan::new(&input, self.options).execute_into(py, output);
         }
         let options = self.options;

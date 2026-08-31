@@ -193,12 +193,12 @@ pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32
 pub(super) fn mix_x86_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        if blocks.len() < dispatch::X86_128_AVX2_MIN {
+        if blocks.byte_len() < dispatch::X86_128_AVX2_MIN {
             mix_x86_128_body_scalar(blocks, hashes);
             return;
         }
         let capabilities = crate::backend::capabilities();
-        let selected = dispatch::select_x86_128_backend(blocks.len(), capabilities);
+        let selected = dispatch::select_x86_128_backend(blocks.byte_len(), capabilities);
         mix_x86_128_body_with_backend(blocks, hashes, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

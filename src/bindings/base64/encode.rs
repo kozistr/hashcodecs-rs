@@ -40,7 +40,7 @@ pub(super) fn encode<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return encode(py, &BytesLike::Owned(input), altchars, padded, wrapcol);
+        return encode(py, &BytesLike::OwnedVec(input), altchars, padded, wrapcol);
     }
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let output_len = encoded_output_len(input.len(), padded, wrapcol);

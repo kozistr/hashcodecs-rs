@@ -205,8 +205,8 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
         return Ok(Vec::new());
     }
     let simd_len = input.len() - usize::from(layout.padding != 0) * 4;
-    let padded_stores = simd_len >= 16;
-    let allocation_len = if padded_stores {
+    let output_has_store_slack = simd_len >= 16;
+    let allocation_len = if output_has_store_slack {
         layout
             .output_len
             .checked_add(DECODE_STORE_PADDING)
@@ -228,7 +228,7 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
             output.as_mut_ptr().cast(),
             layout,
             alphabet,
-            padded_stores,
+            output_has_store_slack,
         )?
     };
     // The decoder initializes the result prefix. The function discards the private padding.
@@ -326,9 +326,18 @@ pub(crate) unsafe fn decode_to_ptr_with_layout(
     output: *mut u8,
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
 ) -> Result<(), Base64Error> {
-    unsafe { decode_to_ptr_with_layout_mode(input, output, layout, alphabet, padded_stores, false) }
+    unsafe {
+        decode_to_ptr_with_layout_mode(
+            input,
+            output,
+            layout,
+            alphabet,
+            output_has_store_slack,
+            false,
+        )
+    }
 }
 
 #[inline]
@@ -365,7 +374,7 @@ unsafe fn decode_to_ptr_with_layout_mode(
     output: *mut u8,
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
-    padded_stores: bool,
+    output_has_store_slack: bool,
     transactional_errors: bool,
 ) -> Result<(), Base64Error> {
     let padding = layout.padding;
@@ -382,7 +391,7 @@ unsafe fn decode_to_ptr_with_layout_mode(
                 &input[..simd_len],
                 output,
                 alphabet,
-                padded_stores,
+                output_has_store_slack,
                 transactional_errors,
             )
         }?

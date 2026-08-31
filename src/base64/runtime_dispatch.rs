@@ -128,7 +128,7 @@ type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
 fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
     match backend {
         Backend::Avx512Vbmi => Some(encode_backend::avx512::encode::<URLSAFE>),
-        Backend::Sse41 | Backend::Ssse3 => Some(encode_backend::ssse3::encode_ssse3::<URLSAFE>),
+        Backend::Sse41 | Backend::Ssse3 => Some(encode_backend::ssse3::encode::<URLSAFE>),
         Backend::Avx2 | Backend::Scalar | Backend::Neon => None,
     }
 }

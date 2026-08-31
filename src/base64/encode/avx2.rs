@@ -7,7 +7,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 use std::hint::black_box;
 
-use super::ssse3::encode_ssse3;
+use super::ssse3;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::base64) enum Avx2StoreMode {
@@ -33,7 +33,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     store_mode: Avx2StoreMode,
 ) -> usize {
     if input.len() < 32 {
-        return unsafe { encode_ssse3::<URLSAFE>(input, output) };
+        return unsafe { ssse3::encode::<URLSAFE>(input, output) };
     }
 
     let first = unsafe { encode_24_first::<URLSAFE>(input.as_ptr()) };

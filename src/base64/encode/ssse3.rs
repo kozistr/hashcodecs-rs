@@ -7,7 +7,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 #[target_feature(enable = "ssse3")]
-pub(crate) unsafe fn encode_ssse3<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
+pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let mut source = 0;
     let mut destination = 0;
     while source + 52 <= input.len() {

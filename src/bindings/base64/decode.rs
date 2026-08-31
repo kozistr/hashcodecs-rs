@@ -11,15 +11,15 @@ use self::native::{
     decode_advanced, decode_advanced_into, decode_strict, decode_strict_into,
     decode_strict_into_with_altchars, decode_strict_with_altchars,
     decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
-    lenient_continues_after_padding, normalize_mime_whitespace, try_decode_lenient,
-    try_decode_lenient_into, try_decode_strict,
+    lenient_continues_after_padding, try_decode_lenient, try_decode_lenient_into,
+    try_decode_strict,
 };
 use self::output::copy_decoded_into;
 use self::plan::{DecodeOptions, DecodePlan};
 
 mod batch;
 mod fallback;
-mod native;
+pub(super) mod native;
 mod output;
 mod plan;
 
@@ -54,6 +54,21 @@ fn empty_ignorechars(ignorechars: Option<&Bound<'_, PyAny>>) -> bool {
             .cast::<PyBytes>()
             .is_ok_and(|bytes| bytes.as_bytes().is_empty())
     })
+}
+
+fn is_mime_whitespace_input(input: &[u8], mixed_alphabet: bool) -> bool {
+    let mut saw_whitespace = false;
+    for &byte in input {
+        if matches!(byte, b'\r' | b'\n' | b' ') {
+            saw_whitespace = true;
+        } else if !(byte.is_ascii_alphanumeric()
+            || matches!(byte, b'+' | b'/' | b'=')
+            || (mixed_alphabet && matches!(byte, b'-' | b'_')))
+        {
+            return false;
+        }
+    }
+    saw_whitespace
 }
 
 fn decode_plan_allocating_inner<'py>(
@@ -125,11 +140,12 @@ fn decode_plan_allocating_inner<'py>(
             return Ok(output);
         }
         if padded
-            && let Some(alphabet) = direct
-            && let Some(normalized) = normalize_mime_whitespace(input)?
-            && let Some(output) = try_decode_strict(py, &BytesLike::OwnedVec(normalized), alphabet)?
+            && direct.is_some()
+            && unsafe {
+                input.with_bytes(|input| is_mime_whitespace_input(input, altchars == Some(*b"-_")))
+            }
         {
-            return Ok(output);
+            return decode_advanced(py, input, options);
         }
         if !padded {
             match decode_unpadded_with_altchars(py, input, altchars) {
@@ -227,12 +243,6 @@ fn decode_plan_into_inner<'py>(
     } = options;
     let strict_mode = options.strict_mode();
     let transactional_errors = !strict_mode;
-    let alphabet = if altchars == Some(*b"-_") {
-        DecodeAlphabet::Mixed
-    } else {
-        DecodeAlphabet::Standard
-    };
-
     let empty_ignorechars = empty_ignorechars(ignorechars);
     if altchars.is_none()
         && padded
@@ -283,13 +293,11 @@ fn decode_plan_into_inner<'py>(
         && ignorechars.is_none()
         && !canonical
         && matches!(altchars, None | Some([b'-', b'_']))
-        && let Some(normalized) = normalize_mime_whitespace(input)?
-    {
-        let normalized = BytesLike::OwnedVec(normalized);
-        match decode_strict_into(&normalized, output, alphabet, true)? {
-            Ok(written) => return Ok(written),
-            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
+        && unsafe {
+            input.with_bytes(|input| is_mime_whitespace_input(input, altchars == Some(*b"-_")))
         }
+    {
+        return decode_advanced_into(py, input, output, options);
     }
 
     if !padded && ignorechars.is_none() && !canonical {

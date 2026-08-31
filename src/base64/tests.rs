@@ -749,6 +749,13 @@ fn length_helpers_and_buffer_errors_are_precise() {
 }
 
 #[test]
+#[should_panic(expected = "Base64 output slice must have the exact encoded length")]
+fn safe_encoder_rejects_an_inexact_output_slice() {
+    let mut output = [0_u8; 3];
+    encode_backend::encode_to_slice(b"abc", &mut output, false);
+}
+
+#[test]
 fn decode_tables_cover_both_alphabets() {
     for (urlsafe, mixed) in [(false, false), (true, false), (true, true)] {
         let table = decode_table(std::hint::black_box(urlsafe), std::hint::black_box(mixed));

@@ -430,6 +430,36 @@ pub(super) unsafe fn translate_bytes_sse2(
     unsafe { lenient_count_x86::translate_sse2(input, source0, target0, source1, target1) };
 }
 
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+pub(super) unsafe fn translate_bytes_neon(
+    input: &mut [u8],
+    source0: u8,
+    target0: u8,
+    source1: u8,
+    target1: u8,
+) {
+    use std::arch::aarch64::*;
+
+    let mut offset = 0;
+    while offset + 16 <= input.len() {
+        let bytes = unsafe { vld1q_u8(input.as_ptr().add(offset)) };
+        let translated0 = vbslq_u8(
+            vceqq_u8(bytes, vdupq_n_u8(source0)),
+            vdupq_n_u8(target0),
+            bytes,
+        );
+        let translated1 = vbslq_u8(
+            vceqq_u8(bytes, vdupq_n_u8(source1)),
+            vdupq_n_u8(target1),
+            translated0,
+        );
+        unsafe { vst1q_u8(input.as_mut_ptr().add(offset), translated1) };
+        offset += 16;
+    }
+    unsafe { translate_bytes_scalar(&mut input[offset..], source0, target0, source1, target1) };
+}
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn select_translate_bytes_for_x86(avx2: bool, sse2: bool) -> TranslateBytes {
     if avx2 {
@@ -448,7 +478,10 @@ pub(super) fn select_translate_bytes() -> TranslateBytes {
         std::is_x86_feature_detected!("sse2"),
     );
 
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(target_arch = "aarch64")]
+    return translate_bytes_neon;
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     translate_bytes_scalar
 }
 

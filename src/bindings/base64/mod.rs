@@ -273,11 +273,7 @@ enum BatchInputKind {
     AsciiOrBytes,
 }
 
-enum PreparedBatchInput<'py> {
-    Deferred,
-    Ready(BytesLike<'py, 'py>),
-    Failed(PyErr),
-}
+type PreparedBatchInput<'py> = Result<BytesLike<'py, 'py>, PyErr>;
 
 /// Convert only inputs that destination writes can invalidate.
 /// Exact immutable values and independent bytearrays remain on the single-pass path.
@@ -290,7 +286,7 @@ fn prepare_batch_inputs<'py>(
     items: &[Bound<'py, PyAny>],
     outputs: &BatchOutputs<'py>,
     kind: BatchInputKind,
-) -> PyResult<Option<Vec<PreparedBatchInput<'py>>>> {
+) -> PyResult<Vec<(usize, PreparedBatchInput<'py>)>> {
     let needs_preparation = |item: &Bound<'py, PyAny>| {
         if PyBytes::is_exact_type_of(item) {
             return false;
@@ -304,12 +300,7 @@ fn prepare_batch_inputs<'py>(
         unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
     };
 
-    if !items.iter().any(&needs_preparation) {
-        return Ok(None);
-    }
-
-    let mut prepared = batch_results(items.len())?;
-    prepared.extend((0..items.len()).map(|_| PreparedBatchInput::Deferred));
+    let mut prepared = Vec::new();
     for (index, item) in items.iter().enumerate() {
         if !needs_preparation(item) {
             continue;
@@ -320,15 +311,21 @@ fn prepare_batch_inputs<'py>(
         };
         match input {
             Ok(input) => {
-                prepared[index] = PreparedBatchInput::Ready(outputs.stabilize(input)?);
+                prepared
+                    .try_reserve(1)
+                    .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
+                prepared.push((index, Ok(outputs.stabilize(input)?)));
             }
             Err(error) => {
-                prepared[index] = PreparedBatchInput::Failed(error);
+                prepared
+                    .try_reserve(1)
+                    .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
+                prepared.push((index, Err(error)));
                 break;
             }
         }
     }
-    Ok(Some(prepared))
+    Ok(prepared)
 }
 
 fn encode_parsed<'py>(
@@ -501,19 +498,22 @@ fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?;
+    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?
+        .into_iter()
+        .peekable();
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
         match prepared
-            .as_mut()
-            .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))
+            .peek()
+            .is_some_and(|(prepared_index, _)| *prepared_index == index)
+            .then(|| prepared.next().expect("matching prepared input exists").1)
         {
-            Some(PreparedBatchInput::Ready(input)) => Ok(PyInt::new(
+            Some(Ok(input)) => Ok(PyInt::new(
                 py,
                 encode_parsed_into(&input, output, altchars, true, None)?,
             )),
-            Some(PreparedBatchInput::Failed(error)) => Err(error),
-            Some(PreparedBatchInput::Deferred) | None => {
+            Some(Err(error)) => Err(error),
+            None => {
                 let input = contiguous_bytes_like(py, &items[index], "s")?;
                 Ok(PyInt::new(
                     py,

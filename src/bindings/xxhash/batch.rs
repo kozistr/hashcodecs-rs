@@ -1,5 +1,7 @@
 use pyo3::exceptions::{PyMemoryError, PyValueError};
 use pyo3::prelude::*;
+#[cfg(not(Py_GIL_DISABLED))]
+use pyo3::types::PyBytes;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use crate::bindings::buffer::{BytesLike, bytes_like, with_bytearray};
@@ -7,20 +9,38 @@ use crate::bindings::objects::{
     bytearray_data, bytearray_size, list_from_callback, list_from_fn, list_items,
 };
 #[cfg(not(Py_GIL_DISABLED))]
-use crate::bindings::objects::{exact_bytes_at, exact_small_bytes};
+use crate::bindings::objects::{exact_bytes_at, exact_bytes_total, exact_bytes_up_to};
 use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
 use crate::xxhash::{xxh3_64_batch_each, xxh3_128_batch_each};
 
 #[cfg(not(Py_GIL_DISABLED))]
-fn exact_small_inputs<'a>(items: &'a Bound<'_, PyList>) -> PyResult<Option<Vec<&'a [u8]>>> {
-    // The GIL keeps list slots alive for this small-input path. Larger inputs
-    // retain owned references before releasing the GIL in the fallback below.
-    if !exact_small_bytes(items, XXH3_DETACH_THRESHOLD) {
+enum ExactBytesBatch<'a, 'py> {
+    Borrowed(Vec<&'a [u8]>),
+    Retained(Vec<Bound<'py, PyBytes>>),
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+fn exact_bytes_batch<'a, 'py>(
+    items: &'a Bound<'py, PyList>,
+) -> PyResult<Option<ExactBytesBatch<'a, 'py>>> {
+    let Some(total) = exact_bytes_total(items) else {
         return Ok(None);
+    };
+    if total >= XXH3_DETACH_THRESHOLD {
+        let retained = exact_bytes_up_to(items, usize::MAX)?
+            .expect("the exact-bytes scan and retention observe the same GIL-protected list");
+        return Ok(Some(ExactBytesBatch::Retained(retained)));
     }
     let mut inputs = batch_results(items.len())?;
     inputs.extend((0..items.len()).map(|index| unsafe { exact_bytes_at(items, index) }));
-    Ok(Some(inputs))
+    Ok(Some(ExactBytesBatch::Borrowed(inputs)))
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+fn borrow_retained<'a, 'py>(retained: &'a [Bound<'py, PyBytes>]) -> PyResult<Vec<&'a [u8]>> {
+    let mut inputs = batch_results(retained.len())?;
+    inputs.extend(retained.iter().map(|item| item.as_bytes()));
+    Ok(inputs)
 }
 
 fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
@@ -184,8 +204,18 @@ pub(super) fn xxh3_64_batch<'py>(
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return xxh3_64_list(py, &inputs, seed);
+    if let Some(exact) = exact_bytes_batch(items)? {
+        return match exact {
+            ExactBytesBatch::Borrowed(inputs) => xxh3_64_list(py, &inputs, seed),
+            ExactBytesBatch::Retained(retained) => {
+                let inputs = borrow_retained(&retained)?;
+                let hashes = py.detach(|| xxh3_64_batch_results(&inputs, seed))?;
+                let mut hashes = hashes.into_iter();
+                list_from_fn(py, hashes.len(), |_| {
+                    Ok(PyInt::new(py, hashes.next().expect("hash count is exact")))
+                })
+            }
+        };
     }
     let items = list_items(items)?;
     let parsed = parse_batch(py, &items)?;
@@ -207,8 +237,19 @@ pub(super) fn xxh3_128_batch<'py>(
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return xxh3_128_list(py, &inputs, seed);
+    if let Some(exact) = exact_bytes_batch(items)? {
+        return match exact {
+            ExactBytesBatch::Borrowed(inputs) => xxh3_128_list(py, &inputs, seed),
+            ExactBytesBatch::Retained(retained) => {
+                let inputs = borrow_retained(&retained)?;
+                let hashes = py.detach(|| xxh3_128_batch_results(&inputs, seed))?;
+                let mut hashes = hashes.into_iter();
+                list_from_fn(py, hashes.len(), |_| {
+                    let [low, high] = hashes.next().expect("hash count is exact");
+                    Ok(PyInt::new(py, (u128::from(high) << 64) | u128::from(low)))
+                })
+            }
+        };
     }
     let items = list_items(items)?;
     let parsed = parse_batch(py, &items)?;
@@ -232,8 +273,20 @@ pub(super) fn xxh3_64_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return write_direct_64(output, &inputs, seed);
+    if let Some(exact) = exact_bytes_batch(items)? {
+        return match exact {
+            ExactBytesBatch::Borrowed(inputs) => write_direct_64(output, &inputs, seed),
+            ExactBytesBatch::Retained(retained) => {
+                with_bytearray(output, || packed_output_len(output, retained.len(), 8))?;
+                let inputs = borrow_retained(&retained)?;
+                let hashes = py.detach(|| xxh3_64_batch_results(&inputs, seed))?;
+                with_bytearray(output, || {
+                    let written = packed_output_len(output, hashes.len(), 8)?;
+                    write_packed_64(output, &hashes);
+                    Ok(written)
+                })
+            }
+        };
     }
     let items = list_items(items)?;
     with_bytearray(output, || packed_output_len(output, items.len(), 8))?;
@@ -263,8 +316,20 @@ pub(super) fn xxh3_128_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(inputs) = exact_small_inputs(items)? {
-        return write_direct_128(output, &inputs, seed);
+    if let Some(exact) = exact_bytes_batch(items)? {
+        return match exact {
+            ExactBytesBatch::Borrowed(inputs) => write_direct_128(output, &inputs, seed),
+            ExactBytesBatch::Retained(retained) => {
+                with_bytearray(output, || packed_output_len(output, retained.len(), 16))?;
+                let inputs = borrow_retained(&retained)?;
+                let hashes = py.detach(|| xxh3_128_batch_results(&inputs, seed))?;
+                with_bytearray(output, || {
+                    let written = packed_output_len(output, hashes.len(), 16)?;
+                    write_packed_128(output, &hashes);
+                    Ok(written)
+                })
+            }
+        };
     }
     let items = list_items(items)?;
     with_bytearray(output, || packed_output_len(output, items.len(), 16))?;

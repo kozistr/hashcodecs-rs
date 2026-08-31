@@ -316,32 +316,6 @@ pub(in crate::bindings::base64::decode) fn translate_altchars(
     Ok(Some(translated))
 }
 
-pub(in crate::bindings::base64::decode) fn normalize_mime_whitespace(
-    input: &BytesLike<'_, '_>,
-) -> PyResult<Option<Vec<u8>>> {
-    unsafe {
-        input.with_bytes(|input| {
-            let Some(first) = memchr::memchr3(b'\r', b'\n', b' ', input) else {
-                return Ok(None);
-            };
-            let mut normalized = Vec::new();
-            normalized
-                .try_reserve_exact(input.len())
-                .map_err(|_| PyMemoryError::new_err("Base64 input is too large"))?;
-            normalized.extend_from_slice(&input[..first]);
-            let search_start = first + 1;
-            let mut start = search_start;
-            for whitespace in memchr::memchr3_iter(b'\r', b'\n', b' ', &input[search_start..]) {
-                let whitespace = search_start + whitespace;
-                normalized.extend_from_slice(&input[start..whitespace]);
-                start = whitespace + 1;
-            }
-            normalized.extend_from_slice(&input[start..]);
-            Ok(Some(normalized))
-        })
-    }
-}
-
 pub(in crate::bindings::base64::decode) fn decode_strict_with_altchars<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,

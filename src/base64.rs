@@ -37,10 +37,10 @@ pub(crate) use decode::{
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
 };
-#[cfg(feature = "python")]
-pub(crate) use encode::encode_to_ptr;
 #[cfg(any(feature = "python", all(test, target_arch = "aarch64"), kani))]
 pub(crate) use encode::encoded_len;
+#[cfg(feature = "python")]
+pub(crate) use encode::{encode_to_ptr, encode_to_ptr_cached};
 
 #[cfg(test)]
 pub(crate) use encode::encode_scalar;

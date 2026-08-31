@@ -189,19 +189,40 @@ pub(crate) fn encoded_len(input_len: usize) -> usize {
 
 #[inline]
 pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
-    debug_assert_eq!(output.len(), encoded_len(input.len()));
-    // The check above confirmed the exact output length.
+    assert_eq!(
+        output.len(),
+        encoded_len(input.len()),
+        "Base64 output slice must have the exact encoded length"
+    );
+    // The assertion above confirmed the exact output length.
     unsafe { encode_to_ptr(input, output.as_mut_ptr(), urlsafe) };
 }
 
 #[inline]
 pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
+    unsafe { encode_to_ptr_with_store_policy(input, output, urlsafe, true) };
+}
+
+#[inline]
+#[cfg(feature = "python")]
+pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe: bool) {
+    unsafe { encode_to_ptr_with_store_policy(input, output, urlsafe, false) };
+}
+
+#[inline]
+unsafe fn encode_to_ptr_with_store_policy(
+    input: &[u8],
+    output: *mut u8,
+    urlsafe: bool,
+    allow_streaming_stores: bool,
+) {
     if input.len() < 16 {
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
         return;
     }
 
-    let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe) };
+    let input_offset =
+        unsafe { encode_with_runtime_backend(input, output, urlsafe, allow_streaming_stores) };
     unsafe {
         encode_scalar_ptr(
             &input[input_offset..],

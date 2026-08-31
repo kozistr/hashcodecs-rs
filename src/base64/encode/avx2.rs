@@ -27,11 +27,6 @@ struct EncodeAvx2Constants {
 }
 
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn encode_avx2<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
-    unsafe { encode_avx2_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) }
-}
-
-#[target_feature(enable = "avx2")]
 pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     input: &[u8],
     output: *mut u8,

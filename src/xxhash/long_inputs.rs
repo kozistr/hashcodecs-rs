@@ -94,13 +94,8 @@ impl<'batch, 'input> LongRun<'batch, 'input> {
     }
 
     #[inline(always)]
-    fn input(self, index: usize) -> LongInput<'input> {
+    pub(super) fn input(self, index: usize) -> LongInput<'input> {
         LongInput(self.inputs[index])
-    }
-
-    #[inline(always)]
-    pub(super) fn first(self, index: usize) -> LongInput<'input> {
-        self.input(index)
     }
 
     #[inline(always)]

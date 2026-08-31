@@ -35,24 +35,8 @@ where
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
-    let mut index = 0;
-    while index < inputs.len() && inputs[index].len() <= 240 {
-        output(short(inputs[index], seed));
-        index += 1;
-    }
-    if index == inputs.len() {
-        return;
-    }
-
     let engine = LongEngine::new();
-    hash_each_input_with_engine(
-        &inputs[index..],
-        seed,
-        short,
-        finalize,
-        &engine,
-        &mut output,
-    );
+    hash_each_input_with_engine(inputs, seed, short, finalize, &engine, &mut output);
 }
 
 #[inline(always)]
@@ -116,7 +100,7 @@ fn hash_each_input_with_engine<T, S, F, O>(
                 emit_long_group2(secret, group, accumulators, finalize, &mut output);
             }
             1 => {
-                let input = run.first(run_index);
+                let input = run.input(run_index);
                 output(engine.hash(input, secret, finalize));
             }
             _ => {}

@@ -128,9 +128,8 @@ type EncodeKernel = unsafe fn(&[u8], *mut u8) -> usize;
 fn encode_x86_kernel<const URLSAFE: bool>(backend: Backend) -> Option<EncodeKernel> {
     match backend {
         Backend::Avx512Vbmi => Some(encode_backend::avx512::encode::<URLSAFE>),
-        Backend::Avx2 => Some(encode_backend::avx2::encode_avx2::<URLSAFE>),
         Backend::Sse41 | Backend::Ssse3 => Some(encode_backend::ssse3::encode_ssse3::<URLSAFE>),
-        Backend::Scalar | Backend::Neon => None,
+        Backend::Avx2 | Backend::Scalar | Backend::Neon => None,
     }
 }
 
@@ -314,14 +313,17 @@ mod tests {
     use crate::base64::{b64encode, encode_scalar};
 
     #[test]
-    fn every_x86_backend_resolves_without_running_unsupported_instructions() {
+    fn every_x86_backend_has_a_dispatch_path_without_running_unsupported_instructions() {
         for backend in [
             Backend::Avx512Vbmi,
             Backend::Avx2,
             Backend::Sse41,
             Backend::Ssse3,
         ] {
-            assert!(encode_x86_kernel::<false>(backend).is_some());
+            assert_eq!(
+                encode_x86_kernel::<false>(backend).is_some(),
+                backend != Backend::Avx2
+            );
             assert!(
                 decode_x86_kernel::<x86_contracts::StandardDecoder, x86_contracts::ExactStore>(
                     backend
@@ -339,13 +341,13 @@ mod tests {
     }
 
     #[test]
-    fn avx2_cached_wrapper_and_streaming_dispatch_match() {
+    fn avx2_cached_and_streaming_dispatch_match() {
         if backend::is_supported(Backend::Avx2) {
-            check_avx2_cached_wrapper_and_streaming_dispatch();
+            check_avx2_cached_and_streaming_dispatch();
         }
     }
 
-    fn check_avx2_cached_wrapper_and_streaming_dispatch() {
+    fn check_avx2_cached_and_streaming_dispatch() {
         let input = vec![0x5a_u8; 192];
         let expected = b64encode(&input);
         let mut storage = vec![0xa5_u8; expected.len() + 16];
@@ -353,7 +355,7 @@ mod tests {
         let output = &mut storage[offset..offset + expected.len()];
 
         let consumed =
-            unsafe { encode_backend::avx2::encode_avx2::<false>(&input, output.as_mut_ptr()) };
+            unsafe { encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, false) };
         encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
         assert_eq!(output, expected.as_bytes());
 

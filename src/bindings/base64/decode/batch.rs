@@ -4,7 +4,7 @@ use pyo3::types::{PyAny, PyInt, PyList};
 use super::super::{
     BatchInputKind, PreparedBatchInput, batch_outputs, parse_altchars, prepare_batch_inputs,
 };
-use super::plan::{DecodeExecution, DecodeOptions, DecodeOutput, DecodePlan};
+use super::plan::{DecodeOptions, DecodePlan};
 use crate::bindings::buffer::ascii_or_bytes;
 use crate::bindings::objects::{list_from_fn, list_items};
 
@@ -37,9 +37,7 @@ fn b64decode_batch_parsed<'py>(
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        DecodePlan::new(&input, options)
-            .execute(py, DecodeExecution::Allocate)
-            .map(DecodeOutput::into_bytes)
+        DecodePlan::new(&input, options).execute_allocating(py)
     })
 }
 
@@ -94,18 +92,14 @@ fn b64decode_batch_into_parsed<'py>(
         {
             Some(PreparedBatchInput::Ready(input)) => Ok(PyInt::new(
                 py,
-                DecodePlan::new(&input, options)
-                    .execute(py, DecodeExecution::Into(output))?
-                    .into_written(),
+                DecodePlan::new(&input, options).execute_into(py, output)?,
             )),
             Some(PreparedBatchInput::Failed(error)) => Err(error),
             Some(PreparedBatchInput::Deferred) | None => {
                 let input = ascii_or_bytes(py, &items[index], "s")?;
                 Ok(PyInt::new(
                     py,
-                    DecodePlan::new(&input, options)
-                        .execute(py, DecodeExecution::Into(output))?
-                        .into_written(),
+                    DecodePlan::new(&input, options).execute_into(py, output)?,
                 ))
             }
         }

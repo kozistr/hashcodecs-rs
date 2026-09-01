@@ -180,27 +180,24 @@ pub(super) fn mix_x86_32_body_with_backend(
     hash: &mut u32,
     backend: dispatch::Backend,
 ) {
-    if unsafe { x86::try_mix_x86_32_body(blocks, hash, backend) } {
-        return;
-    }
-    mix_x86_32_body_scalar(blocks, hash);
+    unsafe { x86::mix_x86_32_body(blocks, hash, backend) };
 }
 
 #[inline]
 #[cfg(test)]
-pub(super) fn murmur3_x86_32_scalar(key: &[u8], seed: u32) -> u32 {
-    let (blocks, tail) = FullBlocks::<4>::split(key);
+pub(super) fn murmur3_x86_32_scalar(input: &[u8], seed: u32) -> u32 {
+    let (blocks, tail) = FullBlocks::<4>::split(input);
     let mut hash = seed;
     mix_x86_32_body_scalar(blocks, &mut hash);
-    finish_x86_32_tail(tail, hash, key.len() as u32)
+    finish_x86_32_tail(tail, hash, input.len() as u32)
 }
 
 #[inline]
 pub(super) fn mix_x86_32_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
-    let key = blocks.as_bytes();
+    let input = blocks.as_bytes();
     let mut offset = 0;
-    while offset < key.len() {
-        let block = read_u32_le(key, offset)
+    while offset < input.len() {
+        let block = read_u32_le(input, offset)
             .wrapping_mul(X86_32_C1)
             .rotate_left(15)
             .wrapping_mul(X86_32_C2);
@@ -219,8 +216,8 @@ pub(super) fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
 
 #[inline(always)]
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
-pub(super) fn finish_x86_32(key: &[u8], hash: u32, offset: usize) -> u32 {
-    finish_x86_32_tail(&key[offset..], hash, key.len() as u32)
+pub(super) fn finish_x86_32(input: &[u8], hash: u32, offset: usize) -> u32 {
+    finish_x86_32_tail(&input[offset..], hash, input.len() as u32)
 }
 
 #[inline(always)]

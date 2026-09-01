@@ -188,31 +188,28 @@ pub(super) fn mix_x64_128_body_with_backend(
     backend: dispatch::Backend,
     has_bmi2: bool,
 ) {
-    if unsafe { x86::try_mix_x64_128_body(blocks, hashes, backend, has_bmi2) } {
-        return;
-    }
-    mix_x64_128_body_scalar(blocks, hashes);
+    unsafe { x86::mix_x64_128_body(blocks, hashes, backend, has_bmi2) };
 }
 
 #[inline(never)]
 #[cfg(test)]
-pub(super) fn murmur3_x64_128_scalar_inner(key: &[u8], seed: u64) -> [u64; 2] {
-    let (blocks, tail) = FullBlocks::<16>::split(key);
+pub(super) fn murmur3_x64_128_scalar_inner(input: &[u8], seed: u64) -> [u64; 2] {
+    let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 2];
     mix_x64_128_body_scalar(blocks, &mut hashes);
-    finish_x64_128_tail(tail, hashes, key.len() as u64)
+    finish_x64_128_tail(tail, hashes, input.len() as u64)
 }
 
 #[inline]
 pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
-    let key = blocks.as_bytes();
+    let input = blocks.as_bytes();
     let mut hash1 = hashes[0];
     let mut hash2 = hashes[1];
-    let mut input = key.as_ptr();
-    let end = unsafe { input.add(key.len()) };
-    while input < end {
-        let value1 = u64::from_le(unsafe { input.cast::<u64>().read_unaligned() });
-        let value2 = u64::from_le(unsafe { input.add(8).cast::<u64>().read_unaligned() });
+    let mut cursor = input.as_ptr();
+    let end = unsafe { cursor.add(input.len()) };
+    while cursor < end {
+        let value1 = u64::from_le(unsafe { cursor.cast::<u64>().read_unaligned() });
+        let value2 = u64::from_le(unsafe { cursor.add(8).cast::<u64>().read_unaligned() });
         let block1 = value1
             .wrapping_mul(X64_128_C1)
             .rotate_left(31)
@@ -222,15 +219,15 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
             .rotate_left(33)
             .wrapping_mul(X64_128_C1);
         mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
-        input = unsafe { input.add(16) };
+        cursor = unsafe { cursor.add(16) };
     }
     *hashes = [hash1, hash2];
 }
 
 #[inline]
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
-pub(super) fn finish_x64_128(key: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
-    finish_x64_128_tail(&key[offset..], hashes, key.len() as u64)
+pub(super) fn finish_x64_128(input: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
+    finish_x64_128_tail(&input[offset..], hashes, input.len() as u64)
 }
 
 #[inline]

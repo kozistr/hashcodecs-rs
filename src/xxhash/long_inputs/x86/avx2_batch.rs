@@ -37,39 +37,39 @@ macro_rules! define_accumulate_batch {
                 }
                 for stripe in 0..16 {
                     let input_offset = offset + stripe * 64;
-                    let key = unsafe { secret.as_ptr().add(stripe * 8) };
+                    let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
                     unsafe {
                         $(accumulate_registers(
                             &mut $acc,
                             data[$index].as_ptr().add(input_offset),
-                            key,
+                            secret_ptr,
                         );)+
                     }
                 }
-                let key = unsafe { secret.as_ptr().add(128) };
+                let secret_ptr = unsafe { secret.as_ptr().add(128) };
                 unsafe {
-                    $(scramble_registers(&mut $acc, key);)+
+                    $(scramble_registers(&mut $acc, secret_ptr);)+
                 }
             }
 
             for stripe in 0..schedule.tail_stripes() {
                 let input_offset = schedule.tail_offset() + stripe * 64;
-                let key = unsafe { secret.as_ptr().add(stripe * 8) };
+                let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
                 unsafe {
                     $(accumulate_registers(
                         &mut $acc,
                         data[$index].as_ptr().add(input_offset),
-                        key,
+                        secret_ptr,
                     );)+
                 }
             }
             let input_offset = schedule.last_offset();
-            let key = unsafe { secret.as_ptr().add(121) };
+            let secret_ptr = unsafe { secret.as_ptr().add(121) };
             unsafe {
                 $(accumulate_registers(
                     &mut $acc,
                     data[$index].as_ptr().add(input_offset),
-                    key,
+                    secret_ptr,
                 );)+
                 [$(finish($acc)),+]
             }

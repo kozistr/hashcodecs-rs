@@ -22,9 +22,9 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     #[target_feature(enable = "avx512f")]
     unsafe fn accumulate(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {
         let input = unsafe { _mm512_loadu_si512(data.cast()) };
-        let key = unsafe { _mm512_loadu_si512(secret.cast()) };
-        let keyed = _mm512_xor_si512(input, key);
-        let product = _mm512_mul_epu32(keyed, _mm512_srli_epi64::<32>(keyed));
+        let secret_values = unsafe { _mm512_loadu_si512(secret.cast()) };
+        let mixed = _mm512_xor_si512(input, secret_values);
+        let product = _mm512_mul_epu32(mixed, _mm512_srli_epi64::<32>(mixed));
         let swapped = _mm512_shuffle_epi32::<0x4e>(input);
         let old = unsafe { _mm512_load_si512(acc.0.as_ptr().cast()) };
         unsafe {
@@ -39,8 +39,11 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     #[target_feature(enable = "avx512f")]
     unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
         let value = unsafe { _mm512_load_si512(acc.0.as_ptr().cast()) };
-        let key = unsafe { _mm512_loadu_si512(secret.cast()) };
-        let mixed = _mm512_xor_si512(_mm512_xor_si512(value, _mm512_srli_epi64::<47>(value)), key);
+        let secret_values = unsafe { _mm512_loadu_si512(secret.cast()) };
+        let mixed = _mm512_xor_si512(
+            _mm512_xor_si512(value, _mm512_srli_epi64::<47>(value)),
+            secret_values,
+        );
         let prime = _mm512_set1_epi32(P32_1 as i32);
         let low = _mm512_mul_epu32(mixed, prime);
         let high = _mm512_slli_epi64::<32>(_mm512_mul_epu32(_mm512_srli_epi64::<32>(mixed), prime));

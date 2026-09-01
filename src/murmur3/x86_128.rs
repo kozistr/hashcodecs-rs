@@ -162,8 +162,8 @@ pub fn murmur3_x86_128(input: &[u8], seed: u32) -> [u32; 4] {
 
 #[inline]
 #[cfg(test)]
-pub(super) fn finish_x86_128(key: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
-    finish_x86_128_tail(&key[offset..], hashes, key.len() as u32)
+pub(super) fn finish_x86_128(input: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
+    finish_x86_128_tail(&input[offset..], hashes, input.len() as u32)
 }
 
 #[inline]
@@ -224,32 +224,29 @@ pub(super) fn mix_x86_128_body_with_backend(
     hashes: &mut [u32; 4],
     backend: dispatch::Backend,
 ) {
-    if unsafe { x86::try_mix_x86_128_body(blocks, hashes, backend) } {
-        return;
-    }
-    mix_x86_128_body_scalar(blocks, hashes);
+    unsafe { x86::mix_x86_128_body(blocks, hashes, backend) };
 }
 
 #[inline]
 pub(super) fn mix_x86_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     const ROTATE_K: [u32; 4] = [15, 16, 17, 18];
 
-    let key = blocks.as_bytes();
+    let input = blocks.as_bytes();
     let mut offset = 0;
-    while offset < key.len() {
-        let block1 = read_u32_le(key, offset)
+    while offset < input.len() {
+        let block1 = read_u32_le(input, offset)
             .wrapping_mul(X86_128_C1[0])
             .rotate_left(ROTATE_K[0])
             .wrapping_mul(X86_128_C2[0]);
-        let block2 = read_u32_le(key, offset + 4)
+        let block2 = read_u32_le(input, offset + 4)
             .wrapping_mul(X86_128_C1[1])
             .rotate_left(ROTATE_K[1])
             .wrapping_mul(X86_128_C2[1]);
-        let block3 = read_u32_le(key, offset + 8)
+        let block3 = read_u32_le(input, offset + 8)
             .wrapping_mul(X86_128_C1[2])
             .rotate_left(ROTATE_K[2])
             .wrapping_mul(X86_128_C2[2]);
-        let block4 = read_u32_le(key, offset + 12)
+        let block4 = read_u32_le(input, offset + 12)
             .wrapping_mul(X86_128_C1[3])
             .rotate_left(ROTATE_K[3])
             .wrapping_mul(X86_128_C2[3]);

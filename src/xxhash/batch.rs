@@ -149,19 +149,19 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::xxhash::xxh3_64_batch_each;
+///     use hashcodecs::xxhash::xxh3_64_batch_for_each;
 ///
 ///     let inputs: &[&[u8]] = &[b"one", b"two"];
 ///     let mut hashes = [0; 2];
 ///     let mut index = 0;
-///     xxh3_64_batch_each(inputs, 7, |hash| {
+///     xxh3_64_batch_for_each(inputs, 7, |hash| {
 ///         hashes[index] = hash;
 ///         index += 1;
 ///     });
 ///     assert_eq!(index, inputs.len());
 ///
 #[inline]
-pub fn xxh3_64_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
+pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
     hash_each_input(inputs, seed, xxh3_64, finalize_long_64, output);
 }
 
@@ -206,19 +206,19 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
 ///
 /// # Examples
 ///
-///     use hashcodecs::xxhash::xxh3_128_batch_each;
+///     use hashcodecs::xxhash::xxh3_128_batch_for_each;
 ///
 ///     let inputs: &[&[u8]] = &[b"one", b"two"];
 ///     let mut hashes = [[0; 2]; 2];
 ///     let mut index = 0;
-///     xxh3_128_batch_each(inputs, 7, |hash| {
+///     xxh3_128_batch_for_each(inputs, 7, |hash| {
 ///         hashes[index] = hash;
 ///         index += 1;
 ///     });
 ///     assert_eq!(index, inputs.len());
 ///
 #[inline]
-pub fn xxh3_128_batch_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
+pub fn xxh3_128_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
     hash_each_input(inputs, seed, xxh3_128, finalize_long_128, output);
 }
 

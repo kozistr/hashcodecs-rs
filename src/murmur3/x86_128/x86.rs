@@ -9,7 +9,7 @@ use crate::murmur3::dispatch::Backend;
 
 #[target_feature(enable = "avx2")]
 unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
-    let key = blocks.as_bytes();
+    let input = blocks.as_bytes();
     let c1 = _mm256_setr_epi32(
         X86_128_C1[0] as i32,
         X86_128_C1[1] as i32,
@@ -35,34 +35,34 @@ unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4
     let mut mixed = [0_u32; 64];
     let mut offset = 0;
 
-    while offset + 256 <= key.len() {
+    while offset + 256 <= input.len() {
         for vector in 0..8 {
-            let input =
-                unsafe { _mm256_loadu_si256(key.as_ptr().add(offset + vector * 32).cast()) };
-            let input = premix_x86_128_avx2(input, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), input) };
+            let values =
+                unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
+            let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
+            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), values) };
         }
         mix_x86_128_blocks(hashes, &mixed);
         offset += 256;
     }
-    while offset + 128 <= key.len() {
+    while offset + 128 <= input.len() {
         for vector in 0..4 {
-            let input =
-                unsafe { _mm256_loadu_si256(key.as_ptr().add(offset + vector * 32).cast()) };
-            let input = premix_x86_128_avx2(input, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), input) };
+            let values =
+                unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
+            let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
+            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), values) };
         }
         mix_x86_128_blocks(hashes, &mixed[..32]);
         offset += 128;
     }
-    while offset + 32 <= key.len() {
-        let input = unsafe { _mm256_loadu_si256(key.as_ptr().add(offset).cast()) };
-        let input = premix_x86_128_avx2(input, c1, c2, rotate_left, rotate_right);
-        unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), input) };
+    while offset + 32 <= input.len() {
+        let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
+        let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
+        unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), values) };
         mix_x86_128_blocks(hashes, &mixed[..8]);
         offset += 32;
     }
-    let remaining = FullBlocks::new(&key[offset..]).expect("SIMD leaves complete blocks");
+    let remaining = FullBlocks::new(&input[offset..]).expect("SIMD leaves complete blocks");
     mix_x86_128_body_scalar(remaining, hashes);
 }
 
@@ -85,15 +85,15 @@ fn premix_x86_128_avx2(
 
 #[target_feature(enable = "sse4.1")]
 unsafe fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
-    let key = blocks.as_bytes();
+    let input = blocks.as_bytes();
     let mut mixed = [0_u32; 64];
     let mut offset = 0;
 
-    while offset + 256 <= key.len() {
+    while offset + 256 <= input.len() {
         for group in 0..4 {
             unsafe {
                 premix_x86_128_group_sse41(
-                    key.as_ptr().add(offset + group * 64),
+                    input.as_ptr().add(offset + group * 64),
                     mixed.as_mut_ptr().add(group * 16),
                 )
             };
@@ -103,12 +103,12 @@ unsafe fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 
         }
         offset += 256;
     }
-    while offset + 64 <= key.len() {
-        unsafe { premix_x86_128_group_sse41(key.as_ptr().add(offset), mixed.as_mut_ptr()) };
+    while offset + 64 <= input.len() {
+        unsafe { premix_x86_128_group_sse41(input.as_ptr().add(offset), mixed.as_mut_ptr()) };
         mix_x86_128_transposed_group(hashes, &mixed[..16]);
         offset += 64;
     }
-    let remaining = FullBlocks::new(&key[offset..]).expect("SIMD leaves complete blocks");
+    let remaining = FullBlocks::new(&input[offset..]).expect("SIMD leaves complete blocks");
     mix_x86_128_body_scalar(remaining, hashes);
 }
 
@@ -187,20 +187,18 @@ fn mix_x86_128_blocks(hashes: &mut [u32; 4], blocks: &[u32]) {
 #[inline(always)]
 /// # Safety
 /// The current CPU must support the selected backend.
-pub(in crate::murmur3) unsafe fn try_mix_x86_128_body(
+pub(in crate::murmur3) unsafe fn mix_x86_128_body(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u32; 4],
     backend: Backend,
-) -> bool {
+) {
     match backend {
         Backend::Avx2 => {
             unsafe { mix_x86_128_body_avx2(blocks, hashes) };
-            true
         }
         Backend::Sse41 => {
             unsafe { mix_x86_128_body_sse41(blocks, hashes) };
-            true
         }
-        Backend::Scalar => false,
+        Backend::Scalar => mix_x86_128_body_scalar(blocks, hashes),
     }
 }

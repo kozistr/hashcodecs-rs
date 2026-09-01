@@ -22,9 +22,9 @@ unsafe fn accumulate_stripe(
         // `LongSchedule` keeps each data stripe in bounds, and every secret
         // offset passed by `accumulate` leaves a complete 64-byte stripe.
         let value = unsafe { read_u64_le(data, data_offset + lane * 8) };
-        let keyed = value ^ unsafe { read_u64_le(secret, secret_offset + lane * 8) };
+        let mixed = value ^ unsafe { read_u64_le(secret, secret_offset + lane * 8) };
         acc[lane ^ 1] = acc[lane ^ 1].wrapping_add(value);
-        acc[lane] = acc[lane].wrapping_add((keyed as u32 as u64).wrapping_mul(keyed >> 32));
+        acc[lane] = acc[lane].wrapping_add((mixed as u32 as u64).wrapping_mul(mixed >> 32));
     }
 }
 

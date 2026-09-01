@@ -106,9 +106,9 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
     if len <= 8 {
         let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
         let input_word = read_u32_le(input, 0) as u64 | (read_u32_le(input, len - 4) as u64) << 32;
-        let keyed =
+        let mixed =
             input_word ^ (read_u64_le(&SECRET, 16) ^ read_u64_le(&SECRET, 24)).wrapping_add(seed);
-        let product = (keyed as u128) * (P64_1.wrapping_add((len as u64) << 2) as u128);
+        let product = (mixed as u128) * (P64_1.wrapping_add((len as u64) << 2) as u128);
         let mut lo = product as u64;
         let mut hi = (product >> 64) as u64;
         hi = hi.wrapping_add(lo << 1);

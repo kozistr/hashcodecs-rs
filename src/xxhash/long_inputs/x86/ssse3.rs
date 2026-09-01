@@ -19,9 +19,9 @@ unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secre
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let input = unsafe { _mm_loadu_si128(data.add(byte_offset).cast()) };
-        let key = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
-        let keyed = _mm_xor_si128(input, key);
-        let product = _mm_mul_epu32(keyed, _mm_shuffle_epi32::<0xb1>(keyed));
+        let secret_values = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
+        let mixed = _mm_xor_si128(input, secret_values);
+        let product = _mm_mul_epu32(mixed, _mm_shuffle_epi32::<0xb1>(mixed));
         let swapped = _mm_shuffle_epi32::<0x4e>(input);
         let old = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
         unsafe {
@@ -40,8 +40,11 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let value = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
-        let key = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
-        let mixed = _mm_xor_si128(_mm_xor_si128(value, _mm_srli_epi64::<47>(value)), key);
+        let secret_values = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
+        let mixed = _mm_xor_si128(
+            _mm_xor_si128(value, _mm_srli_epi64::<47>(value)),
+            secret_values,
+        );
         let low = _mm_mul_epu32(mixed, prime);
         let high = _mm_slli_epi64::<32>(_mm_mul_epu32(_mm_srli_epi64::<32>(mixed), prime));
         unsafe {

@@ -41,13 +41,13 @@ fn batches_match_one_shot() {
     let mut hashes_64 = [0; 3];
     let mut hashes_128 = [[0; 2]; 3];
     let mut index = 0;
-    xxh3_64_batch_each(&values, 42, |hash| {
+    xxh3_64_batch_for_each(&values, 42, |hash| {
         hashes_64[index] = hash;
         index += 1;
     });
     assert_eq!(index, values.len());
     let mut index = 0;
-    xxh3_128_batch_each(&values, 42, |hash| {
+    xxh3_128_batch_for_each(&values, 42, |hash| {
         hashes_128[index] = hash;
         index += 1;
     });

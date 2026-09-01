@@ -211,11 +211,10 @@ unsafe fn decode_lenient_slice_into(
     .ok())
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
 mod tests {
     use super::*;
 
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn x86_backend_selectors_cover_each_dispatch_tier() {
         for (avx2, sse2, expected) in [

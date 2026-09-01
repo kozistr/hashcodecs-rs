@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use super::super::lenient::{
+use super::super::lenient::helpers::{
     AlphanumericPrefix, TranslateBytes, select_alphanumeric_prefix, select_translate_bytes,
 };
 use super::specials::StrictSpecials;

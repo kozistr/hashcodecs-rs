@@ -1,41 +1,38 @@
-//! Detect CPU features and select CPU execution backends.
+//! Detect raw CPU features used by algorithm-owned backend selectors.
 
 #[cfg(not(any(kani, miri)))]
 use std::sync::OnceLock;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SimdBackend {
-    Scalar,
+pub(crate) enum CpuFeature {
     Neon,
     Ssse3,
     Sse41,
     Avx2,
-    #[cfg_attr(
-        not(any(test, target_arch = "x86", target_arch = "x86_64")),
-        allow(dead_code)
-    )]
-    Avx512,
+    Avx512F,
+    Avx512Bw,
     Avx512Vbmi,
+    Bmi2,
 }
 
-impl SimdBackend {
-    const fn feature_bit(self) -> u8 {
+impl CpuFeature {
+    const fn bit(self) -> u16 {
         match self {
-            Self::Scalar => 0,
             Self::Neon => 1 << 0,
             Self::Ssse3 => 1 << 1,
             Self::Sse41 => 1 << 2,
             Self::Avx2 => 1 << 3,
-            Self::Avx512 => 1 << 4,
-            Self::Avx512Vbmi => 1 << 5,
+            Self::Avx512F => 1 << 4,
+            Self::Avx512Bw => 1 << 5,
+            Self::Avx512Vbmi => 1 << 6,
+            Self::Bmi2 => 1 << 7,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Capabilities {
-    simd_features: u8,
-    bmi2: bool,
+    features: u16,
 }
 
 impl Capabilities {
@@ -44,42 +41,41 @@ impl Capabilities {
         miri,
         not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))
     ))]
-    const SCALAR: Self = Self {
-        simd_features: 0,
-        bmi2: false,
-    };
+    const SCALAR: Self = Self { features: 0 };
 
     #[inline]
-    pub(crate) const fn supports(self, backend: SimdBackend) -> bool {
-        let bit = backend.feature_bit();
-        bit == 0 || self.simd_features & bit != 0
+    pub(crate) const fn supports(self, feature: CpuFeature) -> bool {
+        self.features & feature.bit() != 0
     }
 
     #[inline]
-    pub(crate) fn select_supported_backend(self, preference_order: &[SimdBackend]) -> SimdBackend {
-        preference_order
-            .iter()
-            .copied()
-            .find(|backend| self.supports(*backend))
-            .unwrap_or(SimdBackend::Scalar)
-    }
-
-    #[inline]
-    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
-    pub(crate) const fn has_bmi2(self) -> bool {
-        self.bmi2
+    pub(crate) fn supports_all(self, features: &[CpuFeature]) -> bool {
+        features.iter().all(|&feature| self.supports(feature))
     }
 
     #[cfg(test)]
-    pub(crate) fn from_supported_backends(backends: &[SimdBackend]) -> Self {
-        let mut simd_features = 0;
-        for backend in backends {
-            simd_features |= backend.feature_bit();
+    pub(crate) fn from_features(features: &[CpuFeature]) -> Self {
+        let mut bits = 0;
+        for feature in features {
+            bits |= feature.bit();
         }
-        Self {
-            simd_features,
-            bmi2: false,
+        Self { features: bits }
+    }
+
+    #[cfg(any(
+        test,
+        target_arch = "aarch64",
+        target_arch = "x86",
+        target_arch = "x86_64"
+    ))]
+    fn from_feature_flags(flags: &[(CpuFeature, bool)]) -> Self {
+        let mut features = 0;
+        for &(feature, available) in flags {
+            if available {
+                features |= feature.bit();
+            }
         }
+        Self { features }
     }
 }
 
@@ -126,47 +122,26 @@ fn detect_cpu_capabilities() -> Capabilities {
 fn x86_capabilities_from_feature_flags(
     avx512_vbmi: bool,
     avx512_bw: bool,
-    avx512: bool,
+    avx512_f: bool,
     avx2: bool,
     sse41: bool,
     ssse3: bool,
     bmi2: bool,
 ) -> Capabilities {
-    let mut simd_features = 0;
-    if ssse3 {
-        simd_features |= SimdBackend::Ssse3.feature_bit();
-    }
-    // The SSE4.1 kernels also contain SSSE3 instructions.
-    if sse41 && ssse3 {
-        simd_features |= SimdBackend::Sse41.feature_bit();
-    }
-    // AVX2 kernels may delegate tails to SSSE3 implementations.
-    if avx2 && ssse3 {
-        simd_features |= SimdBackend::Avx2.feature_bit();
-    }
-    // AVX-512 kernels may delegate tails through AVX2 to SSSE3.
-    if avx512 && avx2 && ssse3 {
-        simd_features |= SimdBackend::Avx512.feature_bit();
-    }
-    if avx512 && avx512_bw && avx512_vbmi && avx2 && ssse3 {
-        simd_features |= SimdBackend::Avx512Vbmi.feature_bit();
-    }
-    Capabilities {
-        simd_features,
-        bmi2,
-    }
+    Capabilities::from_feature_flags(&[
+        (CpuFeature::Avx512Vbmi, avx512_vbmi),
+        (CpuFeature::Avx512Bw, avx512_bw),
+        (CpuFeature::Avx512F, avx512_f),
+        (CpuFeature::Avx2, avx2),
+        (CpuFeature::Sse41, sse41),
+        (CpuFeature::Ssse3, ssse3),
+        (CpuFeature::Bmi2, bmi2),
+    ])
 }
 
 #[cfg(any(test, target_arch = "aarch64"))]
 fn aarch64_capabilities_from_feature_flag(neon: bool) -> Capabilities {
-    Capabilities {
-        simd_features: if neon {
-            SimdBackend::Neon.feature_bit()
-        } else {
-            0
-        },
-        bmi2: false,
-    }
+    Capabilities::from_feature_flags(&[(CpuFeature::Neon, neon)])
 }
 
 #[cfg(test)]
@@ -174,92 +149,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn x86_detection_tracks_independent_feature_sets() {
-        let scalar =
-            x86_capabilities_from_feature_flags(false, false, false, false, false, false, false);
-        assert_eq!(
-            scalar.select_supported_backend(&[SimdBackend::Avx2]),
-            SimdBackend::Scalar
-        );
-
-        let ssse3 =
-            x86_capabilities_from_feature_flags(false, false, false, false, false, true, false);
-        assert!(ssse3.supports(SimdBackend::Ssse3));
-        assert!(!ssse3.supports(SimdBackend::Sse41));
-
-        let incomplete_sse41 =
-            x86_capabilities_from_feature_flags(false, false, false, false, true, false, false);
-        assert!(!incomplete_sse41.supports(SimdBackend::Sse41));
-
-        let sse41 =
-            x86_capabilities_from_feature_flags(false, false, false, false, true, true, false);
-        assert!(sse41.supports(SimdBackend::Sse41));
-
-        let incomplete_avx2 =
-            x86_capabilities_from_feature_flags(false, false, false, true, false, false, true);
-        assert!(!incomplete_avx2.supports(SimdBackend::Avx2));
-        let avx2 =
-            x86_capabilities_from_feature_flags(false, false, false, true, false, true, true);
-        assert!(avx2.supports(SimdBackend::Avx2));
-        assert!(!avx2.supports(SimdBackend::Sse41));
-        assert!(avx2.has_bmi2());
-
-        let avx512 =
-            x86_capabilities_from_feature_flags(false, false, true, false, false, false, false);
-        assert!(!avx512.supports(SimdBackend::Avx512));
-        assert!(!avx512.supports(SimdBackend::Avx2));
-        assert!(!avx512.supports(SimdBackend::Avx512Vbmi));
-
-        let avx512 =
-            x86_capabilities_from_feature_flags(false, false, true, true, false, true, false);
-        assert!(avx512.supports(SimdBackend::Avx512));
-        assert!(avx512.supports(SimdBackend::Avx2));
-        assert!(!avx512.supports(SimdBackend::Avx512Vbmi));
-
-        let incomplete_bw =
-            x86_capabilities_from_feature_flags(true, false, true, true, true, true, true);
-        assert!(!incomplete_bw.supports(SimdBackend::Avx512Vbmi));
-
-        let incomplete_vbmi =
-            x86_capabilities_from_feature_flags(false, true, true, true, true, true, true);
-        assert!(!incomplete_vbmi.supports(SimdBackend::Avx512Vbmi));
-
-        let vbmi = x86_capabilities_from_feature_flags(true, true, true, true, true, true, true);
-        assert_eq!(
-            vbmi.select_supported_backend(&[
-                SimdBackend::Avx512Vbmi,
-                SimdBackend::Avx512,
-                SimdBackend::Avx2,
-            ]),
-            SimdBackend::Avx512Vbmi
-        );
+    fn x86_detection_keeps_raw_features_independent() {
+        let capabilities =
+            x86_capabilities_from_feature_flags(true, false, true, true, true, false, true);
+        assert!(capabilities.supports(CpuFeature::Avx512Vbmi));
+        assert!(!capabilities.supports(CpuFeature::Avx512Bw));
+        assert!(capabilities.supports(CpuFeature::Avx512F));
+        assert!(capabilities.supports(CpuFeature::Avx2));
+        assert!(capabilities.supports(CpuFeature::Sse41));
+        assert!(!capabilities.supports(CpuFeature::Ssse3));
+        assert!(capabilities.supports(CpuFeature::Bmi2));
     }
 
     #[test]
-    fn selection_respects_architecture_boundaries_and_preference_order() {
-        let neon = aarch64_capabilities_from_feature_flag(true);
-        assert!(neon.supports(SimdBackend::Neon));
-        assert!(neon.supports(SimdBackend::Scalar));
-        assert!(!neon.supports(SimdBackend::Ssse3));
-        assert_eq!(
-            neon.select_supported_backend(&[SimdBackend::Avx2, SimdBackend::Neon]),
-            SimdBackend::Neon
-        );
-        assert_eq!(
-            aarch64_capabilities_from_feature_flag(false)
-                .select_supported_backend(&[SimdBackend::Neon]),
-            SimdBackend::Scalar
-        );
+    fn capabilities_check_algorithm_prerequisite_sets() {
+        let capabilities =
+            Capabilities::from_features(&[CpuFeature::Avx2, CpuFeature::Sse41, CpuFeature::Bmi2]);
+        assert!(capabilities.supports_all(&[CpuFeature::Avx2, CpuFeature::Bmi2]));
+        assert!(!capabilities.supports_all(&[CpuFeature::Avx2, CpuFeature::Ssse3]));
 
-        let mixed = Capabilities::from_supported_backends(&[
-            SimdBackend::Ssse3,
-            SimdBackend::Avx2,
-            SimdBackend::Avx512,
-        ]);
-        assert_eq!(
-            mixed.select_supported_backend(&[SimdBackend::Avx2, SimdBackend::Avx512]),
-            SimdBackend::Avx2
-        );
-        assert!(capabilities().supports(SimdBackend::Scalar));
+        let neon = aarch64_capabilities_from_feature_flag(true);
+        assert!(neon.supports(CpuFeature::Neon));
+        assert!(!neon.supports(CpuFeature::Avx2));
+        assert!(!aarch64_capabilities_from_feature_flag(false).supports(CpuFeature::Neon));
     }
 }

@@ -1,6 +1,4 @@
-use pyo3::prelude::*;
-
-use super::{is_lenient_symbol, lenient_symbol_count};
+use super::helpers::{is_lenient_symbol, lenient_symbol_count};
 use crate::bindings::base64::STANDARD_ALPHABET;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -107,23 +105,6 @@ pub(in crate::bindings::base64::decode) fn lenient_decoded_len(
         Err(LenientDecodeError::InvalidInput)
     } else {
         Ok(decoded_symbol_len(symbols))
-    }
-}
-
-pub(in crate::bindings::base64::decode) fn lenient_continues_after_padding(py: Python<'_>) -> bool {
-    let version = py.version_info();
-    version_continues_after_padding(version.major, version.minor, version.patch)
-}
-
-pub(in crate::bindings::base64::decode) fn version_continues_after_padding(
-    major: u8,
-    minor: u8,
-    patch: u8,
-) -> bool {
-    match (major, minor) {
-        (3, 13) => patch >= 13,
-        (3, 14) => patch >= 4,
-        (major, minor) => (major, minor) >= (3, 15),
     }
 }
 

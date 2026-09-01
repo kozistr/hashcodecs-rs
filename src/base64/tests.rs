@@ -5,13 +5,13 @@ use super::decode::{self as decode_backend, x86_contracts};
 use super::encode as encode_backend;
 use super::runtime_dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 use super::*;
-use crate::backend::{Capabilities, SimdBackend};
+use crate::backend::{Capabilities, CpuFeature};
 
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 
-fn select_backend(backend: SimdBackend) -> Backend {
-    backend::select_backend(Capabilities::from_supported_backends(&[backend]))
+fn select_backend(features: &[CpuFeature]) -> Backend {
+    backend::select_backend(Capabilities::from_features(features))
 }
 use base64::Engine;
 
@@ -186,13 +186,37 @@ fn seeded_randomized_inputs_match_the_reference_engine() {
 
 #[test]
 fn backend_selection_and_kernels_match_scalar_output() {
-    assert_eq!(select_backend(SimdBackend::Scalar), Backend::Scalar);
-    assert_eq!(select_backend(SimdBackend::Neon), Backend::Neon);
-    assert_eq!(select_backend(SimdBackend::Ssse3), Backend::Ssse3);
-    assert_eq!(select_backend(SimdBackend::Sse41), Backend::Sse41);
-    assert_eq!(select_backend(SimdBackend::Avx2), Backend::Avx2);
-    assert_eq!(select_backend(SimdBackend::Avx512), Backend::Scalar);
-    assert_eq!(select_backend(SimdBackend::Avx512Vbmi), Backend::Avx512Vbmi);
+    assert_eq!(select_backend(&[]), Backend::Scalar);
+    assert_eq!(select_backend(&[CpuFeature::Neon]), Backend::Neon);
+    assert_eq!(select_backend(&[CpuFeature::Ssse3]), Backend::Ssse3);
+    assert_eq!(select_backend(&[CpuFeature::Sse41]), Backend::Scalar);
+    assert_eq!(
+        select_backend(&[CpuFeature::Sse41, CpuFeature::Ssse3]),
+        Backend::Sse41
+    );
+    assert_eq!(select_backend(&[CpuFeature::Avx2]), Backend::Scalar);
+    assert_eq!(
+        select_backend(&[CpuFeature::Avx2, CpuFeature::Ssse3]),
+        Backend::Avx2
+    );
+    assert_eq!(
+        select_backend(&[
+            CpuFeature::Avx512F,
+            CpuFeature::Avx512Bw,
+            CpuFeature::Avx512Vbmi,
+        ]),
+        Backend::Scalar
+    );
+    assert_eq!(
+        select_backend(&[
+            CpuFeature::Avx512F,
+            CpuFeature::Avx512Bw,
+            CpuFeature::Avx512Vbmi,
+            CpuFeature::Avx2,
+            CpuFeature::Ssse3,
+        ]),
+        Backend::Avx512Vbmi
+    );
     assert!(backend::is_supported(Backend::Scalar));
     assert_eq!(
         Base64Error::InvalidInput.to_string(),

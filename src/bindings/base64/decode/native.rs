@@ -18,6 +18,6 @@ pub(in crate::bindings::base64) fn translate_bytes(
     source1: u8,
     target1: u8,
 ) {
-    let translate = lenient::select_translate_bytes();
+    let translate = lenient::helpers::select_translate_bytes();
     unsafe { translate(input, source0, target0, source1, target1) };
 }

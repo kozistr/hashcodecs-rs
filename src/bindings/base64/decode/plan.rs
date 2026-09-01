@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes};
+use pyo3::types::{PyAny, PyByteArray, PyBytes};
 
 use super::fallback::warn_legacy_altchars;
-use super::{decode_plan_allocating_inner, decode_plan_into_inner};
+use super::output::{AllocatingExecutor, IntoExecutor};
 use crate::bindings::base64::python_at_least;
 use crate::bindings::buffer::BytesLike;
 
@@ -46,7 +46,6 @@ impl<'a, 'py> DecodeOptions<'a, 'py> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(super) enum DecodeAttempt {
     Urlsafe315,
     StandardStrict,
@@ -60,23 +59,6 @@ pub(super) enum DecodeAttempt {
     Binascii,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum DecodeStrategy {
-    Advanced,
-    StandardStrictThenAdvanced,
-    CanonicalUnpaddedThenAdvanced,
-    StrictPadded,
-    StrictUnpadded,
-    Urlsafe315StrictPadded,
-    Urlsafe315StrictUnpadded,
-    LenientDirectPadded,
-    LenientDirectUnpadded,
-    Urlsafe315LenientDirectPadded,
-    Urlsafe315LenientDirectUnpadded,
-    LenientCustomPadded,
-    LenientCustomUnpadded,
-}
-
 #[derive(Clone, Copy, Default)]
 struct DecodeConfiguration {
     altchars: Option<[u8; 2]>,
@@ -87,152 +69,6 @@ struct DecodeConfiguration {
     canonical: bool,
     python_315: bool,
 }
-
-macro_rules! select_decode_strategy {
-    ($configuration:expr, $select:ident) => {{
-        let DecodeConfiguration {
-            altchars,
-            padded,
-            strict_mode,
-            ignorechars_specified,
-            empty_ignorechars,
-            canonical,
-            python_315,
-        } = $configuration;
-        let standard_strict = altchars.is_none()
-            && padded
-            && (!ignorechars_specified || empty_ignorechars)
-            && (canonical || empty_ignorechars);
-        if ignorechars_specified || canonical {
-            if standard_strict {
-                $select!(DecodeStrategy::StandardStrictThenAdvanced)
-            } else if !ignorechars_specified && canonical && !padded {
-                $select!(DecodeStrategy::CanonicalUnpaddedThenAdvanced)
-            } else {
-                $select!(DecodeStrategy::Advanced)
-            }
-        } else {
-            let urlsafe_315 = python_315 && altchars == Some(*b"-_");
-            if strict_mode {
-                match (urlsafe_315, padded) {
-                    (false, true) => $select!(DecodeStrategy::StrictPadded),
-                    (false, false) => $select!(DecodeStrategy::StrictUnpadded),
-                    (true, true) => $select!(DecodeStrategy::Urlsafe315StrictPadded),
-                    (true, false) => $select!(DecodeStrategy::Urlsafe315StrictUnpadded),
-                }
-            } else {
-                let direct = matches!(altchars, None | Some([b'-', b'_']));
-                match (urlsafe_315, direct, padded) {
-                    (false, true, true) => $select!(DecodeStrategy::LenientDirectPadded),
-                    (false, true, false) => $select!(DecodeStrategy::LenientDirectUnpadded),
-                    (true, true, true) => {
-                        $select!(DecodeStrategy::Urlsafe315LenientDirectPadded)
-                    }
-                    (true, true, false) => {
-                        $select!(DecodeStrategy::Urlsafe315LenientDirectUnpadded)
-                    }
-                    (false, false, true) => $select!(DecodeStrategy::LenientCustomPadded),
-                    (false, false, false) => $select!(DecodeStrategy::LenientCustomUnpadded),
-                    (true, false, _) => {
-                        unreachable!("Python 3.15 routing requires the URL-safe alphabet")
-                    }
-                }
-            }
-        }
-    }};
-}
-
-macro_rules! execute_decode_strategy {
-    ($strategy:expr, $execute_attempt:ident) => {{
-        match $strategy {
-            DecodeStrategy::Advanced => {
-                $execute_attempt!(Advanced);
-            }
-            DecodeStrategy::StandardStrictThenAdvanced => {
-                $execute_attempt!(StandardStrict);
-                $execute_attempt!(Advanced);
-            }
-            DecodeStrategy::CanonicalUnpaddedThenAdvanced => {
-                $execute_attempt!(CanonicalUnpadded);
-                $execute_attempt!(Advanced);
-            }
-            DecodeStrategy::StrictPadded => {
-                $execute_attempt!(Strict);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::StrictUnpadded => {
-                $execute_attempt!(Unpadded);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::Urlsafe315StrictPadded => {
-                $execute_attempt!(Urlsafe315);
-                $execute_attempt!(Strict);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::Urlsafe315StrictUnpadded => {
-                $execute_attempt!(Urlsafe315);
-                $execute_attempt!(Unpadded);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::LenientDirectPadded => {
-                $execute_attempt!(StrictProbe);
-                $execute_attempt!(MimeWhitespace);
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::LenientDirectUnpadded => {
-                $execute_attempt!(StrictProbe);
-                $execute_attempt!(Unpadded);
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::Urlsafe315LenientDirectPadded => {
-                $execute_attempt!(Urlsafe315);
-                $execute_attempt!(StrictProbe);
-                $execute_attempt!(MimeWhitespace);
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::Urlsafe315LenientDirectUnpadded => {
-                $execute_attempt!(Urlsafe315);
-                $execute_attempt!(StrictProbe);
-                $execute_attempt!(Unpadded);
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::LenientCustomPadded => {
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-            DecodeStrategy::LenientCustomUnpadded => {
-                $execute_attempt!(Unpadded);
-                $execute_attempt!(Lenient);
-                $execute_attempt!(Binascii);
-            }
-        }
-    }};
-}
-
-macro_rules! execute_strict_decode_strategy {
-    ($py:expr, $options:expr, $execute_attempt:ident) => {{
-        let options = $options;
-        if options.ignorechars.is_none() && !options.canonical && options.strict_mode() {
-            if options.altchars == Some(*b"-_")
-                && $crate::bindings::base64::python_at_least($py, (3, 15))
-            {
-                $execute_attempt!(Urlsafe315);
-            }
-            if options.padded {
-                $execute_attempt!(Strict);
-            } else {
-                $execute_attempt!(Unpadded);
-            }
-            $execute_attempt!(Binascii);
-        }
-    }};
-}
-
-pub(super) use {execute_decode_strategy, execute_strict_decode_strategy};
 
 impl DecodeConfiguration {
     #[inline(always)]
@@ -257,47 +93,124 @@ impl DecodeConfiguration {
     }
 }
 
-impl DecodeStrategy {
-    #[inline]
-    pub(super) fn select(py: Python<'_>, options: DecodeOptions<'_, '_>) -> Self {
-        Self::from_configuration(DecodeConfiguration::from_options(py, options))
+const ADVANCED: &[DecodeAttempt] = &[DecodeAttempt::Advanced];
+const STANDARD_STRICT_ADVANCED: &[DecodeAttempt] =
+    &[DecodeAttempt::StandardStrict, DecodeAttempt::Advanced];
+const CANONICAL_UNPADDED_ADVANCED: &[DecodeAttempt] =
+    &[DecodeAttempt::CanonicalUnpadded, DecodeAttempt::Advanced];
+const STRICT_PADDED: &[DecodeAttempt] = &[DecodeAttempt::Strict, DecodeAttempt::Binascii];
+const STRICT_UNPADDED: &[DecodeAttempt] = &[DecodeAttempt::Unpadded, DecodeAttempt::Binascii];
+const URLSAFE_315_STRICT_PADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::Urlsafe315,
+    DecodeAttempt::Strict,
+    DecodeAttempt::Binascii,
+];
+const URLSAFE_315_STRICT_UNPADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::Urlsafe315,
+    DecodeAttempt::Unpadded,
+    DecodeAttempt::Binascii,
+];
+const LENIENT_DIRECT_PADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::StrictProbe,
+    DecodeAttempt::MimeWhitespace,
+    DecodeAttempt::Lenient,
+    DecodeAttempt::Binascii,
+];
+const LENIENT_DIRECT_UNPADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::StrictProbe,
+    DecodeAttempt::Unpadded,
+    DecodeAttempt::Lenient,
+    DecodeAttempt::Binascii,
+];
+const URLSAFE_315_LENIENT_DIRECT_PADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::Urlsafe315,
+    DecodeAttempt::StrictProbe,
+    DecodeAttempt::MimeWhitespace,
+    DecodeAttempt::Lenient,
+    DecodeAttempt::Binascii,
+];
+const URLSAFE_315_LENIENT_DIRECT_UNPADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::Urlsafe315,
+    DecodeAttempt::StrictProbe,
+    DecodeAttempt::Unpadded,
+    DecodeAttempt::Lenient,
+    DecodeAttempt::Binascii,
+];
+const LENIENT_CUSTOM_PADDED: &[DecodeAttempt] = &[DecodeAttempt::Lenient, DecodeAttempt::Binascii];
+const LENIENT_CUSTOM_UNPADDED: &[DecodeAttempt] = &[
+    DecodeAttempt::Unpadded,
+    DecodeAttempt::Lenient,
+    DecodeAttempt::Binascii,
+];
+
+fn plan_attempts(configuration: DecodeConfiguration) -> &'static [DecodeAttempt] {
+    let DecodeConfiguration {
+        altchars,
+        padded,
+        strict_mode,
+        ignorechars_specified,
+        empty_ignorechars,
+        canonical,
+        python_315,
+    } = configuration;
+    let standard_strict = altchars.is_none()
+        && padded
+        && (!ignorechars_specified || empty_ignorechars)
+        && (canonical || empty_ignorechars);
+    if ignorechars_specified || canonical {
+        return if standard_strict {
+            STANDARD_STRICT_ADVANCED
+        } else if !ignorechars_specified && canonical && !padded {
+            CANONICAL_UNPADDED_ADVANCED
+        } else {
+            ADVANCED
+        };
     }
 
-    fn from_configuration(configuration: DecodeConfiguration) -> Self {
-        macro_rules! return_strategy {
-            ($strategy:expr) => {
-                $strategy
-            };
-        }
-        select_decode_strategy!(configuration, return_strategy)
+    let urlsafe_315 = python_315 && altchars == Some(*b"-_");
+    if strict_mode {
+        return match (urlsafe_315, padded) {
+            (false, true) => STRICT_PADDED,
+            (false, false) => STRICT_UNPADDED,
+            (true, true) => URLSAFE_315_STRICT_PADDED,
+            (true, false) => URLSAFE_315_STRICT_UNPADDED,
+        };
+    }
+
+    let direct = matches!(altchars, None | Some([b'-', b'_']));
+    match (urlsafe_315, direct, padded) {
+        (false, true, true) => LENIENT_DIRECT_PADDED,
+        (false, true, false) => LENIENT_DIRECT_UNPADDED,
+        (true, true, true) => URLSAFE_315_LENIENT_DIRECT_PADDED,
+        (true, true, false) => URLSAFE_315_LENIENT_DIRECT_UNPADDED,
+        (false, false, true) => LENIENT_CUSTOM_PADDED,
+        (false, false, false) => LENIENT_CUSTOM_UNPADDED,
+        (true, false, _) => unreachable!("Python 3.15 routing requires the URL-safe alphabet"),
     }
 }
 
 pub(super) struct DecodePlan<'a, 'buffer, 'py> {
     input: &'a BytesLike<'buffer, 'py>,
     options: DecodeOptions<'a, 'py>,
+    attempts: &'static [DecodeAttempt],
 }
 
 impl<'a, 'buffer, 'py> DecodePlan<'a, 'buffer, 'py> {
-    pub(super) fn new(input: &'a BytesLike<'buffer, 'py>, options: DecodeOptions<'a, 'py>) -> Self {
-        Self { input, options }
+    pub(super) fn new(
+        py: Python<'py>,
+        input: &'a BytesLike<'buffer, 'py>,
+        options: DecodeOptions<'a, 'py>,
+    ) -> Self {
+        Self {
+            input,
+            options,
+            attempts: plan_attempts(DecodeConfiguration::from_options(py, options)),
+        }
     }
 
     pub(super) fn execute_allocating(self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let options = self.options;
-        let mut skips_legacy_warning = false;
-        let output =
-            decode_plan_allocating_inner(py, self.input, options, &mut skips_legacy_warning)?;
-        if !skips_legacy_warning {
-            warn_legacy_altchars(
-                py,
-                self.input,
-                options.altchars,
-                options.ignorechars.is_some(),
-                options.strict_mode(),
-            )?;
-        }
-        Ok(output)
+        let execution = AllocatingExecutor::execute(py, self.input, self.options, self.attempts)?;
+        self.finish(py, execution.value, execution.skips_legacy_warning)
     }
 
     pub(super) fn execute_into(
@@ -308,28 +221,29 @@ impl<'a, 'buffer, 'py> DecodePlan<'a, 'buffer, 'py> {
         // Every decoder attempt and the warning scan must observe the same input.
         if let Some(input) = self.input.snapshot_for_output(output)? {
             let input = BytesLike::OwnedVec(input);
-            return DecodePlan::new(&input, self.options).execute_into(py, output);
+            return DecodePlan::new(py, &input, self.options).execute_into(py, output);
         }
-        let options = self.options;
-        let mut skips_legacy_warning = false;
-        let written =
-            decode_plan_into_inner(py, self.input, output, options, &mut skips_legacy_warning)?;
+        let execution = IntoExecutor::execute(py, self.input, output, self.options, self.attempts)?;
+        self.finish(py, execution.value, execution.skips_legacy_warning)
+    }
+
+    fn finish<T>(self, py: Python<'_>, value: T, skips_legacy_warning: bool) -> PyResult<T> {
         if !skips_legacy_warning {
             warn_legacy_altchars(
                 py,
                 self.input,
-                options.altchars,
-                options.ignorechars.is_some(),
-                options.strict_mode(),
+                self.options.altchars,
+                self.options.ignorechars.is_some(),
+                self.options.strict_mode(),
             )?;
         }
-        Ok(written)
+        Ok(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DecodeAttempt, DecodeConfiguration, DecodeOptions, DecodeStrategy};
+    use super::{DecodeAttempt, DecodeConfiguration, DecodeOptions, plan_attempts};
 
     #[test]
     fn decode_options_preserve_validation_sentinel() {
@@ -354,131 +268,104 @@ mod tests {
         assert!(!urlsafe.padded);
     }
 
-    fn attempts(strategy: DecodeStrategy) -> Vec<DecodeAttempt> {
-        let mut attempts = Vec::new();
-        macro_rules! execute_attempt {
-            ($attempt:ident) => {
-                attempts.push(DecodeAttempt::$attempt);
-            };
-        }
-        execute_decode_strategy!(strategy, execute_attempt);
-        attempts
-    }
-
     #[test]
-    fn strategy_selection_covers_each_ordered_router() {
-        let strict = DecodeStrategy::from_configuration(DecodeConfiguration {
-            padded: true,
-            strict_mode: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(strict),
-            vec![DecodeAttempt::Strict, DecodeAttempt::Binascii]
-        );
-
-        let strict_urlsafe = DecodeStrategy::from_configuration(DecodeConfiguration {
-            altchars: Some(*b"-_"),
-            strict_mode: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(strict_urlsafe),
-            vec![
-                DecodeAttempt::Urlsafe315,
-                DecodeAttempt::Unpadded,
-                DecodeAttempt::Binascii,
-            ]
-        );
-
-        let lenient = DecodeStrategy::from_configuration(DecodeConfiguration {
-            padded: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(lenient),
-            vec![
-                DecodeAttempt::StrictProbe,
-                DecodeAttempt::MimeWhitespace,
-                DecodeAttempt::Lenient,
-                DecodeAttempt::Binascii,
-            ]
-        );
-
-        let lenient_urlsafe = DecodeStrategy::from_configuration(DecodeConfiguration {
-            altchars: Some(*b"-_"),
-            padded: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(lenient_urlsafe),
-            vec![
-                DecodeAttempt::Urlsafe315,
-                DecodeAttempt::StrictProbe,
-                DecodeAttempt::MimeWhitespace,
-                DecodeAttempt::Lenient,
-                DecodeAttempt::Binascii,
-            ]
-        );
-
-        let custom_unpadded = DecodeStrategy::from_configuration(DecodeConfiguration {
-            altchars: Some(*b"@#"),
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(custom_unpadded),
-            vec![
-                DecodeAttempt::Unpadded,
-                DecodeAttempt::Lenient,
-                DecodeAttempt::Binascii,
-            ]
-        );
-
-        let canonical_padded = DecodeStrategy::from_configuration(DecodeConfiguration {
-            padded: true,
-            strict_mode: true,
-            canonical: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(canonical_padded),
-            vec![DecodeAttempt::StandardStrict, DecodeAttempt::Advanced,]
-        );
-
-        let canonical_unpadded = DecodeStrategy::from_configuration(DecodeConfiguration {
-            strict_mode: true,
-            canonical: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(canonical_unpadded),
-            vec![DecodeAttempt::CanonicalUnpadded, DecodeAttempt::Advanced,]
-        );
-
-        let empty_ignorechars = DecodeStrategy::from_configuration(DecodeConfiguration {
-            padded: true,
-            strict_mode: true,
-            ignorechars_specified: true,
-            empty_ignorechars: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(
-            attempts(empty_ignorechars),
-            vec![DecodeAttempt::StandardStrict, DecodeAttempt::Advanced,]
-        );
-
-        let advanced = DecodeStrategy::from_configuration(DecodeConfiguration {
-            altchars: Some(*b"@#"),
-            padded: true,
-            ignorechars_specified: true,
-            python_315: true,
-            ..DecodeConfiguration::default()
-        });
-        assert_eq!(attempts(advanced), vec![DecodeAttempt::Advanced]);
+    fn planner_covers_each_ordered_route() {
+        let cases = [
+            (
+                DecodeConfiguration {
+                    padded: true,
+                    strict_mode: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[DecodeAttempt::Strict, DecodeAttempt::Binascii][..],
+            ),
+            (
+                DecodeConfiguration {
+                    altchars: Some(*b"-_"),
+                    strict_mode: true,
+                    python_315: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[
+                    DecodeAttempt::Urlsafe315,
+                    DecodeAttempt::Unpadded,
+                    DecodeAttempt::Binascii,
+                ][..],
+            ),
+            (
+                DecodeConfiguration {
+                    padded: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[
+                    DecodeAttempt::StrictProbe,
+                    DecodeAttempt::MimeWhitespace,
+                    DecodeAttempt::Lenient,
+                    DecodeAttempt::Binascii,
+                ][..],
+            ),
+            (
+                DecodeConfiguration {
+                    altchars: Some(*b"-_"),
+                    padded: true,
+                    python_315: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[
+                    DecodeAttempt::Urlsafe315,
+                    DecodeAttempt::StrictProbe,
+                    DecodeAttempt::MimeWhitespace,
+                    DecodeAttempt::Lenient,
+                    DecodeAttempt::Binascii,
+                ][..],
+            ),
+            (
+                DecodeConfiguration {
+                    altchars: Some(*b"@#"),
+                    ..DecodeConfiguration::default()
+                },
+                &[
+                    DecodeAttempt::Unpadded,
+                    DecodeAttempt::Lenient,
+                    DecodeAttempt::Binascii,
+                ][..],
+            ),
+            (
+                DecodeConfiguration {
+                    padded: true,
+                    canonical: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[DecodeAttempt::StandardStrict, DecodeAttempt::Advanced][..],
+            ),
+            (
+                DecodeConfiguration {
+                    canonical: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[DecodeAttempt::CanonicalUnpadded, DecodeAttempt::Advanced][..],
+            ),
+            (
+                DecodeConfiguration {
+                    padded: true,
+                    ignorechars_specified: true,
+                    empty_ignorechars: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[DecodeAttempt::StandardStrict, DecodeAttempt::Advanced][..],
+            ),
+            (
+                DecodeConfiguration {
+                    altchars: Some(*b"@#"),
+                    padded: true,
+                    ignorechars_specified: true,
+                    ..DecodeConfiguration::default()
+                },
+                &[DecodeAttempt::Advanced][..],
+            ),
+        ];
+        for (configuration, expected) in cases {
+            assert_eq!(plan_attempts(configuration), expected);
+        }
     }
 }

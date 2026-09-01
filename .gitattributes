@@ -1,1 +1,14 @@
 * text=auto eol=lf
+
+# Generated API metadata is not handwritten source and must stay out of
+# repository language and complexity statistics.
+/hashcodecs/__init__.py linguist-generated=true
+/hashcodecs/__init__.pyi linguist-generated=true
+/hashcodecs/base64.py linguist-generated=true
+/hashcodecs/base64.pyi linguist-generated=true
+/hashcodecs/murmur3.py linguist-generated=true
+/hashcodecs/murmur3.pyi linguist-generated=true
+/hashcodecs/xxhash.py linguist-generated=true
+/hashcodecs/xxhash.pyi linguist-generated=true
+/docs/api/*.md linguist-generated=true
+/src/bindings/base64/schema_generated.rs linguist-generated=true

@@ -173,22 +173,12 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     for selected in supported.into_iter().flatten() {
         let mut hashes = [seed; 4];
         let blocks = FullBlocks::new(&input[..block_end]).unwrap();
-        assert!(unsafe { x86_128_x86::try_mix_x86_128_body(blocks, &mut hashes, selected) });
+        unsafe { x86_128_x86::mix_x86_128_body(blocks, &mut hashes, selected) };
         assert_eq!(
             x86_words_as_u128(finish_x86_128(input, hashes, block_end)),
             expected
         );
     }
-
-    let mut unchanged = [seed; 4];
-    assert!(!unsafe {
-        x86_128_x86::try_mix_x86_128_body(
-            FullBlocks::new(&input[..block_end]).unwrap(),
-            &mut unchanged,
-            dispatch::Backend::Scalar,
-        )
-    });
-    assert_eq!(unchanged, [seed; 4]);
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -207,30 +197,19 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     ];
     for (selected, bmi2) in supported.into_iter().flatten() {
         let mut hashes = [seed as u64; 2];
-        assert!(unsafe {
-            x64_x86::try_mix_x64_128_body(
+        unsafe {
+            x64_x86::mix_x64_128_body(
                 FullBlocks::new(&input[..block_end]).unwrap(),
                 &mut hashes,
                 selected,
                 bmi2,
             )
-        });
+        };
         assert_eq!(
             x64_words_as_u128(finish_x64_128(input, hashes, block_end)),
             expected
         );
     }
-
-    let mut unchanged = [seed as u64; 2];
-    assert!(!unsafe {
-        x64_x86::try_mix_x64_128_body(
-            FullBlocks::new(&input[..block_end]).unwrap(),
-            &mut unchanged,
-            dispatch::Backend::Scalar,
-            false,
-        )
-    });
-    assert_eq!(unchanged, [seed as u64; 2]);
 }
 
 #[test]
@@ -319,29 +298,19 @@ fn matches_the_reference_implementation_for_every_tail_length() {
                 ];
                 for selected in supported.into_iter().flatten() {
                     let mut hash = seed;
-                    assert!(unsafe {
-                        x86_32_x86::try_mix_x86_32_body(
+                    unsafe {
+                        x86_32_x86::mix_x86_32_body(
                             FullBlocks::new(&input[..block_end]).unwrap(),
                             &mut hash,
                             selected,
                         )
-                    });
+                    };
                     assert_eq!(
                         finish_x86_32(&input, hash, block_end),
                         expected_x86_32,
                         "{selected:?} x86_32 length={length} seed={seed}"
                     );
                 }
-
-                let mut unchanged = seed;
-                assert!(!unsafe {
-                    x86_32_x86::try_mix_x86_32_body(
-                        FullBlocks::new(&input[..block_end]).unwrap(),
-                        &mut unchanged,
-                        dispatch::Backend::Scalar,
-                    )
-                });
-                assert_eq!(unchanged, seed);
             }
 
             let expected_x86_128 =

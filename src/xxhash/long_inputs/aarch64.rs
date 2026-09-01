@@ -27,14 +27,14 @@ unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const 
         unsafe {
             let input_lo = vreinterpretq_u64_u8(vld1q_u8(data.add(byte_offset)));
             let input_hi = vreinterpretq_u64_u8(vld1q_u8(data.add(next_byte_offset)));
-            let key_lo = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
-            let key_hi = vreinterpretq_u64_u8(vld1q_u8(secret.add(next_byte_offset)));
+            let secret_lo = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
+            let secret_hi = vreinterpretq_u64_u8(vld1q_u8(secret.add(next_byte_offset)));
 
-            let keyed_lo = veorq_u64(input_lo, key_lo);
-            let keyed_hi = veorq_u64(input_hi, key_hi);
+            let mixed_lo = veorq_u64(input_lo, secret_lo);
+            let mixed_hi = veorq_u64(input_hi, secret_hi);
             let unzipped = vuzpq_u32(
-                vreinterpretq_u32_u64(keyed_lo),
-                vreinterpretq_u32_u64(keyed_hi),
+                vreinterpretq_u32_u64(mixed_lo),
+                vreinterpretq_u32_u64(mixed_hi),
             );
             let low_words = unzipped.0;
             let high_words = unzipped.1;
@@ -69,8 +69,8 @@ unsafe fn scramble(acc: &mut [u64; 8], secret: *const u8) {
             let acc_offset_ptr = acc.as_mut_ptr().add(acc_offset);
 
             let value = vld1q_u64(acc_offset_ptr);
-            let key = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
-            let mixed = veorq_u64(veorq_u64(value, vshrq_n_u64::<47>(value)), key);
+            let secret_values = vreinterpretq_u64_u8(vld1q_u8(secret.add(byte_offset)));
+            let mixed = veorq_u64(veorq_u64(value, vshrq_n_u64::<47>(value)), secret_values);
 
             let low_product = vmull_u32(vmovn_u64(mixed), prime);
             let high_product = vshlq_n_u64::<32>(vmull_u32(vshrn_n_u64::<32>(mixed), prime));

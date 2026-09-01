@@ -11,7 +11,7 @@ use crate::bindings::objects::{
 #[cfg(not(Py_GIL_DISABLED))]
 use crate::bindings::objects::{exact_bytes_at, exact_bytes_total, exact_bytes_up_to};
 use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
-use crate::xxhash::{xxh3_64_batch_each, xxh3_128_batch_each};
+use crate::xxhash::{xxh3_64_batch_for_each, xxh3_128_batch_for_each};
 
 #[cfg(not(Py_GIL_DISABLED))]
 enum ExactBytesBatch<'a, 'py> {
@@ -88,19 +88,19 @@ fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> PyResult<Vec<&'a [u8]>> 
 
 fn xxh3_64_batch_results(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<u64>> {
     let mut hashes = batch_results(inputs.len())?;
-    xxh3_64_batch_each(inputs, seed, |hash| hashes.push(hash));
+    xxh3_64_batch_for_each(inputs, seed, |hash| hashes.push(hash));
     Ok(hashes)
 }
 
 fn xxh3_128_batch_results(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<[u64; 2]>> {
     let mut hashes = batch_results(inputs.len())?;
-    xxh3_128_batch_each(inputs, seed, |hash| hashes.push(hash));
+    xxh3_128_batch_for_each(inputs, seed, |hash| hashes.push(hash));
     Ok(hashes)
 }
 
 fn xxh3_64_list<'py>(py: Python<'py>, inputs: &[&[u8]], seed: u64) -> PyResult<Bound<'py, PyList>> {
     list_from_callback(py, inputs.len(), |append| {
-        xxh3_64_batch_each(inputs, seed, |hash| append(PyInt::new(py, hash)));
+        xxh3_64_batch_for_each(inputs, seed, |hash| append(PyInt::new(py, hash)));
     })
 }
 
@@ -110,7 +110,7 @@ fn xxh3_128_list<'py>(
     seed: u64,
 ) -> PyResult<Bound<'py, PyList>> {
     list_from_callback(py, inputs.len(), |append| {
-        xxh3_128_batch_each(inputs, seed, |[low, high]| {
+        xxh3_128_batch_for_each(inputs, seed, |[low, high]| {
             append(PyInt::new(py, (u128::from(high) << 64) | u128::from(low)));
         });
     })
@@ -171,7 +171,7 @@ fn write_direct_64(
         let written = packed_output_len(output, inputs.len(), 8)?;
         let output = unsafe { bytearray_data(output.as_ptr()) };
         let mut index = 0;
-        xxh3_64_batch_each(inputs, seed, |hash| {
+        xxh3_64_batch_for_each(inputs, seed, |hash| {
             write_packed_64_at(output, index, hash);
             index += 1;
         });
@@ -189,7 +189,7 @@ fn write_direct_128(
         let written = packed_output_len(output, inputs.len(), 16)?;
         let output = unsafe { bytearray_data(output.as_ptr()) };
         let mut index = 0;
-        xxh3_128_batch_each(inputs, seed, |hash| {
+        xxh3_128_batch_for_each(inputs, seed, |hash| {
             write_packed_128_at(output, index, hash);
             index += 1;
         });

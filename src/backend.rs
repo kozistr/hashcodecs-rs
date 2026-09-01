@@ -12,6 +12,7 @@ pub(crate) enum CpuFeature {
     Avx512F,
     Avx512Bw,
     Avx512Vbmi,
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     Bmi2,
 }
 
@@ -25,6 +26,7 @@ impl CpuFeature {
             Self::Avx512F => 1 << 4,
             Self::Avx512Bw => 1 << 5,
             Self::Avx512Vbmi => 1 << 6,
+            #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
             Self::Bmi2 => 1 << 7,
         }
     }

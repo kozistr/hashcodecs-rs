@@ -7,12 +7,11 @@ use super::super::lenient::{
     translate_bytes_scalar, version_continues_after_padding,
 };
 use super::{
-    ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StrictSpecials, Translation,
-    decode_advanced_staging, decode_advanced_strict_into, finish_advanced_staging,
-    stage_advanced_symbols, stage_advanced_value, try_decode_advanced_staging,
-    validate_advanced_staging,
+    ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StagingValidator, StagingWriter, StrictSpecials,
+    Translation, decode_advanced_strict_into,
 };
 use crate::base64::Base64Error;
+use crate::bindings::base64::STANDARD_ALPHABET;
 use crate::bindings::buffer::BytesLike;
 
 fn advanced_decoder(
@@ -299,7 +298,7 @@ fn strict_special_search_covers_every_width() {
 
     for disabled in 0..=4 {
         let mut table = lenient_decode_table(None);
-        for &byte in &super::STANDARD_ALPHABET[..disabled] {
+        for &byte in &STANDARD_ALPHABET[..disabled] {
             table[usize::from(byte)] = 64;
         }
         let forbidden = StrictSpecials::forbidden(&table, &[false; 256]);
@@ -315,6 +314,12 @@ fn strict_special_search_covers_every_width() {
 }
 
 #[test]
+#[should_panic(expected = "many special bytes use the generic scanner")]
+fn many_strict_specials_cannot_use_the_specialized_search() {
+    StrictSpecials::Many.find(b"abc");
+}
+
+#[test]
 fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     let table = lenient_decode_table(None);
     assert!(Translation::new(&table).is_none());
@@ -322,72 +327,45 @@ fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     translated_table[usize::from(b'@')] = 62;
     let translation = Translation::new(&translated_table).expect("one translated byte");
     let mut translated = b"A@A@".to_vec();
-    unsafe { translation.apply(&mut translated) };
+    translation.apply(&mut translated);
     assert_eq!(&translated, b"A+A+");
 
-    let mut staging = [0_u8; ADVANCED_STAGING_CAPACITY];
     let mut output = vec![0xa5; ADVANCED_STAGING_CAPACITY * 2];
-    let mut staged = 0;
-    let mut written = 0;
     let symbols = vec![b'A'; ADVANCED_STAGING_CAPACITY * 2];
-    unsafe {
-        stage_advanced_symbols(
-            &symbols,
-            &mut staging,
-            &mut staged,
-            output.as_mut_ptr(),
-            &mut written,
-        )
-    };
-    assert_eq!(staged, 0);
+    let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
+    assert_eq!(writer.push_symbols::<true>(&symbols), Some(()));
+    let written = writer.finish::<true>().unwrap();
     assert_eq!(written, ADVANCED_STAGING_CAPACITY / 4 * 3 * 2);
     assert!(output[..written].iter().all(|&byte| byte == 0));
 
-    staged = ADVANCED_STAGING_CAPACITY - 1;
-    staging[..staged].fill(b'A');
-    written = 0;
-    unsafe {
-        stage_advanced_value(
-            0,
-            &mut staging,
-            &mut staged,
-            output.as_mut_ptr(),
-            &mut written,
-        )
-    };
-    assert_eq!(staged, 0);
-    assert_eq!(written, ADVANCED_STAGING_CAPACITY / 4 * 3);
-
-    staging[..3].copy_from_slice(b"AAA");
+    let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(
-        unsafe { finish_advanced_staging(&staging, 0, output.as_mut_ptr(), 7) },
-        7
+        writer.push_symbols::<true>(&symbols[..ADVANCED_STAGING_CAPACITY - 1]),
+        Some(())
     );
+    assert_eq!(writer.push_value::<true>(0), Some(()));
     assert_eq!(
-        unsafe { finish_advanced_staging(&staging, 3, output.as_mut_ptr(), 0) },
-        2
-    );
-    assert_eq!(
-        unsafe { decode_advanced_staging(b"AAA", output.as_mut_ptr()) },
-        2
-    );
-    assert_eq!(
-        unsafe { try_decode_advanced_staging(b"AAA", output.as_mut_ptr()) },
-        Some(2)
-    );
-    assert_eq!(
-        unsafe { try_decode_advanced_staging(b"A", output.as_mut_ptr()) },
-        None
-    );
-    assert_eq!(
-        unsafe { try_decode_advanced_staging(b"AA?", output.as_mut_ptr()) },
-        None
+        writer.finish::<true>(),
+        Some(ADVANCED_STAGING_CAPACITY / 4 * 3)
     );
 
-    let mut scratch = [0_u8; ADVANCED_STAGING_CAPACITY / 4 * 3];
-    assert!(validate_advanced_staging(b"AAA", &mut scratch));
-    assert!(!validate_advanced_staging(b"A", &mut scratch));
-    assert!(!validate_advanced_staging(b"AA?", &mut scratch));
+    assert_eq!(
+        StagingWriter::new(output.as_mut_ptr(), None).finish::<true>(),
+        Some(0)
+    );
+    let mut invalid = StagingWriter::new(output.as_mut_ptr(), None);
+    assert_eq!(invalid.push_symbols::<true>(b"A"), Some(()));
+    assert_eq!(invalid.finish::<true>(), None);
+
+    let mut validator = StagingValidator::new(None);
+    assert_eq!(validator.push(b"AAA"), Some(()));
+    assert_eq!(validator.finish(), Some(()));
+    let mut validator = StagingValidator::new(None);
+    assert_eq!(validator.push(b"A"), Some(()));
+    assert_eq!(validator.finish(), None);
+    let mut validator = StagingValidator::new(None);
+    assert_eq!(validator.push(b"AA?"), Some(()));
+    assert_eq!(validator.finish(), None);
 }
 
 #[test]
@@ -563,6 +541,7 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
     );
 
     let canonical = advanced_decoder(b"!", false, true, true);
+    assert_eq!(canonical.decoded_len(b"AAAA", true), Some(3));
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
         assert_eq!(
@@ -595,4 +574,9 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         unsafe { remapped.decode_to_ptr(b"AAAA", output.as_mut_ptr(), true) },
         3
     );
+
+    let mut remapped_canonical = advanced_decoder(b"!", false, false, true);
+    remapped_canonical.table[usize::from(b'A')] = 1;
+    assert!(!remapped_canonical.preserves_alphanumeric());
+    assert_eq!(remapped_canonical.decoded_len(b"AAAA", true), Some(3));
 }

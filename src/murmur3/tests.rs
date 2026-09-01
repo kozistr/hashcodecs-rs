@@ -133,6 +133,31 @@ fn incremental_hashers_match_one_shot_for_all_tail_lengths() {
     );
 }
 
+#[test]
+fn incremental_hasher_debug_is_redacted() {
+    let secret = b"secret message bytes";
+
+    let mut x86_32 = Murmur3X86Hasher32::new(7);
+    let mut x86_128 = Murmur3X86Hasher128::new(7);
+    let mut x64_128 = Murmur3X64Hasher128::new(7);
+    x86_32.update(secret);
+    x86_128.update(secret);
+    x64_128.update(secret);
+
+    assert_eq!(
+        format!("{x86_32:?}"),
+        "Murmur3Hasher { algorithm: \"x86_32\", total_length: 20, buffered_length: 0 }"
+    );
+    assert_eq!(
+        format!("{x86_128:?}"),
+        "Murmur3Hasher { algorithm: \"x86_128\", total_length: 20, buffered_length: 4 }"
+    );
+    assert_eq!(
+        format!("{x64_128:?}"),
+        "Murmur3Hasher { algorithm: \"x64_128\", total_length: 20, buffered_length: 4 }"
+    );
+}
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     let block_end = input.len() & !15;

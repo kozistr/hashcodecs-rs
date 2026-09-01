@@ -26,7 +26,7 @@ impl<'a, const BLOCK_SIZE: usize> FullBlocks<'a, BLOCK_SIZE> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(super) struct BlockBuffer<const BLOCK_SIZE: usize> {
     bytes: [u8; BLOCK_SIZE],
     len: usize,
@@ -69,5 +69,9 @@ impl<const BLOCK_SIZE: usize> BlockBuffer<BLOCK_SIZE> {
 
     pub(super) fn remaining(&self) -> &[u8] {
         &self.bytes[..self.len]
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.len
     }
 }

@@ -16,6 +16,7 @@ pub(super) unsafe fn encode_with_runtime_backend(
     input: &[u8],
     output: *mut u8,
     urlsafe: bool,
+    allow_streaming_stores: bool,
 ) -> usize {
     let selection = backend::selected_backend();
     unsafe {
@@ -24,7 +25,7 @@ pub(super) unsafe fn encode_with_runtime_backend(
             output,
             selection.backend,
             urlsafe,
-            selection.use_streaming_stores(input.len(), output),
+            allow_streaming_stores && selection.use_streaming_stores(input.len(), output),
         )
     }
 }

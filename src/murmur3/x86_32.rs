@@ -2,6 +2,7 @@ use super::block_buffer::{BlockBuffer, FullBlocks};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::dispatch;
 use super::primitives::{fmix32, read_u32_le};
+use core::fmt;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) mod x86;
 
@@ -24,11 +25,22 @@ pub(super) const X86_32_C2: u32 = 0x1b87_3593;
 ///     hasher.update(b" world");
 ///     assert_ne!(hasher.digest(), checkpoint.digest());
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Murmur3X86Hasher32 {
     hash: u32,
     tail: BlockBuffer<4>,
     length: u32,
+}
+
+impl fmt::Debug for Murmur3X86Hasher32 {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Murmur3Hasher")
+            .field("algorithm", &"x86_32")
+            .field("total_length", &self.length)
+            .field("buffered_length", &self.tail.len())
+            .finish()
+    }
 }
 
 impl Murmur3X86Hasher32 {

@@ -77,21 +77,18 @@ pub(super) fn exact_bytes_up_to<'py>(
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-pub(super) fn exact_small_bytes(items: &Bound<'_, PyList>, threshold: usize) -> bool {
+pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
         let mut total = 0_usize;
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index);
             if ffi::PyBytes_CheckExact(item) == 0 {
-                return false;
+                return None;
             }
             total = total.saturating_add(ffi::Py_SIZE(item) as usize);
-            if total >= threshold {
-                return false;
-            }
         }
-        true
+        Some(total)
     }
 }
 

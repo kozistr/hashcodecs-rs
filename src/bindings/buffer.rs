@@ -105,6 +105,11 @@ pub(super) enum BytesLike<'a, 'py> {
     Bytes(&'a Bound<'py, PyBytes>),
     ByteArray(&'a Bound<'py, PyByteArray>),
     OwnedBytes(Bound<'py, PyBytes>),
+    OwnedBytesSlice {
+        owner: Bound<'py, PyBytes>,
+        offset: usize,
+        len: usize,
+    },
     OwnedByteArray(Bound<'py, PyByteArray>),
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
     Buffer(BorrowedBuffer<'py>),
@@ -120,6 +125,7 @@ impl<'py> BytesLike<'_, 'py> {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
             Self::OwnedBytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
+            Self::OwnedBytesSlice { len, .. } => *len,
             Self::OwnedByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
@@ -140,6 +146,7 @@ impl<'py> BytesLike<'_, 'py> {
         match self {
             Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
             Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
+            Self::OwnedBytesSlice { .. } => Ok(None),
             Self::Buffer(buffer)
                 if !buffer.memoryview_source.is_null()
                     && buffer.view.obj == buffer.memoryview_source =>
@@ -207,7 +214,11 @@ impl<'py> BytesLike<'_, 'py> {
                     bytearray_size(output.as_ptr()),
                 )
             }),
-            Self::Bytes(_) | Self::OwnedBytes(_) | Self::Text(_) | Self::OwnedVec(_) => false,
+            Self::Bytes(_)
+            | Self::OwnedBytes(_)
+            | Self::OwnedBytesSlice { .. }
+            | Self::Text(_)
+            | Self::OwnedVec(_) => false,
         }
     }
 
@@ -246,6 +257,10 @@ impl<'py> BytesLike<'_, 'py> {
                 callback(unsafe { bytearray_bytes(value) })
             }),
             Self::OwnedBytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
+            Self::OwnedBytesSlice { owner, offset, len } => {
+                let owner = unsafe { bytes_slice(owner) };
+                callback(&owner[*offset..*offset + *len])
+            }
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
@@ -305,6 +320,9 @@ impl<'py> BytesLike<'_, 'py> {
                 unreachable!("mutable bytearrays must be snapshotted before borrowing")
             }
             Self::OwnedBytes(bytes) => bytes.as_bytes(),
+            Self::OwnedBytesSlice { owner, offset, len } => {
+                &owner.as_bytes()[*offset..*offset + *len]
+            }
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
             Self::OwnedVec(bytes) => bytes,
@@ -495,11 +513,17 @@ fn exact_memoryview_bytes_like<'py>(
     if let Some(owner) = owner {
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
-            if unsafe {
-                bytes_size(owner.as_ptr()) == nbytes
-                    && bytes_data(owner.as_ptr()) == data.cast_const()
-            } {
-                return Ok(BytesLike::OwnedBytes(owner));
+            let owner_len = unsafe { bytes_size(owner.as_ptr()) };
+            let owner_data = unsafe { bytes_data(owner.as_ptr()) };
+            if let Some(offset) = subslice_offset(owner_data, owner_len, data, nbytes) {
+                if offset == 0 && nbytes == owner_len {
+                    return Ok(BytesLike::OwnedBytes(owner));
+                }
+                return Ok(BytesLike::OwnedBytesSlice {
+                    owner,
+                    offset,
+                    len: nbytes,
+                });
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
@@ -518,6 +542,18 @@ fn exact_memoryview_bytes_like<'py>(
 
     drop(buffer);
     copy_memoryview(memoryview).map(BytesLike::OwnedBytes)
+}
+
+fn subslice_offset(
+    owner_data: *const u8,
+    owner_len: usize,
+    slice_data: *const u8,
+    slice_len: usize,
+) -> Option<usize> {
+    let owner_start = owner_data as usize;
+    let slice_start = slice_data as usize;
+    let offset = slice_start.checked_sub(owner_start)?;
+    (offset <= owner_len && slice_len <= owner_len - offset).then_some(offset)
 }
 
 fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<MemoryViewInfo<'py>> {
@@ -637,6 +673,31 @@ mod tests {
                 error.to_string(),
                 "ValueError: operation forbidden on released memoryview object"
             );
+        });
+    }
+
+    #[test]
+    fn contiguous_bytes_memoryview_slice_retains_owner_and_offset() {
+        Python::initialize();
+        Python::attach(|py| {
+            let memoryview = py
+                .eval(c"memoryview(b'x' + b'a' * 65536 + b'y')[1:-1]", None, None)
+                .unwrap()
+                .cast_into::<PyMemoryView>()
+                .unwrap();
+            let input = exact_memoryview_bytes_like(&memoryview, true).unwrap();
+            assert!(matches!(
+                input,
+                BytesLike::OwnedBytesSlice {
+                    offset: 1,
+                    len: 65536,
+                    ..
+                }
+            ));
+            assert_eq!(input.stable_bytes(), &[b'a'; 65536]);
+            let output = PyByteArray::new(py, b"output");
+            assert!(!input.overlaps(&output));
+            assert!(!BytesLike::Text("text").overlaps(&output));
         });
     }
 }

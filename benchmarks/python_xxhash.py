@@ -11,6 +11,9 @@ from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to
 import hashcodecs.xxhash as hashcodecs_xxhash
 import xxhash
 
+DETACH_THRESHOLD = 256 * 1024
+HIGH_CARDINALITY_ITEM_SIZE = 64
+
 
 def report(
     name: str,
@@ -116,6 +119,45 @@ def main() -> None:
                     total,
                     lambda items=items, output=output128: hashcodecs_xxhash.xxh3_128_batch_into(items, output, 42),
                 )
+
+        print('\nHigh-cardinality exact-bytes batches around the 256 KiB detach threshold')
+        boundary_count = DETACH_THRESHOLD // HIGH_CARDINALITY_ITEM_SIZE
+        payload = data(HIGH_CARDINALITY_ITEM_SIZE)
+        for item_count in (boundary_count - 1, boundary_count, boundary_count + 1):
+            items = [payload] * item_count
+            total = HIGH_CARDINALITY_ITEM_SIZE * item_count
+            output64 = bytearray(8 * item_count)
+            output128 = bytearray(16 * item_count)
+            expected64 = hashcodecs_xxhash.xxh3_64_batch(items, 42)
+            expected128 = hashcodecs_xxhash.xxh3_128_batch(items, 42)
+            assert hashcodecs_xxhash.xxh3_64_batch_into(items, output64, 42) == len(output64)
+            assert hashcodecs_xxhash.xxh3_128_batch_into(items, output128, 42) == len(output128)
+            assert output64 == b''.join(value.to_bytes(8, 'little') for value in expected64)
+            assert output128 == b''.join(value.to_bytes(16, 'little') for value in expected128)
+            report(
+                f'XXH3-64 batch {item_count}',
+                total,
+                lambda items=items: hashcodecs_xxhash.xxh3_64_batch(items, 42),
+                lambda items=items: [xxhash.xxh3_64_intdigest(item, 42) for item in items],
+                arguments.hashcodecs_only,
+            )
+            report_hashcodecs(
+                f'XXH3-64 into {item_count}',
+                total,
+                lambda items=items, output=output64: hashcodecs_xxhash.xxh3_64_batch_into(items, output, 42),
+            )
+            report(
+                f'XXH3-128 batch {item_count}',
+                total,
+                lambda items=items: hashcodecs_xxhash.xxh3_128_batch(items, 42),
+                lambda items=items: [xxhash.xxh3_128_intdigest(item, 42) for item in items],
+                arguments.hashcodecs_only,
+            )
+            report_hashcodecs(
+                f'XXH3-128 into {item_count}',
+                total,
+                lambda items=items, output=output128: hashcodecs_xxhash.xxh3_128_batch_into(items, output, 42),
+            )
     finally:
         gc.enable()
 

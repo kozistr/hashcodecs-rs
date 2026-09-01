@@ -4,8 +4,9 @@ use pyo3::exceptions::{PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
+use super::decode::native::translate_bytes;
 use super::{pybytes_with_len, with_output_ptr};
-use crate::base64::{encode_to_ptr, encoded_len};
+use crate::base64::{encode_to_ptr, encode_to_ptr_cached, encoded_len};
 use crate::bindings::buffer::BytesLike;
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
@@ -160,32 +161,37 @@ fn encode_slice_to_ptr(
 
 #[inline]
 fn substitute_altchars(output: &mut [u8], [plus, slash]: [u8; 2]) {
-    let Some(first) = memchr::memchr2(b'+', b'/', output) else {
-        return;
-    };
-    for byte in &mut output[first..] {
-        if *byte == b'+' {
-            *byte = plus;
-        } else if *byte == b'/' {
-            *byte = slash;
-        }
+    translate_bytes(output, b'+', plus, b'/', slash);
+}
+
+#[inline]
+unsafe fn encode_selected_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, urlsafe: bool) {
+    if CACHED {
+        unsafe { encode_to_ptr_cached(input, output, urlsafe) };
+    } else {
+        unsafe { encode_to_ptr(input, output, urlsafe) };
     }
 }
 
 #[inline]
-unsafe fn encode_unwrapped_ptr(input: &[u8], output: *mut u8, urlsafe: bool, padded: bool) {
+unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
+    input: &[u8],
+    output: *mut u8,
+    urlsafe: bool,
+    padded: bool,
+) {
     if padded {
-        unsafe { encode_to_ptr(input, output, urlsafe) };
+        unsafe { encode_selected_ptr::<CACHED>(input, output, urlsafe) };
         return;
     }
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
-    unsafe { encode_to_ptr(&input[..complete_input_len], output, urlsafe) };
+    unsafe { encode_selected_ptr::<CACHED>(&input[..complete_input_len], output, urlsafe) };
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
-        unsafe { encode_to_ptr(tail, encoded_tail.as_mut_ptr(), urlsafe) };
+        unsafe { encode_selected_ptr::<CACHED>(tail, encoded_tail.as_mut_ptr(), urlsafe) };
         let tail_len = unpadded_encoded_len(tail.len());
         unsafe {
             output
@@ -196,25 +202,43 @@ unsafe fn encode_unwrapped_ptr(input: &[u8], output: *mut u8, urlsafe: bool, pad
 }
 
 unsafe fn encode_configured_ptr(
-    mut input: &[u8],
+    input: &[u8],
     output: *mut u8,
     urlsafe: bool,
     padded: bool,
     wrapcol: Option<usize>,
 ) {
     let Some(width) = wrapcol else {
-        unsafe { encode_unwrapped_ptr(input, output, urlsafe, padded) };
+        unsafe { encode_unwrapped_ptr::<false>(input, output, urlsafe, padded) };
         return;
     };
-    let input_per_line = width / 4 * 3;
-    let mut destination = 0;
-    while encoded_data_len(input.len(), padded) > width {
-        let (line_input, rest_input) = input.split_at(input_per_line);
-        unsafe { encode_to_ptr(line_input, output.add(destination), urlsafe) };
-        destination += width;
-        unsafe { output.add(destination).write(b'\n') };
-        destination += 1;
-        input = rest_input;
+    let data_len = encoded_data_len(input.len(), padded);
+    unsafe { encode_unwrapped_ptr::<true>(input, output, urlsafe, padded) };
+    unsafe { wrap_encoded_ptr(output, data_len, width) };
+}
+
+/// Expand an encoded prefix in place, moving from the end so source bytes are
+/// never overwritten before they are copied.
+unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
+    if data_len <= width {
+        return;
     }
-    unsafe { encode_unwrapped_ptr(input, output.add(destination), urlsafe, padded) };
+    let mut source = data_len;
+    let mut destination = data_len + (data_len - 1) / width;
+    while source != 0 {
+        let remainder = source % width;
+        let line_len = if remainder == 0 { width } else { remainder };
+        source -= line_len;
+        destination -= line_len;
+        unsafe {
+            output
+                .add(source)
+                .copy_to(output.add(destination), line_len)
+        };
+        if source != 0 {
+            destination -= 1;
+            unsafe { output.add(destination).write(b'\n') };
+        }
+    }
+    debug_assert_eq!(destination, 0);
 }

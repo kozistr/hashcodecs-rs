@@ -1,9 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyInt, PyList};
 
-use super::super::{
-    BatchInputKind, PreparedBatchInput, batch_outputs, parse_altchars, prepare_batch_inputs,
-};
+use super::super::{BatchInputKind, batch_outputs, parse_altchars, prepare_batch_inputs};
 use super::plan::{DecodeOptions, DecodePlan};
 use crate::bindings::buffer::ascii_or_bytes;
 use crate::bindings::objects::{list_from_fn, list_items};
@@ -82,20 +80,23 @@ fn b64decode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
-    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?;
+    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?
+        .into_iter()
+        .peekable();
     let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
         match prepared
-            .as_mut()
-            .map(|inputs| std::mem::replace(&mut inputs[index], PreparedBatchInput::Deferred))
+            .peek()
+            .is_some_and(|(prepared_index, _)| *prepared_index == index)
+            .then(|| prepared.next().expect("matching prepared input exists").1)
         {
-            Some(PreparedBatchInput::Ready(input)) => Ok(PyInt::new(
+            Some(Ok(input)) => Ok(PyInt::new(
                 py,
                 DecodePlan::new(&input, options).execute_into(py, output)?,
             )),
-            Some(PreparedBatchInput::Failed(error)) => Err(error),
-            Some(PreparedBatchInput::Deferred) | None => {
+            Some(Err(error)) => Err(error),
+            None => {
                 let input = ascii_or_bytes(py, &items[index], "s")?;
                 Ok(PyInt::new(
                     py,

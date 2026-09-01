@@ -2,7 +2,6 @@ use super::alphabet::decode_table;
 use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::decode::{self as decode_backend, x86_contracts};
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::encode as encode_backend;
 use super::runtime_dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 use super::*;
@@ -746,6 +745,13 @@ fn length_helpers_and_buffer_errors_are_precise() {
         })
     );
     assert_eq!(decoded, [0xa5; 2]);
+}
+
+#[test]
+#[should_panic(expected = "Base64 output slice must have the exact encoded length")]
+fn safe_encoder_rejects_an_inexact_output_slice() {
+    let mut output = [0_u8; 3];
+    encode_backend::encode_to_slice(b"abc", &mut output, false);
 }
 
 #[test]

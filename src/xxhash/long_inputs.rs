@@ -7,9 +7,7 @@
 ))]
 use crate::backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::Capabilities;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::SimdBackend;
+use crate::backend::{Capabilities, CpuFeature};
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
@@ -28,12 +26,44 @@ pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub(super) const X86_BACKEND_PREFERENCE: [SimdBackend; 4] = [
-    SimdBackend::Avx512,
-    SimdBackend::Avx2,
-    SimdBackend::Sse41,
-    SimdBackend::Ssse3,
+pub(super) const X86_BACKEND_PREFERENCE: [X86Backend; 5] = [
+    X86Backend::Avx512,
+    X86Backend::Avx2,
+    X86Backend::Sse41,
+    X86Backend::Ssse3,
+    X86Backend::Scalar,
 ];
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum X86Backend {
+    Scalar,
+    Ssse3,
+    Sse41,
+    Avx2,
+    Avx512,
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+pub(super) fn select_x86_backend(capabilities: Capabilities) -> X86Backend {
+    X86_BACKEND_PREFERENCE
+        .into_iter()
+        .find(|&backend| x86_backend_supported(capabilities, backend))
+        .expect("scalar XXH3 is always available")
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline]
+fn x86_backend_supported(capabilities: Capabilities, backend: X86Backend) -> bool {
+    match backend {
+        X86Backend::Scalar => true,
+        X86Backend::Ssse3 => capabilities.supports(CpuFeature::Ssse3),
+        X86Backend::Sse41 => capabilities.supports_all(&[CpuFeature::Sse41, CpuFeature::Ssse3]),
+        X86Backend::Avx2 => capabilities.supports(CpuFeature::Avx2),
+        X86Backend::Avx512 => capabilities.supports(CpuFeature::Avx512F),
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct LongInput<'a>(&'a [u8]);
@@ -151,7 +181,7 @@ pub(super) fn initialize_secret_scalar(seed: u64) -> Secret {
 #[cfg(test)]
 #[inline]
 pub(super) fn initialize_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> Secret {
-    if capabilities.supports(SimdBackend::Avx2) {
+    if capabilities.supports(CpuFeature::Avx2) {
         unsafe { avx2::init_secret(seed) }
     } else {
         initialize_secret_scalar(seed)
@@ -237,12 +267,12 @@ type X86Kernel = unsafe fn(LongInput<'_>, &Secret) -> [u64; 8];
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn select_x86_accumulation_kernel(backend: SimdBackend) -> Option<X86Kernel> {
+pub(super) fn select_x86_accumulation_kernel(backend: X86Backend) -> Option<X86Kernel> {
     match backend {
-        SimdBackend::Ssse3 | SimdBackend::Sse41 => Some(ssse3::accumulate),
-        SimdBackend::Avx2 => Some(avx2::accumulate),
-        SimdBackend::Avx512 => Some(avx512::accumulate),
-        SimdBackend::Scalar | SimdBackend::Neon | SimdBackend::Avx512Vbmi => None,
+        X86Backend::Ssse3 | X86Backend::Sse41 => Some(ssse3::accumulate),
+        X86Backend::Avx2 => Some(avx2::accumulate),
+        X86Backend::Avx512 => Some(avx512::accumulate),
+        X86Backend::Scalar => None,
     }
 }
 
@@ -252,7 +282,7 @@ pub(super) fn select_x86_accumulation_kernel(backend: SimdBackend) -> Option<X86
 pub(super) unsafe fn accumulate_x86(
     input: LongInput<'_>,
     secret: &Secret,
-    backend: SimdBackend,
+    backend: X86Backend,
 ) -> [u64; 8] {
     let Some(kernel) = select_x86_accumulation_kernel(backend) else {
         return scalar::accumulate(input, secret);
@@ -285,7 +315,7 @@ impl LongEngine {
 
         #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
         {
-            let backend = if backend::capabilities().supports(crate::backend::SimdBackend::Neon) {
+            let backend = if backend::capabilities().supports(crate::backend::CpuFeature::Neon) {
                 LongBackend::Neon
             } else {
                 LongBackend::Scalar
@@ -306,14 +336,14 @@ impl LongEngine {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
-        let selected = capabilities.select_supported_backend(&X86_BACKEND_PREFERENCE);
+        let selected = select_x86_backend(capabilities);
         let backend = match select_x86_accumulation_kernel(selected) {
             Some(kernel) => LongBackend::X86(kernel),
             None => LongBackend::Scalar,
         };
         Self {
             backend,
-            avx2_available: capabilities.supports(SimdBackend::Avx2),
+            avx2_available: capabilities.supports(CpuFeature::Avx2),
         }
     }
 

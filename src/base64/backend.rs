@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use crate::backend::{self as cpu, Capabilities, SimdBackend};
+use crate::backend::{self as cpu, Capabilities, CpuFeature};
 
 #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
 use super::encode::cache;
@@ -64,31 +64,39 @@ fn detect_runtime_backend() -> RuntimeBackend {
 
 #[inline]
 pub(super) fn select_backend(capabilities: Capabilities) -> Backend {
-    match capabilities.select_supported_backend(&[
-        SimdBackend::Avx512Vbmi,
-        SimdBackend::Avx2,
-        SimdBackend::Sse41,
-        SimdBackend::Ssse3,
-        SimdBackend::Neon,
-    ]) {
-        SimdBackend::Avx512Vbmi => Backend::Avx512Vbmi,
-        SimdBackend::Avx2 => Backend::Avx2,
-        SimdBackend::Sse41 => Backend::Sse41,
-        SimdBackend::Ssse3 => Backend::Ssse3,
-        SimdBackend::Neon => Backend::Neon,
-        SimdBackend::Scalar | SimdBackend::Avx512 => Backend::Scalar,
-    }
+    [
+        Backend::Avx512Vbmi,
+        Backend::Avx2,
+        Backend::Sse41,
+        Backend::Ssse3,
+        Backend::Neon,
+    ]
+    .into_iter()
+    .find(|&backend| supports_backend(capabilities, backend))
+    .unwrap_or(Backend::Scalar)
+}
+
+#[inline]
+fn supports_backend(capabilities: Capabilities, backend: Backend) -> bool {
+    let required: &[CpuFeature] = match backend {
+        Backend::Scalar => &[],
+        Backend::Neon => &[CpuFeature::Neon],
+        Backend::Ssse3 => &[CpuFeature::Ssse3],
+        // These kernels delegate their tails to lower-tier implementations.
+        Backend::Sse41 => &[CpuFeature::Sse41, CpuFeature::Ssse3],
+        Backend::Avx2 => &[CpuFeature::Avx2, CpuFeature::Ssse3],
+        Backend::Avx512Vbmi => &[
+            CpuFeature::Avx512F,
+            CpuFeature::Avx512Bw,
+            CpuFeature::Avx512Vbmi,
+            CpuFeature::Avx2,
+            CpuFeature::Ssse3,
+        ],
+    };
+    capabilities.supports_all(required)
 }
 
 #[cfg(test)]
 pub(super) fn is_supported(backend: Backend) -> bool {
-    let required = match backend {
-        Backend::Scalar => SimdBackend::Scalar,
-        Backend::Neon => SimdBackend::Neon,
-        Backend::Ssse3 => SimdBackend::Ssse3,
-        Backend::Sse41 => SimdBackend::Sse41,
-        Backend::Avx2 => SimdBackend::Avx2,
-        Backend::Avx512Vbmi => SimdBackend::Avx512Vbmi,
-    };
-    cpu::capabilities().supports(required)
+    supports_backend(cpu::capabilities(), backend)
 }

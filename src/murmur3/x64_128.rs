@@ -174,7 +174,12 @@ pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]
     {
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x64_128_backend(blocks.byte_len(), capabilities);
-        mix_x64_128_body_with_backend(blocks, hashes, selected, capabilities.has_bmi2());
+        mix_x64_128_body_with_backend(
+            blocks,
+            hashes,
+            selected,
+            capabilities.supports(crate::backend::CpuFeature::Bmi2),
+        );
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     mix_x64_128_body_scalar(blocks, hashes);

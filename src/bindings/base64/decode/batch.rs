@@ -35,7 +35,7 @@ fn b64decode_batch_parsed<'py>(
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        DecodePlan::new(&input, options).execute_allocating(py)
+        DecodePlan::new(py, &input, options).execute_allocating(py)
     })
 }
 
@@ -93,14 +93,14 @@ fn b64decode_batch_into_parsed<'py>(
         {
             Some(Ok(input)) => Ok(PyInt::new(
                 py,
-                DecodePlan::new(&input, options).execute_into(py, output)?,
+                DecodePlan::new(py, &input, options).execute_into(py, output)?,
             )),
             Some(Err(error)) => Err(error),
             None => {
                 let input = ascii_or_bytes(py, &items[index], "s")?;
                 Ok(PyInt::new(
                     py,
-                    DecodePlan::new(&input, options).execute_into(py, output)?,
+                    DecodePlan::new(py, &input, options).execute_into(py, output)?,
                 ))
             }
         }

@@ -99,7 +99,7 @@ pub(in crate::bindings::base64::decode) fn decode_advanced<'py>(
         return decode_advanced(py, &BytesLike::OwnedVec(input), options);
     }
     let decoder = AdvancedDecoder::new(py, options)?;
-    let continue_after_padding = super::lenient::lenient_continues_after_padding(py);
+    let continue_after_padding = super::lenient::compat::continues_after_padding(py);
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -151,7 +151,7 @@ pub(in crate::bindings::base64::decode) fn decode_advanced_into(
         return decode_advanced_into(py, &BytesLike::OwnedVec(input), output, options);
     }
     let decoder = AdvancedDecoder::new(py, options)?;
-    let continue_after_padding = super::lenient::lenient_continues_after_padding(py);
+    let continue_after_padding = super::lenient::compat::continues_after_padding(py);
     if let Some(input) = input.snapshot_for_output(output)? {
         return with_bytearray(output, || unsafe {
             decode_advanced_slice_into(

@@ -255,7 +255,7 @@ mod tests {
         ]
         .map(|length| vec![length as u8; length]);
         let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
-        let scalar = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
+        let scalar = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
         assert!(!scalar.has_batch_kernel());
 
         let short = [b"short".as_slice()];
@@ -306,7 +306,7 @@ mod tests {
         let refs = owned.each_ref().map(Vec::as_slice);
         let run = LongRun::new(&refs).unwrap();
         let inputs = run.batch2(0);
-        let engine = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
         let derived = engine.derive_secret(17);
         let mut actual = Vec::new();
         emit_long_group2(
@@ -326,7 +326,7 @@ mod tests {
                 .collect::<Vec<_>>()
         );
 
-        let engine = LongEngine::new_with_capabilities(Capabilities::from_supported_backends(&[]));
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
         let derived = engine.derive_secret(17);
         let mut actual = Vec::new();
         emit_long_group2(

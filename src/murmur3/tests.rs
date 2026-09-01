@@ -13,7 +13,7 @@ use super::*;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::{x64_128::x86 as x64_x86, x86_32::x86 as x86_32_x86, x86_128::x86 as x86_128_x86};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::{self as cpu, SimdBackend};
+use crate::backend::{self as cpu, CpuFeature};
 use std::io::Cursor;
 
 fn x86_words_as_u128(words: [u32; 4]) -> u128 {
@@ -30,64 +30,70 @@ fn x64_words_as_u128(words: [u64; 2]) -> u128 {
 
 #[test]
 fn dispatch_thresholds_are_explicit_and_feature_gated() {
-    use crate::backend::{Capabilities, SimdBackend as Simd};
+    use crate::backend::{Capabilities, CpuFeature as Feature};
     use dispatch::Backend::{Avx2, Scalar, Sse41};
-    let caps = |backend| Capabilities::from_supported_backends(&[backend]);
+    let caps = |feature| Capabilities::from_features(&[feature]);
 
     assert_eq!(
-        dispatch::select_x86_32_backend(15, caps(Simd::Avx2)),
+        dispatch::select_x86_32_backend(15, caps(Feature::Avx2)),
         Scalar
     );
     assert_eq!(
-        dispatch::select_x86_32_backend(31, caps(Simd::Avx2)),
+        dispatch::select_x86_32_backend(31, caps(Feature::Avx2)),
         Scalar
     );
     assert_eq!(
-        dispatch::select_x86_32_backend(16, caps(Simd::Sse41)),
+        dispatch::select_x86_32_backend(16, caps(Feature::Sse41)),
         Sse41
     );
-    assert_eq!(dispatch::select_x86_32_backend(32, caps(Simd::Avx2)), Avx2);
     assert_eq!(
-        dispatch::select_x86_32_backend(usize::MAX, caps(Simd::Scalar)),
-        Scalar
-    );
-
-    assert_eq!(
-        dispatch::select_x86_128_backend(255, caps(Simd::Avx2)),
-        Scalar
-    );
-    assert_eq!(
-        dispatch::select_x86_128_backend(256, caps(Simd::Avx2)),
+        dispatch::select_x86_32_backend(32, caps(Feature::Avx2)),
         Avx2
     );
     assert_eq!(
-        dispatch::select_x86_128_backend(16 * 1024 * 1024 - 1, caps(Simd::Sse41)),
-        Scalar
-    );
-    assert_eq!(
-        dispatch::select_x86_128_backend(16 * 1024 * 1024, caps(Simd::Sse41)),
-        Sse41
-    );
-    assert_eq!(
-        dispatch::select_x86_128_backend(usize::MAX, caps(Simd::Scalar)),
+        dispatch::select_x86_32_backend(usize::MAX, Capabilities::from_features(&[])),
         Scalar
     );
 
     assert_eq!(
-        dispatch::select_x64_128_backend(15, caps(Simd::Avx2)),
+        dispatch::select_x86_128_backend(255, caps(Feature::Avx2)),
         Scalar
     );
     assert_eq!(
-        dispatch::select_x64_128_backend(16, caps(Simd::Sse41)),
-        Sse41
-    );
-    assert_eq!(dispatch::select_x64_128_backend(32, caps(Simd::Avx2)), Avx2);
-    assert_eq!(
-        dispatch::select_x64_128_backend(8 * 1024 * 1024, caps(Simd::Sse41)),
-        Sse41
+        dispatch::select_x86_128_backend(256, caps(Feature::Avx2)),
+        Avx2
     );
     assert_eq!(
-        dispatch::select_x64_128_backend(8 * 1024 * 1024 + 1, caps(Simd::Sse41)),
+        dispatch::select_x86_128_backend(16 * 1024 * 1024 - 1, caps(Feature::Sse41)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(16 * 1024 * 1024, caps(Feature::Sse41)),
+        Sse41
+    );
+    assert_eq!(
+        dispatch::select_x86_128_backend(usize::MAX, Capabilities::from_features(&[])),
+        Scalar
+    );
+
+    assert_eq!(
+        dispatch::select_x64_128_backend(15, caps(Feature::Avx2)),
+        Scalar
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(16, caps(Feature::Sse41)),
+        Sse41
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(32, caps(Feature::Avx2)),
+        Avx2
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(8 * 1024 * 1024, caps(Feature::Sse41)),
+        Sse41
+    );
+    assert_eq!(
+        dispatch::select_x64_128_backend(8 * 1024 * 1024 + 1, caps(Feature::Sse41)),
         Scalar
     );
 }
@@ -164,10 +170,10 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     let capabilities = cpu::capabilities();
     let supported = [
         capabilities
-            .supports(SimdBackend::Sse41)
+            .supports(CpuFeature::Sse41)
             .then_some(dispatch::Backend::Sse41),
         capabilities
-            .supports(SimdBackend::Avx2)
+            .supports(CpuFeature::Avx2)
             .then_some(dispatch::Backend::Avx2),
     ];
     for selected in supported.into_iter().flatten() {
@@ -187,12 +193,12 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     let capabilities = cpu::capabilities();
     let supported = [
         capabilities
-            .supports(SimdBackend::Sse41)
+            .supports(CpuFeature::Sse41)
             .then_some((dispatch::Backend::Sse41, false)),
         capabilities
-            .supports(SimdBackend::Avx2)
+            .supports(CpuFeature::Avx2)
             .then_some((dispatch::Backend::Avx2, false)),
-        (capabilities.supports(SimdBackend::Avx2) && capabilities.has_bmi2())
+        (capabilities.supports(CpuFeature::Avx2) && capabilities.supports(CpuFeature::Bmi2))
             .then_some((dispatch::Backend::Avx2, true)),
     ];
     for (selected, bmi2) in supported.into_iter().flatten() {
@@ -290,10 +296,10 @@ fn matches_the_reference_implementation_for_every_tail_length() {
                 let block_end = input.len() & !3;
                 let supported = [
                     capabilities
-                        .supports(SimdBackend::Sse41)
+                        .supports(CpuFeature::Sse41)
                         .then_some(dispatch::Backend::Sse41),
                     capabilities
-                        .supports(SimdBackend::Avx2)
+                        .supports(CpuFeature::Avx2)
                         .then_some(dispatch::Backend::Avx2),
                 ];
                 for selected in supported.into_iter().flatten() {

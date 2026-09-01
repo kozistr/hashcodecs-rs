@@ -695,6 +695,9 @@ mod tests {
                 }
             ));
             assert_eq!(input.stable_bytes(), &[b'a'; 65536]);
+            let output = PyByteArray::new(py, b"output");
+            assert!(!input.overlaps(&output));
+            assert!(!BytesLike::Text("text").overlaps(&output));
         });
     }
 }

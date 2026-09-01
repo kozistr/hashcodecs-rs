@@ -314,6 +314,12 @@ fn strict_special_search_covers_every_width() {
 }
 
 #[test]
+#[should_panic(expected = "many special bytes use the generic scanner")]
+fn many_strict_specials_cannot_use_the_specialized_search() {
+    StrictSpecials::Many.find(b"abc");
+}
+
+#[test]
 fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     let table = lenient_decode_table(None);
     assert!(Translation::new(&table).is_none());
@@ -535,6 +541,7 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
     );
 
     let canonical = advanced_decoder(b"!", false, true, true);
+    assert_eq!(canonical.decoded_len(b"AAAA", true), Some(3));
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
         assert_eq!(
@@ -567,4 +574,9 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         unsafe { remapped.decode_to_ptr(b"AAAA", output.as_mut_ptr(), true) },
         3
     );
+
+    let mut remapped_canonical = advanced_decoder(b"!", false, false, true);
+    remapped_canonical.table[usize::from(b'A')] = 1;
+    assert!(!remapped_canonical.preserves_alphanumeric());
+    assert_eq!(remapped_canonical.decoded_len(b"AAAA", true), Some(3));
 }

@@ -2,7 +2,6 @@ use super::alphabet::decode_table;
 use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::decode::{self as decode_backend, x86_contracts};
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::encode as encode_backend;
 use super::runtime_dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
 use super::*;

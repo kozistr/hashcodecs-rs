@@ -161,6 +161,42 @@ def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
     assert decoded == b'def'
 
 
+def test_base64_batch_into_acquires_reentrant_strings_before_snapshotting_aliases() -> None:
+    shared = bytearray(b'....')
+    decoded = bytearray(3)
+
+    class RelocatingString(str):
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> memoryview:
+            shared[:] = b'ZGVm' + b'A' * (1 << 20)
+            return memoryview(shared)[:4]
+
+    assert base64.b64decode_batch_into(
+        [memoryview(b'YWJj'), RelocatingString('ignored')],
+        [shared, decoded],
+        validate=True,
+    ) == [3, 3]
+    assert shared[:3] == b'abc'
+    assert decoded == b'def'
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
+def test_base64_batch_into_acquires_reentrant_buffers_before_snapshotting_aliases() -> None:
+    shared = bytearray(b'....')
+    encoded = bytearray(4)
+
+    class RelocatingBuffer:
+        def __buffer__(self, flags: int) -> memoryview:
+            shared[:] = b'def' + b'x' * (1 << 20)
+            return memoryview(shared)[:3]
+
+    assert base64.b64encode_batch_into(
+        [memoryview(b'abc'), RelocatingBuffer()],
+        [shared, encoded],
+    ) == [4, 4]
+    assert shared[:4] == b'YWJj'
+    assert encoded == b'ZGVm'
+
+
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
     empty_input = memoryview(bytearray(b'x'))[:0]
     empty_output = bytearray(b'!')

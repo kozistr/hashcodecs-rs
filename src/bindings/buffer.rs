@@ -187,10 +187,6 @@ impl<'py> BytesLike<'_, 'py> {
         }
     }
 
-    pub(super) fn into_snapshot(self) -> PyResult<Self> {
-        self.into_snapshot_if(true)
-    }
-
     #[cfg(Py_GIL_DISABLED)]
     pub(super) fn snapshot_mutable(&self) -> PyResult<Option<Vec<u8>>> {
         self.snapshot_if(self.is_mutable_bytearray())
@@ -234,10 +230,11 @@ impl<'py> BytesLike<'_, 'py> {
         matches!(self, Self::ByteArray(_) | Self::OwnedByteArray(_))
     }
 
-    fn snapshot_if(&self, needed: bool) -> PyResult<Option<Vec<u8>>> {
+    pub(super) fn snapshot_if(&self, needed: bool) -> PyResult<Option<Vec<u8>>> {
         needed.then(|| self.try_snapshot()).transpose()
     }
 
+    #[cfg(Py_GIL_DISABLED)]
     fn into_snapshot_if(self, needed: bool) -> PyResult<Self> {
         match self.snapshot_if(needed)? {
             Some(snapshot) => Ok(Self::OwnedVec(snapshot)),

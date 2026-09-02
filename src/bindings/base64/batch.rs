@@ -57,18 +57,14 @@ impl<'py> BatchOutputs<'py> {
         Ok(index != 0 && ranges[index - 1].overlaps(input))
     }
 
-    fn stabilize(&self, input: BytesLike<'py, 'py>) -> PyResult<BytesLike<'py, 'py>> {
+    fn snapshot_alias(&self, input: &BytesLike<'py, 'py>) -> PyResult<Option<Vec<u8>>> {
         let mut aliases_output = input
             .bytearray_identity()
             .is_some_and(|identity| self.contains_identity(identity));
         if !aliases_output && let Some(range) = input.buffer_range() {
             aliases_output = self.overlaps_range(range)?;
         }
-        if aliases_output {
-            input.into_snapshot()
-        } else {
-            Ok(input)
-        }
+        input.snapshot_if(aliases_output)
     }
 }
 
@@ -138,6 +134,9 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
         unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
     };
 
+    // Acquiring a buffer or encoding a string subclass can run arbitrary
+    // Python. A hook may relocate an output and expose its new storage, so no
+    // output address is captured until every such input has been acquired.
     let mut prepared = Vec::new();
     for (index, item) in items.iter().enumerate() {
         if !needs_preparation(item) {
@@ -152,7 +151,7 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
                 prepared
                     .try_reserve(1)
                     .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-                prepared.push((index, Ok(outputs.stabilize(input)?)));
+                prepared.push((index, Ok(input)));
             }
             Err(error) => {
                 prepared
@@ -161,6 +160,27 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
                 prepared.push((index, Err(error)));
                 break;
             }
+        }
+    }
+
+    if prepared.iter().any(|(_, input)| input.is_ok()) {
+        let _ = outputs.ranges()?;
+    }
+
+    // Keep every acquired input alive until all alias snapshots are complete.
+    // Releasing a Python buffer can itself invoke exporter code.
+    let mut snapshots = batch_results(prepared.len())?;
+    for (_, input) in &prepared {
+        let snapshot = match input {
+            Ok(input) => outputs.snapshot_alias(input)?,
+            Err(_) => None,
+        };
+        snapshots.push(snapshot);
+    }
+
+    for ((_, input), snapshot) in prepared.iter_mut().zip(snapshots) {
+        if let (Ok(input), Some(snapshot)) = (input, snapshot) {
+            *input = BytesLike::OwnedVec(snapshot);
         }
     }
     Ok(prepared)

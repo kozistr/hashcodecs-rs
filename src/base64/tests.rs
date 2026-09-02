@@ -632,28 +632,31 @@ fn avx2_streaming_encoder_matches_scalar() {
         } else {
             base64::engine::general_purpose::STANDARD.encode(&input)
         };
-        let mut guarded_output = vec![0xa5_u8; expected.len() + 16];
-        let output_offset = guarded_output.as_mut_ptr().align_offset(16);
-        let output = &mut guarded_output[output_offset..output_offset + expected.len()];
+        for wide_stores in [false, true] {
+            let mut guarded_output = vec![0xa5_u8; expected.len() + 64];
+            let aligned_offset = guarded_output.as_mut_ptr().align_offset(32);
+            let output_offset = aligned_offset + usize::from(!wide_stores) * 16;
+            let output = &mut guarded_output[output_offset..output_offset + expected.len()];
 
-        let consumed = unsafe {
-            if urlsafe {
-                encode_backend::avx2::encode_avx2_with_store::<true>(
-                    &input,
-                    output.as_mut_ptr(),
-                    encode_backend::avx2::Avx2StoreMode::Streaming,
-                )
-            } else {
-                encode_backend::avx2::encode_avx2_with_store::<false>(
-                    &input,
-                    output.as_mut_ptr(),
-                    encode_backend::avx2::Avx2StoreMode::Streaming,
-                )
-            }
-        };
-        encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], urlsafe);
+            let consumed = unsafe {
+                if urlsafe {
+                    encode_backend::avx2::encode_avx2_with_store::<true>(
+                        &input,
+                        output.as_mut_ptr(),
+                        encode_backend::avx2::Avx2StoreMode::Streaming,
+                    )
+                } else {
+                    encode_backend::avx2::encode_avx2_with_store::<false>(
+                        &input,
+                        output.as_mut_ptr(),
+                        encode_backend::avx2::Avx2StoreMode::Streaming,
+                    )
+                }
+            };
+            encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], urlsafe);
 
-        assert_eq!(output, expected.as_bytes());
+            assert_eq!(output, expected.as_bytes());
+        }
     }
 }
 

@@ -43,6 +43,8 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     // actual load offset avoids forming a pointer before the start of `input`.
     let mut load_offset = 20;
     let mut destination = 32;
+    #[cfg(target_arch = "x86_64")]
+    let mut used_streaming_stores = false;
 
     // A group needs four 32-byte shifted loads for 96 logical input bytes.
     // `input.len() - load_offset - 8` is an equivalent division form of the
@@ -52,12 +54,21 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
         let groups = (input.len() - load_offset - 8) / 96;
         if groups != 0 {
             if store_mode == Avx2StoreMode::Streaming {
+                used_streaming_stores = true;
                 unsafe {
-                    encode_96_shifted::<URLSAFE>(
-                        input.as_ptr().add(load_offset),
-                        output.add(destination),
-                        groups,
-                    )
+                    if output.align_offset(32) == 0 {
+                        encode_96_shifted::<URLSAFE, StreamingStore256>(
+                            input.as_ptr().add(load_offset),
+                            output.add(destination),
+                            groups,
+                        )
+                    } else {
+                        encode_96_shifted::<URLSAFE, StreamingStore128>(
+                            input.as_ptr().add(load_offset),
+                            output.add(destination),
+                            groups,
+                        )
+                    }
                 };
             } else {
                 unsafe {
@@ -102,20 +113,29 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
 
     // Keep the final SIMD block VEX-encoded. Entering the legacy-encoded
     // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
-    if source + 16 <= input.len() {
+    let consumed = if source + 16 <= input.len() {
         let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
         source + 12
     } else {
         source
+    };
+
+    #[cfg(target_arch = "x86_64")]
+    if used_streaming_stores {
+        // Streaming stores are weakly ordered with respect to later
+        // loads/stores. Fence after the cached tail has also completed.
+        _mm_sfence();
     }
+
+    consumed
 }
 
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 #[allow(unused_unsafe)]
-unsafe fn encode_96_shifted<const URLSAFE: bool>(
+unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
     mut input: *const u8,
     mut output: *mut u8,
     mut groups: usize,
@@ -138,14 +158,14 @@ unsafe fn encode_96_shifted<const URLSAFE: bool>(
         let eighth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
         unsafe {
-            store_32(output, first);
-            store_32(output.add(32), second);
-            store_32(output.add(64), third);
-            store_32(output.add(96), fourth);
-            store_32(output.add(128), fifth);
-            store_32(output.add(160), sixth);
-            store_32(output.add(192), seventh);
-            store_32(output.add(224), eighth);
+            Store::store(output, first);
+            Store::store(output.add(32), second);
+            Store::store(output.add(64), third);
+            Store::store(output.add(96), fourth);
+            Store::store(output.add(128), fifth);
+            Store::store(output.add(160), sixth);
+            Store::store(output.add(192), seventh);
+            Store::store(output.add(224), eighth);
         }
         input = unsafe { input.add(192) };
         output = unsafe { output.add(256) };
@@ -160,16 +180,12 @@ unsafe fn encode_96_shifted<const URLSAFE: bool>(
         let fourth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
         unsafe {
-            store_32(output, first);
-            store_32(output.add(32), second);
-            store_32(output.add(64), third);
-            store_32(output.add(96), fourth);
+            Store::store(output, first);
+            Store::store(output.add(32), second);
+            Store::store(output.add(64), third);
+            Store::store(output.add(96), fourth);
         }
     }
-
-    // Streaming stores are weakly ordered with respect to later loads/stores.
-    // SAFETY: the fence has no memory-safety preconditions.
-    unsafe { _mm_sfence() };
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -222,12 +238,34 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
 }
 
 #[cfg(target_arch = "x86_64")]
-#[inline]
-#[target_feature(enable = "avx2")]
-unsafe fn store_32(output: *mut u8, value: __m256i) {
-    unsafe {
-        _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
-        _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
+trait StreamingStore {
+    unsafe fn store(output: *mut u8, value: __m256i);
+}
+
+#[cfg(target_arch = "x86_64")]
+struct StreamingStore128;
+
+#[cfg(target_arch = "x86_64")]
+impl StreamingStore for StreamingStore128 {
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn store(output: *mut u8, value: __m256i) {
+        unsafe {
+            _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
+            _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+struct StreamingStore256;
+
+#[cfg(target_arch = "x86_64")]
+impl StreamingStore for StreamingStore256 {
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn store(output: *mut u8, value: __m256i) {
+        unsafe { _mm256_stream_si256(output.cast(), value) };
     }
 }
 

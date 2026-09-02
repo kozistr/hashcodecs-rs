@@ -22,6 +22,17 @@ macro_rules! benchmark {
     };
 }
 
+macro_rules! benchmark_encode {
+    ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr) => {
+        $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
+            bench.iter(|| {
+                let output = black_box(($function)(black_box(input)));
+                black_box(output.bytes().fold(0_u8, u8::wrapping_add))
+            });
+        });
+    };
+}
+
 fn base64(c: &mut Criterion) {
     support::pin_to_one_cpu();
     standard_encode(c);
@@ -42,17 +53,17 @@ fn standard_encode(c: &mut Criterion) {
         assert_eq!(base64_turbo::STANDARD.encode(&input), expected);
 
         group.throughput(Throughput::Bytes(size as u64));
-        benchmark!(
+        benchmark_encode!(
             group,
             size,
             &input,
             "hashcodecs",
             hashcodecs::base64::b64encode
         );
-        benchmark!(group, size, &input, "base64", |input: &[u8]| {
+        benchmark_encode!(group, size, &input, "base64", |input: &[u8]| {
             base64::engine::general_purpose::STANDARD.encode(input)
         });
-        benchmark!(group, size, &input, "base64-turbo", |input: &[u8]| {
+        benchmark_encode!(group, size, &input, "base64-turbo", |input: &[u8]| {
             base64_turbo::STANDARD.encode(input)
         });
     }
@@ -71,17 +82,17 @@ fn urlsafe_encode(c: &mut Criterion) {
         assert_eq!(base64_turbo::URL_SAFE.encode(&input), expected);
 
         group.throughput(Throughput::Bytes(size as u64));
-        benchmark!(
+        benchmark_encode!(
             group,
             size,
             &input,
             "hashcodecs",
             hashcodecs::base64::b64encode_urlsafe
         );
-        benchmark!(group, size, &input, "base64", |input: &[u8]| {
+        benchmark_encode!(group, size, &input, "base64", |input: &[u8]| {
             base64::engine::general_purpose::URL_SAFE.encode(input)
         });
-        benchmark!(group, size, &input, "base64-turbo", |input: &[u8]| {
+        benchmark_encode!(group, size, &input, "base64-turbo", |input: &[u8]| {
             base64_turbo::URL_SAFE.encode(input)
         });
     }

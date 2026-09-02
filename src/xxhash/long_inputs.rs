@@ -1,5 +1,8 @@
 //! Process XXH3 inputs that contain more than 240 bytes.
 
+#[cfg(not(any(kani, miri)))]
+use std::sync::OnceLock;
+
 #[cfg(any(
     all(target_arch = "aarch64", target_endian = "little"),
     target_arch = "x86",
@@ -305,7 +308,29 @@ pub(super) struct LongEngine {
     avx2_available: bool,
 }
 
+#[cfg(not(any(kani, miri)))]
+static LONG_ENGINE: OnceLock<LongEngine> = OnceLock::new();
+
+#[cfg(any(kani, miri))]
+static LONG_ENGINE: LongEngine = LongEngine {
+    backend: LongBackend::Scalar,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2_available: false,
+};
+
 impl LongEngine {
+    #[inline(always)]
+    pub(super) fn cached() -> &'static Self {
+        #[cfg(not(any(kani, miri)))]
+        {
+            LONG_ENGINE.get_or_init(Self::new)
+        }
+        #[cfg(any(kani, miri))]
+        {
+            &LONG_ENGINE
+        }
+    }
+
     #[inline(always)]
     pub(super) fn new() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -512,13 +537,13 @@ impl LongEngine {
 }
 
 pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
-    let engine = LongEngine::new();
+    let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
     engine.hash(input, engine.secret(&derived), finalize_long_64)
 }
 
 pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 2] {
-    let engine = LongEngine::new();
+    let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
     engine.hash(input, engine.secret(&derived), finalize_long_128)
 }

@@ -35,8 +35,23 @@ where
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
-    let engine = LongEngine::new();
-    hash_each_input_with_engine(inputs, seed, short, finalize, &engine, &mut output);
+    let mut index = 0;
+    while index < inputs.len() && inputs[index].len() <= 240 {
+        output(short(inputs[index], seed));
+        index += 1;
+    }
+    if index == inputs.len() {
+        return;
+    }
+
+    hash_each_input_with_engine(
+        &inputs[index..],
+        seed,
+        short,
+        finalize,
+        LongEngine::cached(),
+        &mut output,
+    );
 }
 
 #[inline(always)]

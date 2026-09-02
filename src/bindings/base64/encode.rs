@@ -172,33 +172,42 @@ fn substitute_altchars(output: &mut [u8], [plus, slash]: [u8; 2]) {
 }
 
 #[inline]
-unsafe fn encode_selected_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, urlsafe: bool) {
-    if CACHED {
-        unsafe { encode_to_ptr_cached(input, output, urlsafe) };
-    } else {
-        unsafe { encode_to_ptr(input, output, urlsafe) };
-    }
-}
-
-#[inline]
-unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
-    input: &[u8],
-    output: *mut u8,
-    urlsafe: bool,
-    padded: bool,
-) {
+unsafe fn encode_unwrapped_ptr(input: &[u8], output: *mut u8, urlsafe: bool, padded: bool) {
     if padded {
-        unsafe { encode_selected_ptr::<CACHED>(input, output, urlsafe) };
+        unsafe { encode_to_ptr(input, output, urlsafe) };
         return;
     }
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
-    unsafe { encode_selected_ptr::<CACHED>(&input[..complete_input_len], output, urlsafe) };
+    unsafe { encode_to_ptr(&input[..complete_input_len], output, urlsafe) };
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
-        unsafe { encode_selected_ptr::<CACHED>(tail, encoded_tail.as_mut_ptr(), urlsafe) };
+        unsafe { encode_to_ptr(tail, encoded_tail.as_mut_ptr(), urlsafe) };
+        let tail_len = unpadded_encoded_len(tail.len());
+        unsafe {
+            output
+                .add(complete_output_len)
+                .copy_from_nonoverlapping(encoded_tail.as_ptr(), tail_len)
+        };
+    }
+}
+
+#[inline]
+unsafe fn encode_unwrapped_cached_ptr(input: &[u8], output: *mut u8, urlsafe: bool, padded: bool) {
+    if padded {
+        unsafe { encode_to_ptr_cached(input, output, urlsafe) };
+        return;
+    }
+
+    let complete_input_len = input.len() / 3 * 3;
+    let complete_output_len = complete_input_len / 3 * 4;
+    unsafe { encode_to_ptr_cached(&input[..complete_input_len], output, urlsafe) };
+    if complete_input_len != input.len() {
+        let tail = &input[complete_input_len..];
+        let mut encoded_tail = [0; 4];
+        unsafe { encode_to_ptr_cached(tail, encoded_tail.as_mut_ptr(), urlsafe) };
         let tail_len = unpadded_encoded_len(tail.len());
         unsafe {
             output
@@ -216,11 +225,11 @@ unsafe fn encode_configured_ptr(
     wrapcol: Option<usize>,
 ) {
     let Some(width) = wrapcol else {
-        unsafe { encode_unwrapped_ptr::<false>(input, output, urlsafe, padded) };
+        unsafe { encode_unwrapped_ptr(input, output, urlsafe, padded) };
         return;
     };
     let data_len = encoded_data_len(input.len(), padded);
-    unsafe { encode_unwrapped_ptr::<true>(input, output, urlsafe, padded) };
+    unsafe { encode_unwrapped_cached_ptr(input, output, urlsafe, padded) };
     unsafe { wrap_encoded_ptr(output, data_len, width) };
 }
 

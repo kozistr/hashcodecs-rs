@@ -6,7 +6,10 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::tables::{PACK_SHUFFLE, STANDARD_OFFSETS, URLSAFE_OFFSETS};
+use super::tables::{
+    MIXED_LOW_CLASSES, PACK_SHUFFLE, STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES, STANDARD_OFFSETS,
+    URLSAFE_HIGH_CLASSES, URLSAFE_LOW_CLASSES, URLSAFE_OFFSETS,
+};
 use super::x86_contracts::{Decoder, Store};
 
 #[target_feature(enable = "ssse3")]
@@ -53,14 +56,8 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, __m128i) {
     let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let high_classes = _mm_setr_epi8(
-        0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
-        0x10,
-    );
-    let low_classes = _mm_setr_epi8(
-        0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x13, 0x1a, 0x1b, 0x1b, 0x1b,
-        0x1a,
-    );
+    let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
@@ -74,14 +71,8 @@ pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, _
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __m128i) {
     let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let high_classes = _mm_setr_epi8(
-        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
-        0x20,
-    );
-    let low_classes = _mm_setr_epi8(
-        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3b, 0x3b, 0x3a, 0x3b,
-        0x33,
-    );
+    let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let offsets = unsafe { _mm_loadu_si128(URLSAFE_OFFSETS.as_ptr().cast()) };
     let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, high_nibbles));
@@ -93,14 +84,8 @@ pub(super) unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m128i) {
     let value = unsafe { _mm_loadu_si128(input.cast()) };
-    let high_classes = _mm_setr_epi8(
-        0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
-        0x20,
-    );
-    let low_classes = _mm_setr_epi8(
-        0x25, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x21, 0x23, 0x3a, 0x3b, 0x3a, 0x3b,
-        0x32,
-    );
+    let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);

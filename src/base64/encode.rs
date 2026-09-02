@@ -200,29 +200,30 @@ pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
 
 #[inline]
 pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
-    unsafe { encode_to_ptr_with_store_policy(input, output, urlsafe, true) };
-}
-
-#[inline]
-#[cfg(feature = "python")]
-pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe: bool) {
-    unsafe { encode_to_ptr_with_store_policy(input, output, urlsafe, false) };
-}
-
-#[inline]
-unsafe fn encode_to_ptr_with_store_policy(
-    input: &[u8],
-    output: *mut u8,
-    urlsafe: bool,
-    allow_streaming_stores: bool,
-) {
     if input.len() < 16 {
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
         return;
     }
 
-    let input_offset =
-        unsafe { encode_with_runtime_backend(input, output, urlsafe, allow_streaming_stores) };
+    let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe, true) };
+    unsafe {
+        encode_scalar_ptr(
+            &input[input_offset..],
+            output.add(input_offset / 3 * 4),
+            urlsafe,
+        )
+    };
+}
+
+#[inline]
+#[cfg(feature = "python")]
+pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe: bool) {
+    if input.len() < 16 {
+        unsafe { encode_scalar_ptr(input, output, urlsafe) };
+        return;
+    }
+
+    let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe, false) };
     unsafe {
         encode_scalar_ptr(
             &input[input_offset..],

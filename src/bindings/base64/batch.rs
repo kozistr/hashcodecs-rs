@@ -1,7 +1,6 @@
 //! Shared validation and alias protection for Base64 batch output buffers.
 
 use std::collections::HashSet;
-use std::sync::OnceLock;
 
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyMemoryError, PyTypeError, PyValueError};
@@ -9,9 +8,7 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyByteArray, PyBytes, PyList, PyString};
 
-use super::super::buffer::{
-    BufferRange, BytesLike, ascii_or_bytes_owned, contiguous_bytes_like_owned,
-};
+use super::super::buffer::{BytesLike, ascii_or_bytes_owned, contiguous_bytes_like_owned};
 use super::super::objects::list_items;
 
 pub(in crate::bindings::base64) fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
@@ -25,7 +22,6 @@ pub(in crate::bindings::base64) fn batch_results<T>(length: usize) -> PyResult<V
 pub(in crate::bindings::base64) struct BatchOutputs<'py> {
     outputs: Vec<Bound<'py, PyByteArray>>,
     identities: HashSet<*mut ffi::PyObject>,
-    ranges: OnceLock<Vec<BufferRange>>,
 }
 
 impl<'py> BatchOutputs<'py> {
@@ -35,36 +31,6 @@ impl<'py> BatchOutputs<'py> {
 
     fn contains_identity(&self, identity: *mut ffi::PyObject) -> bool {
         self.identities.contains(&identity)
-    }
-
-    fn ranges(&self) -> PyResult<&[BufferRange]> {
-        if let Some(ranges) = self.ranges.get() {
-            return Ok(ranges);
-        }
-        let mut ranges = batch_results(self.outputs.len())?;
-        ranges.extend(self.outputs.iter().filter_map(BufferRange::for_bytearray));
-        ranges.sort_unstable_by_key(|range| range.start());
-        let _ = self.ranges.set(ranges);
-        Ok(self
-            .ranges
-            .get()
-            .expect("Base64 output ranges were initialized"))
-    }
-
-    fn overlaps_range(&self, input: BufferRange) -> PyResult<bool> {
-        let ranges = self.ranges()?;
-        let index = ranges.partition_point(|output| output.start() < input.end());
-        Ok(index != 0 && ranges[index - 1].overlaps(input))
-    }
-
-    fn snapshot_alias(&self, input: &BytesLike<'py, 'py>) -> PyResult<Option<Vec<u8>>> {
-        let mut aliases_output = input
-            .bytearray_identity()
-            .is_some_and(|identity| self.contains_identity(identity));
-        if !aliases_output && let Some(range) = input.buffer_range() {
-            aliases_output = self.overlaps_range(range)?;
-        }
-        input.snapshot_if(aliases_output)
     }
 }
 
@@ -97,7 +63,6 @@ pub(in crate::bindings::base64) fn batch_outputs<'py>(
     Ok(BatchOutputs {
         outputs: parsed,
         identities,
-        ranges: OnceLock::new(),
     })
 }
 
@@ -131,12 +96,16 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
         if PyByteArray::is_exact_type_of(item) {
             return outputs.contains_identity(item.as_ptr());
         }
-        unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
+        true
     };
 
+    if !items.iter().any(&needs_preparation) {
+        return Ok(Vec::new());
+    }
+
     // Acquiring a buffer or encoding a string subclass can run arbitrary
-    // Python. A hook may relocate an output and expose its new storage, so no
-    // output address is captured until every such input has been acquired.
+    // Python. Keep every acquired value alive until every exporter has run,
+    // then snapshot those uncommon inputs before any destination write.
     let mut prepared = Vec::new();
     for (index, item) in items.iter().enumerate() {
         if !needs_preparation(item) {
@@ -163,16 +132,12 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
         }
     }
 
-    if prepared.iter().any(|(_, input)| input.is_ok()) {
-        let _ = outputs.ranges()?;
-    }
-
-    // Keep every acquired input alive until all alias snapshots are complete.
-    // Releasing a Python buffer can itself invoke exporter code.
+    // Releasing a Python buffer can itself invoke exporter code, so snapshot
+    // only after every acquired input is still alive.
     let mut snapshots = batch_results(prepared.len())?;
     for (_, input) in &prepared {
         let snapshot = match input {
-            Ok(input) => outputs.snapshot_alias(input)?,
+            Ok(input) => input.snapshot_if(true)?,
             Err(_) => None,
         };
         snapshots.push(snapshot);

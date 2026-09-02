@@ -10,6 +10,13 @@ use crate::base64::{encode_to_ptr, encode_to_ptr_cached, encoded_len};
 use crate::bindings::buffer::BytesLike;
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
+mod batch;
+
+pub(super) use self::batch::{
+    b64encode_batch, b64encode_batch_into, standard_b64encode_batch, standard_b64encode_batch_into,
+    urlsafe_b64encode_batch, urlsafe_b64encode_batch_into,
+};
+
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn encode_exact<'py>(
     py: Python<'py>,

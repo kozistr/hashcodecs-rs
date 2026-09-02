@@ -1,11 +1,10 @@
-use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use pyo3::PyTypeInfo;
-use pyo3::exceptions::{PyAssertionError, PyMemoryError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyAssertionError, PyMemoryError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyInt, PyList, PyString};
+use pyo3::types::{PyByteArray, PyBytes, PyInt};
 
 use self::decode::{
     b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
@@ -13,16 +12,16 @@ use self::decode::{
     urlsafe_b64decode, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
     urlsafe_b64decode_into,
 };
-use super::buffer::{
-    BufferRange, BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
-    contiguous_bytes_like_owned, with_bytearray,
+use self::encode::{
+    b64encode_batch, b64encode_batch_into, standard_b64encode_batch, standard_b64encode_batch_into,
+    urlsafe_b64encode_batch, urlsafe_b64encode_batch_into,
 };
-#[cfg(not(Py_GIL_DISABLED))]
-use super::objects::exact_bytes_up_to;
-use super::objects::{bytearray_data, bytearray_size, bytes_data_mut, list_from_fn, list_items};
+use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
+use super::objects::{bytearray_data, bytearray_size, bytes_data_mut};
 use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
 use crate::base64::STANDARD_ALPHABET;
 
+mod batch;
 mod callbacks;
 mod decode;
 mod encode;
@@ -176,158 +175,6 @@ fn output_too_small(required: usize, provided: usize) -> PyErr {
     ))
 }
 
-fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
-    let mut results = Vec::new();
-    results
-        .try_reserve_exact(length)
-        .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-    Ok(results)
-}
-
-struct BatchOutputs<'py> {
-    outputs: Vec<Bound<'py, PyByteArray>>,
-    identities: HashSet<*mut ffi::PyObject>,
-    ranges: OnceLock<Vec<BufferRange>>,
-}
-
-impl<'py> BatchOutputs<'py> {
-    fn get(&self, index: usize) -> &Bound<'py, PyByteArray> {
-        &self.outputs[index]
-    }
-
-    fn contains_identity(&self, identity: *mut ffi::PyObject) -> bool {
-        self.identities.contains(&identity)
-    }
-
-    fn ranges(&self) -> PyResult<&[BufferRange]> {
-        if let Some(ranges) = self.ranges.get() {
-            return Ok(ranges);
-        }
-        let mut ranges = batch_results(self.outputs.len())?;
-        ranges.extend(self.outputs.iter().filter_map(BufferRange::for_bytearray));
-        ranges.sort_unstable_by_key(|range| range.start());
-        let _ = self.ranges.set(ranges);
-        Ok(self
-            .ranges
-            .get()
-            .expect("Base64 output ranges were initialized"))
-    }
-
-    fn overlaps_range(&self, input: BufferRange) -> PyResult<bool> {
-        let ranges = self.ranges()?;
-        let index = ranges.partition_point(|output| output.start() < input.end());
-        Ok(index != 0 && ranges[index - 1].overlaps(input))
-    }
-
-    fn stabilize(&self, input: BytesLike<'py, 'py>) -> PyResult<BytesLike<'py, 'py>> {
-        let mut aliases_output = input
-            .bytearray_identity()
-            .is_some_and(|identity| self.contains_identity(identity));
-        if !aliases_output && let Some(range) = input.buffer_range() {
-            aliases_output = self.overlaps_range(range)?;
-        }
-        if aliases_output {
-            input.into_snapshot()
-        } else {
-            Ok(input)
-        }
-    }
-}
-
-fn batch_outputs<'py>(
-    items_length: usize,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<BatchOutputs<'py>> {
-    if outputs.len() != items_length {
-        return Err(PyValueError::new_err(
-            "items and outputs must have the same length",
-        ));
-    }
-
-    let mut parsed = batch_results(outputs.len())?;
-    let mut identities = HashSet::new();
-    identities
-        .try_reserve(outputs.len())
-        .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-    for (index, output) in list_items(outputs)?.into_iter().enumerate() {
-        let output = output
-            .cast_into::<PyByteArray>()
-            .map_err(|_| PyTypeError::new_err(format!("outputs[{index}] must be a bytearray")))?;
-        if !identities.insert(output.as_ptr()) {
-            return Err(PyValueError::new_err(
-                "outputs must contain distinct bytearrays",
-            ));
-        }
-        parsed.push(output);
-    }
-    Ok(BatchOutputs {
-        outputs: parsed,
-        identities,
-        ranges: OnceLock::new(),
-    })
-}
-
-#[derive(Clone, Copy)]
-enum BatchInputKind {
-    Contiguous,
-    AsciiOrBytes,
-}
-
-type PreparedBatchInput<'py> = Result<BytesLike<'py, 'py>, PyErr>;
-
-/// Convert only inputs that destination writes can invalidate.
-/// Exact immutable values and independent bytearrays remain on the single-pass path.
-/// The conversion handles these inputs:
-///
-/// * aliased bytearrays
-/// * string subclasses that can override encoding
-/// * other buffer exporters
-fn prepare_batch_inputs<'py>(
-    items: &[Bound<'py, PyAny>],
-    outputs: &BatchOutputs<'py>,
-    kind: BatchInputKind,
-) -> PyResult<Vec<(usize, PreparedBatchInput<'py>)>> {
-    let needs_preparation = |item: &Bound<'py, PyAny>| {
-        if PyBytes::is_exact_type_of(item) {
-            return false;
-        }
-        if matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>() {
-            return !PyString::is_exact_type_of(item);
-        }
-        if PyByteArray::is_exact_type_of(item) {
-            return outputs.contains_identity(item.as_ptr());
-        }
-        unsafe { ffi::PyObject_CheckBuffer(item.as_ptr()) != 0 }
-    };
-
-    let mut prepared = Vec::new();
-    for (index, item) in items.iter().enumerate() {
-        if !needs_preparation(item) {
-            continue;
-        }
-        let input = match kind {
-            BatchInputKind::Contiguous => contiguous_bytes_like_owned(item, "s"),
-            BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(item, "s"),
-        };
-        match input {
-            Ok(input) => {
-                prepared
-                    .try_reserve(1)
-                    .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-                prepared.push((index, Ok(outputs.stabilize(input)?)));
-            }
-            Err(error) => {
-                prepared
-                    .try_reserve(1)
-                    .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-                prepared.push((index, Err(error)));
-                break;
-            }
-        }
-    }
-    Ok(prepared)
-}
-
 fn encode_parsed<'py>(
     py: Python<'py>,
     input: &Bound<'py, PyAny>,
@@ -413,133 +260,6 @@ pub(super) fn b64encode<'py>(
     encode::encode(py, &input, altchars, padded, wrapcol)
 }
 
-/// Encode each bytes-like item and return the results in input order.
-///
-/// ``items`` must be a list. ``altchars`` applies to every item.
-/// The function stops at the first error and discards the partial result list.
-/// The function uses one thread. It releases the GIL for each immutable item of at least 256 KiB.
-/// It retains the GIL for smaller or mutable items. Do not change ``items`` during the call.
-pub(super) fn b64encode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    altchars: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyList>> {
-    let altchars = parse_altchars(py, altchars, false)?;
-    b64encode_batch_parsed(py, items, altchars)
-}
-
-fn b64encode_batch_parsed<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    altchars: Option<[u8; 2]>,
-) -> PyResult<Bound<'py, PyList>> {
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(items) = exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX)? {
-        // Validation retains every input before allocating the output list.
-        // Creating a GC-tracked Python object can run finalizers which mutate
-        // the original list.
-        let length = items.len();
-        let mut items = items.into_iter();
-        return list_from_fn(py, length, |_| {
-            let item = items.next().expect("batch item count is exact");
-            encode::encode_exact(py, item.as_bytes(), altchars, true, None)
-        });
-    }
-    let items = list_items(items)?;
-    let length = items.len();
-    let mut items = items.into_iter();
-    list_from_fn(py, length, |_| {
-        encode_parsed(
-            py,
-            &items.next().expect("batch item count is exact"),
-            altchars,
-            true,
-            None,
-        )
-    })
-}
-
-pub(super) fn standard_b64encode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_parsed(py, items, None)
-}
-
-pub(super) fn urlsafe_b64encode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_parsed(py, items, Some(*b"-_"))
-}
-
-/// Encode each item into its matching bytearray and return the byte counts.
-///
-/// ``items`` and ``outputs`` must be lists of equal length. Each destination must be a different bytearray.
-/// Each destination keeps its size. The function changes only the written prefix.
-/// The function stops at the first error. It does not restore destinations that it changed.
-/// The function retains the GIL because outputs are mutable.
-/// It copies all inputs that overlap a destination before it writes to the first destination.
-pub(super) fn b64encode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-    altchars: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyList>> {
-    let altchars = parse_altchars(py, altchars, false)?;
-    b64encode_batch_into_parsed(py, items, outputs, altchars)
-}
-
-fn b64encode_batch_into_parsed<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-    altchars: Option<[u8; 2]>,
-) -> PyResult<Bound<'py, PyList>> {
-    let items = list_items(items)?;
-    let outputs = batch_outputs(items.len(), outputs)?;
-    let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?
-        .into_iter()
-        .peekable();
-    list_from_fn(py, items.len(), |index| {
-        let output = outputs.get(index);
-        match prepared
-            .peek()
-            .is_some_and(|(prepared_index, _)| *prepared_index == index)
-            .then(|| prepared.next().expect("matching prepared input exists").1)
-        {
-            Some(Ok(input)) => Ok(PyInt::new(
-                py,
-                encode_parsed_into(&input, output, altchars, true, None)?,
-            )),
-            Some(Err(error)) => Err(error),
-            None => {
-                let input = contiguous_bytes_like(py, &items[index], "s")?;
-                Ok(PyInt::new(
-                    py,
-                    encode_parsed_into(&input, output, altchars, true, None)?,
-                ))
-            }
-        }
-    })
-}
-
-pub(super) fn standard_b64encode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_into_parsed(py, items, outputs, None)
-}
-
-pub(super) fn urlsafe_b64encode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_into_parsed(py, items, outputs, Some(*b"-_"))
-}
-
 pub(super) fn b64encode_into(
     py: Python<'_>,
     s: &Bound<'_, PyAny>,
@@ -571,13 +291,3 @@ fn return_usize(py: Python<'_>, result: PyResult<usize>) -> *mut ffi::PyObject {
 }
 
 pub(super) use methods::add_to_module;
-
-#[cfg(test)]
-mod tests {
-    use super::batch_results;
-
-    #[test]
-    fn oversized_batch_capacity_is_an_error() {
-        assert!(batch_results::<u8>(usize::MAX).is_err());
-    }
-}

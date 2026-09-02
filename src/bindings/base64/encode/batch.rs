@@ -1,8 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyInt, PyList};
 
+#[cfg(not(Py_GIL_DISABLED))]
+use super::super::EXACT_BYTES_BATCH_MAX;
 use super::super::batch::{BatchInputKind, batch_outputs, prepare_batch_inputs};
-use super::super::{EXACT_BYTES_BATCH_MAX, encode_parsed, encode_parsed_into, parse_altchars};
+use super::super::{encode_parsed, encode_parsed_into, parse_altchars};
+#[cfg(not(Py_GIL_DISABLED))]
 use super::encode_exact;
 use crate::bindings::buffer::contiguous_bytes_like;
 #[cfg(not(Py_GIL_DISABLED))]

@@ -94,14 +94,29 @@ impl PreparedEncoder {
 
     unsafe fn encode_to_ptr(self, input: &[u8], output: *mut u8) {
         match self.wrapping {
-            LineWrapping::None => unsafe {
-                encode_unwrapped_ptr::<false>(
-                    input,
-                    output,
-                    self.alphabet.is_urlsafe(),
-                    self.padding,
-                )
-            },
+            LineWrapping::None => {
+                if matches!(self.alphabet, EncodeAlphabet::Custom(_)) {
+                    // The substitution pass immediately rereads the encoded
+                    // bytes, so they must remain cache-resident.
+                    unsafe {
+                        encode_unwrapped_ptr::<true>(
+                            input,
+                            output,
+                            self.alphabet.is_urlsafe(),
+                            self.padding,
+                        )
+                    };
+                } else {
+                    unsafe {
+                        encode_unwrapped_ptr::<false>(
+                            input,
+                            output,
+                            self.alphabet.is_urlsafe(),
+                            self.padding,
+                        )
+                    };
+                }
+            }
             LineWrapping::Columns(width) => unsafe {
                 encode_unwrapped_ptr::<true>(
                     input,

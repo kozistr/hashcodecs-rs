@@ -1,4 +1,9 @@
-use crate::base64::{DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout};
+use std::mem::MaybeUninit;
+use std::slice;
+
+use crate::base64::{
+    DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout, validate_alphabet,
+};
 use crate::bindings::base64::STANDARD_ALPHABET;
 
 use super::Translation;
@@ -24,7 +29,7 @@ unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> 
 }
 
 pub(super) struct StagingWriter {
-    staging: [u8; CONFIGURED_STAGING_CAPACITY],
+    staging: [MaybeUninit<u8>; CONFIGURED_STAGING_CAPACITY],
     staged: usize,
     output: *mut u8,
     written: usize,
@@ -34,7 +39,7 @@ pub(super) struct StagingWriter {
 impl StagingWriter {
     pub(super) fn new(output: *mut u8, translation: Option<Translation>) -> Self {
         Self {
-            staging: [0; CONFIGURED_STAGING_CAPACITY],
+            staging: [MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY],
             staged: 0,
             output,
             written: 0,
@@ -54,8 +59,15 @@ impl StagingWriter {
         let mut source = 0;
         while source < input.len() {
             let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
-            self.staging[self.staged..self.staged + copied]
-                .copy_from_slice(&input[source..source + copied]);
+            // The initialized staging range is exactly `0..staged`. Extend it
+            // only after copying every byte in the new suffix.
+            unsafe {
+                self.staging
+                    .as_mut_ptr()
+                    .add(self.staged)
+                    .cast::<u8>()
+                    .copy_from_nonoverlapping(input.as_ptr().add(source), copied)
+            };
             self.staged += copied;
             source += copied;
             if self.staged == CONFIGURED_STAGING_CAPACITY {
@@ -66,7 +78,7 @@ impl StagingWriter {
     }
 
     pub(super) fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
-        self.staging[self.staged] = STANDARD_ALPHABET[usize::from(value)];
+        self.staging[self.staged].write(STANDARD_ALPHABET[usize::from(value)]);
         self.staged += 1;
         if self.staged == CONFIGURED_STAGING_CAPACITY {
             self.flush::<CHECKED>()?;
@@ -75,12 +87,16 @@ impl StagingWriter {
     }
 
     fn flush<const CHECKED: bool>(&mut self) -> Option<()> {
-        if let Some(translation) = self.translation {
-            translation.apply(&mut self.staging[..self.staged]);
-        }
-        self.written += unsafe {
-            decode_staging::<CHECKED>(&self.staging[..self.staged], self.output.add(self.written))?
+        // Push methods initialize every byte in this prefix before increasing
+        // `staged`; no code reads the uninitialized suffix.
+        let staging = unsafe {
+            slice::from_raw_parts_mut(self.staging.as_mut_ptr().cast::<u8>(), self.staged)
         };
+        if let Some(translation) = self.translation {
+            translation.apply(staging);
+        }
+        self.written +=
+            unsafe { decode_staging::<CHECKED>(staging, self.output.add(self.written))? };
         self.staged = 0;
         Some(())
     }
@@ -94,8 +110,7 @@ impl StagingWriter {
 }
 
 pub(super) struct StagingValidator {
-    staging: [u8; CONFIGURED_STAGING_CAPACITY],
-    scratch: [u8; CONFIGURED_STAGING_CAPACITY / 4 * 3],
+    staging: [MaybeUninit<u8>; CONFIGURED_STAGING_CAPACITY],
     staged: usize,
     translation: Option<Translation>,
 }
@@ -103,8 +118,7 @@ pub(super) struct StagingValidator {
 impl StagingValidator {
     pub(super) fn new(translation: Option<Translation>) -> Self {
         Self {
-            staging: [0; CONFIGURED_STAGING_CAPACITY],
-            scratch: [0; CONFIGURED_STAGING_CAPACITY / 4 * 3],
+            staging: [MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY],
             staged: 0,
             translation,
         }
@@ -114,8 +128,14 @@ impl StagingValidator {
         let mut source = 0;
         while source < input.len() {
             let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
-            self.staging[self.staged..self.staged + copied]
-                .copy_from_slice(&input[source..source + copied]);
+            // As with `StagingWriter`, `0..staged` is the sole initialized range.
+            unsafe {
+                self.staging
+                    .as_mut_ptr()
+                    .add(self.staged)
+                    .cast::<u8>()
+                    .copy_from_nonoverlapping(input.as_ptr().add(source), copied)
+            };
             self.staged += copied;
             source += copied;
             if self.staged == CONFIGURED_STAGING_CAPACITY {
@@ -126,19 +146,16 @@ impl StagingValidator {
     }
 
     fn flush(&mut self) -> Option<()> {
+        // Every byte in this prefix was initialized by `push`; the remainder
+        // of the array stays uninitialized and is never exposed.
+        let staging = unsafe {
+            slice::from_raw_parts_mut(self.staging.as_mut_ptr().cast::<u8>(), self.staged)
+        };
         if let Some(translation) = self.translation {
-            translation.apply(&mut self.staging[..self.staged]);
+            translation.apply(staging);
         }
-        let layout = decode_unpadded_layout(&self.staging[..self.staged]).ok()?;
-        unsafe {
-            decode_to_ptr_with_unpadded_layout(
-                &self.staging[..self.staged],
-                self.scratch.as_mut_ptr(),
-                layout,
-                DecodeAlphabet::Standard,
-            )
-        }
-        .ok()?;
+        decode_unpadded_layout(staging).ok()?;
+        validate_alphabet(staging, DecodeAlphabet::Standard).ok()?;
         self.staged = 0;
         Some(())
     }

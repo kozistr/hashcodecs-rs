@@ -24,13 +24,21 @@ pub(super) use state_machine::{
 pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
+    altchars: Option<[u8; 2]>,
     padding: Padding,
     table: &[u8; 256],
     semantics: PythonSemantics,
 ) -> PyResult<Option<Bound<'py, PyBytes>>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return try_decode_lenient(py, &BytesLike::OwnedVec(input), padding, table, semantics);
+        return try_decode_lenient(
+            py,
+            &BytesLike::OwnedVec(input),
+            altchars,
+            padding,
+            table,
+            semantics,
+        );
     }
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;
@@ -44,6 +52,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
                     output_address as *mut u8,
                     input.len().div_ceil(4) * 3,
                     table,
+                    altchars,
                     padding.is_padded(),
                     continue_after_padding,
                 )
@@ -128,6 +137,7 @@ unsafe fn decode_lenient_slice_into(
             output,
             provided,
             table,
+            altchars,
             padded,
             continue_after_padding,
         )

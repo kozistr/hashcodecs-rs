@@ -110,12 +110,27 @@ pub(super) enum DecodeRoute {
     LenientCustom,
 }
 
+#[derive(Clone, Copy, Default)]
+pub(super) struct IgnoredBytes([u64; 4]);
+
+impl IgnoredBytes {
+    fn insert(&mut self, byte: u8) {
+        let byte = usize::from(byte);
+        self.0[byte / 64] |= 1_u64 << (byte % 64);
+    }
+
+    pub(super) fn contains(self, byte: u8) -> bool {
+        let byte = usize::from(byte);
+        self.0[byte / 64] & (1_u64 << (byte % 64)) != 0
+    }
+}
+
 pub(super) struct PreparedPolicy {
     pub(super) altchars: Option<[u8; 2]>,
     pub(super) validation: Validation,
     pub(super) padding: Padding,
     pub(super) ignorechars_specified: bool,
-    pub(super) ignored: Option<Box<[bool; 256]>>,
+    pub(super) ignored: Option<IgnoredBytes>,
     pub(super) canonical: bool,
 }
 
@@ -128,16 +143,16 @@ impl PreparedPolicy {
                 .is_ok_and(|bytes| bytes.as_bytes().is_empty())
         });
         let ignored = if let Some(ignorechars) = policy.ignorechars {
-            let mut ignored = [false; 256];
+            let mut ignored = IgnoredBytes::default();
             let ignorechars = contiguous_bytes_like(ignorechars, "ignorechars")?;
             unsafe {
                 ignorechars.with_bytes(|bytes| {
                     for &byte in bytes {
-                        ignored[usize::from(byte)] = true;
+                        ignored.insert(byte);
                     }
                 })
             };
-            Some(Box::new(ignored))
+            Some(ignored)
         } else {
             None
         };

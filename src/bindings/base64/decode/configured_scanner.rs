@@ -1,5 +1,6 @@
 use super::staging::{StagingValidator, StagingWriter};
-use super::{ConfiguredDecoder, StrictSpecials, Translation};
+use super::{ConfiguredDecoder, StrictSpecials, Translation, is_ignored_value};
+use crate::base64::{DecodeAlphabet, validate_alphabet};
 use crate::bindings::base64::decode::lenient::decoded_symbol_len;
 use crate::bindings::base64::decode::policy::Validation;
 
@@ -12,7 +13,7 @@ trait ScanSink: Sized {
 
 struct CountSink {
     translation: Option<Translation>,
-    validator: Option<StagingValidator>,
+    validator: Option<Box<StagingValidator>>,
 }
 
 impl CountSink {
@@ -32,9 +33,13 @@ impl ScanSink for CountSink {
     fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8], validate: bool) -> Option<()> {
         let _ = CHECKED;
         if validate {
-            self.validator
-                .get_or_insert_with(|| StagingValidator::new(self.translation))
-                .push(input)?;
+            if self.translation.is_none() {
+                validate_alphabet(input, DecodeAlphabet::Standard).ok()?;
+            } else {
+                self.validator
+                    .get_or_insert_with(|| Box::new(StagingValidator::new(self.translation)))
+                    .push(input)?;
+            }
         }
         Some(())
     }
@@ -213,7 +218,7 @@ impl ConfiguredDecoder {
                     if CHECKED {
                         padding += 1;
                     }
-                } else if CHECKED && !self.ignored[usize::from(byte)] {
+                } else if CHECKED && !is_ignored_value(value) {
                     return None;
                 }
                 continue;
@@ -301,7 +306,7 @@ impl ConfiguredDecoder {
             if source != data_end {
                 let byte = input[source];
                 debug_assert!(
-                    self.table[usize::from(byte)] >= 64 && self.ignored[usize::from(byte)],
+                    is_ignored_value(self.table[usize::from(byte)]),
                     "strict special-byte search only returns discarded bytes"
                 );
                 source += 1;
@@ -315,7 +320,7 @@ impl ConfiguredDecoder {
                     padding += 1;
                 } else {
                     let value = self.table[usize::from(byte)];
-                    if value < 64 || !self.ignored[usize::from(byte)] {
+                    if value < 64 || !is_ignored_value(value) {
                         return None;
                     }
                 }

@@ -3,7 +3,7 @@ use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::lenient::symbols::{
     alphanumeric_prefix_scalar, decode_byte_kernels, is_lenient_symbol, lenient_symbol_count,
-    translate_bytes_scalar,
+    symbol_prefix_scalar, translate_bytes_scalar,
 };
 use super::super::lenient::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
@@ -11,8 +11,8 @@ use super::super::lenient::{
 };
 use super::super::policy::{DecodePolicy, ErrorWrites, Padding, PreparedDecoder, Validation};
 use super::{
-    CONFIGURED_STAGING_CAPACITY, ConfiguredDecoder, StagingValidator, StagingWriter,
-    StrictSpecials, Translation, decode_configured_into,
+    CONFIGURED_STAGING_CAPACITY, ConfiguredDecoder, IGNORED_CONFIGURED_VALUE, StagingValidator,
+    StagingWriter, StrictSpecials, Translation, decode_configured_into,
     decode_configured_strict_into as decode_prepared_strict_into,
 };
 use crate::base64::Base64Error;
@@ -26,13 +26,14 @@ fn configured_decoder(
     canonical: bool,
 ) -> ConfiguredDecoder {
     let table = lenient_decode_table(None);
-    let mut ignored = [false; 256];
+    let mut table = table;
     for &byte in ignored_bytes {
-        ignored[usize::from(byte)] = true;
+        if table[usize::from(byte)] >= 64 {
+            table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
+        }
     }
     ConfiguredDecoder {
         table,
-        ignored,
         validation: if strict_mode {
             Validation::Strict
         } else {
@@ -41,9 +42,9 @@ fn configured_decoder(
         padding: Padding::new(padded),
         canonical,
         alphanumeric_prefix: alphanumeric_prefix_scalar,
-        strict_specials: StrictSpecials::new(&table, &ignored, padded),
-        strict_forbidden: StrictSpecials::forbidden(&table, &ignored),
-        translation: Translation::new(&table, decode_byte_kernels().translate),
+        strict_specials: StrictSpecials::new(&table, padded),
+        strict_forbidden: StrictSpecials::forbidden(&table),
+        translation: Translation::new(&table, None, decode_byte_kernels().translate),
     }
 }
 
@@ -94,6 +95,7 @@ fn scalar_prefix_and_translation_cover_boundaries() {
     assert_eq!(unsafe { alphanumeric_prefix_scalar(b"") }, 0);
     assert_eq!(unsafe { alphanumeric_prefix_scalar(b"abcXYZ09") }, 8);
     assert_eq!(unsafe { alphanumeric_prefix_scalar(b"abc!XYZ") }, 3);
+    assert_eq!(unsafe { symbol_prefix_scalar(b"A+/9-_!", Some(*b"-_")) }, 6);
 
     let mut input = *b"@a#b@#";
     unsafe { translate_bytes_scalar(&mut input, b'@', b'+', b'#', b'/') };
@@ -127,6 +129,12 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
             .filter(|&&byte| is_lenient_symbol(byte, Some(*b"@#")))
             .count()
     );
+    let mut symbols: Vec<u8> = b"A+/_".iter().copied().cycle().take(97).collect();
+    symbols[47] = b'!';
+    assert_eq!(
+        unsafe { super::super::lenient::symbols_x86::symbol_prefix_sse2(&symbols, Some(*b"-_")) },
+        47
+    );
 
     let original: Vec<u8> = b"@#ab".iter().copied().cycle().take(67).collect();
     let mut expected = original.clone();
@@ -150,6 +158,12 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
                 .iter()
                 .filter(|&&byte| is_lenient_symbol(byte, Some(*b"@#")))
                 .count()
+        );
+        assert_eq!(
+            unsafe {
+                super::super::lenient::symbols_x86::symbol_prefix_avx2(&symbols, Some(*b"-_"))
+            },
+            47
         );
         let mut translated: Vec<u8> = b"@#ab".iter().copied().cycle().take(99).collect();
         let mut expected = translated.clone();
@@ -215,6 +229,7 @@ fn lenient_decoder_reports_each_output_boundary_transactionally() {
                 output.as_mut_ptr(),
                 output.len(),
                 &table,
+                None,
                 true,
                 true,
             )
@@ -231,6 +246,7 @@ fn lenient_decoder_reports_each_output_boundary_transactionally() {
                 output.as_mut_ptr(),
                 output.len(),
                 &table,
+                None,
                 true,
                 true,
             )
@@ -252,6 +268,7 @@ fn lenient_decoder_reports_each_output_boundary_transactionally() {
                     output.as_mut_ptr(),
                     provided,
                     &table,
+                    None,
                     true,
                     true,
                 )
@@ -266,6 +283,7 @@ fn lenient_decoder_reports_each_output_boundary_transactionally() {
                 output.as_mut_ptr(),
                 output.len(),
                 &table,
+                None,
                 true,
                 false,
             )
@@ -279,12 +297,63 @@ fn lenient_decoder_reports_each_output_boundary_transactionally() {
                 output.as_mut_ptr(),
                 output.len(),
                 &table,
+                None,
                 true,
                 true,
             )
         },
         Err(LenientDecodeError::InvalidInput)
     );
+}
+
+#[test]
+fn lenient_decoder_delegates_long_clean_runs_around_noise() {
+    let table = lenient_decode_table(None);
+    let mut input = b"YWJj".repeat(64);
+    input.splice(128..128, *b"!?\r\n");
+    let mut output = vec![0xa5; 3 * 64];
+    assert_eq!(
+        unsafe {
+            decode_lenient_to_ptr::<true>(
+                &input,
+                output.as_mut_ptr(),
+                output.len(),
+                &table,
+                None,
+                true,
+                true,
+            )
+        },
+        Ok(output.len())
+    );
+    assert_eq!(output, b"abc".repeat(64));
+
+    let table = lenient_decode_table(Some(*b"-_"));
+    let input = b"-_8/".repeat(32);
+    let mut output = vec![0; 3 * 32];
+    assert_eq!(
+        unsafe {
+            decode_lenient_to_ptr::<true>(
+                &input,
+                output.as_mut_ptr(),
+                output.len(),
+                &table,
+                Some(*b"-_"),
+                true,
+                true,
+            )
+        },
+        Ok(output.len())
+    );
+    assert_eq!(output, b"\xfb\xff?".repeat(32));
+}
+
+#[test]
+fn configured_decoder_compacts_ignored_bytes_into_its_decode_table() {
+    assert!(std::mem::size_of::<ConfiguredDecoder>() <= 320);
+    let decoder = configured_decoder(b"!", true, true, false);
+    assert_eq!(decoder.table[usize::from(b'!')], IGNORED_CONFIGURED_VALUE);
+    assert_eq!(decoder.table[usize::from(b'?')], 64);
 }
 
 #[test]
@@ -297,11 +366,11 @@ fn strict_special_search_covers_every_width() {
         (b"!?~".as_slice(), 3),
         (b"!?~%".as_slice(), 4),
     ] {
-        let mut ignored = [false; 256];
+        let mut table = table;
         for &byte in ignored_bytes {
-            ignored[usize::from(byte)] = true;
+            table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
-        let specials = StrictSpecials::new(&table, &ignored, true);
+        let specials = StrictSpecials::new(&table, true);
         assert!(matches!(
             (expected, specials),
             (0, StrictSpecials::None)
@@ -324,7 +393,7 @@ fn strict_special_search_covers_every_width() {
         for &byte in &STANDARD_ALPHABET[..disabled] {
             table[usize::from(byte)] = 64;
         }
-        let forbidden = StrictSpecials::forbidden(&table, &[false; 256]);
+        let forbidden = StrictSpecials::forbidden(&table);
         assert!(matches!(
             (disabled, forbidden),
             (0, StrictSpecials::None)
@@ -345,11 +414,15 @@ fn many_strict_specials_cannot_use_the_specialized_search() {
 #[test]
 fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     let table = lenient_decode_table(None);
-    assert!(Translation::new(&table, decode_byte_kernels().translate).is_none());
+    assert!(Translation::new(&table, None, decode_byte_kernels().translate).is_none());
     let mut translated_table = table;
     translated_table[usize::from(b'@')] = 62;
-    let translation = Translation::new(&translated_table, decode_byte_kernels().translate)
-        .expect("one translated byte");
+    let translation = Translation::new(
+        &translated_table,
+        Some(*b"@#"),
+        decode_byte_kernels().translate,
+    )
+    .expect("one translated byte");
     let mut translated = b"A@A@".to_vec();
     translation.apply(&mut translated);
     assert_eq!(&translated, b"A+A+");
@@ -473,7 +546,7 @@ fn configured_strict_specials_cover_padding_and_staging_errors() {
 
     let mut forbidden = configured_decoder(b"!", true, true, false);
     forbidden.table[usize::from(b'A')] = 64;
-    forbidden.strict_forbidden = StrictSpecials::forbidden(&forbidden.table, &forbidden.ignored);
+    forbidden.strict_forbidden = StrictSpecials::forbidden(&forbidden.table);
     assert_eq!(forbidden.validate_strict(b"AAAA"), None);
     assert_eq!(
         unsafe { forbidden.decode_strict_checked_to_ptr(b"AAAA", output.as_mut_ptr()) },

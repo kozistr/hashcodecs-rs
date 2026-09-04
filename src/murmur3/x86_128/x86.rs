@@ -2,6 +2,7 @@
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
+use std::{mem::MaybeUninit, slice};
 
 use super::{X86_128_C1, X86_128_C2, mix_x86_128_body_scalar, mix_x86_128_hashes};
 use crate::murmur3::block_buffer::FullBlocks;
@@ -32,7 +33,8 @@ unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4
     );
     let rotate_left = _mm256_setr_epi32(15, 16, 17, 18, 15, 16, 17, 18);
     let rotate_right = _mm256_setr_epi32(17, 16, 15, 14, 17, 16, 15, 14);
-    let mut mixed = [0_u32; 64];
+    let mut mixed = MaybeUninit::<[u32; 64]>::uninit();
+    let mixed = mixed.as_mut_ptr().cast::<u32>();
     let mut offset = 0;
 
     while offset + 256 <= input.len() {
@@ -40,9 +42,10 @@ unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4
             let values =
                 unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
             let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), values) };
+            unsafe { _mm256_storeu_si256(mixed.add(vector * 8).cast(), values) };
         }
-        mix_x86_128_blocks(hashes, &mixed);
+        // All 64 words are initialized by the eight stores above.
+        mix_x86_128_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 64) });
         offset += 256;
     }
     while offset + 128 <= input.len() {
@@ -50,16 +53,18 @@ unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4
             let values =
                 unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
             let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 8).cast(), values) };
+            unsafe { _mm256_storeu_si256(mixed.add(vector * 8).cast(), values) };
         }
-        mix_x86_128_blocks(hashes, &mixed[..32]);
+        // The first four vector stores initialize exactly 32 words.
+        mix_x86_128_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 32) });
         offset += 128;
     }
     while offset + 32 <= input.len() {
         let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
         let values = premix_x86_128_avx2(values, c1, c2, rotate_left, rotate_right);
-        unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), values) };
-        mix_x86_128_blocks(hashes, &mixed[..8]);
+        unsafe { _mm256_storeu_si256(mixed.cast(), values) };
+        // This store initializes the first eight words.
+        mix_x86_128_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 8) });
         offset += 32;
     }
     let remaining = FullBlocks::new(&input[offset..]).expect("SIMD leaves complete blocks");
@@ -86,7 +91,8 @@ fn premix_x86_128_avx2(
 #[target_feature(enable = "sse4.1")]
 unsafe fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     let input = blocks.as_bytes();
-    let mut mixed = [0_u32; 64];
+    let mut mixed = MaybeUninit::<[u32; 64]>::uninit();
+    let mixed = mixed.as_mut_ptr().cast::<u32>();
     let mut offset = 0;
 
     while offset + 256 <= input.len() {
@@ -94,18 +100,22 @@ unsafe fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 
             unsafe {
                 premix_x86_128_group_sse41(
                     input.as_ptr().add(offset + group * 64),
-                    mixed.as_mut_ptr().add(group * 16),
+                    mixed.add(group * 16),
                 )
             };
         }
         for group in 0..4 {
-            mix_x86_128_transposed_group(hashes, &mixed[group * 16..group * 16 + 16]);
+            // Each group helper initializes its corresponding 16-word range.
+            mix_x86_128_transposed_group(hashes, unsafe {
+                slice::from_raw_parts(mixed.add(group * 16), 16)
+            });
         }
         offset += 256;
     }
     while offset + 64 <= input.len() {
-        unsafe { premix_x86_128_group_sse41(input.as_ptr().add(offset), mixed.as_mut_ptr()) };
-        mix_x86_128_transposed_group(hashes, &mixed[..16]);
+        unsafe { premix_x86_128_group_sse41(input.as_ptr().add(offset), mixed) };
+        // The group helper initializes the first 16 words.
+        mix_x86_128_transposed_group(hashes, unsafe { slice::from_raw_parts(mixed, 16) });
         offset += 64;
     }
     let remaining = FullBlocks::new(&input[offset..]).expect("SIMD leaves complete blocks");

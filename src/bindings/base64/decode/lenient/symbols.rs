@@ -26,6 +26,17 @@ pub(in crate::bindings::base64::decode) unsafe fn alphanumeric_prefix_scalar(
         .unwrap_or(input.len())
 }
 
+#[cfg(any(not(target_arch = "aarch64"), test))]
+pub(in crate::bindings::base64::decode) unsafe fn symbol_prefix_scalar(
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+) -> usize {
+    input
+        .iter()
+        .position(|&byte| !is_lenient_symbol(byte, altchars))
+        .unwrap_or(input.len())
+}
+
 #[cfg(test)]
 pub(in crate::bindings::base64::decode) unsafe fn translate_bytes_scalar(
     input: &mut [u8],
@@ -78,10 +89,13 @@ pub(in crate::bindings::base64::decode) fn lenient_symbol_count(
 }
 
 pub(in crate::bindings::base64::decode) type AlphanumericPrefix = unsafe fn(&[u8]) -> usize;
+pub(in crate::bindings::base64::decode) type SymbolPrefix =
+    unsafe fn(&[u8], Option<[u8; 2]>) -> usize;
 
 #[derive(Clone, Copy)]
 pub(in crate::bindings::base64::decode) struct DecodeByteKernels {
     pub(in crate::bindings::base64::decode) scanner: AlphanumericPrefix,
+    pub(in crate::bindings::base64::decode) symbol_prefix: SymbolPrefix,
     pub(in crate::bindings::base64::decode) translate: TranslateBytes,
 }
 
@@ -98,6 +112,17 @@ fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPre
     alphanumeric_prefix_scalar
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn select_symbol_prefix_for_x86(avx2: bool, sse2: bool) -> SymbolPrefix {
+    if avx2 {
+        return super::symbols_x86::symbol_prefix_avx2;
+    }
+    if sse2 {
+        return super::symbols_x86::symbol_prefix_sse2;
+    }
+    symbol_prefix_scalar
+}
+
 fn select_alphanumeric_prefix() -> AlphanumericPrefix {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return select_alphanumeric_prefix_for_x86(
@@ -107,6 +132,20 @@ fn select_alphanumeric_prefix() -> AlphanumericPrefix {
 
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     alphanumeric_prefix_scalar
+}
+
+fn select_symbol_prefix() -> SymbolPrefix {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return select_symbol_prefix_for_x86(
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("sse2"),
+    );
+
+    #[cfg(target_arch = "aarch64")]
+    return super::symbols_aarch64::symbol_prefix;
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
+    symbol_prefix_scalar
 }
 
 pub(in crate::bindings::base64::decode) type TranslateBytes = unsafe fn(&mut [u8], u8, u8, u8, u8);
@@ -139,6 +178,7 @@ fn select_translate_bytes() -> TranslateBytes {
 pub(in crate::bindings::base64::decode) fn decode_byte_kernels() -> &'static DecodeByteKernels {
     DECODE_BYTE_KERNELS.get_or_init(|| DecodeByteKernels {
         scanner: select_alphanumeric_prefix(),
+        symbol_prefix: select_symbol_prefix(),
         translate: select_translate_bytes(),
     })
 }
@@ -168,6 +208,25 @@ mod tests {
         ] {
             assert!(std::ptr::fn_addr_eq(
                 select_alphanumeric_prefix_for_x86(avx2, sse2),
+                expected,
+            ));
+        }
+
+        for (avx2, sse2, expected) in [
+            (
+                true,
+                true,
+                super::super::symbols_x86::symbol_prefix_avx2 as SymbolPrefix,
+            ),
+            (
+                false,
+                true,
+                super::super::symbols_x86::symbol_prefix_sse2 as SymbolPrefix,
+            ),
+            (false, false, symbol_prefix_scalar as SymbolPrefix),
+        ] {
+            assert!(std::ptr::fn_addr_eq(
+                select_symbol_prefix_for_x86(avx2, sse2),
                 expected,
             ));
         }

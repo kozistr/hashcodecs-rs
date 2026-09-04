@@ -31,14 +31,21 @@ pub(super) struct Translation {
 }
 
 impl Translation {
-    pub(super) fn new(table: &[u8; 256], translate: TranslateBytes) -> Option<Self> {
+    pub(super) fn new(
+        table: &[u8; 256],
+        altchars: Option<[u8; 2]>,
+        translate: TranslateBytes,
+    ) -> Option<Self> {
+        let altchars = altchars?;
         let mut sources = [0_u8; 2];
         let mut targets = [0_u8; 2];
         let mut count = 0;
-        for byte in u8::MIN..=u8::MAX {
+        for byte in altchars {
+            if sources[..count].contains(&byte) {
+                continue;
+            }
             let value = table[usize::from(byte)];
             if value < 64 && STANDARD_ALPHABET[usize::from(value)] != byte {
-                assert!(count < 2, "a Base64 alphabet translates at most two bytes");
                 sources[count] = byte;
                 targets[count] = STANDARD_ALPHABET[usize::from(value)];
                 count += 1;
@@ -73,9 +80,16 @@ impl Translation {
     }
 }
 
+const INVALID_CONFIGURED_VALUE: u8 = 64;
+const IGNORED_CONFIGURED_VALUE: u8 = 65;
+
+#[inline]
+fn is_ignored_value(value: u8) -> bool {
+    value == IGNORED_CONFIGURED_VALUE
+}
+
 pub(super) struct ConfiguredDecoder {
     pub(super) table: [u8; 256],
-    pub(super) ignored: [bool; 256],
     pub(super) validation: Validation,
     pub(super) padding: Padding,
     pub(super) canonical: bool,
@@ -89,9 +103,14 @@ impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
         let kernels = decode_byte_kernels();
         let altchars = policy.altchars;
-        let ignored = policy.ignored.as_deref().copied().unwrap_or([false; 256]);
+        let ignored = policy.ignored.unwrap_or_default();
 
-        let mut table = [64; 256];
+        let mut table = [INVALID_CONFIGURED_VALUE; 256];
+        for byte in u8::MIN..=u8::MAX {
+            if ignored.contains(byte) {
+                table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
+            }
+        }
         for (value, &byte) in STANDARD_ALPHABET[..62].iter().enumerate() {
             table[usize::from(byte)] = value as u8;
         }
@@ -109,12 +128,11 @@ impl ConfiguredDecoder {
             }
         }
 
-        let strict_specials = StrictSpecials::new(&table, &ignored, policy.padding.is_padded());
-        let strict_forbidden = StrictSpecials::forbidden(&table, &ignored);
-        let translation = Translation::new(&table, kernels.translate);
+        let strict_specials = StrictSpecials::new(&table, policy.padding.is_padded());
+        let strict_forbidden = StrictSpecials::forbidden(&table);
+        let translation = Translation::new(&table, altchars, kernels.translate);
         Self {
             table,
-            ignored,
             validation: policy.validation,
             padding: policy.padding,
             canonical: policy.canonical,
@@ -143,14 +161,13 @@ pub(super) enum StrictSpecials {
 }
 
 impl StrictSpecials {
-    pub(super) fn new(table: &[u8; 256], ignored: &[bool; 256], padded: bool) -> Self {
+    pub(super) fn new(table: &[u8; 256], padded: bool) -> Self {
         let equals_is_padding = padded && table[usize::from(b'=')] >= 64;
         let mut bytes = [0_u8; 3];
         let mut count = 0;
         for byte in u8::MIN..=u8::MAX {
             let value = table[usize::from(byte)];
-            let discarded =
-                value >= 64 && ignored[usize::from(byte)] && !(equals_is_padding && byte == b'=');
+            let discarded = is_ignored_value(value) && !(equals_is_padding && byte == b'=');
             if discarded {
                 if count == bytes.len() {
                     return Self::Many;
@@ -178,11 +195,11 @@ impl StrictSpecials {
         }
     }
 
-    pub(super) fn forbidden(table: &[u8; 256], ignored: &[bool; 256]) -> Self {
+    pub(super) fn forbidden(table: &[u8; 256]) -> Self {
         let mut bytes = [0_u8; 3];
         let mut count = 0;
         for (value, &byte) in STANDARD_ALPHABET.iter().enumerate() {
-            if table[usize::from(byte)] >= 64 && !ignored[usize::from(byte)] {
+            if table[usize::from(byte)] == INVALID_CONFIGURED_VALUE {
                 if count == bytes.len() {
                     return Self::Many;
                 }

@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::ssse3::{errors_are_zero_ssse3, pack_16_indices};
+use super::ssse3::{errors_are_zero_ssse3, pack_16_indices, store_12_exact};
 use super::tables::{
     MIXED_LOW_CLASSES, PACK_SHUFFLE, STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES, STANDARD_OFFSETS,
     URLSAFE_HIGH_CLASSES, URLSAFE_LOW_CLASSES, URLSAFE_OFFSETS,
@@ -76,6 +76,86 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         destination += 12;
     }
     Ok((source, destination))
+}
+
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
+    let mut source = 0;
+    while source + 128 <= input.len() {
+        let (_, first) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        let (_, second) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
+        let (_, third) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
+        let (_, fourth) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+        let errors = _mm256_or_si256(
+            _mm256_or_si256(first, second),
+            _mm256_or_si256(third, fourth),
+        );
+        if _mm256_testz_si256(errors, errors) == 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+        source += 128;
+    }
+    while source + 32 <= input.len() {
+        let (_, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        if _mm256_testz_si256(errors, errors) == 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+        source += 32;
+    }
+    if source + 16 <= input.len() {
+        let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+        if !errors_are_zero_ssse3(errors) {
+            return Err(Base64Error::InvalidInput);
+        }
+        source += 16;
+    }
+    Ok(source)
+}
+
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
+    input: &[u8],
+    output: *mut u8,
+) -> (usize, usize) {
+    let mut source = 0;
+    let mut destination = 0;
+    while source + 128 <= input.len() {
+        let (first, first_error) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
+        let (third, third_error) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
+        let (fourth, fourth_error) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+        let errors = _mm256_or_si256(
+            _mm256_or_si256(first_error, second_error),
+            _mm256_or_si256(third_error, fourth_error),
+        );
+        if _mm256_testz_si256(errors, errors) == 0 {
+            break;
+        }
+        unsafe { store_24_exact(output.add(destination), pack_32(first)) };
+        unsafe { store_24_exact(output.add(destination + 24), pack_32(second)) };
+        unsafe { store_24_exact(output.add(destination + 48), pack_32(third)) };
+        unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
+        source += 128;
+        destination += 96;
+    }
+    while source + 32 <= input.len() {
+        let (indices, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        if _mm256_testz_si256(errors, errors) == 0 {
+            break;
+        }
+        unsafe { store_24_exact(output.add(destination), pack_32(indices)) };
+        source += 32;
+        destination += 24;
+    }
+    if source + 16 <= input.len() {
+        let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+        if errors_are_zero_ssse3(errors) {
+            unsafe { store_12_exact(output.add(destination), pack_16_indices(indices)) };
+            source += 16;
+            destination += 12;
+        }
+    }
+    (source, destination)
 }
 
 #[target_feature(enable = "avx2")]

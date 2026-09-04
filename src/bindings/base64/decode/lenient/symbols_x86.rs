@@ -51,6 +51,30 @@ pub(in crate::bindings::base64::decode) unsafe fn alphanumeric_prefix_avx2(input
 }
 
 #[target_feature(enable = "avx2")]
+pub(in crate::bindings::base64::decode) unsafe fn symbol_prefix_avx2(
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+) -> usize {
+    let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+    let extra0 = _mm256_set1_epi8(extra0 as i8);
+    let extra1 = _mm256_set1_epi8(extra1 as i8);
+    let mut source = 0;
+    while source + 32 <= input.len() {
+        let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
+        let mask = _mm256_movemask_epi8(valid_avx2(bytes, extra0, extra1)) as u32;
+        if mask != u32::MAX {
+            return source + (!mask).trailing_zeros() as usize;
+        }
+        source += 32;
+    }
+    source
+        + input[source..]
+            .iter()
+            .position(|&byte| !is_lenient_symbol(byte, altchars))
+            .unwrap_or(input.len() - source)
+}
+
+#[target_feature(enable = "avx2")]
 pub(in crate::bindings::base64::decode) unsafe fn translate_avx2(
     input: &mut [u8],
     source0: u8,
@@ -162,6 +186,30 @@ pub(in crate::bindings::base64::decode) unsafe fn alphanumeric_prefix_sse2(input
         + input[source..]
             .iter()
             .position(|byte| !byte.is_ascii_alphanumeric())
+            .unwrap_or(input.len() - source)
+}
+
+#[target_feature(enable = "sse2")]
+pub(in crate::bindings::base64::decode) unsafe fn symbol_prefix_sse2(
+    input: &[u8],
+    altchars: Option<[u8; 2]>,
+) -> usize {
+    let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+    let extra0 = _mm_set1_epi8(extra0 as i8);
+    let extra1 = _mm_set1_epi8(extra1 as i8);
+    let mut source = 0;
+    while source + 16 <= input.len() {
+        let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
+        let mask = _mm_movemask_epi8(valid_sse2(bytes, extra0, extra1)) as u32;
+        if mask != 0xffff {
+            return source + ((!mask) & 0xffff).trailing_zeros() as usize;
+        }
+        source += 16;
+    }
+    source
+        + input[source..]
+            .iter()
+            .position(|&byte| !is_lenient_symbol(byte, altchars))
             .unwrap_or(input.len() - source)
 }
 

@@ -57,6 +57,165 @@ pub(super) unsafe fn decode_with_runtime_backend(
 }
 
 #[inline]
+pub(super) fn validate_with_runtime_backend(
+    input: &[u8],
+    alphabet: DecodeAlphabet,
+) -> Result<usize, Base64Error> {
+    validate_with_backend_inner(input, backend::selected_backend().backend, alphabet)
+}
+
+#[inline]
+pub(super) unsafe fn decode_valid_prefix_with_runtime_backend(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: DecodeAlphabet,
+) -> Option<(usize, usize)> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        let backend = backend::selected_backend().backend;
+        unsafe { decode_valid_prefix_x86_alphabet(input, output, backend, alphabet) }
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        let _ = (input, output, alphabet);
+        None
+    }
+}
+
+#[inline]
+#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+pub(super) unsafe fn decode_valid_prefix_with_backend(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+    alphabet: DecodeAlphabet,
+) -> (usize, usize) {
+    if !backend::is_supported(backend) {
+        return (0, 0);
+    }
+    unsafe { decode_valid_prefix_x86_alphabet(input, output, backend, alphabet) }.unwrap_or((0, 0))
+}
+
+#[inline]
+#[cfg(test)]
+pub(super) fn validate_with_backend(
+    input: &[u8],
+    backend: Backend,
+    alphabet: DecodeAlphabet,
+) -> Result<usize, Base64Error> {
+    if !backend::is_supported(backend) {
+        return Ok(0);
+    }
+    validate_with_backend_inner(input, backend, alphabet)
+}
+
+#[inline]
+fn validate_with_backend_inner(
+    input: &[u8],
+    backend: Backend,
+    alphabet: DecodeAlphabet,
+) -> Result<usize, Base64Error> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return match alphabet {
+        DecodeAlphabet::Standard => validate_x86::<x86_contracts::StandardDecoder>(input, backend),
+        DecodeAlphabet::UrlSafe => validate_x86::<x86_contracts::UrlSafeDecoder>(input, backend),
+        DecodeAlphabet::Mixed => validate_x86::<x86_contracts::MixedDecoder>(input, backend),
+    };
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if backend == Backend::Neon {
+            return unsafe {
+                match alphabet {
+                    DecodeAlphabet::Standard => decode_aarch64::validate::<false, false>(input),
+                    DecodeAlphabet::UrlSafe => decode_aarch64::validate::<true, false>(input),
+                    DecodeAlphabet::Mixed => decode_aarch64::validate::<false, true>(input),
+                }
+            };
+        }
+        let _ = (input, backend, alphabet);
+        Ok(0)
+    }
+}
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn validate_x86<A: x86_contracts::Decoder>(
+    input: &[u8],
+    backend: Backend,
+) -> Result<usize, Base64Error> {
+    let Some(kernel) = validate_x86_kernel::<A>(backend) else {
+        return Ok(0);
+    };
+    unsafe { kernel(input) }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+type ValidateKernel = unsafe fn(&[u8]) -> Result<usize, Base64Error>;
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn validate_x86_kernel<A: x86_contracts::Decoder>(backend: Backend) -> Option<ValidateKernel> {
+    match backend {
+        Backend::Avx512Vbmi => Some(decode_backend::avx512::validate::<A>),
+        Backend::Avx2 => Some(decode_backend::avx2::validate::<A>),
+        Backend::Sse41 => Some(decode_backend::sse41::validate::<A>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::validate::<A>),
+        Backend::Scalar | Backend::Neon => None,
+    }
+}
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+unsafe fn decode_valid_prefix_x86_alphabet(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+    alphabet: DecodeAlphabet,
+) -> Option<(usize, usize)> {
+    match alphabet {
+        DecodeAlphabet::Standard => unsafe {
+            decode_valid_prefix_x86::<x86_contracts::StandardDecoder>(input, output, backend)
+        },
+        DecodeAlphabet::UrlSafe => unsafe {
+            decode_valid_prefix_x86::<x86_contracts::UrlSafeDecoder>(input, output, backend)
+        },
+        DecodeAlphabet::Mixed => unsafe {
+            decode_valid_prefix_x86::<x86_contracts::MixedDecoder>(input, output, backend)
+        },
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+type DecodePrefixKernel = unsafe fn(&[u8], *mut u8) -> (usize, usize);
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+unsafe fn decode_valid_prefix_x86<A: x86_contracts::Decoder>(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+) -> Option<(usize, usize)> {
+    let kernel = decode_valid_prefix_x86_kernel::<A>(backend)?;
+    Some(unsafe { kernel(input, output) })
+}
+
+#[inline]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn decode_valid_prefix_x86_kernel<A: x86_contracts::Decoder>(
+    backend: Backend,
+) -> Option<DecodePrefixKernel> {
+    match backend {
+        Backend::Avx512Vbmi => Some(decode_backend::avx512::decode_prefix::<A>),
+        Backend::Avx2 => Some(decode_backend::avx2::decode_prefix_avx2::<A>),
+        Backend::Sse41 => Some(decode_backend::sse41::decode_prefix_sse41::<A>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::decode_prefix_ssse3::<A>),
+        Backend::Scalar | Backend::Neon => None,
+    }
+}
+
+#[inline]
 #[cfg(test)]
 pub(super) fn encode_with_backend(
     input: &[u8],
@@ -337,6 +496,10 @@ mod tests {
                 )
                 .is_some()
             );
+            assert!(validate_x86_kernel::<x86_contracts::StandardDecoder>(backend).is_some());
+            assert!(
+                decode_valid_prefix_x86_kernel::<x86_contracts::StandardDecoder>(backend).is_some()
+            );
         }
         assert!(encode_x86_kernel::<true>(Backend::Scalar).is_none());
         assert!(
@@ -344,6 +507,11 @@ mod tests {
                 Backend::Neon
             )
             .is_none()
+        );
+        assert!(validate_x86_kernel::<x86_contracts::StandardDecoder>(Backend::Scalar).is_none());
+        assert!(
+            decode_valid_prefix_x86_kernel::<x86_contracts::StandardDecoder>(Backend::Scalar)
+                .is_none()
         );
     }
 

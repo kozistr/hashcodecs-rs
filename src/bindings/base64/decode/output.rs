@@ -10,10 +10,10 @@ use super::fallback::{
     canonical_padding, decode_with_binascii, decoding_error, warn_legacy_altchars,
 };
 use super::policy::{
-    AdvancedShortcut, DecodeRoute, ErrorWrites, Padding, PreparedDecoder, StoreBounds,
+    ConfiguredShortcut, DecodeRoute, ErrorWrites, Padding, PreparedDecoder, StoreBounds,
 };
 use super::{
-    decode_advanced, decode_advanced_into, decode_strict, decode_strict_into,
+    decode_configured, decode_configured_into, decode_strict, decode_strict_into,
     decode_strict_into_with_altchars, decode_strict_with_altchars,
     decode_unpadded_into_with_altchars, decode_unpadded_with_altchars, try_decode_lenient,
     try_decode_lenient_into, try_decode_strict, try_decode_urlsafe_315,
@@ -29,8 +29,8 @@ impl PreparedDecoder {
         input: &BytesLike<'_, 'py>,
     ) -> PyResult<Bound<'py, PyBytes>> {
         let value = match self.route {
-            DecodeRoute::Advanced(shortcut) => {
-                self.decode_advanced_allocating(py, input, shortcut)?
+            DecodeRoute::Configured(shortcut) => {
+                self.decode_configured_allocating(py, input, shortcut)?
             }
             DecodeRoute::Strict { urlsafe_315 } => {
                 if urlsafe_315
@@ -65,7 +65,7 @@ impl PreparedDecoder {
                         })
                     }
                 {
-                    decode_advanced(py, input, self.advanced(), self.semantics)?
+                    decode_configured(py, input, self.configured(), self.semantics)?
                 } else if self.policy.padding == Padding::Unpadded
                     && let Some(value) = self.try_unpadded_allocating(py, input)?
                 {
@@ -103,13 +103,13 @@ impl PreparedDecoder {
         self.finish(py, input, value)
     }
 
-    fn decode_advanced_allocating<'py>(
+    fn decode_configured_allocating<'py>(
         &self,
         py: Python<'py>,
         input: &BytesLike<'_, 'py>,
-        shortcut: AdvancedShortcut,
+        shortcut: ConfiguredShortcut,
     ) -> PyResult<Bound<'py, PyBytes>> {
-        if shortcut == AdvancedShortcut::StandardStrict {
+        if shortcut == ConfiguredShortcut::StandardStrict {
             match decode_strict(py, input, DecodeAlphabet::Standard) {
                 Ok(value) => {
                     let canonical_input = !self.policy.canonical
@@ -129,7 +129,7 @@ impl PreparedDecoder {
                 Err(_) => {}
             }
         }
-        if shortcut == AdvancedShortcut::CanonicalUnpadded
+        if shortcut == ConfiguredShortcut::CanonicalUnpadded
             && unsafe {
                 input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
             }
@@ -146,7 +146,7 @@ impl PreparedDecoder {
                 Err(_) => {}
             }
         }
-        decode_advanced(py, input, self.advanced(), self.semantics)
+        decode_configured(py, input, self.configured(), self.semantics)
     }
 
     fn decode_strict_allocating<'py>(
@@ -207,8 +207,8 @@ impl PreparedDecoder {
             return self.decode_into(py, &BytesLike::OwnedVec(input), output);
         }
         let value = match self.route {
-            DecodeRoute::Advanced(shortcut) => {
-                self.decode_advanced_into(py, input, output, shortcut)?
+            DecodeRoute::Configured(shortcut) => {
+                self.decode_configured_into(py, input, output, shortcut)?
             }
             DecodeRoute::Strict { urlsafe_315 } => {
                 if urlsafe_315
@@ -253,7 +253,7 @@ impl PreparedDecoder {
                         })
                     }
                 {
-                    decode_advanced_into(py, input, output, self.advanced(), self.semantics)?
+                    decode_configured_into(py, input, output, self.configured(), self.semantics)?
                 } else if self.policy.padding == Padding::Unpadded
                     && let Some(value) = self.try_unpadded_into(input, output)?
                 {
@@ -293,14 +293,14 @@ impl PreparedDecoder {
         self.finish(py, input, value)
     }
 
-    fn decode_advanced_into(
+    fn decode_configured_into(
         &self,
         py: Python<'_>,
         input: &BytesLike<'_, '_>,
         output: &Bound<'_, PyByteArray>,
-        shortcut: AdvancedShortcut,
+        shortcut: ConfiguredShortcut,
     ) -> PyResult<usize> {
-        if shortcut == AdvancedShortcut::StandardStrict {
+        if shortcut == ConfiguredShortcut::StandardStrict {
             let canonical_input = !self.policy.canonical
                 || unsafe {
                     input.with_bytes(|input| {
@@ -323,7 +323,7 @@ impl PreparedDecoder {
                 return Ok(value);
             }
         }
-        if shortcut == AdvancedShortcut::CanonicalUnpadded
+        if shortcut == ConfiguredShortcut::CanonicalUnpadded
             && unsafe {
                 input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
             }
@@ -337,7 +337,7 @@ impl PreparedDecoder {
         {
             return Ok(value);
         }
-        decode_advanced_into(py, input, output, self.advanced(), self.semantics)
+        decode_configured_into(py, input, output, self.configured(), self.semantics)
     }
 
     fn decode_strict_into(

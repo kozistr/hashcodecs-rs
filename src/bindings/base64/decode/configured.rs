@@ -15,11 +15,13 @@ use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
+#[path = "configured_scanner.rs"]
 mod scanner;
+#[path = "configured_staging.rs"]
 mod staging;
 
 #[cfg(test)]
-use staging::{ADVANCED_STAGING_CAPACITY, StagingValidator, StagingWriter};
+use staging::{CONFIGURED_STAGING_CAPACITY, StagingValidator, StagingWriter};
 
 #[derive(Clone, Copy)]
 pub(super) struct Translation {
@@ -73,7 +75,7 @@ impl Translation {
     }
 }
 
-pub(super) struct AdvancedDecoder {
+pub(super) struct ConfiguredDecoder {
     pub(super) table: [u8; 256],
     pub(super) ignored: [bool; 256],
     pub(super) validation: Validation,
@@ -85,7 +87,7 @@ pub(super) struct AdvancedDecoder {
     pub(super) translation: Option<Translation>,
 }
 
-impl AdvancedDecoder {
+impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
         let altchars = policy.altchars;
         let ignored = policy.ignored.as_deref().copied().unwrap_or([false; 256]);
@@ -223,15 +225,15 @@ fn translated_strict_decoded_len(
     decode_unpadded_layout(input).map(|layout| layout.output_len())
 }
 
-pub(super) fn decode_advanced_strict_into(
+pub(super) fn decode_configured_strict_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: [u8; 2],
-    decoder: &AdvancedDecoder,
+    decoder: &ConfiguredDecoder,
     error_writes: ErrorWrites,
 ) -> PyResult<Result<usize, Base64Error>> {
     if let Some(input) = input.snapshot_for_output(output)? {
-        return decode_advanced_strict_into(
+        return decode_configured_strict_into(
             &BytesLike::OwnedVec(input),
             output,
             altchars,
@@ -265,15 +267,15 @@ pub(super) fn decode_advanced_strict_into(
     })
 }
 
-pub(in crate::bindings::base64::decode) fn decode_advanced<'py>(
+pub(in crate::bindings::base64::decode) fn decode_configured<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
-    decoder: &AdvancedDecoder,
+    decoder: &ConfiguredDecoder,
     semantics: PythonSemantics,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced(py, &BytesLike::OwnedVec(input), decoder, semantics);
+        return decode_configured(py, &BytesLike::OwnedVec(input), decoder, semantics);
     }
     let continue_after_padding = semantics.continues_after_padding;
     let writer = BytesWriter::new(py, input.len())?;
@@ -297,12 +299,12 @@ pub(in crate::bindings::base64::decode) fn decode_advanced<'py>(
     unsafe { writer.finish(py, written) }
 }
 
-unsafe fn decode_advanced_slice_into(
+unsafe fn decode_configured_slice_into(
     py: Python<'_>,
     input: &[u8],
     output: *mut u8,
     provided: usize,
-    decoder: &AdvancedDecoder,
+    decoder: &ConfiguredDecoder,
     continue_after_padding: bool,
 ) -> PyResult<usize> {
     let Some(required) = decoder.decoded_len(input, continue_after_padding) else {
@@ -316,21 +318,21 @@ unsafe fn decode_advanced_slice_into(
     Ok(written)
 }
 
-pub(in crate::bindings::base64::decode) fn decode_advanced_into(
+pub(in crate::bindings::base64::decode) fn decode_configured_into(
     py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
-    decoder: &AdvancedDecoder,
+    decoder: &ConfiguredDecoder,
     semantics: PythonSemantics,
 ) -> PyResult<usize> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced_into(py, &BytesLike::OwnedVec(input), output, decoder, semantics);
+        return decode_configured_into(py, &BytesLike::OwnedVec(input), output, decoder, semantics);
     }
     let continue_after_padding = semantics.continues_after_padding;
     if let Some(input) = input.snapshot_for_output(output)? {
         return with_bytearray(output, || unsafe {
-            decode_advanced_slice_into(
+            decode_configured_slice_into(
                 py,
                 &input,
                 bytearray_data(output.as_ptr()),
@@ -342,11 +344,18 @@ pub(in crate::bindings::base64::decode) fn decode_advanced_into(
     }
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            decode_advanced_slice_into(py, input, output, provided, decoder, continue_after_padding)
+            decode_configured_slice_into(
+                py,
+                input,
+                output,
+                provided,
+                decoder,
+                continue_after_padding,
+            )
         })
     }
 }
 
 #[cfg(test)]
-#[path = "advanced_tests.rs"]
+#[path = "configured_tests.rs"]
 mod tests;

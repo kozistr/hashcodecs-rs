@@ -33,6 +33,10 @@ The scalar implementations set the portability and correctness baseline. Runtime
 | `benches/`, `benchmarks/` | Rust and Python throughput measurements. |
 | `tests/`, `fuzz/` | Python compatibility tests, differential fuzzing, and safety validation. |
 
+Layout depth is counted from the relevant source root, such as `src/`, rather than from the repository root. Build,
+environment, cache, and generated-output directories—including `target/`, `.venv/`, `.uv-cache/`, `site/`, and
+`__pycache__/`—are excluded from layout conventions. Checked-in generated API metadata remains under `generated/`.
+
 ## Dependency Rules
 
 The crate groups code into layered modules within one crate:
@@ -43,6 +47,9 @@ The crate groups code into layered modules within one crate:
 - architecture-specific kernels have no dependency on Python bindings;
 - algorithm-specific Python adapters depend on the Rust APIs and shared binding policies;
 - `bindings.rs` is a composition root and contains no parsing, buffer, or execution policy.
+
+The core algorithms and feature-gated CPython bindings intentionally remain in this crate. Splitting them would
+either expose private pointer-oriented implementation APIs across a crate boundary or add copies to sensitive paths.
 
 Shared state machines own their invariants. For example, `murmur3/block_buffer.rs` keeps the pending block and its
 length together, so each incremental hasher cannot represent an inconsistent tail. At the CPython boundary,
@@ -113,7 +120,7 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 
 `one_shot.rs` selects the input-length class. `short_inputs.rs` contains the formulas for 0 to 240 bytes.
 `long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
-`long_inputs/aarch64.rs`, `long_inputs/avx2.rs`, `long_inputs/avx512.rs`, and `long_inputs/ssse3.rs` contain the ISA kernels.
+`long_inputs/aarch64.rs` and the kernels under `long_inputs/x86/` contain the ISA-specific implementations.
 The scalar long-input flow and backend selection use the same module. These kernels handle inputs longer than 240 bytes.
 
 The AVX2 one-shot kernel splits each full 1,024-byte block across four accumulator chains. It also splits tails

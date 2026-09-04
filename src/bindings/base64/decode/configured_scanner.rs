@@ -1,5 +1,5 @@
 use super::staging::{StagingValidator, StagingWriter};
-use super::{AdvancedDecoder, StrictSpecials, Translation};
+use super::{ConfiguredDecoder, StrictSpecials, Translation};
 use crate::bindings::base64::decode::lenient::decoded_symbol_len;
 use crate::bindings::base64::decode::policy::Validation;
 
@@ -85,7 +85,7 @@ impl ScanSink for WriteSink<'_> {
     }
 }
 
-impl AdvancedDecoder {
+impl ConfiguredDecoder {
     #[cfg(test)]
     pub(super) fn validate_strict(&self, input: &[u8]) -> Option<usize> {
         debug_assert_eq!(self.validation, Validation::Strict);
@@ -134,7 +134,7 @@ impl AdvancedDecoder {
     ) -> usize {
         let mut writer = StagingWriter::new(output, None);
         self.scan::<WriteSink, false>(input, WriteSink::new(&mut writer), continue_after_padding)
-            .expect("validated advanced Base64 remains valid")
+            .expect("validated configured Base64 remains valid")
     }
 
     fn scan<S: ScanSink, const CHECKED: bool>(

@@ -28,17 +28,76 @@ mod encode;
 mod methods;
 mod schema;
 
-static PYTHON_VERSION: OnceLock<(u8, u8)> = OnceLock::new();
+static PYTHON_SEMANTICS: OnceLock<PythonSemantics> = OnceLock::new();
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct PythonSemantics {
+    version: (u8, u8, u8),
+    binascii_api: BinasciiApi,
+    pub(super) urlsafe_exclusive_alphabet: bool,
+    pub(super) warns_legacy_altchars: bool,
+    pub(super) continues_after_padding: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BinasciiApi {
+    Legacy,
+    StrictMode,
+    Padding,
+}
+
+impl PythonSemantics {
+    pub(super) fn from_version(version: (u8, u8, u8)) -> Self {
+        let minor_version = (version.0, version.1);
+        let binascii_api = if minor_version >= (3, 15) {
+            BinasciiApi::Padding
+        } else if minor_version >= (3, 11) {
+            BinasciiApi::StrictMode
+        } else {
+            BinasciiApi::Legacy
+        };
+        let python_315 = minor_version >= (3, 15);
+        let continues_after_padding = match version {
+            (3, 13, patch) => patch >= 13,
+            (3, 14, patch) => patch >= 4,
+            (major, minor, _) => (major, minor) >= (3, 15),
+        };
+        Self {
+            version,
+            binascii_api,
+            urlsafe_exclusive_alphabet: python_315,
+            warns_legacy_altchars: python_315,
+            continues_after_padding,
+        }
+    }
+
+    fn at_least(self, version: (u8, u8)) -> bool {
+        (self.version.0, self.version.1) >= version
+    }
+
+    pub(super) fn binascii_accepts_strict_mode(self) -> bool {
+        self.binascii_api != BinasciiApi::Legacy
+    }
+
+    pub(super) fn binascii_accepts_padding(self) -> bool {
+        self.binascii_api == BinasciiApi::Padding
+    }
+}
 
 #[cfg(not(Py_GIL_DISABLED))]
 const EXACT_BYTES_BATCH_MAX: usize = 256;
 
 #[inline]
 pub(super) fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
-    *PYTHON_VERSION.get_or_init(|| {
-        let version_info = py.version_info();
-        (version_info.major, version_info.minor)
-    }) >= version
+    python_semantics(py).at_least(version)
+}
+
+#[inline]
+pub(super) fn python_semantics(py: Python<'_>) -> PythonSemantics {
+    *PYTHON_SEMANTICS.get_or_init(|| {
+        let version = py.version_info();
+        PythonSemantics::from_version((version.major, version.minor, version.patch))
+    })
 }
 
 fn parse_altchars(

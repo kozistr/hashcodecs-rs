@@ -3,7 +3,7 @@ use pyo3::types::{PyAny, PyInt, PyList};
 
 use super::super::batch::{BatchInputKind, batch_outputs, prepare_batch_inputs};
 use super::super::parse_altchars;
-use super::plan::{DecodeOptions, DecodePlan};
+use super::policy::{DecodePolicy, PreparedDecoder};
 use crate::bindings::buffer::ascii_or_bytes;
 use crate::bindings::objects::{list_from_fn, list_items};
 
@@ -32,11 +32,14 @@ fn b64decode_batch_parsed<'py>(
     let items = list_items(items)?;
     let length = items.len();
     let mut items = items.into_iter();
-    let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
+    let decoder = PreparedDecoder::new(
+        py,
+        DecodePolicy::new(altchars, Some(validate), true, None, false),
+    )?;
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
-        DecodePlan::new(py, &input, options).execute_allocating(py)
+        decoder.decode_allocating(py, &input)
     })
 }
 
@@ -84,7 +87,10 @@ fn b64decode_batch_into_parsed<'py>(
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?
         .into_iter()
         .peekable();
-    let options = DecodeOptions::new(altchars, Some(validate), true, None, false);
+    let decoder = PreparedDecoder::new(
+        py,
+        DecodePolicy::new(altchars, Some(validate), true, None, false),
+    )?;
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
         match prepared
@@ -92,17 +98,11 @@ fn b64decode_batch_into_parsed<'py>(
             .is_some_and(|(prepared_index, _, _)| *prepared_index == index)
             .then(|| prepared.next().expect("matching prepared input exists").1)
         {
-            Some(Ok(input)) => Ok(PyInt::new(
-                py,
-                DecodePlan::new(py, &input, options).execute_into(py, output)?,
-            )),
+            Some(Ok(input)) => Ok(PyInt::new(py, decoder.decode_into(py, &input, output)?)),
             Some(Err(error)) => Err(error),
             None => {
                 let input = ascii_or_bytes(py, &items[index], "s")?;
-                Ok(PyInt::new(
-                    py,
-                    DecodePlan::new(py, &input, options).execute_into(py, output)?,
-                ))
+                Ok(PyInt::new(py, decoder.decode_into(py, &input, output)?))
             }
         }
     })

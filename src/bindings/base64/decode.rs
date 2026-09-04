@@ -4,14 +4,14 @@ use pyo3::types::{PyAny, PyByteArray, PyBytes};
 use super::parse_altchars;
 use crate::bindings::buffer::ascii_or_bytes;
 
-use self::plan::{DecodeOptions, DecodePlan};
+use self::policy::{DecodePolicy, PreparedDecoder};
 
 mod advanced;
 mod batch;
 mod fallback;
 mod lenient;
 mod output;
-mod plan;
+mod policy;
 mod strict;
 
 use advanced::{decode_advanced, decode_advanced_into, decode_advanced_strict_into};
@@ -49,8 +49,8 @@ pub(super) fn b64decode<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
-    let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
-    DecodePlan::new(py, &input, options).execute_allocating(py)
+    let policy = DecodePolicy::new(altchars, validate, padded, ignorechars, canonical);
+    PreparedDecoder::new(py, policy)?.decode_allocating(py, &input)
 }
 
 /// Decode with the standard Base64 alphabet.
@@ -59,7 +59,7 @@ pub(super) fn standard_b64decode<'py>(
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(py, &input, DecodeOptions::standard()).execute_allocating(py)
+    PreparedDecoder::new(py, DecodePolicy::standard())?.decode_allocating(py, &input)
 }
 
 /// Decode standard Base64 into a reusable output.
@@ -69,7 +69,7 @@ pub(super) fn standard_b64decode_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(py, &input, DecodeOptions::standard()).execute_into(py, output)
+    PreparedDecoder::new(py, DecodePolicy::standard())?.decode_into(py, &input, output)
 }
 
 pub(super) fn urlsafe_b64decode<'py>(
@@ -78,7 +78,7 @@ pub(super) fn urlsafe_b64decode<'py>(
     padded: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(py, &input, DecodeOptions::urlsafe(padded)).execute_allocating(py)
+    PreparedDecoder::new(py, DecodePolicy::urlsafe(padded))?.decode_allocating(py, &input)
 }
 
 pub(super) fn urlsafe_b64decode_into(
@@ -88,7 +88,7 @@ pub(super) fn urlsafe_b64decode_into(
     padded: bool,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
-    DecodePlan::new(py, &input, DecodeOptions::urlsafe(padded)).execute_into(py, output)
+    PreparedDecoder::new(py, DecodePolicy::urlsafe(padded))?.decode_into(py, &input, output)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -104,6 +104,6 @@ pub(super) fn b64decode_into(
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
     let altchars = parse_altchars(py, altchars, true)?;
-    let options = DecodeOptions::new(altchars, validate, padded, ignorechars, canonical);
-    DecodePlan::new(py, &input, options).execute_into(py, output)
+    let policy = DecodePolicy::new(altchars, validate, padded, ignorechars, canonical);
+    PreparedDecoder::new(py, policy)?.decode_into(py, &input, output)
 }

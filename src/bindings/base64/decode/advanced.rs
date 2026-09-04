@@ -5,12 +5,13 @@ use super::lenient::symbols::{
     AlphanumericPrefix, TranslateBytes, select_alphanumeric_prefix, select_translate_bytes,
 };
 use crate::base64::{Base64Error, decode_layout, decode_unpadded_layout};
+use crate::bindings::base64::PythonSemantics;
 use crate::bindings::base64::STANDARD_ALPHABET;
 use crate::bindings::base64::decode::fallback::decoding_error;
 use crate::bindings::base64::decode::output::BytesWriter;
-use crate::bindings::base64::decode::plan::DecodeOptions;
+use crate::bindings::base64::decode::policy::{ErrorWrites, Padding, PreparedPolicy, Validation};
 use crate::bindings::base64::output_too_small;
-use crate::bindings::buffer::{BytesLike, contiguous_bytes_like, with_bytearray};
+use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
@@ -75,8 +76,8 @@ impl Translation {
 pub(super) struct AdvancedDecoder {
     pub(super) table: [u8; 256],
     pub(super) ignored: [bool; 256],
-    pub(super) strict_mode: bool,
-    pub(super) padded: bool,
+    pub(super) validation: Validation,
+    pub(super) padding: Padding,
     pub(super) canonical: bool,
     pub(super) alphanumeric_prefix: AlphanumericPrefix,
     pub(super) strict_specials: StrictSpecials,
@@ -85,31 +86,15 @@ pub(super) struct AdvancedDecoder {
 }
 
 impl AdvancedDecoder {
-    pub(super) fn new(py: Python<'_>, options: DecodeOptions<'_, '_>) -> PyResult<Self> {
-        let DecodeOptions {
-            altchars,
-            padded,
-            ignorechars,
-            canonical,
-            ..
-        } = options;
-        let mut ignored = [false; 256];
-        if let Some(ignorechars) = ignorechars {
-            let ignorechars = contiguous_bytes_like(py, ignorechars, "ignorechars")?;
-            unsafe {
-                ignorechars.with_bytes(|bytes| {
-                    for &byte in bytes {
-                        ignored[usize::from(byte)] = true;
-                    }
-                })
-            };
-        }
+    pub(super) fn new(policy: &PreparedPolicy) -> Self {
+        let altchars = policy.altchars;
+        let ignored = policy.ignored.as_deref().copied().unwrap_or([false; 256]);
 
         let mut table = [64; 256];
         for (value, &byte) in STANDARD_ALPHABET[..62].iter().enumerate() {
             table[usize::from(byte)] = value as u8;
         }
-        let custom_alphabet = altchars.is_some() && ignorechars.is_some();
+        let custom_alphabet = altchars.is_some() && policy.ignorechars_specified;
         if !custom_alphabet {
             table[usize::from(b'+')] = 62;
             table[usize::from(b'/')] = 63;
@@ -123,20 +108,20 @@ impl AdvancedDecoder {
             }
         }
 
-        let strict_specials = StrictSpecials::new(&table, &ignored, padded);
+        let strict_specials = StrictSpecials::new(&table, &ignored, policy.padding.is_padded());
         let strict_forbidden = StrictSpecials::forbidden(&table, &ignored);
         let translation = Translation::new(&table);
-        Ok(Self {
+        Self {
             table,
             ignored,
-            strict_mode: options.strict_mode(),
-            padded,
-            canonical,
+            validation: policy.validation,
+            padding: policy.padding,
+            canonical: policy.canonical,
             alphanumeric_prefix: select_alphanumeric_prefix(),
             strict_specials,
             strict_forbidden,
             translation,
-        })
+        }
     }
 
     pub(super) fn preserves_alphanumeric(&self) -> bool {
@@ -239,30 +224,24 @@ fn translated_strict_decoded_len(
 }
 
 pub(super) fn decode_advanced_strict_into(
-    py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: [u8; 2],
-    padded: bool,
-    transactional_errors: bool,
+    decoder: &AdvancedDecoder,
+    error_writes: ErrorWrites,
 ) -> PyResult<Result<usize, Base64Error>> {
     if let Some(input) = input.snapshot_for_output(output)? {
         return decode_advanced_strict_into(
-            py,
             &BytesLike::OwnedVec(input),
             output,
             altchars,
-            padded,
-            transactional_errors,
+            decoder,
+            error_writes,
         );
     }
-    let decoder = AdvancedDecoder::new(
-        py,
-        DecodeOptions::new(Some(altchars), Some(true), padded, None, false),
-    )?;
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            if transactional_errors {
+            if error_writes.transactional() {
                 let Some(required) = decoder.decoded_len(input, false) else {
                     return Err(Base64Error::InvalidInput);
                 };
@@ -274,7 +253,8 @@ pub(super) fn decode_advanced_strict_into(
                 return Ok(written);
             }
 
-            let required = translated_strict_decoded_len(input, altchars, padded)?;
+            let required =
+                translated_strict_decoded_len(input, altchars, decoder.padding.is_padded())?;
             if provided < required {
                 return Err(Base64Error::OutputTooSmall { required, provided });
             }
@@ -288,14 +268,14 @@ pub(super) fn decode_advanced_strict_into(
 pub(in crate::bindings::base64::decode) fn decode_advanced<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
-    options: DecodeOptions<'_, '_>,
+    decoder: &AdvancedDecoder,
+    semantics: PythonSemantics,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced(py, &BytesLike::OwnedVec(input), options);
+        return decode_advanced(py, &BytesLike::OwnedVec(input), decoder, semantics);
     }
-    let decoder = AdvancedDecoder::new(py, options)?;
-    let continue_after_padding = super::lenient::continues_after_padding(py);
+    let continue_after_padding = semantics.continues_after_padding;
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -340,14 +320,14 @@ pub(in crate::bindings::base64::decode) fn decode_advanced_into(
     py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
-    options: DecodeOptions<'_, '_>,
+    decoder: &AdvancedDecoder,
+    semantics: PythonSemantics,
 ) -> PyResult<usize> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_advanced_into(py, &BytesLike::OwnedVec(input), output, options);
+        return decode_advanced_into(py, &BytesLike::OwnedVec(input), output, decoder, semantics);
     }
-    let decoder = AdvancedDecoder::new(py, options)?;
-    let continue_after_padding = super::lenient::continues_after_padding(py);
+    let continue_after_padding = semantics.continues_after_padding;
     if let Some(input) = input.snapshot_for_output(output)? {
         return with_bytearray(output, || unsafe {
             decode_advanced_slice_into(
@@ -355,21 +335,14 @@ pub(in crate::bindings::base64::decode) fn decode_advanced_into(
                 &input,
                 bytearray_data(output.as_ptr()),
                 bytearray_size(output.as_ptr()),
-                &decoder,
+                decoder,
                 continue_after_padding,
             )
         });
     }
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            decode_advanced_slice_into(
-                py,
-                input,
-                output,
-                provided,
-                &decoder,
-                continue_after_padding,
-            )
+            decode_advanced_slice_into(py, input, output, provided, decoder, continue_after_padding)
         })
     }
 }

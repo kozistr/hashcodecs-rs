@@ -26,6 +26,7 @@ pub(in crate::bindings::base64::decode) unsafe fn alphanumeric_prefix_scalar(
         .unwrap_or(input.len())
 }
 
+#[cfg(any(not(target_arch = "aarch64"), test))]
 pub(in crate::bindings::base64::decode) unsafe fn symbol_prefix_scalar(
     input: &[u8],
     altchars: Option<[u8; 2]>,

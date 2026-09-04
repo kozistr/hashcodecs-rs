@@ -89,6 +89,8 @@ python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 512 768
 Add `--memoryview-input` to wrap every matrix input in an exact memoryview. This mode compares independent views
 against the matching one-item loops and reusable-output paths.
 
+[![Python Base64 memoryview batch throughput](docs/benchmarks/base64-python-batch-memoryview.svg)](docs/benchmarks/base64-python-batch-memoryview.svg)
+
 ```sh
 python benchmarks/python_base64_batch.py --item-sizes 1048576 --batch-sizes 8 --memoryview-input --decode-only
 ```

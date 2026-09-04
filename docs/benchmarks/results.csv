@@ -485,6 +485,66 @@ Large Python Base64 batches,1 MiB items,4,reusable decode,21.07
 Large Python Base64 batches,1 MiB items,8,reusable decode,19.16
 Large Python Base64 batches,1 MiB items,16,reusable decode,12.20
 Large Python Base64 batches,1 MiB items,32,reusable decode,10.60
+Python Base64 memoryview batch throughput,16 B items,8,returned encode,0.34
+Python Base64 memoryview batch throughput,16 B items,64,returned encode,0.40
+Python Base64 memoryview batch throughput,16 B items,"1,024",returned encode,0.39
+Python Base64 memoryview batch throughput,16 B items,8,reusable encode,0.20
+Python Base64 memoryview batch throughput,16 B items,64,reusable encode,0.22
+Python Base64 memoryview batch throughput,16 B items,"1,024",reusable encode,0.22
+Python Base64 memoryview batch throughput,16 B items,8,returned decode,0.30
+Python Base64 memoryview batch throughput,16 B items,64,returned decode,0.34
+Python Base64 memoryview batch throughput,16 B items,"1,024",returned decode,0.34
+Python Base64 memoryview batch throughput,16 B items,8,reusable decode,0.16
+Python Base64 memoryview batch throughput,16 B items,64,reusable decode,0.19
+Python Base64 memoryview batch throughput,16 B items,"1,024",reusable decode,0.18
+Python Base64 memoryview batch throughput,256 B items,8,returned encode,4.83
+Python Base64 memoryview batch throughput,256 B items,64,returned encode,5.00
+Python Base64 memoryview batch throughput,256 B items,"1,024",returned encode,4.85
+Python Base64 memoryview batch throughput,256 B items,8,reusable encode,2.70
+Python Base64 memoryview batch throughput,256 B items,64,reusable encode,3.08
+Python Base64 memoryview batch throughput,256 B items,"1,024",reusable encode,2.83
+Python Base64 memoryview batch throughput,256 B items,8,returned decode,4.43
+Python Base64 memoryview batch throughput,256 B items,64,returned decode,4.63
+Python Base64 memoryview batch throughput,256 B items,"1,024",returned decode,4.56
+Python Base64 memoryview batch throughput,256 B items,8,reusable decode,2.48
+Python Base64 memoryview batch throughput,256 B items,64,reusable decode,2.91
+Python Base64 memoryview batch throughput,256 B items,"1,024",reusable decode,2.71
+Python Base64 memoryview batch throughput,4 KiB items,8,returned encode,13.89
+Python Base64 memoryview batch throughput,4 KiB items,64,returned encode,16.69
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned encode,1.99
+Python Base64 memoryview batch throughput,4 KiB items,8,reusable encode,20.90
+Python Base64 memoryview batch throughput,4 KiB items,64,reusable encode,21.27
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable encode,14.38
+Python Base64 memoryview batch throughput,4 KiB items,8,returned decode,18.71
+Python Base64 memoryview batch throughput,4 KiB items,64,returned decode,18.14
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned decode,9.91
+Python Base64 memoryview batch throughput,4 KiB items,8,reusable decode,16.64
+Python Base64 memoryview batch throughput,4 KiB items,64,reusable decode,17.67
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable decode,13.92
+Python Base64 memoryview batch throughput,1 MiB items,1,returned encode,3.62
+Python Base64 memoryview batch throughput,1 MiB items,2,returned encode,3.85
+Python Base64 memoryview batch throughput,1 MiB items,4,returned encode,3.61
+Python Base64 memoryview batch throughput,1 MiB items,8,returned encode,3.04
+Python Base64 memoryview batch throughput,1 MiB items,16,returned encode,2.91
+Python Base64 memoryview batch throughput,1 MiB items,32,returned encode,2.80
+Python Base64 memoryview batch throughput,1 MiB items,1,reusable encode,39.59
+Python Base64 memoryview batch throughput,1 MiB items,2,reusable encode,22.90
+Python Base64 memoryview batch throughput,1 MiB items,4,reusable encode,20.18
+Python Base64 memoryview batch throughput,1 MiB items,8,reusable encode,19.59
+Python Base64 memoryview batch throughput,1 MiB items,16,reusable encode,13.44
+Python Base64 memoryview batch throughput,1 MiB items,32,reusable encode,11.00
+Python Base64 memoryview batch throughput,1 MiB items,1,returned decode,4.09
+Python Base64 memoryview batch throughput,1 MiB items,2,returned decode,4.36
+Python Base64 memoryview batch throughput,1 MiB items,4,returned decode,4.34
+Python Base64 memoryview batch throughput,1 MiB items,8,returned decode,3.73
+Python Base64 memoryview batch throughput,1 MiB items,16,returned decode,3.54
+Python Base64 memoryview batch throughput,1 MiB items,32,returned decode,3.24
+Python Base64 memoryview batch throughput,1 MiB items,1,reusable decode,29.12
+Python Base64 memoryview batch throughput,1 MiB items,2,reusable decode,22.12
+Python Base64 memoryview batch throughput,1 MiB items,4,reusable decode,20.94
+Python Base64 memoryview batch throughput,1 MiB items,8,reusable decode,18.76
+Python Base64 memoryview batch throughput,1 MiB items,16,reusable decode,12.37
+Python Base64 memoryview batch throughput,1 MiB items,32,reusable decode,10.59
 Mutable Python Base64 inputs,Encode,1 KiB,returned bytes,10.40
 Mutable Python Base64 inputs,Encode,4 KiB,returned bytes,22.98
 Mutable Python Base64 inputs,Encode,1 MiB,returned bytes,3.56

@@ -1,7 +1,7 @@
 use crate::base64::{DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout};
 use crate::bindings::base64::STANDARD_ALPHABET;
 
-use super::config::Translation;
+use super::Translation;
 
 pub(super) const ADVANCED_STAGING_CAPACITY: usize = 4096;
 

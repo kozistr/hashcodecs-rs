@@ -14,12 +14,15 @@ use crate::backend::{Capabilities, CpuFeature};
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod avx2;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod avx2_batch;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod avx512;
 mod scalar;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86;
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use x86::{avx2, avx2_batch, avx512, ssse3};
+mod ssse3;
 
 use super::primitives::*;
 

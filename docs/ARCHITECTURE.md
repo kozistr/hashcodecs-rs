@@ -26,7 +26,7 @@ The scalar implementations set the portability and correctness baseline. Runtime
 | `src/base64.rs`, `src/base64/` | Base64 public API, operations, alphabets, output buffers, runtime dispatch, and kernels. |
 | `src/murmur3.rs`, `src/murmur3/` | MurmurHash3 public API, variants, incremental buffers, and dispatch. |
 | `src/xxhash.rs`, `src/xxhash/` | XXH3 public API, length-specific formulas, long-input accumulation, batching, and kernels. |
-| `src/bindings/mod.rs` | CPython extension composition root for public functions and classes. |
+| `src/bindings.rs` | CPython extension composition root for public functions and classes. |
 | `src/bindings/arguments.rs`, `objects.rs`, `runtime.rs` | Shared CPython parsing, object access, function registration, and GIL policy. |
 | `src/bindings/{base64,murmur3,xxhash}/` | Algorithm-specific CPython adapters. |
 | `hashcodecs/` | Typed Python facade and public module organization. |
@@ -42,7 +42,7 @@ The crate groups code into layered modules within one crate:
 - dispatch modules depend on the shared CPU capability snapshot and select interchangeable kernels;
 - architecture-specific kernels have no dependency on Python bindings;
 - algorithm-specific Python adapters depend on the Rust APIs and shared binding policies;
-- `bindings/mod.rs` is a composition root and contains no parsing, buffer, or execution policy.
+- `bindings.rs` is a composition root and contains no parsing, buffer, or execution policy.
 
 Shared state machines own their invariants. For example, `murmur3/block_buffer.rs` keeps the pending block and its
 length together, so each incremental hasher cannot represent an inconsistent tail. At the CPython boundary,
@@ -113,7 +113,7 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 
 `one_shot.rs` selects the input-length class. `short_inputs.rs` contains the formulas for 0 to 240 bytes.
 `long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
-`long_inputs/aarch64.rs` and `long_inputs/x86/` contain the ISA kernels.
+`long_inputs/aarch64.rs`, `long_inputs/avx2.rs`, `long_inputs/avx512.rs`, and `long_inputs/ssse3.rs` contain the ISA kernels.
 The scalar long-input flow and backend selection use the same module. These kernels handle inputs longer than 240 bytes.
 
 The AVX2 one-shot kernel splits each full 1,024-byte block across four accumulator chains. It also splits tails

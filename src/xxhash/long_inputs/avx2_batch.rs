@@ -5,8 +5,8 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::super::{LongInput, Secret, build_long_input_schedule};
 use super::avx2::{accumulate_registers, finish, initial, scramble_registers};
+use super::{LongInput, Secret, build_long_input_schedule};
 
 macro_rules! define_accumulate_batch {
     ($name:ident, $size:literal, $(($acc:ident, $index:literal)),+ $(,)?) => {

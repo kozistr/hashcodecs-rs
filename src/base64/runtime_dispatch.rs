@@ -11,6 +11,12 @@ use super::encode as encode_backend;
 use super::encode::aarch64 as encode_aarch64;
 use super::{Base64Error, DecodeAlphabet};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ErrorWritePolicy {
+    Partial,
+    ValidatedBlocksOnly,
+}
+
 #[inline]
 pub(super) unsafe fn encode_with_runtime_backend(
     input: &[u8],
@@ -36,7 +42,7 @@ pub(super) unsafe fn decode_with_runtime_backend(
     output: *mut u8,
     alphabet: DecodeAlphabet,
     output_has_store_slack: bool,
-    transactional_errors: bool,
+    error_write_policy: ErrorWritePolicy,
 ) -> Result<(usize, usize), Base64Error> {
     unsafe {
         decode_with_backend_ptr_mode(
@@ -45,7 +51,7 @@ pub(super) unsafe fn decode_with_runtime_backend(
             backend::selected_backend().backend,
             alphabet,
             output_has_store_slack,
-            transactional_errors,
+            error_write_policy,
         )
     }
 }
@@ -165,7 +171,7 @@ pub(super) unsafe fn decode_with_backend_ptr(
             backend,
             alphabet,
             output_has_store_slack,
-            false,
+            ErrorWritePolicy::Partial,
         )
     }
 }
@@ -177,11 +183,11 @@ unsafe fn decode_with_backend_ptr_mode(
     backend: Backend,
     alphabet: DecodeAlphabet,
     output_has_store_slack: bool,
-    transactional_errors: bool,
+    error_write_policy: ErrorWritePolicy,
 ) -> Result<(usize, usize), Base64Error> {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        let _ = transactional_errors;
+        let _ = error_write_policy;
         unsafe { decode_x86_alphabet(input, output, backend, alphabet, output_has_store_slack) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -190,16 +196,16 @@ unsafe fn decode_with_backend_ptr_mode(
         if backend == Backend::Neon {
             let _ = output_has_store_slack;
             return unsafe {
-                if transactional_errors {
+                if error_write_policy == ErrorWritePolicy::ValidatedBlocksOnly {
                     match alphabet {
                         DecodeAlphabet::Standard => {
-                            decode_aarch64::decode_transactional::<false, false>(input, output)
+                            decode_aarch64::decode_validated_blocks::<false, false>(input, output)
                         }
                         DecodeAlphabet::UrlSafe => {
-                            decode_aarch64::decode_transactional::<true, false>(input, output)
+                            decode_aarch64::decode_validated_blocks::<true, false>(input, output)
                         }
                         DecodeAlphabet::Mixed => {
-                            decode_aarch64::decode_transactional::<false, true>(input, output)
+                            decode_aarch64::decode_validated_blocks::<false, true>(input, output)
                         }
                     }
                 } else {
@@ -223,7 +229,7 @@ unsafe fn decode_with_backend_ptr_mode(
             backend,
             alphabet,
             output_has_store_slack,
-            transactional_errors,
+            error_write_policy,
         );
         Ok((0, 0))
     }

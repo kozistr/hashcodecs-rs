@@ -16,15 +16,14 @@ use self::encode::{
 };
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 use super::objects::{bytearray_data, bytearray_size, bytes_data_mut};
-use super::runtime::{METHOD_FLAGS, add_methods, return_function_result};
+use super::runtime::{add_methods, return_function_result};
 use crate::base64::STANDARD_ALPHABET;
 
 mod batch;
-mod callbacks;
+pub(in crate::bindings) mod callbacks;
 mod decode;
 mod encode;
 mod methods;
-mod schema;
 
 static PYTHON_SEMANTICS: OnceLock<PythonSemantics> = OnceLock::new();
 
@@ -54,7 +53,7 @@ impl PythonSemantics {
         } else {
             BinasciiApi::Legacy
         };
-        let python_315 = minor_version >= (3, 15);
+        let urlsafe_315 = minor_version >= (3, 15);
         let continues_after_padding = match version {
             (3, 13, patch) => patch >= 13,
             (3, 14, patch) => patch >= 4,
@@ -63,8 +62,8 @@ impl PythonSemantics {
         Self {
             version,
             binascii_api,
-            urlsafe_exclusive_alphabet: python_315,
-            warns_legacy_altchars: python_315,
+            urlsafe_exclusive_alphabet: urlsafe_315,
+            warns_legacy_altchars: minor_version >= (3, 15),
             continues_after_padding,
         }
     }

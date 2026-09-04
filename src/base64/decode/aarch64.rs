@@ -28,7 +28,7 @@ pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
 }
 
 #[target_feature(enable = "neon")]
-pub(crate) unsafe fn decode_transactional<const URLSAFE: bool, const MIXED: bool>(
+pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
@@ -37,7 +37,7 @@ pub(crate) unsafe fn decode_transactional<const URLSAFE: bool, const MIXED: bool
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONAL_ERRORS: bool>(
+unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BLOCKS_ONLY: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
@@ -45,7 +45,7 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const TRANSACTIONA
     let mut source = 0;
     let mut destination = 0;
 
-    if TRANSACTIONAL_ERRORS {
+    if VALIDATED_BLOCKS_ONLY {
         while source + 64 <= input.len() {
             let (decoded, errors) =
                 unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };

@@ -33,9 +33,9 @@ pub(crate) use decode::DecodeLayout;
 pub(crate) use decode::{
     decode_layout, decode_to_ptr_with_layout, decode_to_ptr_with_unpadded_layout,
     decode_to_slice_with_layout_and_alphabet,
-    decode_to_slice_with_layout_and_alphabet_transactional,
+    decode_to_slice_with_layout_and_alphabet_validated_blocks,
     decode_to_slice_with_unpadded_layout_and_alphabet,
-    decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
+    decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,
 };
 #[cfg(any(feature = "python", all(test, target_arch = "aarch64"), kani))]
 pub(crate) use encode::encoded_len;

@@ -12,9 +12,9 @@ use super::{decode_configured, decode_configured_strict_into};
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
-    decode_to_slice_with_layout_and_alphabet_transactional,
+    decode_to_slice_with_layout_and_alphabet_validated_blocks,
     decode_to_slice_with_unpadded_layout_and_alphabet,
-    decode_to_slice_with_unpadded_layout_and_alphabet_transactional, decode_unpadded_layout,
+    decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,
 };
 use crate::bindings::base64::PythonSemantics;
 use crate::bindings::buffer::{BytesLike, with_bytearray};
@@ -158,7 +158,7 @@ fn decode_strict_with_layout_to_ptr(
     }
     let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
     if error_writes.transactional() {
-        decode_to_slice_with_layout_and_alphabet_transactional(input, output, layout, alphabet)?;
+        decode_to_slice_with_layout_and_alphabet_validated_blocks(input, output, layout, alphabet)?;
     } else {
         decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
     }
@@ -271,7 +271,7 @@ fn decode_unpadded_with_layout_to_ptr(
     }
     let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
     if error_writes.transactional() {
-        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+        decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
             input, output, layout, alphabet,
         )?;
     } else {

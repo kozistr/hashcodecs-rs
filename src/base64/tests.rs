@@ -839,16 +839,16 @@ fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
             decode_to_slice_with_unpadded_layout_and_alphabet(&encoded, output, layout, alphabet)
                 .unwrap();
             assert_eq!(output, input, "length={length} alphabet={alphabet:?}");
-            let mut transactional = vec![CANARY; layout.output_len()];
-            decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+            let mut validated_blocks = vec![CANARY; layout.output_len()];
+            decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
                 &encoded,
-                &mut transactional,
+                &mut validated_blocks,
                 layout,
                 alphabet,
             )
             .unwrap();
             assert_eq!(
-                transactional, input,
+                validated_blocks, input,
                 "length={length} alphabet={alphabet:?}"
             );
             let mut direct = vec![CANARY; layout.output_len()];
@@ -903,7 +903,7 @@ fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
                     );
                     assert_eq!(output, [CANARY; 2]);
                     assert_eq!(
-                        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+                        decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
                             &encoded,
                             &mut output[..layout.output_len()],
                             layout,
@@ -925,7 +925,7 @@ fn unpadded_decoder_propagates_invalid_prefix_errors() {
     let mut output = [0xa5; 4];
 
     assert_eq!(
-        decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+        decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
             encoded,
             &mut output,
             layout,
@@ -937,7 +937,7 @@ fn unpadded_decoder_propagates_invalid_prefix_errors() {
 }
 
 #[test]
-fn transactional_decoder_matches_regular_decoder() {
+fn validated_blocks_decoder_matches_regular_decoder() {
     let input: Vec<u8> = (0..96)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
@@ -945,7 +945,7 @@ fn transactional_decoder_matches_regular_decoder() {
     let layout = decode_layout(encoded.as_bytes()).unwrap();
     let mut decoded = vec![0xa5; layout.output_len()];
 
-    decode_to_slice_with_layout_and_alphabet_transactional(
+    decode_to_slice_with_layout_and_alphabet_validated_blocks(
         encoded.as_bytes(),
         &mut decoded,
         layout,

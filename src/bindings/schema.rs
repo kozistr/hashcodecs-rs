@@ -4,9 +4,9 @@ use std::ffi::CStr;
 use pyo3::ffi;
 use pyo3::prelude::*;
 
-use super::python_at_least;
 use crate::bindings::arguments::parse_raw_arguments;
-use crate::bindings::runtime::catch_unwind_callback;
+use crate::bindings::base64::python_at_least;
+use crate::bindings::runtime::{METHOD_FLAGS, catch_unwind_callback};
 
 pub(super) type Callback = unsafe extern "C" fn(
     *mut ffi::PyObject,
@@ -42,10 +42,15 @@ impl Argument {
     }
 
     #[inline(always)]
+    pub(super) const fn as_ptr(self) -> *mut ffi::PyObject {
+        self.value
+    }
+
+    #[inline(always)]
     pub(super) fn raw<'a, 'py>(&'a self, py: Python<'py>) -> &'a Bound<'py, PyAny> {
         assert!(
             !self.value.is_null(),
-            "required Base64 argument must be present"
+            "required binding argument must be present"
         );
         unsafe { Bound::ref_from_ptr(py, &self.value) }
     }
@@ -79,7 +84,7 @@ impl Argument {
                     before
                 }
             }
-            _ => unreachable!("Base64 argument does not have a boolean default"),
+            _ => unreachable!("binding argument does not have a boolean default"),
         }
     }
 
@@ -110,7 +115,7 @@ impl Argument {
         if self.value.is_null() {
             return match self.default {
                 DefaultValue::I128(value) => Ok(value),
-                _ => unreachable!("Base64 argument does not have an integer default"),
+                _ => unreachable!("binding argument does not have an integer default"),
             };
         }
         self.raw(py).extract::<i128>()
@@ -184,7 +189,7 @@ impl<const N: usize> Binding<N> {
             ml_meth: ffi::PyMethodDefPointer {
                 PyCFunctionFastWithKeywords: self.callback,
             },
-            ml_flags: super::METHOD_FLAGS,
+            ml_flags: METHOD_FLAGS,
             ml_doc: self.documentation.select(version).as_ptr(),
         };
         unsafe { methods.add(*method_count).write(method) };
@@ -196,7 +201,7 @@ macro_rules! binding {
     (
         $constant:ident: $count:literal {
             name: $name:expr,
-            callback: $callback:ident,
+            callback: $callback:path,
             parameters: [$($parameter:expr),* $(,)?],
             max_positional: $max_positional:expr,
             required: $required:expr,
@@ -206,7 +211,7 @@ macro_rules! binding {
     ) => {
         const $constant: Binding<$count> = Binding {
             name: $name,
-            callback: super::callbacks::$callback,
+            callback: $callback,
             parser: Parser {
                 parameters: [$($parameter),*],
                 max_positional: $max_positional,
@@ -220,4 +225,4 @@ macro_rules! binding {
     };
 }
 
-include!("../../../generated/rust/base64_schema.rs");
+include!("../../generated/rust/binding_schema.rs");

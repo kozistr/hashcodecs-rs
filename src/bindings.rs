@@ -9,6 +9,7 @@ mod buffer;
 mod murmur3;
 mod objects;
 mod runtime;
+mod schema;
 mod xxhash;
 
 #[pymodule(name = "_hashcodecs")]

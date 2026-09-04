@@ -33,8 +33,8 @@ pub(in crate::bindings::base64) fn translate_bytes(
     source1: u8,
     target1: u8,
 ) {
-    let translate = lenient::symbols::select_translate_bytes();
-    unsafe { translate(input, source0, target0, source1, target1) };
+    let kernels = lenient::symbols::decode_byte_kernels();
+    unsafe { (kernels.translate)(input, source0, target0, source1, target1) };
 }
 
 pub(super) fn b64decode<'py>(

@@ -5,13 +5,13 @@ use super::*;
 
 macro_rules! callback {
     ($name:ident, |$py:ident; $($parameter:ident),+| $body:block) => {
-        pub(super) unsafe extern "C" fn $name(
+        pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,
             nargs: isize,
             keywords: *mut ffi::PyObject,
         ) -> *mut ffi::PyObject {
-            unsafe { schema::$name(args, nargs, keywords, |$py, $($parameter),+| $body) }
+            unsafe { crate::bindings::schema::base64::$name(args, nargs, keywords, |$py, $($parameter),+| $body) }
         }
     };
 }

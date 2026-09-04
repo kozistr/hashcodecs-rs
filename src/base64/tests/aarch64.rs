@@ -1,7 +1,7 @@
 use super::super::Base64Error;
 use super::super::decode::aarch64::{
     DECODE_ERROR_CHECK_INTERVAL, decode as decode_aarch64,
-    decode_transactional as decode_aarch64_transactional,
+    decode_validated_blocks as decode_aarch64_validated_blocks,
 };
 use super::super::encode::aarch64::encode as encode_aarch64;
 
@@ -533,7 +533,7 @@ fn decode_checkpoint_scalar_and_padding_handoffs_are_exact() {
     invalid_scalar_checkpoint_tail::<false, true>();
 }
 
-fn transactional_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
+fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
     const ENCODED_LEN: usize = 3 * 64;
     for invalid_index in [0, 63, 64, 127, 128, ENCODED_LEN - 1] {
         for input_offset in [0, 1, 7, 15] {
@@ -548,7 +548,7 @@ fn transactional_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
             let output_len = decoded_len(ENCODED_LEN);
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
             let result = unsafe {
-                decode_aarch64_transactional::<URLSAFE, MIXED>(
+                decode_aarch64_validated_blocks::<URLSAFE, MIXED>(
                     input,
                     guarded_output.as_mut_ptr().add(output_start),
                 )
@@ -582,8 +582,8 @@ fn transactional_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn transactional_decode_never_stores_the_failing_block() {
-    transactional_invalid_blocks::<false, false>();
-    transactional_invalid_blocks::<true, false>();
-    transactional_invalid_blocks::<false, true>();
+fn validated_blocks_decode_never_stores_the_failing_block() {
+    validated_invalid_blocks::<false, false>();
+    validated_invalid_blocks::<true, false>();
+    validated_invalid_blocks::<false, true>();
 }

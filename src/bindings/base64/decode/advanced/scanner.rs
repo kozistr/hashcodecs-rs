@@ -1,6 +1,7 @@
 use super::staging::{StagingValidator, StagingWriter};
 use super::{AdvancedDecoder, StrictSpecials, Translation};
 use crate::bindings::base64::decode::lenient::decoded_symbol_len;
+use crate::bindings::base64::decode::policy::Validation;
 
 trait ScanSink: Sized {
     fn set_translation(&mut self, translation: Option<Translation>);
@@ -87,7 +88,7 @@ impl ScanSink for WriteSink<'_> {
 impl AdvancedDecoder {
     #[cfg(test)]
     pub(super) fn validate_strict(&self, input: &[u8]) -> Option<usize> {
-        debug_assert!(self.strict_mode);
+        debug_assert_eq!(self.validation, Validation::Strict);
         self.decoded_len(input, false)
     }
 
@@ -97,7 +98,7 @@ impl AdvancedDecoder {
         input: &[u8],
         output: *mut u8,
     ) -> Option<usize> {
-        debug_assert!(self.strict_mode);
+        debug_assert_eq!(self.validation, Validation::Strict);
         unsafe { self.decode_checked_to_ptr(input, output, false) }
     }
 
@@ -142,7 +143,7 @@ impl AdvancedDecoder {
         mut sink: S,
         continue_after_padding: bool,
     ) -> Option<usize> {
-        if self.strict_mode
+        if self.validation == Validation::Strict
             && !matches!(self.strict_specials, StrictSpecials::Many)
             && !matches!(self.strict_forbidden, StrictSpecials::Many)
         {
@@ -160,14 +161,14 @@ impl AdvancedDecoder {
         let mut leftchar = 0;
 
         while source < input.len() {
-            if preserves_alphanumeric && (!self.strict_mode || !saw_padding) {
+            if preserves_alphanumeric && (self.validation == Validation::Lenient || !saw_padding) {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
                     if CHECKED {
                         symbols += run;
                     }
-                    if self.strict_mode {
+                    if self.validation == Validation::Strict {
                         if CHECKED {
                             last_value = self.table[usize::from(input[source + run - 1])];
                         }
@@ -194,7 +195,7 @@ impl AdvancedDecoder {
             source += 1;
             let value = self.table[usize::from(byte)];
 
-            if self.strict_mode {
+            if self.validation == Validation::Strict {
                 if value < 64 {
                     if CHECKED && saw_padding {
                         return None;
@@ -205,7 +206,7 @@ impl AdvancedDecoder {
                         last_value = value;
                     }
                 } else if byte == b'=' && !equals_is_data {
-                    if CHECKED && !self.padded {
+                    if CHECKED && !self.padding.is_padded() {
                         return None;
                     }
                     saw_padding = true;
@@ -218,7 +219,7 @@ impl AdvancedDecoder {
                 continue;
             }
 
-            if self.padded && byte == b'=' && !equals_is_data {
+            if self.padding.is_padded() && byte == b'=' && !equals_is_data {
                 padding += 1;
                 if CHECKED
                     && self.canonical
@@ -253,12 +254,12 @@ impl AdvancedDecoder {
             }
         }
 
-        if self.strict_mode {
+        if self.validation == Validation::Strict {
             return self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value);
         }
         if CHECKED
             && (quad_pos == 1
-                || (self.padded && quad_pos != 0 && quad_pos + padding < 4)
+                || (self.padding.is_padded() && quad_pos != 0 && quad_pos + padding < 4)
                 || (self.canonical && matches!(quad_pos, 2 | 3) && leftchar != 0))
         {
             None
@@ -273,7 +274,7 @@ impl AdvancedDecoder {
         mut sink: S,
     ) -> Option<usize> {
         sink.set_translation(self.translation);
-        let equals_is_padding = self.padded && self.table[usize::from(b'=')] >= 64;
+        let equals_is_padding = self.padding.is_padded() && self.table[usize::from(b'=')] >= 64;
         let data_end = if equals_is_padding {
             memchr::memchr(b'=', input).unwrap_or(input.len())
         } else {
@@ -338,7 +339,7 @@ impl AdvancedDecoder {
                 3 => 1,
                 _ => return None,
             };
-            if self.padded && padding != expected_padding {
+            if self.padding.is_padded() && padding != expected_padding {
                 return None;
             }
             if self.canonical

@@ -6,15 +6,15 @@ use super::super::lenient::symbols::{
 };
 use super::super::lenient::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
-    lenient_decoded_len, version_continues_after_padding,
+    lenient_decoded_len,
 };
-use super::super::plan::DecodeOptions;
+use super::super::policy::{DecodePolicy, ErrorWrites, Padding, PreparedDecoder, Validation};
 use super::{
     ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StagingValidator, StagingWriter, StrictSpecials,
-    Translation, decode_advanced_into, decode_advanced_strict_into,
+    Translation, decode_advanced_into, decode_advanced_strict_into as decode_prepared_strict_into,
 };
 use crate::base64::Base64Error;
-use crate::bindings::base64::STANDARD_ALPHABET;
+use crate::bindings::base64::{PythonSemantics, STANDARD_ALPHABET};
 use crate::bindings::buffer::BytesLike;
 
 fn advanced_decoder(
@@ -31,14 +31,43 @@ fn advanced_decoder(
     AdvancedDecoder {
         table,
         ignored,
-        strict_mode,
-        padded,
+        validation: if strict_mode {
+            Validation::Strict
+        } else {
+            Validation::Lenient
+        },
+        padding: Padding::new(padded),
         canonical,
         alphanumeric_prefix: alphanumeric_prefix_scalar,
         strict_specials: StrictSpecials::new(&table, &ignored, padded),
         strict_forbidden: StrictSpecials::forbidden(&table, &ignored),
         translation: Translation::new(&table),
     }
+}
+
+fn decode_advanced_strict_into(
+    py: Python<'_>,
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: [u8; 2],
+    padded: bool,
+    transactional_errors: bool,
+) -> PyResult<Result<usize, Base64Error>> {
+    let prepared = PreparedDecoder::new(
+        py,
+        DecodePolicy::new(Some(altchars), Some(true), padded, None, false),
+    )?;
+    decode_prepared_strict_into(
+        input,
+        output,
+        altchars,
+        prepared.strict_custom(),
+        if transactional_errors {
+            ErrorWrites::PreserveOutput
+        } else {
+            ErrorWrites::MayWrite
+        },
+    )
 }
 
 #[test]
@@ -164,13 +193,13 @@ fn lenient_lengths_cover_padding_policies_and_invalid_tails() {
         Ok(3)
     );
 
-    assert!(!version_continues_after_padding(3, 13, 12));
-    assert!(version_continues_after_padding(3, 13, 13));
-    assert!(!version_continues_after_padding(3, 14, 3));
-    assert!(version_continues_after_padding(3, 14, 4));
-    assert!(!version_continues_after_padding(3, 12, 99));
-    assert!(version_continues_after_padding(3, 15, 0));
-    assert!(version_continues_after_padding(4, 0, 0));
+    assert!(!PythonSemantics::from_version((3, 13, 12)).continues_after_padding);
+    assert!(PythonSemantics::from_version((3, 13, 13)).continues_after_padding);
+    assert!(!PythonSemantics::from_version((3, 14, 3)).continues_after_padding);
+    assert!(PythonSemantics::from_version((3, 14, 4)).continues_after_padding);
+    assert!(!PythonSemantics::from_version((3, 12, 99)).continues_after_padding);
+    assert!(PythonSemantics::from_version((3, 15, 0)).continues_after_padding);
+    assert!(PythonSemantics::from_version((4, 0, 0)).continues_after_padding);
 }
 
 #[test]
@@ -612,12 +641,18 @@ fn advanced_into_snapshots_an_aliasing_bytearray() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
+        let prepared = PreparedDecoder::new(
+            py,
+            DecodePolicy::new(Some(*b"@#"), Some(false), true, None, false),
+        )
+        .unwrap();
         assert_eq!(
             decode_advanced_into(
                 py,
                 &BytesLike::ByteArray(&shared),
                 &shared,
-                DecodeOptions::new(Some(*b"@#"), Some(false), true, None, false),
+                prepared.advanced(),
+                prepared.semantics,
             )
             .unwrap(),
             2

@@ -3,7 +3,8 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyType};
 
-use super::super::{STANDARD_ALPHABET, python_at_least};
+use super::super::{PythonSemantics, STANDARD_ALPHABET};
+use super::policy::{Padding, Validation};
 use super::translate_altchars;
 use crate::bindings::buffer::BytesLike;
 
@@ -21,10 +22,11 @@ pub(super) fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
 #[inline]
 pub(super) fn warn_legacy_altchars(
     py: Python<'_>,
+    semantics: PythonSemantics,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
     ignorechars_specified: bool,
-    strict_mode: bool,
+    validation: Validation,
 ) -> PyResult<()> {
     if ignorechars_specified {
         return Ok(());
@@ -32,7 +34,7 @@ pub(super) fn warn_legacy_altchars(
     let Some(altchars) = altchars else {
         return Ok(());
     };
-    if !python_at_least(py, (3, 15)) {
+    if !semantics.warns_legacy_altchars {
         return Ok(());
     }
     let badchar = unsafe {
@@ -46,6 +48,7 @@ pub(super) fn warn_legacy_altchars(
     let Some(badchar) = badchar else {
         return Ok(());
     };
+    let strict_mode = validation.is_strict();
     let mode = if strict_mode { "True" } else { "False" };
     let outcome = if strict_mode {
         "will be an error"
@@ -69,19 +72,21 @@ pub(super) fn warn_legacy_altchars(
 
 pub(super) fn decode_with_binascii<'py>(
     py: Python<'py>,
+    semantics: PythonSemantics,
     input: &BytesLike<'_, 'py>,
     altchars: Option<[u8; 2]>,
-    strict_mode: bool,
-    padded: bool,
+    validation: Validation,
+    padding: Padding,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
         return decode_with_binascii(
             py,
+            semantics,
             &BytesLike::OwnedVec(input),
             altchars,
-            strict_mode,
-            padded,
+            validation,
+            padding,
         );
     }
     let translated = if let Some(altchars) = altchars {
@@ -100,12 +105,13 @@ pub(super) fn decode_with_binascii<'py>(
     let decode = py
         .import(intern!(py, "binascii"))?
         .getattr(intern!(py, "a2b_base64"))?;
-    let output = if python_at_least(py, (3, 15)) {
+    let strict_mode = validation.is_strict();
+    let output = if semantics.binascii_accepts_padding() {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
-        kwargs.set_item("padded", padded)?;
+        kwargs.set_item("padded", padding.is_padded())?;
         decode.call((data,), Some(&kwargs))?
-    } else if !python_at_least(py, (3, 11)) {
+    } else if !semantics.binascii_accepts_strict_mode() {
         if strict_mode && !strict_base64_310(input) {
             return Err(decoding_error(py, "Non-base64 digit found"));
         }

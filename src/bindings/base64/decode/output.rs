@@ -7,14 +7,14 @@ use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::{STANDARD_ALPHABET, output_too_small, with_output_ptr};
 use super::fallback::{canonical_padding, decode_with_binascii, decoding_error};
-use super::native::{
+use super::plan::{DecodeAttempt, DecodeOptions};
+use super::{
     decode_advanced, decode_advanced_into, decode_strict, decode_strict_into,
     decode_strict_into_with_altchars, decode_strict_with_altchars,
     decode_unpadded_into_with_altchars, decode_unpadded_with_altchars, try_decode_lenient,
     try_decode_lenient_into, try_decode_strict, try_decode_urlsafe_315,
     try_decode_urlsafe_315_into,
 };
-use super::plan::{DecodeAttempt, DecodeOptions};
 use crate::base64::{Base64Error, DecodeAlphabet};
 use crate::bindings::buffer::BytesLike;
 

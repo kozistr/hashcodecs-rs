@@ -1,4 +1,4 @@
-use super::helpers::{is_lenient_symbol, lenient_symbol_count};
+use super::symbols::{is_lenient_symbol, lenient_symbol_count};
 use crate::bindings::base64::STANDARD_ALPHABET;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

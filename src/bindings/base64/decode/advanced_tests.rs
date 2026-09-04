@@ -1,13 +1,12 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::lenient::compat::version_continues_after_padding;
-use super::super::lenient::helpers::{
+use super::super::lenient::symbols::{
     alphanumeric_prefix_scalar, is_lenient_symbol, lenient_symbol_count, translate_bytes_scalar,
 };
 use super::super::lenient::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
-    lenient_decoded_len,
+    lenient_decoded_len, version_continues_after_padding,
 };
 use super::{
     ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StagingValidator, StagingWriter, StrictSpecials,
@@ -78,18 +77,18 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
 
     let valid = vec![b'A'; 97];
     assert_eq!(
-        unsafe { super::super::lenient::helpers::x86::alphanumeric_prefix_sse2(&valid) },
+        unsafe { super::super::lenient::symbols_x86::alphanumeric_prefix_sse2(&valid) },
         97
     );
     let mut interrupted = valid.clone();
     interrupted[47] = b'!';
     assert_eq!(
-        unsafe { super::super::lenient::helpers::x86::alphanumeric_prefix_sse2(&interrupted) },
+        unsafe { super::super::lenient::symbols_x86::alphanumeric_prefix_sse2(&interrupted) },
         47
     );
     assert_eq!(
         unsafe {
-            super::super::lenient::helpers::x86::symbol_count_sse2(&interrupted, Some(*b"@#"))
+            super::super::lenient::symbols_x86::symbol_count_sse2(&interrupted, Some(*b"@#"))
         },
         interrupted
             .iter()
@@ -102,18 +101,18 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
     unsafe { translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/') };
     let mut translated = original.clone();
     unsafe {
-        super::super::lenient::helpers::x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/')
+        super::super::lenient::symbols_x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/')
     };
     assert_eq!(translated, expected);
 
     if std::is_x86_feature_detected!("avx2") {
         assert_eq!(
-            unsafe { super::super::lenient::helpers::x86::alphanumeric_prefix_avx2(&interrupted) },
+            unsafe { super::super::lenient::symbols_x86::alphanumeric_prefix_avx2(&interrupted) },
             47
         );
         assert_eq!(
             unsafe {
-                super::super::lenient::helpers::x86::symbol_count_avx2(&interrupted, Some(*b"@#"))
+                super::super::lenient::symbols_x86::symbol_count_avx2(&interrupted, Some(*b"@#"))
             },
             interrupted
                 .iter()
@@ -124,7 +123,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
         let mut expected = translated.clone();
         unsafe { translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/') };
         unsafe {
-            super::super::lenient::helpers::x86::translate_avx2(
+            super::super::lenient::symbols_x86::translate_avx2(
                 &mut translated,
                 b'@',
                 b'+',

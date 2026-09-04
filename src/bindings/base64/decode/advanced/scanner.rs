@@ -1,7 +1,6 @@
-use super::config::{AdvancedDecoder, Translation};
-use super::specials::StrictSpecials;
 use super::staging::{StagingValidator, StagingWriter};
-use crate::bindings::base64::decode::native::lenient::decoded_symbol_len;
+use super::{AdvancedDecoder, StrictSpecials, Translation};
+use crate::bindings::base64::decode::lenient::decoded_symbol_len;
 
 trait ScanSink: Sized {
     fn set_translation(&mut self, translation: Option<Translation>);

@@ -1,20 +1,40 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::super::output_too_small;
-use super::super::output::BytesWriter;
+use super::super::output_too_small;
+use super::output::BytesWriter;
 use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
-pub(super) mod compat;
-pub(super) mod helpers;
 mod state_machine;
+pub(super) mod symbols;
+#[cfg(target_arch = "aarch64")]
+mod symbols_aarch64;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(in crate::bindings::base64::decode) mod symbols_x86;
 
 pub(super) use state_machine::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
     lenient_decoded_len,
 };
+
+pub(super) fn continues_after_padding(py: Python<'_>) -> bool {
+    let version = py.version_info();
+    version_continues_after_padding(version.major, version.minor, version.patch)
+}
+
+pub(in crate::bindings::base64::decode) fn version_continues_after_padding(
+    major: u8,
+    minor: u8,
+    patch: u8,
+) -> bool {
+    match (major, minor) {
+        (3, 13) => patch >= 13,
+        (3, 14) => patch >= 4,
+        (major, minor) => (major, minor) >= (3, 15),
+    }
+}
 
 pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
     py: Python<'py>,
@@ -29,7 +49,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;
     let table = lenient_decode_table(altchars);
-    let continue_after_padding = compat::continues_after_padding(py);
+    let continue_after_padding = continues_after_padding(py);
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let result = unsafe {
         input.with_bytes(|input| {
@@ -60,7 +80,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient_into(
     padded: bool,
 ) -> PyResult<Option<usize>> {
     let table = lenient_decode_table(altchars);
-    let continue_after_padding = compat::continues_after_padding(py);
+    let continue_after_padding = continues_after_padding(py);
     if let Some(input) = input.snapshot_for_output(output)? {
         return with_bytearray(output, || unsafe {
             decode_lenient_slice_into(

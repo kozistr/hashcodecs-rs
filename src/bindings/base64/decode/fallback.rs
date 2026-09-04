@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyType};
 
 use super::super::{STANDARD_ALPHABET, python_at_least};
-use super::native::translate_altchars;
+use super::translate_altchars;
 use crate::bindings::buffer::BytesLike;
 
 pub(super) fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {

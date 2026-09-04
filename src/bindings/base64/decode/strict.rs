@@ -4,9 +4,9 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::super::{output_too_small, pybytes_with_len};
-use super::super::fallback::decoding_error;
-use super::super::plan::DecodeOptions;
+use super::super::{output_too_small, pybytes_with_len};
+use super::fallback::decoding_error;
+use super::plan::DecodeOptions;
 use super::{decode_advanced, decode_advanced_strict_into};
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,

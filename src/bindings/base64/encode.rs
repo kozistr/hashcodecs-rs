@@ -4,7 +4,7 @@ use pyo3::exceptions::{PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::decode::native::translate_bytes;
+use super::decode::translate_bytes;
 use super::{pybytes_with_len, with_output_ptr};
 use crate::base64::{encode_to_ptr, encode_to_ptr_cached, encoded_len};
 use crate::bindings::buffer::BytesLike;

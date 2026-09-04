@@ -1,9 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::lenient::symbols::{
-    AlphanumericPrefix, TranslateBytes, select_alphanumeric_prefix, select_translate_bytes,
-};
+use super::lenient::symbols::{AlphanumericPrefix, TranslateBytes, decode_byte_kernels};
 use crate::base64::{Base64Error, decode_layout, decode_unpadded_layout};
 use crate::bindings::base64::PythonSemantics;
 use crate::bindings::base64::STANDARD_ALPHABET;
@@ -33,7 +31,7 @@ pub(super) struct Translation {
 }
 
 impl Translation {
-    pub(super) fn new(table: &[u8; 256]) -> Option<Self> {
+    pub(super) fn new(table: &[u8; 256], translate: TranslateBytes) -> Option<Self> {
         let mut sources = [0_u8; 2];
         let mut targets = [0_u8; 2];
         let mut count = 0;
@@ -58,7 +56,7 @@ impl Translation {
             target0: targets[0],
             source1: sources[1],
             target1: targets[1],
-            translate: select_translate_bytes(),
+            translate,
         })
     }
 
@@ -89,6 +87,7 @@ pub(super) struct ConfiguredDecoder {
 
 impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
+        let kernels = decode_byte_kernels();
         let altchars = policy.altchars;
         let ignored = policy.ignored.as_deref().copied().unwrap_or([false; 256]);
 
@@ -112,14 +111,14 @@ impl ConfiguredDecoder {
 
         let strict_specials = StrictSpecials::new(&table, &ignored, policy.padding.is_padded());
         let strict_forbidden = StrictSpecials::forbidden(&table, &ignored);
-        let translation = Translation::new(&table);
+        let translation = Translation::new(&table, kernels.translate);
         Self {
             table,
             ignored,
             validation: policy.validation,
             padding: policy.padding,
             canonical: policy.canonical,
-            alphanumeric_prefix: select_alphanumeric_prefix(),
+            alphanumeric_prefix: kernels.scanner,
             strict_specials,
             strict_forbidden,
             translation,

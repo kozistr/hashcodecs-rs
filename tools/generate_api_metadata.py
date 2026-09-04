@@ -38,10 +38,8 @@ API_INTRODUCTIONS = {
     'xxhash': 'This reference uses the authoritative typed API declaration for all functions.',
 }
 RUST_GENERATED = ROOT / 'generated' / 'rust'
-BASE64_GENERATED_SCHEMA = RUST_GENERATED / 'base64_schema.rs'
-MURMUR3_GENERATED_METHODS = RUST_GENERATED / 'murmur3_methods.rs'
+BINDING_GENERATED_SCHEMA = RUST_GENERATED / 'binding_schema.rs'
 MURMUR3_GENERATED_CLASSES = RUST_GENERATED / 'murmur3_classes.rs'
-XXHASH_GENERATED_METHODS = RUST_GENERATED / 'xxhash_methods.rs'
 GENERATED_HEADER = '# tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.\n'
 RUST_GENERATED_HEADER = '// tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.\n'
 MURMUR_CLASS_IMPLEMENTATIONS = {
@@ -254,32 +252,6 @@ def rust_c_string(value: str) -> str:
     return f'cr{hashes}"{value}"{hashes}'
 
 
-def render_native_methods(module: str, functions: list[ast.FunctionDef]) -> str:
-    callback_suffix = '' if module == 'murmur3' else '_digest'
-    entries = [
-        (
-            '    ffi::PyMethodDef {\n'
-            f'        ml_name: c"{function.name}".as_ptr(),\n'
-            '        ml_meth: ffi::PyMethodDefPointer {\n'
-            f'            PyCFunctionFastWithKeywords: {function.name}{callback_suffix},\n'
-            '        },\n'
-            '        ml_flags: METHOD_FLAGS,\n'
-            f'        ml_doc: {rust_c_string(runtime_doc(function))}.as_ptr(),\n'
-            '    },'
-        )
-        for function in functions
-    ]
-    method_count = len(functions) + 1
-    rendered_entries = '\n'.join(entries)
-    return (
-        f'{RUST_GENERATED_HEADER}\n'
-        f'static mut METHODS: [ffi::PyMethodDef; {method_count}] = [\n'
-        f'{rendered_entries}\n'
-        '    ffi::PyMethodDef::zeroed(),\n'
-        '];\n'
-    )
-
-
 def rust_default(function: ast.FunctionDef, argument: ast.arg, default: ast.expr | None) -> str:
     if default is None:
         return 'DefaultValue::Required'
@@ -306,7 +278,7 @@ def binding_constant(name: str) -> str:
     return name.upper()
 
 
-def render_base64_binding(function: ast.FunctionDef) -> str:
+def render_binding(module: str, function: ast.FunctionDef) -> str:
     parameters = function_parameters(function)
     defaults = [rust_default(function, argument, default) for argument, default in parameters]
     required = sum(default is None for _, default in parameters)
@@ -327,7 +299,7 @@ def render_base64_binding(function: ast.FunctionDef) -> str:
     return f"""binding! {{
     {constant}: {len(parameters)} {{
         name: c"{function.name}",
-        callback: {function.name},
+        callback: crate::bindings::{module}::callbacks::{function.name},
         parameters: [{parameter_names}],
         max_positional: {max_positional},
         required: {required},
@@ -337,7 +309,7 @@ def render_base64_binding(function: ast.FunctionDef) -> str:
 }}
 
 #[inline(always)]
-pub(super) unsafe fn {function.name}(
+pub(in crate::bindings) unsafe fn {function.name}(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -355,25 +327,36 @@ pub(super) unsafe fn {function.name}(
 """
 
 
-def render_base64_schema(functions: list[ast.FunctionDef]) -> str:
-    bindings = '\n'.join(render_base64_binding(function) for function in functions)
+def render_module_schema(module: str, functions: list[ast.FunctionDef]) -> str:
+    bindings = '\n'.join(render_binding(module, function) for function in functions)
     registrations = '\n'.join(
         f'    unsafe {{ {binding_constant(function.name)}.register(methods, &mut method_count, version) }};'
         for function in functions
     )
-    return f"""{RUST_GENERATED_HEADER}
-pub(super) const BINDING_COUNT: usize = {len(functions)};
+    return f"""pub(super) mod {module} {{
+use super::*;
+
+pub(in crate::bindings) const BINDING_COUNT: usize = {len(functions)};
 
 {bindings}
-pub(super) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {{
+pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {{
     let mut method_count = 0;
 {registrations}
     assert_eq!(
         method_count, BINDING_COUNT,
-        "Base64 method table must match its generated schema",
+        "{module} method table must match its generated schema",
     );
 }}
+}}
 """
+
+
+def render_binding_schema(grouped: dict[str, list[ast.FunctionDef | ast.ClassDef]]) -> str:
+    modules = []
+    for module in MODULES:
+        functions = [node for node in grouped[module] if isinstance(node, ast.FunctionDef)]
+        modules.append(render_module_schema(module, functions))
+    return f'{RUST_GENERATED_HEADER}\n' + '\n'.join(modules)
 
 
 def generated_files() -> dict[Path, str]:
@@ -391,15 +374,9 @@ def generated_files() -> dict[Path, str]:
         '_hashcodecs', sorted((name for names in grouped_names.values() for name in names), key=natural_key)
     )
 
-    murmur_functions = [node for node in grouped['murmur3'] if isinstance(node, ast.FunctionDef)]
     murmur_classes = [node for node in grouped['murmur3'] if isinstance(node, ast.ClassDef)]
-    xxhash_functions = [node for node in grouped['xxhash'] if isinstance(node, ast.FunctionDef)]
-    outputs[MURMUR3_GENERATED_METHODS] = render_native_methods('murmur3', murmur_functions)
     outputs[MURMUR3_GENERATED_CLASSES] = render_murmur_classes(murmur_classes)
-    outputs[XXHASH_GENERATED_METHODS] = render_native_methods('xxhash', xxhash_functions)
-
-    base64_functions = [node for node in grouped['base64'] if isinstance(node, ast.FunctionDef)]
-    outputs[BASE64_GENERATED_SCHEMA] = render_base64_schema(base64_functions)
+    outputs[BINDING_GENERATED_SCHEMA] = render_binding_schema(grouped)
     return outputs
 
 

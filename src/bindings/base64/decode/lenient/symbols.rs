@@ -79,6 +79,14 @@ pub(in crate::bindings::base64::decode) fn lenient_symbol_count(
 
 pub(in crate::bindings::base64::decode) type AlphanumericPrefix = unsafe fn(&[u8]) -> usize;
 
+#[derive(Clone, Copy)]
+pub(in crate::bindings::base64::decode) struct DecodeByteKernels {
+    pub(in crate::bindings::base64::decode) scanner: AlphanumericPrefix,
+    pub(in crate::bindings::base64::decode) translate: TranslateBytes,
+}
+
+static DECODE_BYTE_KERNELS: OnceLock<DecodeByteKernels> = OnceLock::new();
+
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPrefix {
     if avx2 {
@@ -90,7 +98,7 @@ fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPre
     alphanumeric_prefix_scalar
 }
 
-pub(in crate::bindings::base64::decode) fn select_alphanumeric_prefix() -> AlphanumericPrefix {
+fn select_alphanumeric_prefix() -> AlphanumericPrefix {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return select_alphanumeric_prefix_for_x86(
         std::is_x86_feature_detected!("avx2"),
@@ -114,7 +122,7 @@ fn select_translate_bytes_for_x86(avx2: bool, sse2: bool) -> TranslateBytes {
     translate_scalar
 }
 
-pub(in crate::bindings::base64::decode) fn select_translate_bytes() -> TranslateBytes {
+fn select_translate_bytes() -> TranslateBytes {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return select_translate_bytes_for_x86(
         std::is_x86_feature_detected!("avx2"),
@@ -126,6 +134,13 @@ pub(in crate::bindings::base64::decode) fn select_translate_bytes() -> Translate
 
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
     translate_scalar
+}
+
+pub(in crate::bindings::base64::decode) fn decode_byte_kernels() -> &'static DecodeByteKernels {
+    DECODE_BYTE_KERNELS.get_or_init(|| DecodeByteKernels {
+        scanner: select_alphanumeric_prefix(),
+        translate: select_translate_bytes(),
+    })
 }
 
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
@@ -177,3 +192,4 @@ mod tests {
         }
     }
 }
+use std::sync::OnceLock;

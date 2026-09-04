@@ -1,16 +1,20 @@
 use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
+use std::sync::Once;
 
-use super::{
-    xxh3_64_batch_digest, xxh3_64_batch_into_digest, xxh3_64_digest, xxh3_128_batch_digest,
-    xxh3_128_batch_into_digest, xxh3_128_digest,
-};
-use crate::bindings::runtime::{METHOD_FLAGS, add_methods};
+use crate::bindings::runtime::add_methods;
+use crate::bindings::schema::xxhash::{BINDING_COUNT, register_all};
 
-include!("../../../generated/rust/xxhash_methods.rs");
+static mut METHODS: [ffi::PyMethodDef; BINDING_COUNT + 1] =
+    [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];
+
+static METHODS_INIT: Once = Once::new();
 
 pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
+    let version_info = module.py().version_info();
+    let version = (version_info.major, version_info.minor);
+    METHODS_INIT.call_once(|| unsafe { register_all(methods, version) });
     unsafe { add_methods(module, methods) }
 }

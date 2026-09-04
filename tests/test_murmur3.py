@@ -3,7 +3,9 @@ import inspect
 import sys
 from array import array
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 
 import pytest
@@ -160,3 +162,52 @@ def test_large_murmur3_calls_release_the_gil(assert_releases_gil: GILProgressAss
             return hasher.digest()
 
         assert_releases_gil(incremental_digest, expected, 256)
+
+
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+@pytest.mark.parametrize('use_memoryview', [False, True], ids=['bytearray', 'memoryview'])
+@pytest.mark.parametrize(
+    ('one_shot', 'constructor'),
+    [
+        (hashcodecs.murmur3_32, murmur3.murmur3_x86_32),
+        (hashcodecs.murmur3_x86_128_digest, murmur3.murmur3_x86_128),
+        (hashcodecs.murmur3_x64_128_digest, murmur3.murmur3_x64_128),
+    ],
+)
+def test_murmur3_mutable_input_races_are_serialized(
+    one_shot: Callable[[object], object],
+    constructor: Callable[..., Any],
+    use_memoryview: bool,
+) -> None:
+    size = 1024 * 1024
+    first = b'a' * size
+    second = b'b' * size
+    value = bytearray(first)
+    input_value = memoryview(value) if use_memoryview else value
+    expected = {one_shot(first), one_shot(second)}
+    start = Barrier(2)
+
+    def hash_value() -> list[object]:
+        start.wait()
+        results = []
+        for _ in range(32):
+            results.append(one_shot(input_value))
+            hasher = constructor()
+            hasher.update(input_value)
+            results.append(
+                hasher.digest() if not isinstance(results[-1], int) else int.from_bytes(hasher.digest(), 'little')
+            )
+        return results
+
+    def mutate_value() -> None:
+        start.wait()
+        for index in range(64):
+            value[:] = first if index % 2 else second
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hashes_future = executor.submit(hash_value)
+        mutate_future = executor.submit(mutate_value)
+        hashes = hashes_future.result()
+        mutate_future.result()
+
+    assert set(hashes) <= expected

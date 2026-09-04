@@ -2,7 +2,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::lenient::symbols::{
-    alphanumeric_prefix_scalar, is_lenient_symbol, lenient_symbol_count, translate_bytes_scalar,
+    alphanumeric_prefix_scalar, decode_byte_kernels, is_lenient_symbol, lenient_symbol_count,
+    translate_bytes_scalar,
 };
 use super::super::lenient::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
@@ -42,7 +43,7 @@ fn configured_decoder(
         alphanumeric_prefix: alphanumeric_prefix_scalar,
         strict_specials: StrictSpecials::new(&table, &ignored, padded),
         strict_forbidden: StrictSpecials::forbidden(&table, &ignored),
-        translation: Translation::new(&table),
+        translation: Translation::new(&table, decode_byte_kernels().translate),
     }
 }
 
@@ -344,10 +345,11 @@ fn many_strict_specials_cannot_use_the_specialized_search() {
 #[test]
 fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     let table = lenient_decode_table(None);
-    assert!(Translation::new(&table).is_none());
+    assert!(Translation::new(&table, decode_byte_kernels().translate).is_none());
     let mut translated_table = table;
     translated_table[usize::from(b'@')] = 62;
-    let translation = Translation::new(&translated_table).expect("one translated byte");
+    let translation = Translation::new(&translated_table, decode_byte_kernels().translate)
+        .expect("one translated byte");
     let mut translated = b"A@A@".to_vec();
     translation.apply(&mut translated);
     assert_eq!(&translated, b"A+A+");

@@ -16,7 +16,7 @@ mod tables;
 pub(super) mod x86_contracts;
 
 use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
-use super::runtime_dispatch::decode_with_runtime_backend;
+use super::runtime_dispatch::{ErrorWritePolicy, decode_with_runtime_backend};
 use super::{
     Base64Error, DECODE_STORE_PADDING, DecodeAlphabet, INVALID_VALUE, MIXED_DECODE,
     STANDARD_DECODE, URLSAFE_DECODE,
@@ -301,13 +301,19 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet(
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
     unsafe {
-        decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false)
+        decode_to_ptr_with_unpadded_layout_mode(
+            input,
+            output.as_mut_ptr(),
+            layout,
+            alphabet,
+            ErrorWritePolicy::Partial,
+        )
     }
 }
 
 #[inline]
 #[cfg_attr(not(feature = "python"), allow(dead_code))]
-pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
+pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
     input: &[u8],
     output: &mut [u8],
     layout: DecodeLayout,
@@ -316,7 +322,13 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_transactional(
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
     unsafe {
-        decode_to_ptr_with_unpadded_layout_mode(input, output.as_mut_ptr(), layout, alphabet, true)
+        decode_to_ptr_with_unpadded_layout_mode(
+            input,
+            output.as_mut_ptr(),
+            layout,
+            alphabet,
+            ErrorWritePolicy::ValidatedBlocksOnly,
+        )
     }
 }
 
@@ -335,7 +347,7 @@ pub(crate) unsafe fn decode_to_ptr_with_layout(
             layout,
             alphabet,
             output_has_store_slack,
-            false,
+            ErrorWritePolicy::Partial,
         )
     }
 }
@@ -348,12 +360,20 @@ pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    unsafe { decode_to_ptr_with_unpadded_layout_mode(input, output, layout, alphabet, false) }
+    unsafe {
+        decode_to_ptr_with_unpadded_layout_mode(
+            input,
+            output,
+            layout,
+            alphabet,
+            ErrorWritePolicy::Partial,
+        )
+    }
 }
 
 #[inline]
 #[cfg_attr(not(feature = "python"), allow(dead_code))]
-pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
+pub(crate) fn decode_to_slice_with_layout_and_alphabet_validated_blocks(
     input: &[u8],
     output: &mut [u8],
     layout: DecodeLayout,
@@ -361,10 +381,17 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet_transactional(
 ) -> Result<(), Base64Error> {
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
-    // Transactional SIMD error handling writes only complete, validated blocks.
+    // This error policy writes only complete, validated SIMD blocks.
     // A lenient caller can use its fallback without changing the suffix.
     unsafe {
-        decode_to_ptr_with_layout_mode(input, output.as_mut_ptr(), layout, alphabet, false, true)
+        decode_to_ptr_with_layout_mode(
+            input,
+            output.as_mut_ptr(),
+            layout,
+            alphabet,
+            false,
+            ErrorWritePolicy::ValidatedBlocksOnly,
+        )
     }
 }
 
@@ -375,7 +402,7 @@ unsafe fn decode_to_ptr_with_layout_mode(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
     output_has_store_slack: bool,
-    transactional_errors: bool,
+    error_write_policy: ErrorWritePolicy,
 ) -> Result<(), Base64Error> {
     let padding = layout.padding;
     let simd_len = if padding == 0 {
@@ -392,7 +419,7 @@ unsafe fn decode_to_ptr_with_layout_mode(
                 output,
                 alphabet,
                 output_has_store_slack,
-                transactional_errors,
+                error_write_policy,
             )
         }?
     };
@@ -440,7 +467,7 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
     output: *mut u8,
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
-    transactional_errors: bool,
+    error_write_policy: ErrorWritePolicy,
 ) -> Result<(), Base64Error> {
     let prefix_len = input.len() / 4 * 4;
     let prefix_layout = DecodeLayout {
@@ -455,7 +482,7 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
             prefix_layout,
             alphabet,
             false,
-            transactional_errors,
+            error_write_policy,
         )?
     };
 

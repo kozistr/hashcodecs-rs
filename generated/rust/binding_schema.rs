@@ -1,11 +1,14 @@
 // tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.
 
-pub(super) const BINDING_COUNT: usize = 24;
+pub(super) mod base64 {
+use super::*;
+
+pub(in crate::bindings) const BINDING_COUNT: usize = 24;
 
 binding! {
     B64ENCODE: 4 {
         name: c"b64encode",
-        callback: b64encode,
+        callback: crate::bindings::base64::callbacks::b64encode,
         parameters: [c"s", c"altchars", c"padded", c"wrapcol"],
         max_positional: 2,
         required: 1,
@@ -42,7 +45,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64encode(
+pub(in crate::bindings) unsafe fn b64encode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -64,7 +67,7 @@ pub(super) unsafe fn b64encode(
 binding! {
     B64ENCODE_BATCH: 2 {
         name: c"b64encode_batch",
-        callback: b64encode_batch,
+        callback: crate::bindings::base64::callbacks::b64encode_batch,
         parameters: [c"items", c"altchars"],
         max_positional: 2,
         required: 1,
@@ -97,7 +100,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64encode_batch(
+pub(in crate::bindings) unsafe fn b64encode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -117,7 +120,7 @@ pub(super) unsafe fn b64encode_batch(
 binding! {
     B64ENCODE_BATCH_INTO: 3 {
         name: c"b64encode_batch_into",
-        callback: b64encode_batch_into,
+        callback: crate::bindings::base64::callbacks::b64encode_batch_into,
         parameters: [c"items", c"outputs", c"altchars"],
         max_positional: 3,
         required: 2,
@@ -157,7 +160,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64encode_batch_into(
+pub(in crate::bindings) unsafe fn b64encode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -178,7 +181,7 @@ pub(super) unsafe fn b64encode_batch_into(
 binding! {
     B64ENCODE_INTO: 5 {
         name: c"b64encode_into",
-        callback: b64encode_into,
+        callback: crate::bindings::base64::callbacks::b64encode_into,
         parameters: [c"s", c"output", c"altchars", c"padded", c"wrapcol"],
         max_positional: 3,
         required: 2,
@@ -216,7 +219,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64encode_into(
+pub(in crate::bindings) unsafe fn b64encode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -239,7 +242,7 @@ pub(super) unsafe fn b64encode_into(
 binding! {
     B64DECODE: 6 {
         name: c"b64decode",
-        callback: b64decode,
+        callback: crate::bindings::base64::callbacks::b64decode,
         parameters: [c"s", c"altchars", c"validate", c"padded", c"ignorechars", c"canonical"],
         max_positional: 3,
         required: 1,
@@ -281,7 +284,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64decode(
+pub(in crate::bindings) unsafe fn b64decode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -305,7 +308,7 @@ pub(super) unsafe fn b64decode(
 binding! {
     B64DECODE_BATCH: 3 {
         name: c"b64decode_batch",
-        callback: b64decode_batch,
+        callback: crate::bindings::base64::callbacks::b64decode_batch,
         parameters: [c"items", c"altchars", c"validate"],
         max_positional: 3,
         required: 1,
@@ -340,7 +343,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64decode_batch(
+pub(in crate::bindings) unsafe fn b64decode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -361,7 +364,7 @@ pub(super) unsafe fn b64decode_batch(
 binding! {
     B64DECODE_BATCH_INTO: 4 {
         name: c"b64decode_batch_into",
-        callback: b64decode_batch_into,
+        callback: crate::bindings::base64::callbacks::b64decode_batch_into,
         parameters: [c"items", c"outputs", c"altchars", c"validate"],
         max_positional: 4,
         required: 2,
@@ -403,7 +406,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64decode_batch_into(
+pub(in crate::bindings) unsafe fn b64decode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -425,7 +428,7 @@ pub(super) unsafe fn b64decode_batch_into(
 binding! {
     B64DECODE_INTO: 7 {
         name: c"b64decode_into",
-        callback: b64decode_into,
+        callback: crate::bindings::base64::callbacks::b64decode_into,
         parameters: [c"s", c"output", c"altchars", c"validate", c"padded", c"ignorechars", c"canonical"],
         max_positional: 4,
         required: 2,
@@ -473,7 +476,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn b64decode_into(
+pub(in crate::bindings) unsafe fn b64decode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -498,7 +501,7 @@ pub(super) unsafe fn b64decode_into(
 binding! {
     STANDARD_B64ENCODE: 1 {
         name: c"standard_b64encode",
-        callback: standard_b64encode,
+        callback: crate::bindings::base64::callbacks::standard_b64encode,
         parameters: [c"s"],
         max_positional: 1,
         required: 1,
@@ -524,7 +527,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64encode(
+pub(in crate::bindings) unsafe fn standard_b64encode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -543,7 +546,7 @@ pub(super) unsafe fn standard_b64encode(
 binding! {
     STANDARD_B64ENCODE_INTO: 2 {
         name: c"standard_b64encode_into",
-        callback: standard_b64encode_into,
+        callback: crate::bindings::base64::callbacks::standard_b64encode_into,
         parameters: [c"s", c"output"],
         max_positional: 2,
         required: 2,
@@ -574,7 +577,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64encode_into(
+pub(in crate::bindings) unsafe fn standard_b64encode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -594,7 +597,7 @@ pub(super) unsafe fn standard_b64encode_into(
 binding! {
     STANDARD_B64ENCODE_BATCH: 1 {
         name: c"standard_b64encode_batch",
-        callback: standard_b64encode_batch,
+        callback: crate::bindings::base64::callbacks::standard_b64encode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -607,7 +610,7 @@ Encode each item with the padded standard Base64 alphabet.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64encode_batch(
+pub(in crate::bindings) unsafe fn standard_b64encode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -626,7 +629,7 @@ pub(super) unsafe fn standard_b64encode_batch(
 binding! {
     STANDARD_B64ENCODE_BATCH_INTO: 2 {
         name: c"standard_b64encode_batch_into",
-        callback: standard_b64encode_batch_into,
+        callback: crate::bindings::base64::callbacks::standard_b64encode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -639,7 +642,7 @@ Encode each item into its matching reusable bytearray.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64encode_batch_into(
+pub(in crate::bindings) unsafe fn standard_b64encode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -659,7 +662,7 @@ pub(super) unsafe fn standard_b64encode_batch_into(
 binding! {
     STANDARD_B64DECODE_BATCH: 1 {
         name: c"standard_b64decode_batch",
-        callback: standard_b64decode_batch,
+        callback: crate::bindings::base64::callbacks::standard_b64decode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -672,7 +675,7 @@ Decode each item with the padded standard Base64 alphabet.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64decode_batch(
+pub(in crate::bindings) unsafe fn standard_b64decode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -691,7 +694,7 @@ pub(super) unsafe fn standard_b64decode_batch(
 binding! {
     STANDARD_B64DECODE_BATCH_INTO: 2 {
         name: c"standard_b64decode_batch_into",
-        callback: standard_b64decode_batch_into,
+        callback: crate::bindings::base64::callbacks::standard_b64decode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -704,7 +707,7 @@ Decode each item into its matching reusable bytearray.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64decode_batch_into(
+pub(in crate::bindings) unsafe fn standard_b64decode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -724,7 +727,7 @@ pub(super) unsafe fn standard_b64decode_batch_into(
 binding! {
     STANDARD_B64DECODE: 1 {
         name: c"standard_b64decode",
-        callback: standard_b64decode,
+        callback: crate::bindings::base64::callbacks::standard_b64decode,
         parameters: [c"s"],
         max_positional: 1,
         required: 1,
@@ -755,7 +758,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64decode(
+pub(in crate::bindings) unsafe fn standard_b64decode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -774,7 +777,7 @@ pub(super) unsafe fn standard_b64decode(
 binding! {
     STANDARD_B64DECODE_INTO: 2 {
         name: c"standard_b64decode_into",
-        callback: standard_b64decode_into,
+        callback: crate::bindings::base64::callbacks::standard_b64decode_into,
         parameters: [c"s", c"output"],
         max_positional: 2,
         required: 2,
@@ -806,7 +809,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn standard_b64decode_into(
+pub(in crate::bindings) unsafe fn standard_b64decode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -826,7 +829,7 @@ pub(super) unsafe fn standard_b64decode_into(
 binding! {
     URLSAFE_B64ENCODE_BATCH: 1 {
         name: c"urlsafe_b64encode_batch",
-        callback: urlsafe_b64encode_batch,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -839,7 +842,7 @@ Encode each item with the padded URL-safe Base64 alphabet.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64encode_batch(
+pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -858,7 +861,7 @@ pub(super) unsafe fn urlsafe_b64encode_batch(
 binding! {
     URLSAFE_B64ENCODE_BATCH_INTO: 2 {
         name: c"urlsafe_b64encode_batch_into",
-        callback: urlsafe_b64encode_batch_into,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -871,7 +874,7 @@ Encode each item with the URL-safe alphabet into its matching reusable bytearray
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64encode_batch_into(
+pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -891,7 +894,7 @@ pub(super) unsafe fn urlsafe_b64encode_batch_into(
 binding! {
     URLSAFE_B64DECODE_BATCH: 1 {
         name: c"urlsafe_b64decode_batch",
-        callback: urlsafe_b64decode_batch,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -904,7 +907,7 @@ Decode each item with the padded URL-safe Base64 alphabet.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64decode_batch(
+pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -923,7 +926,7 @@ pub(super) unsafe fn urlsafe_b64decode_batch(
 binding! {
     URLSAFE_B64DECODE_BATCH_INTO: 2 {
         name: c"urlsafe_b64decode_batch_into",
-        callback: urlsafe_b64decode_batch_into,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -936,7 +939,7 @@ Decode each URL-safe item into its matching reusable bytearray.",
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64decode_batch_into(
+pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -956,7 +959,7 @@ pub(super) unsafe fn urlsafe_b64decode_batch_into(
 binding! {
     URLSAFE_B64ENCODE: 2 {
         name: c"urlsafe_b64encode",
-        callback: urlsafe_b64encode,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64encode,
         parameters: [c"s", c"padded"],
         max_positional: 1,
         required: 1,
@@ -983,7 +986,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64encode(
+pub(in crate::bindings) unsafe fn urlsafe_b64encode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -1003,7 +1006,7 @@ pub(super) unsafe fn urlsafe_b64encode(
 binding! {
     URLSAFE_B64ENCODE_INTO: 3 {
         name: c"urlsafe_b64encode_into",
-        callback: urlsafe_b64encode_into,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_into,
         parameters: [c"s", c"output", c"padded"],
         max_positional: 2,
         required: 2,
@@ -1035,7 +1038,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64encode_into(
+pub(in crate::bindings) unsafe fn urlsafe_b64encode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -1056,7 +1059,7 @@ pub(super) unsafe fn urlsafe_b64encode_into(
 binding! {
     URLSAFE_B64DECODE: 2 {
         name: c"urlsafe_b64decode",
-        callback: urlsafe_b64decode,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64decode,
         parameters: [c"s", c"padded"],
         max_positional: 1,
         required: 1,
@@ -1112,7 +1115,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64decode(
+pub(in crate::bindings) unsafe fn urlsafe_b64decode(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -1132,7 +1135,7 @@ pub(super) unsafe fn urlsafe_b64decode(
 binding! {
     URLSAFE_B64DECODE_INTO: 3 {
         name: c"urlsafe_b64decode_into",
-        callback: urlsafe_b64decode_into,
+        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_into,
         parameters: [c"s", c"output", c"padded"],
         max_positional: 2,
         required: 2,
@@ -1196,7 +1199,7 @@ Examples:
 }
 
 #[inline(always)]
-pub(super) unsafe fn urlsafe_b64decode_into(
+pub(in crate::bindings) unsafe fn urlsafe_b64decode_into(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
@@ -1214,7 +1217,7 @@ pub(super) unsafe fn urlsafe_b64decode_into(
     }
 }
 
-pub(super) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
+pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
     unsafe { B64ENCODE.register(methods, &mut method_count, version) };
     unsafe { B64ENCODE_BATCH.register(methods, &mut method_count, version) };
@@ -1242,6 +1245,515 @@ pub(super) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, 
     unsafe { URLSAFE_B64DECODE_INTO.register(methods, &mut method_count, version) };
     assert_eq!(
         method_count, BINDING_COUNT,
-        "Base64 method table must match its generated schema",
+        "base64 method table must match its generated schema",
     );
+}
+}
+
+pub(super) mod murmur3 {
+use super::*;
+
+pub(in crate::bindings) const BINDING_COUNT: usize = 3;
+
+binding! {
+    MURMUR3_32: 2 {
+        name: c"murmur3_32",
+        callback: crate::bindings::murmur3::callbacks::murmur3_32,
+        parameters: [c"s", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"murmur3_32($module, /, s, seed=0)
+--
+
+Compute the canonical MurmurHash3 x86 32-bit hash.
+
+MurmurHash3 does not provide cryptographic security. The result matches the
+original x86-32 reference algorithm.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 32-bit seed.
+
+Returns:
+    The unsigned 32-bit hash as a Python integer.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**32.
+
+Examples:
+    >>> hex(murmur3_32(b'hello'))
+    '0x248bfa47'",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn murmur3_32(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        MURMUR3_32.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    MURMUR3_X86_128_DIGEST: 2 {
+        name: c"murmur3_x86_128_digest",
+        callback: crate::bindings::murmur3::callbacks::murmur3_x86_128_digest,
+        parameters: [c"s", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"murmur3_x86_128_digest($module, /, s, seed=0)
+--
+
+Compute the canonical MurmurHash3 x86 128-bit digest.
+
+The function serializes the four result words as little-endian 32-bit
+integers.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 32-bit seed.
+
+Returns:
+    A 16-byte digest.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**32.
+
+Examples:
+    >>> len(murmur3_x86_128_digest(b'hello'))
+    16",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn murmur3_x86_128_digest(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        MURMUR3_X86_128_DIGEST.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    MURMUR3_X64_128_DIGEST: 2 {
+        name: c"murmur3_x64_128_digest",
+        callback: crate::bindings::murmur3::callbacks::murmur3_x64_128_digest,
+        parameters: [c"s", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"murmur3_x64_128_digest($module, /, s, seed=0)
+--
+
+Compute the canonical MurmurHash3 x64 128-bit digest.
+
+The function serializes the two result words as little-endian 64-bit
+integers.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 32-bit seed.
+
+Returns:
+    A 16-byte digest.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**32.
+
+Examples:
+    >>> len(murmur3_x64_128_digest(b'hello'))
+    16",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn murmur3_x64_128_digest(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        MURMUR3_X64_128_DIGEST.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
+    let mut method_count = 0;
+    unsafe { MURMUR3_32.register(methods, &mut method_count, version) };
+    unsafe { MURMUR3_X86_128_DIGEST.register(methods, &mut method_count, version) };
+    unsafe { MURMUR3_X64_128_DIGEST.register(methods, &mut method_count, version) };
+    assert_eq!(
+        method_count, BINDING_COUNT,
+        "murmur3 method table must match its generated schema",
+    );
+}
+}
+
+pub(super) mod xxhash {
+use super::*;
+
+pub(in crate::bindings) const BINDING_COUNT: usize = 6;
+
+binding! {
+    XXH3_64: 2 {
+        name: c"xxh3_64",
+        callback: crate::bindings::xxhash::callbacks::xxh3_64,
+        parameters: [c"s", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"xxh3_64($module, /, s, seed=0)
+--
+
+Compute the canonical XXH3 64-bit hash.
+
+XXH3 does not provide cryptographic security.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 64-bit seed.
+
+Returns:
+    The unsigned 64-bit hash as a Python integer.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> hex(xxh3_64(b''))
+    '0x2d06800538d394c2'",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_64(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_64.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    XXH3_128: 2 {
+        name: c"xxh3_128",
+        callback: crate::bindings::xxhash::callbacks::xxh3_128,
+        parameters: [c"s", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"xxh3_128($module, /, s, seed=0)
+--
+
+Compute the canonical XXH3 128-bit hash.
+
+The returned integer stores the low 64-bit word in its least significant
+half. XXH3 does not provide cryptographic security.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 64-bit seed.
+
+Returns:
+    The unsigned 128-bit hash as a Python integer.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> hex(xxh3_128(b''))
+    '0x99aa06d3014798d86001c324468d497f'",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_128(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_128.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    XXH3_64_BATCH: 2 {
+        name: c"xxh3_64_batch",
+        callback: crate::bindings::xxhash::callbacks::xxh3_64_batch,
+        parameters: [c"items", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"xxh3_64_batch($module, /, items, seed=0)
+--
+
+Compute canonical XXH3 64-bit hashes for a list of inputs.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The function returns one unsigned 64-bit integer for each item, in input
+    order.
+
+Raises:
+    TypeError: The container, an item, or seed has an invalid type.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> xxh3_64_batch([b'', b'hello']) == [xxh3_64(b''), xxh3_64(b'hello')]
+    True",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_64_batch(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_64_BATCH.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    XXH3_64_BATCH_INTO: 3 {
+        name: c"xxh3_64_batch_into",
+        callback: crate::bindings::xxhash::callbacks::xxh3_64_batch_into,
+        parameters: [c"items", c"output", c"seed"],
+        max_positional: 3,
+        required: 2,
+        documentation: cr"xxh3_64_batch_into($module, /, items, output, seed=0)
+--
+
+Write XXH3 64-bit hashes as packed little-endian bytes.
+
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    output: Destination with at least 8 * len(items) bytes.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The total number of bytes that the function writes.
+
+Raises:
+    TypeError: A container, item, destination, or seed has an invalid type.
+    ValueError: output is too small.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> output = bytearray(8)
+    >>> xxh3_64_batch_into([b'hello'], output)
+    8
+    >>> int.from_bytes(output, 'little') == xxh3_64(b'hello')
+    True",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_64_batch_into(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_64_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::Required),
+                Argument::new(values[2], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    XXH3_128_BATCH: 2 {
+        name: c"xxh3_128_batch",
+        callback: crate::bindings::xxhash::callbacks::xxh3_128_batch,
+        parameters: [c"items", c"seed"],
+        max_positional: 2,
+        required: 1,
+        documentation: cr"xxh3_128_batch($module, /, items, seed=0)
+--
+
+Compute canonical XXH3 128-bit hashes for a list of inputs.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The function returns one unsigned 128-bit integer for each item, in
+    input order.
+
+Raises:
+    TypeError: The container, an item, or seed has an invalid type.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> xxh3_128_batch([b'', b'hello']) == [xxh3_128(b''), xxh3_128(b'hello')]
+    True",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_128_batch(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_128_BATCH.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+binding! {
+    XXH3_128_BATCH_INTO: 3 {
+        name: c"xxh3_128_batch_into",
+        callback: crate::bindings::xxhash::callbacks::xxh3_128_batch_into,
+        parameters: [c"items", c"output", c"seed"],
+        max_positional: 3,
+        required: 2,
+        documentation: cr"xxh3_128_batch_into($module, /, items, output, seed=0)
+--
+
+Write XXH3 128-bit hashes as packed little-endian bytes.
+
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    output: Destination with at least 16 * len(items) bytes.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The total number of bytes that the function writes.
+
+Raises:
+    TypeError: A container, item, destination, or seed has an invalid type.
+    ValueError: output is too small.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> output = bytearray(16)
+    >>> xxh3_128_batch_into([b'hello'], output)
+    16
+    >>> int.from_bytes(output, 'little') == xxh3_128(b'hello')
+    True",
+        python_315_documentation: None,
+    }
+}
+
+#[inline(always)]
+pub(in crate::bindings) unsafe fn xxh3_128_batch_into(
+    args: *const *mut ffi::PyObject,
+    nargs: isize,
+    keywords: *mut ffi::PyObject,
+    operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
+) -> *mut ffi::PyObject {
+    unsafe {
+        XXH3_128_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
+            operation(
+                py,
+                Argument::new(values[0], DefaultValue::Required),
+                Argument::new(values[1], DefaultValue::Required),
+                Argument::new(values[2], DefaultValue::I128(0)),
+            )
+        })
+    }
+}
+
+pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
+    let mut method_count = 0;
+    unsafe { XXH3_64.register(methods, &mut method_count, version) };
+    unsafe { XXH3_128.register(methods, &mut method_count, version) };
+    unsafe { XXH3_64_BATCH.register(methods, &mut method_count, version) };
+    unsafe { XXH3_64_BATCH_INTO.register(methods, &mut method_count, version) };
+    unsafe { XXH3_128_BATCH.register(methods, &mut method_count, version) };
+    unsafe { XXH3_128_BATCH_INTO.register(methods, &mut method_count, version) };
+    assert_eq!(
+        method_count, BINDING_COUNT,
+        "xxhash method table must match its generated schema",
+    );
+}
 }

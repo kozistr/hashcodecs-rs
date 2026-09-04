@@ -4,7 +4,7 @@ use pyo3::types::PyModule;
 use std::sync::Once;
 
 use super::add_methods;
-use super::schema::{BINDING_COUNT, register_all};
+use crate::bindings::schema::base64::{BINDING_COUNT, register_all};
 
 static mut METHODS: [ffi::PyMethodDef; BINDING_COUNT + 1] =
     [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];

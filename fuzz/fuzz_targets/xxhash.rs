@@ -22,8 +22,12 @@ fuzz_target!(|bytes: &[u8]| {
         [expected128 as u64, (expected128 >> 64) as u64]
     );
 
-    // Equal-length independent allocations drive every AVX2 batch width.
-    let mut owned = std::array::from_fn::<_, 4, _>(|_| input.to_vec());
+    // Independent heterogeneous allocations exercise every batch remainder,
+    // including more than one complete four-lane group.
+    let mut owned = std::array::from_fn::<_, 9, _>(|index| {
+        let start = input.len().saturating_mul(index) / 9;
+        input[start..].to_vec()
+    });
     for (index, value) in owned.iter_mut().enumerate() {
         if let Some(first) = value.first_mut() {
             *first = first.wrapping_add(index as u8);
@@ -33,7 +37,7 @@ fuzz_target!(|bytes: &[u8]| {
         }
     }
     let batch = owned.each_ref().map(Vec::as_slice);
-    for width in 2..=4 {
+    for width in 1..=batch.len() {
         let batch = &batch[..width];
         assert_eq!(
             xxh3_64_batch(batch, seed),

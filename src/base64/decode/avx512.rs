@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::avx2::{decode_avx2, decode_prefix_avx2, validate_avx2};
+use super::avx2::{decode_avx2, decode_prefix_avx2};
 use super::x86_contracts::{Decoder, Store};
 
 const OUTPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
@@ -111,7 +111,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     if input.len() < 64 {
-        return unsafe { validate_avx2::<A>(input) };
+        return unsafe { super::avx2::validate::<A>(input) };
     }
 
     let table = A::decode_table();
@@ -127,7 +127,7 @@ pub(in crate::base64) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usi
         source += 64;
     }
     if input.len() - source >= 16 {
-        source += unsafe { validate_avx2::<A>(&input[source..])? };
+        source += unsafe { super::avx2::validate::<A>(&input[source..])? };
     }
     Ok(source)
 }

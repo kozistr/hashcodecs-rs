@@ -3,9 +3,10 @@ use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::decode::{self as decode_backend, x86_contracts};
 use super::encode as encode_backend;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use super::runtime_dispatch::decode_valid_prefix_with_backend;
 use super::runtime_dispatch::{
-    decode_valid_prefix_with_backend, decode_with_backend, decode_with_backend_ptr,
-    encode_with_backend, validate_with_backend,
+    decode_with_backend, decode_with_backend_ptr, encode_with_backend, validate_with_backend,
 };
 use super::*;
 use crate::backend::{Capabilities, CpuFeature};

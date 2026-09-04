@@ -54,7 +54,7 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
 }
 
 #[target_feature(enable = "ssse3")]
-pub(crate) unsafe fn validate_ssse3<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
+pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
     while source + 64 <= input.len() {
         let (_, first) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };

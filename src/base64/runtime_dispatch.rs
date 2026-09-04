@@ -159,9 +159,9 @@ type ValidateKernel = unsafe fn(&[u8]) -> Result<usize, Base64Error>;
 fn validate_x86_kernel<A: x86_contracts::Decoder>(backend: Backend) -> Option<ValidateKernel> {
     match backend {
         Backend::Avx512Vbmi => Some(decode_backend::avx512::validate::<A>),
-        Backend::Avx2 => Some(decode_backend::avx2::validate_avx2::<A>),
-        Backend::Sse41 => Some(decode_backend::sse41::validate_sse41::<A>),
-        Backend::Ssse3 => Some(decode_backend::ssse3::validate_ssse3::<A>),
+        Backend::Avx2 => Some(decode_backend::avx2::validate::<A>),
+        Backend::Sse41 => Some(decode_backend::sse41::validate::<A>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::validate::<A>),
         Backend::Scalar | Backend::Neon => None,
     }
 }

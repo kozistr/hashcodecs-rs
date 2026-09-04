@@ -4,6 +4,43 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-04
+
+### What's Changed
+* chore: expand XXH3 benchmark coverage by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/61
+* refactor: split Base64 decoder bindings by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/62
+* refactor: declare Base64 binding schema by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/63
+* perf: inspect exact CPython memoryviews directly by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/64
+* refactor: avoid copying Base64 fallback inputs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/65
+* chore: strengthen runtime coverage and benchmarks by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/66
+* fix: avoid unnecessary batch snapshots and scalar grouping by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/67
+* refactor: generate Base64 binding metadata by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/68
+* perf: remove advanced decode and batch allocations by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/69
+* refactor: finish native codec cleanup by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/70
+* chore: verify source distributions in CI by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/71
+* fix: stabilize aliased Base64 decode inputs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/72
+* perf: remove Python batch input copies by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/73
+* fix: use strict fast paths for decode-into by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/74
+* refactor: streamline native bindings and benchmarks by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/75
+* fix: restore XXH fast paths and wheel compatibility by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/76
+* refactor: use four-lane AArch64 XXH3 accumulation by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/77
+* refactor: clarify internal names and technical prose by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/78
+* fix: restore Base64 batch encode throughput by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/79
+* refactor: clarify internal naming by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/80
+* refactor: simplify internal decode and dispatch paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/81
+* fix: harden hashers and optimize codec paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/82
+* refactor: centralize Python Base64 decode routing by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/83
+* refactor: standardize Rust callback and input names by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/84
+* refactor: clarify codec routing and CPU capabilities by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/85
+* refactor: consolidate base64 batch ownership by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/86
+* refactor: reduce XXH3 dispatch overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/87
+* Fix Base64 batch alias stabilization and AVX2 streaming stores by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/88
+* fix: restore Base64 encode fast paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/89
+* fix: restore Base64 memoryview batch throughput by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/90
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...v1.3.0
+
 ## [1.2.1] - 2026-08-26
 
 ### What's Changed
@@ -127,7 +164,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.0.0...v1.1.0

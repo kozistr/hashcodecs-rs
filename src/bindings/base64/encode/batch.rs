@@ -104,7 +104,7 @@ fn b64encode_batch_into_parsed<'py>(
         let output = outputs.get(index);
         match prepared
             .peek()
-            .is_some_and(|(prepared_index, _)| *prepared_index == index)
+            .is_some_and(|(prepared_index, _, _)| *prepared_index == index)
             .then(|| prepared.next().expect("matching prepared input exists").1)
         {
             Some(Ok(input)) => Ok(PyInt::new(

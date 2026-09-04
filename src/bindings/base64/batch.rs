@@ -1,14 +1,17 @@
 //! Shared validation and alias protection for Base64 batch output buffers.
 
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyMemoryError, PyTypeError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyByteArray, PyBytes, PyList, PyString};
+use pyo3::types::{PyAny, PyByteArray, PyBytes, PyList, PyMemoryView, PyString};
 
-use super::super::buffer::{BytesLike, ascii_or_bytes_owned, contiguous_bytes_like_owned};
+use super::super::buffer::{
+    BufferRange, BytesLike, ascii_or_bytes_owned, contiguous_bytes_like_owned,
+};
 use super::super::objects::list_items;
 
 pub(in crate::bindings::base64) fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
@@ -22,6 +25,7 @@ pub(in crate::bindings::base64) fn batch_results<T>(length: usize) -> PyResult<V
 pub(in crate::bindings::base64) struct BatchOutputs<'py> {
     outputs: Vec<Bound<'py, PyByteArray>>,
     identities: HashSet<*mut ffi::PyObject>,
+    ranges: OnceLock<Vec<BufferRange>>,
 }
 
 impl<'py> BatchOutputs<'py> {
@@ -31,6 +35,40 @@ impl<'py> BatchOutputs<'py> {
 
     fn contains_identity(&self, identity: *mut ffi::PyObject) -> bool {
         self.identities.contains(&identity)
+    }
+
+    fn ranges(&self) -> PyResult<&[BufferRange]> {
+        if let Some(ranges) = self.ranges.get() {
+            return Ok(ranges);
+        }
+
+        let mut ranges = batch_results(self.outputs.len())?;
+        ranges.extend(self.outputs.iter().filter_map(BufferRange::for_bytearray));
+        ranges.sort_unstable_by_key(|range| range.start());
+        let _ = self.ranges.set(ranges);
+        Ok(self
+            .ranges
+            .get()
+            .expect("Base64 output ranges were initialized"))
+    }
+
+    fn snapshot_alias(&self, input: &BytesLike<'py, 'py>) -> PyResult<Option<Vec<u8>>> {
+        if input
+            .bytearray_identity()
+            .is_some_and(|identity| self.contains_identity(identity))
+        {
+            return input.snapshot_if(true);
+        }
+
+        let Some(input_range) = input.buffer_range() else {
+            return Ok(None);
+        };
+
+        let ranges = self.ranges()?;
+        let index = ranges.partition_point(|output| output.start() < input_range.end());
+        let aliases_output = index != 0 && ranges[index - 1].overlaps(input_range);
+
+        input.snapshot_if(aliases_output)
     }
 }
 
@@ -63,6 +101,7 @@ pub(in crate::bindings::base64) fn batch_outputs<'py>(
     Ok(BatchOutputs {
         outputs: parsed,
         identities,
+        ranges: OnceLock::new(),
     })
 }
 
@@ -74,43 +113,80 @@ pub(in crate::bindings::base64) enum BatchInputKind {
 
 pub(in crate::bindings::base64) type PreparedBatchInput<'py> = Result<BytesLike<'py, 'py>, PyErr>;
 
-/// Convert only inputs that destination writes can invalidate.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(in crate::bindings::base64) enum SnapshotPolicy {
+    AliasesOnly,
+    ReleaseBeforeWrite,
+}
+
+pub(in crate::bindings::base64) type PreparedBatchItem<'py> =
+    (usize, PreparedBatchInput<'py>, SnapshotPolicy);
+
+fn stage_snapshots<'py>(
+    prepared: &mut [PreparedBatchItem<'py>],
+    mut snapshot: impl FnMut(&BytesLike<'py, 'py>, SnapshotPolicy) -> PyResult<Option<Vec<u8>>>,
+) -> PyResult<()> {
+    let mut snapshots = batch_results(prepared.len())?;
+
+    for (_, input, policy) in prepared.iter() {
+        snapshots.push(match input {
+            Ok(input) => snapshot(input, *policy)?,
+            Err(_) => None,
+        })
+    }
+
+    for ((_, input, _), snapshot) in prepared.iter_mut().zip(snapshots) {
+        if let (Ok(input), Some(snapshot)) = (input, snapshot) {
+            *input = BytesLike::OwnedVec(snapshot);
+        }
+    }
+
+    Ok(())
+}
+
+/// Stabilize inputs whose release or destination writes can invalidate them.
 /// Exact immutable values and independent bytearrays remain on the single-pass path.
-/// The conversion handles these inputs:
+/// The function handles these inputs:
 ///
 /// * aliased bytearrays
-/// * string subclasses that can override encoding
-/// * other buffer exporters
+/// * exact memoryviews that overlap any destination
+/// * string subclasses and custom buffer exporters with reentrant release hooks
 pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
     items: &[Bound<'py, PyAny>],
     outputs: &BatchOutputs<'py>,
     kind: BatchInputKind,
-) -> PyResult<Vec<(usize, PreparedBatchInput<'py>)>> {
-    let needs_preparation = |item: &Bound<'py, PyAny>| {
+) -> PyResult<Vec<PreparedBatchItem<'py>>> {
+    let snapshot_policy = |item: &Bound<'py, PyAny>| {
         if PyBytes::is_exact_type_of(item) {
-            return false;
+            return None;
         }
         if matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>() {
-            return !PyString::is_exact_type_of(item);
+            return (!PyString::is_exact_type_of(item))
+                .then_some(SnapshotPolicy::ReleaseBeforeWrite);
         }
         if PyByteArray::is_exact_type_of(item) {
-            return outputs.contains_identity(item.as_ptr());
+            return outputs
+                .contains_identity(item.as_ptr())
+                .then_some(SnapshotPolicy::AliasesOnly);
         }
-        true
+        if PyMemoryView::is_exact_type_of(item) {
+            return Some(SnapshotPolicy::AliasesOnly);
+        }
+        Some(SnapshotPolicy::ReleaseBeforeWrite)
     };
 
-    if !items.iter().any(&needs_preparation) {
+    if !items.iter().any(|item| snapshot_policy(item).is_some()) {
         return Ok(Vec::new());
     }
 
     // Acquiring a buffer or encoding a string subclass can run arbitrary
     // Python. Keep every acquired value alive until every exporter has run,
-    // then snapshot those uncommon inputs before any destination write.
+    // then stabilize those uncommon inputs before any destination write.
     let mut prepared = Vec::new();
     for (index, item) in items.iter().enumerate() {
-        if !needs_preparation(item) {
+        let Some(policy) = snapshot_policy(item) else {
             continue;
-        }
+        };
         let input = match kind {
             BatchInputKind::Contiguous => contiguous_bytes_like_owned(item, "s"),
             BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(item, "s"),
@@ -120,34 +196,32 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
                 prepared
                     .try_reserve(1)
                     .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-                prepared.push((index, Ok(input)));
+                prepared.push((index, Ok(input), policy));
             }
             Err(error) => {
                 prepared
                     .try_reserve(1)
                     .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-                prepared.push((index, Err(error)));
+                prepared.push((index, Err(error), policy));
                 break;
             }
         }
     }
 
-    // Releasing a Python buffer can itself invoke exporter code, so snapshot
-    // only after every acquired input is still alive.
-    let mut snapshots = batch_results(prepared.len())?;
-    for (_, input) in &prepared {
-        let snapshot = match input {
-            Ok(input) => input.snapshot_if(true)?,
-            Err(_) => None,
-        };
-        snapshots.push(snapshot);
-    }
+    // Release custom exporters before capturing output addresses. Their release
+    // hooks can resize a destination. Exact memoryviews remain owned by items.
+    stage_snapshots(&mut prepared, |input, policy| {
+        // ReleaseBeforeWrite also covers a temporary exact memoryview returned by
+        // a string subclass. The items list does not retain that memoryview.
+        let needed = input.buffer_release_may_reenter()
+            || (policy == SnapshotPolicy::ReleaseBeforeWrite && input.has_borrowed_buffer());
 
-    for ((_, input), snapshot) in prepared.iter_mut().zip(snapshots) {
-        if let (Ok(input), Some(snapshot)) = (input, snapshot) {
-            *input = BytesLike::OwnedVec(snapshot);
-        }
-    }
+        input.snapshot_if(needed)
+    })?;
+
+    // Capture destination ranges after every reentrant release, then stage all
+    // alias snapshots before dropping any remaining buffer export.
+    stage_snapshots(&mut prepared, |input, _| outputs.snapshot_alias(input))?;
     Ok(prepared)
 }
 

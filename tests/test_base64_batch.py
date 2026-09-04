@@ -197,6 +197,25 @@ def test_base64_batch_into_acquires_reentrant_buffers_before_snapshotting_aliase
     assert encoded == b'ZGVm'
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
+def test_base64_batch_into_releases_custom_buffers_before_writing() -> None:
+    output = bytearray(b'....')
+    events: list[str] = []
+
+    class ReleaseBuffer:
+        def __buffer__(self, flags: int) -> memoryview:
+            events.append('acquire')
+            return memoryview(b'abc')
+
+        def __release_buffer__(self, views: memoryview) -> None:
+            events.append('release')
+            output[:] = b'BAD!'
+
+    assert base64.b64encode_batch_into([ReleaseBuffer()], [output]) == [4]
+    assert events == ['acquire', 'release']
+    assert output == b'YWJj'
+
+
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
     empty_input = memoryview(bytearray(b'x'))[:0]
     empty_output = bytearray(b'!')

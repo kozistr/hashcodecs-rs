@@ -86,6 +86,15 @@ into a decode investigation:
 python benchmarks/python_base64_batch.py --item-sizes 4096 --batch-sizes 512 768 1024 1280 2048 --decode-only
 ```
 
+Add `--memoryview-input` to wrap every matrix input in an exact memoryview. This mode compares independent views
+against the matching one-item loops and reusable-output paths.
+
+[![Python Base64 memoryview batch throughput](docs/benchmarks/base64-python-batch-memoryview.svg)](docs/benchmarks/base64-python-batch-memoryview.svg)
+
+```sh
+python benchmarks/python_base64_batch.py --item-sizes 1048576 --batch-sizes 8 --memoryview-input --decode-only
+```
+
 Use a single operation when recording a sampling profile, or compare traced allocations without a sampler:
 
 ```sh

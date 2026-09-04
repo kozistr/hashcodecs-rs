@@ -374,6 +374,44 @@ CHARTS = (
         ),
     ),
     Chart(
+        'base64-python-batch-memoryview.svg',
+        'Python Base64 memoryview batch throughput',
+        (
+            panel(
+                '16 B items',
+                ['8', '64', '1,024'],
+                returned_encode=[0.34, 0.40, 0.39],
+                reusable_encode=[0.20, 0.22, 0.22],
+                returned_decode=[0.30, 0.34, 0.34],
+                reusable_decode=[0.16, 0.19, 0.18],
+            ),
+            panel(
+                '256 B items',
+                ['8', '64', '1,024'],
+                returned_encode=[4.83, 5.00, 4.85],
+                reusable_encode=[2.70, 3.08, 2.83],
+                returned_decode=[4.43, 4.63, 4.56],
+                reusable_decode=[2.48, 2.91, 2.71],
+            ),
+            panel(
+                '4 KiB items',
+                ['8', '64', '1,024'],
+                returned_encode=[13.89, 16.69, 1.99],
+                reusable_encode=[20.90, 21.27, 14.38],
+                returned_decode=[18.71, 18.14, 9.91],
+                reusable_decode=[16.64, 17.67, 13.92],
+            ),
+            panel(
+                '1 MiB items',
+                ['1', '2', '4', '8', '16', '32'],
+                returned_encode=[3.62, 3.85, 3.61, 3.04, 2.91, 2.80],
+                reusable_encode=[39.59, 22.90, 20.18, 19.59, 13.44, 11.00],
+                returned_decode=[4.09, 4.36, 4.34, 3.73, 3.54, 3.24],
+                reusable_decode=[29.12, 22.12, 20.94, 18.76, 12.37, 10.59],
+            ),
+        ),
+    ),
+    Chart(
         'base64-python-mutable.svg',
         'Mutable Python Base64 inputs',
         (

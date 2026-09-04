@@ -81,13 +81,18 @@ def run_matrix(
     batch_sizes: tuple[int, ...],
     hashcodecs_only: bool,
     decode_only: bool,
+    memoryview_input: bool,
 ) -> None:
     for item_size in item_sizes:
         payloads = [data(item_size) for _ in range(max(batch_sizes))]
         encoded = [stdlib_base64.b64encode(payload) for payload in payloads]
+        payload_inputs = [memoryview(payload) for payload in payloads] if memoryview_input else payloads
+        encoded_inputs = [memoryview(value) for value in encoded] if memoryview_input else encoded
         for batch_size in batch_sizes:
-            batch = payloads[:batch_size]
-            encoded_batch = encoded[:batch_size]
+            batch = payload_inputs[:batch_size]
+            encoded_batch = encoded_inputs[:batch_size]
+            expected_batch = payloads[:batch_size]
+            expected_encoded = encoded[:batch_size]
             if not decode_only:
                 benchmark(
                     'encode',
@@ -102,7 +107,7 @@ def run_matrix(
                         ('stdlib', lambda batch=batch: [stdlib_base64.b64encode(item) for item in batch]),
                     ),
                 )
-                encoded_outputs = [bytearray(len(value)) for value in encoded_batch]
+                encoded_outputs = [bytearray(len(value)) for value in expected_encoded]
                 benchmark_into(
                     'enc-in',
                     item_size,
@@ -111,7 +116,7 @@ def run_matrix(
                         batch, outputs
                     ),
                     encoded_outputs,
-                    encoded_batch,
+                    expected_encoded,
                     ()
                     if hashcodecs_only
                     else (
@@ -162,7 +167,7 @@ def run_matrix(
                     inputs, outputs, validate=True
                 ),
                 decoded_outputs,
-                batch,
+                expected_batch,
                 ()
                 if hashcodecs_only
                 else (
@@ -288,6 +293,11 @@ def main() -> None:
     parser.add_argument('--batch-sizes', nargs='+', type=positive_int, help='override batch item counts')
     parser.add_argument('--decode-only', action='store_true', help='skip encode benchmarks')
     parser.add_argument(
+        '--memoryview-input',
+        action='store_true',
+        help='wrap every matrix input in an exact memoryview',
+    )
+    parser.add_argument(
         '--hashcodecs-only',
         action='store_true',
         help='time hashcodecs without timing reference implementations',
@@ -330,6 +340,8 @@ def main() -> None:
         parser.error('profiling requires exactly one --item-sizes value and one --batch-sizes value')
     if arguments.discard_profile_result and not arguments.profile_operation:
         parser.error('--discard-profile-result requires --profile-operation')
+    if arguments.memoryview_input and (arguments.profile_operation or arguments.allocation_profile):
+        parser.error('--memoryview-input supports matrix benchmarks only')
     configure_timing(arguments.samples, arguments.minimum_sample_seconds)
 
     pin_to_one_cpu()
@@ -347,7 +359,13 @@ def main() -> None:
         elif arguments.allocation_profile:
             allocation_profile(arguments.profile_direction, item_sizes[0], batch_sizes[0])
         else:
-            run_matrix(item_sizes, batch_sizes, arguments.hashcodecs_only, arguments.decode_only)
+            run_matrix(
+                item_sizes,
+                batch_sizes,
+                arguments.hashcodecs_only,
+                arguments.decode_only,
+                arguments.memoryview_input,
+            )
     finally:
         gc.enable()
 

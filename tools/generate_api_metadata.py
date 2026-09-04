@@ -37,39 +37,36 @@ API_INTRODUCTIONS = {
     ),
     'xxhash': 'This reference uses the authoritative typed API declaration for all functions.',
 }
-METHOD_FILES = {
-    'murmur3': ROOT / 'src' / 'bindings' / 'murmur3' / 'methods.rs',
-    'xxhash': ROOT / 'src' / 'bindings' / 'xxhash' / 'methods.rs',
-}
-MURMUR_INCREMENTAL = ROOT / 'src' / 'bindings' / 'murmur3' / 'incremental.rs'
-BASE64_CALLBACKS = ROOT / 'src' / 'bindings' / 'base64' / 'callbacks.rs'
-BASE64_GENERATED_SCHEMA = ROOT / 'src' / 'bindings' / 'base64' / 'schema_generated.rs'
+RUST_GENERATED = ROOT / 'generated' / 'rust'
+BASE64_GENERATED_SCHEMA = RUST_GENERATED / 'base64_schema.rs'
+MURMUR3_GENERATED_METHODS = RUST_GENERATED / 'murmur3_methods.rs'
+MURMUR3_GENERATED_CLASSES = RUST_GENERATED / 'murmur3_classes.rs'
+XXHASH_GENERATED_METHODS = RUST_GENERATED / 'xxhash_methods.rs'
 GENERATED_HEADER = '# tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.\n'
 RUST_GENERATED_HEADER = '// tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.\n'
-METHOD_DOC_PATTERN = re.compile(
-    r'(?P<prefix>ml_doc:\s+cr(?P<hashes>\#*)")(?P<body>.*?)(?P<suffix>"(?P=hashes)\s*\.as_ptr\(\),)',
-    re.DOTALL,
-)
-METHOD_ENTRY_PATTERN = re.compile(
-    r'ml_name:\s+c"(?P<name>[^"]+)"\.as_ptr\(\),\s*'
-    r'ml_meth:\s+ffi::PyMethodDefPointer\s*\{\s*'
-    r'PyCFunctionFastWithKeywords:\s*(?P<callback>[a-z0-9_]+),',
-    re.DOTALL,
-)
-MURMUR_CLASS_DOC_PATTERN = re.compile(
-    r'(?P<prefix>define_python_hasher!\(\s*'
-    r'[A-Za-z0-9_]+,\s*'
-    r'[A-Za-z0-9_]+,\s*'
-    r'"(?P<name>murmur3_[a-z0-9_]+)",\s*)'
-    r'(?P<body>.*?)'
-    r'(?P<suffix>,\s*\n\s*\d+,\s*\n\s*\d+,)',
-    re.DOTALL,
-)
-CALLBACK_PATTERN = re.compile(
-    r'callback!\s*\{\s*'
-    r'(?P<name>[a-z0-9_]+),\s*'
-    r'\|(?P<py>[a-z0-9_]+)\s*;\s*(?P<parameters>[a-z0-9_,\s]+)\|\s*\{',
-)
+MURMUR_CLASS_IMPLEMENTATIONS = {
+    'murmur3_x86_32': (
+        'PyMurmur3X86Hasher32',
+        'Murmur3X86Hasher32',
+        4,
+        4,
+        '|state: &Murmur3X86Hasher32| state.digest().to_le_bytes()',
+    ),
+    'murmur3_x86_128': (
+        'PyMurmur3X86Hasher128',
+        'Murmur3X86Hasher128',
+        16,
+        16,
+        '|state: &Murmur3X86Hasher128| x86_128_digest(state.digest())',
+    ),
+    'murmur3_x64_128': (
+        'PyMurmur3X64Hasher128',
+        'Murmur3X64Hasher128',
+        16,
+        16,
+        '|state: &Murmur3X64Hasher128| x64_128_digest(state.digest())',
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -214,88 +211,38 @@ def runtime_doc(function: ast.FunctionDef, *, python_315: bool = False) -> str:
     return f'{text_signature(function, python_315=python_315)}\n--\n\n{docstring}'
 
 
-def replace_runtime_docs(
-    path: Path,
-    source: str,
-    functions: dict[str, ast.FunctionDef],
-) -> str:
-    seen: set[str] = set()
+def render_murmur_classes(classes: list[ast.ClassDef]) -> str:
+    names = {class_definition.name for class_definition in classes}
+    if names != set(MURMUR_CLASS_IMPLEMENTATIONS):
+        raise ValueError(f'MurmurHash3 classes {sorted(names)!r} do not match the native implementations')
 
-    def replace(match: re.Match[str]) -> str:
-        first_line = match.group('body').splitlines()[0]
-        name = first_line.split('(', 1)[0]
-        function = functions.get(name)
-        if function is None:
-            raise ValueError(f'{path}: native method {name!r} is absent from {STUB.name}')
-        if name in seen:
-            raise ValueError(f'{path}: native method {name!r} has duplicate documentation')
-        seen.add(name)
-        return f'{match.group("prefix")}{runtime_doc(function)}{match.group("suffix")}'
-
-    rendered = METHOD_DOC_PATTERN.sub(replace, source)
-    if seen != set(functions):
-        raise ValueError(f'{path}: documented native methods {sorted(seen)!r} do not match {sorted(functions)!r}')
-    return rendered
-
-
-def render_method_file(module: str, path: Path, functions: dict[str, ast.FunctionDef]) -> str:
-    source = path.read_text(encoding='utf-8')
-    entries = [(match.group('name'), match.group('callback')) for match in METHOD_ENTRY_PATTERN.finditer(source)]
-    method_names = [name for name, _ in entries]
-    if len(method_names) != len(set(method_names)) or set(method_names) != set(functions):
-        raise ValueError(f'{path}: native method names {method_names!r} do not match the typed declarations')
-    callback_suffix = '' if module == 'murmur3' else '_digest'
-    for name, callback in entries:
-        expected_callback = f'{name}{callback_suffix}'
-        if callback != expected_callback:
-            raise ValueError(
-                f'{path}: native method {name!r} uses callback {callback!r}, expected {expected_callback!r}'
-            )
-    documented_names = [
-        match.group('body').splitlines()[0].split('(', 1)[0] for match in METHOD_DOC_PATTERN.finditer(source)
-    ]
-    if documented_names != method_names:
-        raise ValueError(
-            f'{path}: method table names {method_names!r} do not match documentation {documented_names!r}'
-        )
-    return replace_runtime_docs(path, source, functions)
-
-
-def render_murmur_class_file(path: Path, classes: dict[str, ast.ClassDef]) -> str:
-    source = path.read_text(encoding='utf-8')
-    seen: set[str] = set()
-
-    def replace(match: re.Match[str]) -> str:
-        name = match.group('name')
-        class_definition = classes.get(name)
-        if class_definition is None:
-            raise ValueError(f'{path}: native class {name!r} is absent from {STUB.name}')
-        if name in seen:
-            raise ValueError(f'{path}: native class {name!r} has duplicate documentation')
-        seen.add(name)
+    rendered = []
+    summary_prefix = 'Incremental MurmurHash3 '
+    summary_suffix = (
+        ' hasher.\n\nArgs:\n    data: Optional initial bytes-like data.\n    seed: Initial unsigned 32-bit seed.'
+    )
+    for class_definition in classes:
         documentation = ast.get_docstring(class_definition, clean=True)
         if not documentation:
-            raise ValueError(f'{name} has no API docstring')
+            raise ValueError(f'{class_definition.name} has no API docstring')
         summary_line, separator, examples = documentation.partition('\n\nExamples:\n')
-        summary_prefix = 'Incremental MurmurHash3 '
-        summary_suffix = (
-            ' hasher.\n\nArgs:\n    data: Optional initial bytes-like data.\n    seed: Initial unsigned 32-bit seed.'
-        )
         if not separator or not summary_line.startswith(summary_prefix) or not summary_line.endswith(summary_suffix):
-            raise ValueError(f'{name}: class docstring does not match the native MurmurHash3 template')
+            raise ValueError(f'{class_definition.name}: class docstring does not match the native template')
         summary = summary_line.removeprefix(summary_prefix).removesuffix(summary_suffix)
-        rendered = f'{summary_prefix}{summary}{summary_suffix}\n\nExamples:\n{examples}'
-        if rendered != documentation:
-            raise ValueError(f'{name}: class docstring cannot be represented by the native MurmurHash3 template')
-        return (
-            f'{match.group("prefix")}{json.dumps(summary, ensure_ascii=False)},\n'
-            f'    {json.dumps(examples, ensure_ascii=False)}{match.group("suffix")}'
+        rust_class, state, digest_size, block_size, digest = MURMUR_CLASS_IMPLEMENTATIONS[class_definition.name]
+        rendered.append(
+            'define_python_hasher!(\n'
+            f'    {rust_class},\n'
+            f'    {state},\n'
+            f'    {json.dumps(class_definition.name)},\n'
+            f'    {json.dumps(summary, ensure_ascii=False)},\n'
+            f'    {json.dumps(examples, ensure_ascii=False)},\n'
+            f'    {digest_size},\n'
+            f'    {block_size},\n'
+            f'    {digest},\n'
+            ');\n'
         )
-
-    rendered = MURMUR_CLASS_DOC_PATTERN.sub(replace, source)
-    if seen != set(classes):
-        raise ValueError(f'{path}: documented native classes {sorted(seen)!r} do not match {sorted(classes)!r}')
-    return rendered
+    return f'{RUST_GENERATED_HEADER}\n' + '\n'.join(rendered)
 
 
 def rust_c_string(value: str) -> str:
@@ -305,6 +252,32 @@ def rust_c_string(value: str) -> str:
     while f'"{hashes}' in value:
         hashes += '#'
     return f'cr{hashes}"{value}"{hashes}'
+
+
+def render_native_methods(module: str, functions: list[ast.FunctionDef]) -> str:
+    callback_suffix = '' if module == 'murmur3' else '_digest'
+    entries = [
+        (
+            '    ffi::PyMethodDef {\n'
+            f'        ml_name: c"{function.name}".as_ptr(),\n'
+            '        ml_meth: ffi::PyMethodDefPointer {\n'
+            f'            PyCFunctionFastWithKeywords: {function.name}{callback_suffix},\n'
+            '        },\n'
+            '        ml_flags: METHOD_FLAGS,\n'
+            f'        ml_doc: {rust_c_string(runtime_doc(function))}.as_ptr(),\n'
+            '    },'
+        )
+        for function in functions
+    ]
+    method_count = len(functions) + 1
+    rendered_entries = '\n'.join(entries)
+    return (
+        f'{RUST_GENERATED_HEADER}\n'
+        f'static mut METHODS: [ffi::PyMethodDef; {method_count}] = [\n'
+        f'{rendered_entries}\n'
+        '    ffi::PyMethodDef::zeroed(),\n'
+        '];\n'
+    )
 
 
 def rust_default(function: ast.FunctionDef, argument: ast.arg, default: ast.expr | None) -> str:
@@ -331,31 +304,6 @@ def rust_default(function: ast.FunctionDef, argument: ast.arg, default: ast.expr
 
 def binding_constant(name: str) -> str:
     return name.upper()
-
-
-def validate_base64_callbacks(functions: list[ast.FunctionDef]) -> None:
-    source = BASE64_CALLBACKS.read_text(encoding='utf-8')
-    callbacks: dict[str, list[str]] = {}
-    for match in CALLBACK_PATTERN.finditer(source):
-        name = match.group('name')
-        if name in callbacks:
-            raise ValueError(f'{BASE64_CALLBACKS}: duplicate callback {name!r}')
-        callbacks[name] = [
-            parameter.strip() for parameter in match.group('parameters').split(',') if parameter.strip()
-        ]
-
-    expected = {function.name for function in functions}
-    if set(callbacks) != expected:
-        raise ValueError(
-            f'{BASE64_CALLBACKS}: callbacks {sorted(callbacks)!r} do not match typed declarations {sorted(expected)!r}'
-        )
-    for function in functions:
-        expected_parameters = [argument.arg for argument, _ in function_parameters(function)]
-        if callbacks[function.name] != expected_parameters:
-            raise ValueError(
-                f'{BASE64_CALLBACKS}: callback {function.name!r} parameters {callbacks[function.name]!r} '
-                f'do not match typed declaration {expected_parameters!r}'
-            )
 
 
 def render_base64_binding(function: ast.FunctionDef) -> str:
@@ -408,7 +356,6 @@ pub(super) unsafe fn {function.name}(
 
 
 def render_base64_schema(functions: list[ast.FunctionDef]) -> str:
-    validate_base64_callbacks(functions)
     bindings = '\n'.join(render_base64_binding(function) for function in functions)
     registrations = '\n'.join(
         f'    unsafe {{ {binding_constant(function.name)}.register(methods, &mut method_count, version) }};'
@@ -444,12 +391,12 @@ def generated_files() -> dict[Path, str]:
         '_hashcodecs', sorted((name for names in grouped_names.values() for name in names), key=natural_key)
     )
 
-    for module, path in METHOD_FILES.items():
-        functions = {node.name: node for node in grouped[module] if isinstance(node, ast.FunctionDef)}
-        outputs[path] = render_method_file(module, path, functions)
-
-    murmur_classes = {node.name: node for node in grouped['murmur3'] if isinstance(node, ast.ClassDef)}
-    outputs[MURMUR_INCREMENTAL] = render_murmur_class_file(MURMUR_INCREMENTAL, murmur_classes)
+    murmur_functions = [node for node in grouped['murmur3'] if isinstance(node, ast.FunctionDef)]
+    murmur_classes = [node for node in grouped['murmur3'] if isinstance(node, ast.ClassDef)]
+    xxhash_functions = [node for node in grouped['xxhash'] if isinstance(node, ast.FunctionDef)]
+    outputs[MURMUR3_GENERATED_METHODS] = render_native_methods('murmur3', murmur_functions)
+    outputs[MURMUR3_GENERATED_CLASSES] = render_murmur_classes(murmur_classes)
+    outputs[XXHASH_GENERATED_METHODS] = render_native_methods('xxhash', xxhash_functions)
 
     base64_functions = [node for node in grouped['base64'] if isinstance(node, ast.FunctionDef)]
     outputs[BASE64_GENERATED_SCHEMA] = render_base64_schema(base64_functions)
@@ -465,13 +412,11 @@ def main() -> int:
     for path, content in generated_files().items():
         if path.exists():
             current = path.read_text(encoding='utf-8')
-            if path in METHOD_FILES.values():
-                current = re.sub(r'"###\s*\.as_ptr\(\)', '"###.as_ptr()', current)
-                content = re.sub(r'"###\s*\.as_ptr\(\)', '"###.as_ptr()', content)
             if current == content:
                 continue
         stale.append(path.relative_to(ROOT))
         if not args.check:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding='utf-8', newline='')
 
     if stale and args.check:

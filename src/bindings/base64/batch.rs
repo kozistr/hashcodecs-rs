@@ -12,15 +12,9 @@ use pyo3::types::{PyAny, PyByteArray, PyBytes, PyList, PyMemoryView, PyString};
 use super::super::buffer::{
     BufferRange, BytesLike, ascii_or_bytes_owned, contiguous_bytes_like_owned,
 };
-use super::super::objects::list_items;
+use super::super::objects::{batch_results, list_items};
 
-pub(in crate::bindings::base64) fn batch_results<T>(length: usize) -> PyResult<Vec<T>> {
-    let mut results = Vec::new();
-    results
-        .try_reserve_exact(length)
-        .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
-    Ok(results)
-}
+const BATCH_TOO_LARGE: &str = "Base64 batch is too large";
 
 pub(in crate::bindings::base64) struct BatchOutputs<'py> {
     outputs: Vec<Bound<'py, PyByteArray>>,
@@ -42,7 +36,7 @@ impl<'py> BatchOutputs<'py> {
             return Ok(ranges);
         }
 
-        let mut ranges = batch_results(self.outputs.len())?;
+        let mut ranges = batch_results(self.outputs.len(), BATCH_TOO_LARGE)?;
         ranges.extend(self.outputs.iter().filter_map(BufferRange::for_bytearray));
         ranges.sort_unstable_by_key(|range| range.start());
         let _ = self.ranges.set(ranges);
@@ -82,7 +76,7 @@ pub(in crate::bindings::base64) fn batch_outputs<'py>(
         ));
     }
 
-    let mut parsed = batch_results(outputs.len())?;
+    let mut parsed = batch_results(outputs.len(), BATCH_TOO_LARGE)?;
     let mut identities = HashSet::new();
     identities
         .try_reserve(outputs.len())
@@ -126,7 +120,7 @@ fn stage_snapshots<'py>(
     prepared: &mut [PreparedBatchItem<'py>],
     mut snapshot: impl FnMut(&BytesLike<'py, 'py>, SnapshotPolicy) -> PyResult<Option<Vec<u8>>>,
 ) -> PyResult<()> {
-    let mut snapshots = batch_results(prepared.len())?;
+    let mut snapshots = batch_results(prepared.len(), BATCH_TOO_LARGE)?;
 
     for (_, input, policy) in prepared.iter() {
         snapshots.push(match input {
@@ -223,14 +217,4 @@ pub(in crate::bindings::base64) fn prepare_batch_inputs<'py>(
     // alias snapshots before dropping any remaining buffer export.
     stage_snapshots(&mut prepared, |input, _| outputs.snapshot_alias(input))?;
     Ok(prepared)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::batch_results;
-
-    #[test]
-    fn oversized_batch_capacity_is_an_error() {
-        assert!(batch_results::<u8>(usize::MAX).is_err());
-    }
 }

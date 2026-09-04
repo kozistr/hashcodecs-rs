@@ -366,7 +366,6 @@ fn ranges_overlap(
 }
 
 pub(super) fn bytes_like<'a, 'py>(
-    _py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
@@ -377,7 +376,6 @@ pub(super) fn bytes_like<'a, 'py>(
 }
 
 pub(super) fn contiguous_bytes_like<'a, 'py>(
-    _py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
@@ -422,7 +420,7 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
         let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
         return buffer_bytes_like(&encoded, argument, false);
     }
-    bytes_like(py, value, argument)
+    bytes_like(value, argument)
 }
 
 pub(super) fn ascii_or_bytes_owned<'py>(

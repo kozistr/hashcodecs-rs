@@ -7,14 +7,12 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes, PyInt};
 
 use self::decode::{
-    b64decode, b64decode_batch, b64decode_batch_into, b64decode_into, standard_b64decode,
-    standard_b64decode_batch, standard_b64decode_batch_into, standard_b64decode_into,
-    urlsafe_b64decode, urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
-    urlsafe_b64decode_into,
+    b64decode, b64decode_batch, b64decode_batch_into, b64decode_batch_into_parsed,
+    b64decode_batch_parsed, b64decode_into, standard_b64decode, standard_b64decode_into,
+    urlsafe_b64decode, urlsafe_b64decode_into,
 };
 use self::encode::{
-    b64encode_batch, b64encode_batch_into, standard_b64encode_batch, standard_b64encode_batch_into,
-    urlsafe_b64encode_batch, urlsafe_b64encode_batch_into,
+    b64encode_batch, b64encode_batch_into, b64encode_batch_into_parsed, b64encode_batch_parsed,
 };
 use super::buffer::{BytesLike, ascii_or_bytes, contiguous_bytes_like, with_bytearray};
 use super::objects::{bytearray_data, bytearray_size, bytes_data_mut};
@@ -111,7 +109,7 @@ fn parse_altchars(
     let bytes = if allow_text {
         ascii_or_bytes(py, value, "altchars")?
     } else {
-        contiguous_bytes_like(py, value, "altchars")?
+        contiguous_bytes_like(value, "altchars")?
     };
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
@@ -171,7 +169,7 @@ fn prepare_b64encode_altchars(
         return Ok(Ok((altchars != *b"+/").then_some(altchars)));
     }
 
-    let bytes = contiguous_bytes_like(py, value, "altchars")?;
+    let bytes = contiguous_bytes_like(value, "altchars")?;
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
     if bytes.len() != 2 {
@@ -241,7 +239,7 @@ fn encode_parsed<'py>(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let input = contiguous_bytes_like(py, input, "s")?;
+    let input = contiguous_bytes_like(input, "s")?;
     encode::encode(py, &input, altchars, padded, wrapcol)
 }
 
@@ -265,11 +263,10 @@ pub(super) fn standard_b64encode<'py>(
 
 /// Encode with the standard Base64 alphabet into a reusable output.
 pub(super) fn standard_b64encode_into(
-    py: Python<'_>,
     s: &Bound<'_, PyAny>,
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
-    let input = contiguous_bytes_like(py, s, "s")?;
+    let input = contiguous_bytes_like(s, "s")?;
     encode_parsed_into(&input, output, None, true, None)
 }
 
@@ -284,12 +281,11 @@ pub(super) fn urlsafe_b64encode<'py>(
 
 /// Encode with the URL-safe Base64 alphabet into a reusable output.
 pub(super) fn urlsafe_b64encode_into(
-    py: Python<'_>,
     s: &Bound<'_, PyAny>,
     output: &Bound<'_, PyByteArray>,
     padded: bool,
 ) -> PyResult<usize> {
-    let input = contiguous_bytes_like(py, s, "s")?;
+    let input = contiguous_bytes_like(s, "s")?;
     encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
 }
 
@@ -301,7 +297,7 @@ pub(super) fn b64encode<'py>(
     wrapcol: i128,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let Some(altchars) = altchars else {
-        let input = contiguous_bytes_like(py, s, "s")?;
+        let input = contiguous_bytes_like(s, "s")?;
         let wrapcol = encode::normalize_wrapcol(wrapcol)?;
         return encode::encode(py, &input, None, padded, wrapcol);
     };
@@ -309,7 +305,7 @@ pub(super) fn b64encode<'py>(
     let parsed_altchars = parse_altchars_first
         .then(|| prepare_b64encode_altchars(py, altchars))
         .transpose()?;
-    let input = contiguous_bytes_like(py, s, "s")?;
+    let input = contiguous_bytes_like(s, "s")?;
     let altchars = if let Some(parsed_altchars) = parsed_altchars {
         parsed_altchars?
     } else {
@@ -327,7 +323,7 @@ pub(super) fn b64encode_into(
     padded: bool,
     wrapcol: i128,
 ) -> PyResult<usize> {
-    let input = contiguous_bytes_like(py, s, "s")?;
+    let input = contiguous_bytes_like(s, "s")?;
     let altchars = parse_altchars(py, altchars, false)?;
     encode_parsed_into(
         &input,

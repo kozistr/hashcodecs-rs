@@ -23,7 +23,7 @@ pub(in crate::bindings::base64) fn b64decode_batch<'py>(
     b64decode_batch_parsed(py, items, altchars, validate)
 }
 
-fn b64decode_batch_parsed<'py>(
+pub(in crate::bindings::base64) fn b64decode_batch_parsed<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     altchars: Option<[u8; 2]>,
@@ -41,20 +41,6 @@ fn b64decode_batch_parsed<'py>(
         let input = ascii_or_bytes(py, &item, "s")?;
         decoder.decode_allocating(py, &input)
     })
-}
-
-pub(in crate::bindings::base64) fn standard_b64decode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64decode_batch_parsed(py, items, None, false)
-}
-
-pub(in crate::bindings::base64) fn urlsafe_b64decode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64decode_batch_parsed(py, items, Some(*b"-_"), false)
 }
 
 /// Decode each item into its matching bytearray and return the byte counts.
@@ -75,7 +61,7 @@ pub(in crate::bindings::base64) fn b64decode_batch_into<'py>(
     b64decode_batch_into_parsed(py, items, outputs, altchars, validate)
 }
 
-fn b64decode_batch_into_parsed<'py>(
+pub(in crate::bindings::base64) fn b64decode_batch_into_parsed<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     outputs: &Bound<'py, PyList>,
@@ -106,20 +92,4 @@ fn b64decode_batch_into_parsed<'py>(
             }
         }
     })
-}
-
-pub(in crate::bindings::base64) fn standard_b64decode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64decode_batch_into_parsed(py, items, outputs, None, false)
-}
-
-pub(in crate::bindings::base64) fn urlsafe_b64decode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64decode_batch_into_parsed(py, items, outputs, Some(*b"-_"), false)
 }

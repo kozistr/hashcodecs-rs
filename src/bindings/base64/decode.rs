@@ -23,8 +23,7 @@ use strict::{
 };
 
 pub(super) use self::batch::{
-    b64decode_batch, b64decode_batch_into, standard_b64decode_batch, standard_b64decode_batch_into,
-    urlsafe_b64decode_batch, urlsafe_b64decode_batch_into,
+    b64decode_batch, b64decode_batch_into, b64decode_batch_into_parsed, b64decode_batch_parsed,
 };
 
 pub(in crate::bindings::base64) fn translate_bytes(

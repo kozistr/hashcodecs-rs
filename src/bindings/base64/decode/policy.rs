@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 
-use super::advanced::AdvancedDecoder;
+use super::configured::ConfiguredDecoder;
 use super::lenient::lenient_decode_table;
 use crate::bindings::base64::{PythonSemantics, python_semantics};
 use crate::bindings::buffer::contiguous_bytes_like;
@@ -96,7 +96,7 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum AdvancedShortcut {
+pub(super) enum ConfiguredShortcut {
     None,
     StandardStrict,
     CanonicalUnpadded,
@@ -104,7 +104,7 @@ pub(super) enum AdvancedShortcut {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum DecodeRoute {
-    Advanced(AdvancedShortcut),
+    Configured(ConfiguredShortcut),
     Strict { urlsafe_315: bool },
     LenientDirect { urlsafe_315: bool },
     LenientCustom,
@@ -190,8 +190,8 @@ pub(super) struct PreparedDecoder {
     pub(super) semantics: PythonSemantics,
     pub(super) policy: PreparedPolicy,
     pub(super) route: DecodeRoute,
-    advanced: std::sync::OnceLock<Box<AdvancedDecoder>>,
-    strict_custom: std::sync::OnceLock<Box<AdvancedDecoder>>,
+    configured: std::sync::OnceLock<Box<ConfiguredDecoder>>,
+    strict_custom: std::sync::OnceLock<Box<ConfiguredDecoder>>,
     lenient_table: std::sync::OnceLock<Box<[u8; 256]>>,
 }
 
@@ -204,20 +204,20 @@ impl PreparedDecoder {
             semantics,
             policy,
             route,
-            advanced: std::sync::OnceLock::new(),
+            configured: std::sync::OnceLock::new(),
             strict_custom: std::sync::OnceLock::new(),
             lenient_table: std::sync::OnceLock::new(),
         })
     }
 
-    pub(super) fn advanced(&self) -> &AdvancedDecoder {
-        self.advanced
-            .get_or_init(|| Box::new(AdvancedDecoder::new(&self.policy)))
+    pub(super) fn configured(&self) -> &ConfiguredDecoder {
+        self.configured
+            .get_or_init(|| Box::new(ConfiguredDecoder::new(&self.policy)))
     }
 
-    pub(super) fn strict_custom(&self) -> &AdvancedDecoder {
+    pub(super) fn strict_custom(&self) -> &ConfiguredDecoder {
         self.strict_custom
-            .get_or_init(|| Box::new(AdvancedDecoder::new(&self.policy.strict_custom())))
+            .get_or_init(|| Box::new(ConfiguredDecoder::new(&self.policy.strict_custom())))
     }
 
     pub(super) fn lenient_table(&self) -> &[u8; 256] {
@@ -237,13 +237,13 @@ fn select_route(
         && (policy.canonical || empty_exact_ignorechars);
     if policy.ignorechars_specified || policy.canonical {
         let shortcut = if standard_strict {
-            AdvancedShortcut::StandardStrict
+            ConfiguredShortcut::StandardStrict
         } else if !policy.ignorechars_specified && policy.canonical && !policy.padding.is_padded() {
-            AdvancedShortcut::CanonicalUnpadded
+            ConfiguredShortcut::CanonicalUnpadded
         } else {
-            AdvancedShortcut::None
+            ConfiguredShortcut::None
         };
-        return DecodeRoute::Advanced(shortcut);
+        return DecodeRoute::Configured(shortcut);
     }
 
     let urlsafe_315 = semantics.urlsafe_exclusive_alphabet && policy.altchars == Some(*b"-_");
@@ -332,7 +332,7 @@ mod tests {
                 false,
                 old,
             ),
-            DecodeRoute::Advanced(AdvancedShortcut::StandardStrict)
+            DecodeRoute::Configured(ConfiguredShortcut::StandardStrict)
         );
         assert_eq!(
             select_route(
@@ -340,7 +340,7 @@ mod tests {
                 false,
                 old,
             ),
-            DecodeRoute::Advanced(AdvancedShortcut::CanonicalUnpadded)
+            DecodeRoute::Configured(ConfiguredShortcut::CanonicalUnpadded)
         );
         assert_eq!(
             select_route(
@@ -354,7 +354,7 @@ mod tests {
                 false,
                 old,
             ),
-            DecodeRoute::Advanced(AdvancedShortcut::None)
+            DecodeRoute::Configured(ConfiguredShortcut::None)
         );
     }
 

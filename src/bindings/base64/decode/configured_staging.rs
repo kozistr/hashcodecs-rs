@@ -3,14 +3,14 @@ use crate::bindings::base64::STANDARD_ALPHABET;
 
 use super::Translation;
 
-pub(super) const ADVANCED_STAGING_CAPACITY: usize = 4096;
+pub(super) const CONFIGURED_STAGING_CAPACITY: usize = 4096;
 
 #[inline]
 unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> Option<usize> {
     let layout = if CHECKED {
         decode_unpadded_layout(input).ok()?
     } else {
-        decode_unpadded_layout(input).expect("validated advanced Base64 staging remains valid")
+        decode_unpadded_layout(input).expect("validated configured Base64 staging remains valid")
     };
     let decoded = unsafe {
         decode_to_ptr_with_unpadded_layout(input, output, layout, DecodeAlphabet::Standard)
@@ -18,13 +18,13 @@ unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> 
     if CHECKED {
         decoded.ok()?;
     } else {
-        decoded.expect("validated advanced Base64 staging remains valid");
+        decoded.expect("validated configured Base64 staging remains valid");
     }
     Some(layout.output_len())
 }
 
 pub(super) struct StagingWriter {
-    staging: [u8; ADVANCED_STAGING_CAPACITY],
+    staging: [u8; CONFIGURED_STAGING_CAPACITY],
     staged: usize,
     output: *mut u8,
     written: usize,
@@ -34,7 +34,7 @@ pub(super) struct StagingWriter {
 impl StagingWriter {
     pub(super) fn new(output: *mut u8, translation: Option<Translation>) -> Self {
         Self {
-            staging: [0; ADVANCED_STAGING_CAPACITY],
+            staging: [0; CONFIGURED_STAGING_CAPACITY],
             staged: 0,
             output,
             written: 0,
@@ -53,12 +53,12 @@ impl StagingWriter {
     pub(super) fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
         while source < input.len() {
-            let copied = (input.len() - source).min(ADVANCED_STAGING_CAPACITY - self.staged);
+            let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
             self.staging[self.staged..self.staged + copied]
                 .copy_from_slice(&input[source..source + copied]);
             self.staged += copied;
             source += copied;
-            if self.staged == ADVANCED_STAGING_CAPACITY {
+            if self.staged == CONFIGURED_STAGING_CAPACITY {
                 self.flush::<CHECKED>()?;
             }
         }
@@ -68,7 +68,7 @@ impl StagingWriter {
     pub(super) fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
         self.staging[self.staged] = STANDARD_ALPHABET[usize::from(value)];
         self.staged += 1;
-        if self.staged == ADVANCED_STAGING_CAPACITY {
+        if self.staged == CONFIGURED_STAGING_CAPACITY {
             self.flush::<CHECKED>()?;
         }
         Some(())
@@ -94,8 +94,8 @@ impl StagingWriter {
 }
 
 pub(super) struct StagingValidator {
-    staging: [u8; ADVANCED_STAGING_CAPACITY],
-    scratch: [u8; ADVANCED_STAGING_CAPACITY / 4 * 3],
+    staging: [u8; CONFIGURED_STAGING_CAPACITY],
+    scratch: [u8; CONFIGURED_STAGING_CAPACITY / 4 * 3],
     staged: usize,
     translation: Option<Translation>,
 }
@@ -103,8 +103,8 @@ pub(super) struct StagingValidator {
 impl StagingValidator {
     pub(super) fn new(translation: Option<Translation>) -> Self {
         Self {
-            staging: [0; ADVANCED_STAGING_CAPACITY],
-            scratch: [0; ADVANCED_STAGING_CAPACITY / 4 * 3],
+            staging: [0; CONFIGURED_STAGING_CAPACITY],
+            scratch: [0; CONFIGURED_STAGING_CAPACITY / 4 * 3],
             staged: 0,
             translation,
         }
@@ -113,12 +113,12 @@ impl StagingValidator {
     pub(super) fn push(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
         while source < input.len() {
-            let copied = (input.len() - source).min(ADVANCED_STAGING_CAPACITY - self.staged);
+            let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
             self.staging[self.staged..self.staged + copied]
                 .copy_from_slice(&input[source..source + copied]);
             self.staged += copied;
             source += copied;
-            if self.staged == ADVANCED_STAGING_CAPACITY {
+            if self.staged == CONFIGURED_STAGING_CAPACITY {
                 self.flush()?;
             }
         }

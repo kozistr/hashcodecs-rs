@@ -5,10 +5,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::{output_too_small, pybytes_with_len};
-use super::advanced::AdvancedDecoder;
+use super::configured::ConfiguredDecoder;
 use super::fallback::decoding_error;
 use super::policy::{ErrorWrites, Padding, StoreBounds};
-use super::{decode_advanced, decode_advanced_strict_into};
+use super::{decode_configured, decode_configured_strict_into};
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
@@ -308,13 +308,13 @@ pub(in crate::bindings::base64::decode) fn decode_strict_with_altchars<'decoder,
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder AdvancedDecoder,
+    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
     semantics: PythonSemantics,
 ) -> PyResult<Bound<'py, PyBytes>> {
     match altchars {
         None => decode_strict(py, input, DecodeAlphabet::Standard),
         Some([b'-', b'_']) => decode_strict(py, input, DecodeAlphabet::Mixed),
-        Some(_) => decode_advanced(py, input, custom(), semantics),
+        Some(_) => decode_configured(py, input, custom(), semantics),
     }
 }
 
@@ -322,13 +322,13 @@ pub(in crate::bindings::base64::decode) fn decode_unpadded_with_altchars<'decode
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder AdvancedDecoder,
+    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
     semantics: PythonSemantics,
 ) -> PyResult<Bound<'py, PyBytes>> {
     match altchars {
         None => decode_unpadded(py, input, DecodeAlphabet::Standard),
         Some([b'-', b'_']) => decode_unpadded(py, input, DecodeAlphabet::Mixed),
-        Some(_) => decode_advanced(py, input, custom(), semantics),
+        Some(_) => decode_configured(py, input, custom(), semantics),
     }
 }
 
@@ -336,7 +336,7 @@ pub(in crate::bindings::base64::decode) fn decode_strict_into_with_altchars<'dec
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder AdvancedDecoder,
+    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
     error_writes: ErrorWrites,
 ) -> PyResult<Result<usize, Base64Error>> {
     match altchars {
@@ -345,7 +345,7 @@ pub(in crate::bindings::base64::decode) fn decode_strict_into_with_altchars<'dec
             decode_strict_into(input, output, DecodeAlphabet::Mixed, error_writes)
         }
         Some(altchars) => {
-            decode_advanced_strict_into(input, output, altchars, custom(), error_writes)
+            decode_configured_strict_into(input, output, altchars, custom(), error_writes)
         }
     }
 }
@@ -354,7 +354,7 @@ pub(in crate::bindings::base64::decode) fn decode_unpadded_into_with_altchars<'d
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder AdvancedDecoder,
+    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
     error_writes: ErrorWrites,
 ) -> PyResult<Result<usize, Base64Error>> {
     match altchars {
@@ -363,7 +363,7 @@ pub(in crate::bindings::base64::decode) fn decode_unpadded_into_with_altchars<'d
             decode_unpadded_into(input, output, DecodeAlphabet::Mixed, error_writes)
         }
         Some(altchars) => {
-            decode_advanced_strict_into(input, output, altchars, custom(), error_writes)
+            decode_configured_strict_into(input, output, altchars, custom(), error_writes)
         }
     }
 }

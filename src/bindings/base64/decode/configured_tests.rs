@@ -10,25 +10,26 @@ use super::super::lenient::{
 };
 use super::super::policy::{DecodePolicy, ErrorWrites, Padding, PreparedDecoder, Validation};
 use super::{
-    ADVANCED_STAGING_CAPACITY, AdvancedDecoder, StagingValidator, StagingWriter, StrictSpecials,
-    Translation, decode_advanced_into, decode_advanced_strict_into as decode_prepared_strict_into,
+    CONFIGURED_STAGING_CAPACITY, ConfiguredDecoder, StagingValidator, StagingWriter,
+    StrictSpecials, Translation, decode_configured_into,
+    decode_configured_strict_into as decode_prepared_strict_into,
 };
 use crate::base64::Base64Error;
 use crate::bindings::base64::{PythonSemantics, STANDARD_ALPHABET};
 use crate::bindings::buffer::BytesLike;
 
-fn advanced_decoder(
+fn configured_decoder(
     ignored_bytes: &[u8],
     strict_mode: bool,
     padded: bool,
     canonical: bool,
-) -> AdvancedDecoder {
+) -> ConfiguredDecoder {
     let table = lenient_decode_table(None);
     let mut ignored = [false; 256];
     for &byte in ignored_bytes {
         ignored[usize::from(byte)] = true;
     }
-    AdvancedDecoder {
+    ConfiguredDecoder {
         table,
         ignored,
         validation: if strict_mode {
@@ -45,7 +46,7 @@ fn advanced_decoder(
     }
 }
 
-fn decode_advanced_strict_into(
+fn decode_configured_strict_into(
     py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
@@ -351,23 +352,23 @@ fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     translation.apply(&mut translated);
     assert_eq!(&translated, b"A+A+");
 
-    let mut output = vec![0xa5; ADVANCED_STAGING_CAPACITY * 2];
-    let symbols = vec![b'A'; ADVANCED_STAGING_CAPACITY * 2];
+    let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
+    let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(writer.push_symbols::<true>(&symbols), Some(()));
     let written = writer.finish::<true>().unwrap();
-    assert_eq!(written, ADVANCED_STAGING_CAPACITY / 4 * 3 * 2);
+    assert_eq!(written, CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2);
     assert!(output[..written].iter().all(|&byte| byte == 0));
 
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(
-        writer.push_symbols::<true>(&symbols[..ADVANCED_STAGING_CAPACITY - 1]),
+        writer.push_symbols::<true>(&symbols[..CONFIGURED_STAGING_CAPACITY - 1]),
         Some(())
     );
     assert_eq!(writer.push_value::<true>(0), Some(()));
     assert_eq!(
         writer.finish::<true>(),
-        Some(ADVANCED_STAGING_CAPACITY / 4 * 3)
+        Some(CONFIGURED_STAGING_CAPACITY / 4 * 3)
     );
 
     assert_eq!(
@@ -390,8 +391,8 @@ fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
 }
 
 #[test]
-fn advanced_strict_decoder_covers_generic_validation_and_decode_errors() {
-    let decoder = advanced_decoder(b"!?#$", true, true, false);
+fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
+    let decoder = configured_decoder(b"!?#$", true, true, false);
     for (input, expected) in [
         (b"AAAA".as_slice(), 3),
         (b"AA==".as_slice(), 1),
@@ -418,7 +419,7 @@ fn advanced_strict_decoder_covers_generic_validation_and_decode_errors() {
         );
     }
 
-    let unpadded = advanced_decoder(b"!?#$", true, false, false);
+    let unpadded = configured_decoder(b"!?#$", true, false, false);
     assert_eq!(unpadded.validate_strict(b"AA=="), None);
     let mut output = [0xa5; 8];
     assert_eq!(
@@ -426,7 +427,7 @@ fn advanced_strict_decoder_covers_generic_validation_and_decode_errors() {
         None
     );
 
-    let canonical = advanced_decoder(b"!?#$", true, true, true);
+    let canonical = configured_decoder(b"!?#$", true, true, true);
     assert_eq!(canonical.validate_strict(b"AB=="), None);
     assert_eq!(
         unsafe { canonical.decode_strict_checked_to_ptr(b"AB==", output.as_mut_ptr()) },
@@ -440,9 +441,9 @@ fn advanced_strict_decoder_covers_generic_validation_and_decode_errors() {
 }
 
 #[test]
-fn advanced_strict_specials_cover_padding_and_staging_errors() {
-    let decoder = advanced_decoder(b"!", true, true, false);
-    let mut output = vec![0xa5; ADVANCED_STAGING_CAPACITY];
+fn configured_strict_specials_cover_padding_and_staging_errors() {
+    let decoder = configured_decoder(b"!", true, true, false);
+    let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY];
 
     assert_eq!(decoder.validate_strict(b"AA!!=="), Some(1));
     assert_eq!(
@@ -459,7 +460,7 @@ fn advanced_strict_specials_cover_padding_and_staging_errors() {
         );
     }
 
-    let canonical = advanced_decoder(b"!", true, true, true);
+    let canonical = configured_decoder(b"!", true, true, true);
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.validate_strict(input), None);
         assert_eq!(
@@ -468,7 +469,7 @@ fn advanced_strict_specials_cover_padding_and_staging_errors() {
         );
     }
 
-    let mut forbidden = advanced_decoder(b"!", true, true, false);
+    let mut forbidden = configured_decoder(b"!", true, true, false);
     forbidden.table[usize::from(b'A')] = 64;
     forbidden.strict_forbidden = StrictSpecials::forbidden(&forbidden.table, &forbidden.ignored);
     assert_eq!(forbidden.validate_strict(b"AAAA"), None);
@@ -477,8 +478,8 @@ fn advanced_strict_specials_cover_padding_and_staging_errors() {
         None
     );
 
-    let symbols = vec![b'A'; ADVANCED_STAGING_CAPACITY];
-    let expected = ADVANCED_STAGING_CAPACITY / 4 * 3;
+    let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY];
+    let expected = CONFIGURED_STAGING_CAPACITY / 4 * 3;
     assert_eq!(decoder.validate_strict(&symbols), Some(expected));
     assert_eq!(
         unsafe { decoder.decode_strict_checked_to_ptr(&symbols, output.as_mut_ptr()) },
@@ -491,12 +492,12 @@ fn advanced_strict_specials_cover_padding_and_staging_errors() {
 }
 
 #[test]
-fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
+fn configured_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::ByteArray(&shared),
                 &shared,
@@ -512,7 +513,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
         let valid = PyBytes::new(py, b"@#8=");
         let output = PyByteArray::new(py, &[0xa5; 2]);
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&valid),
                 &output,
@@ -528,7 +529,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
         let invalid = PyBytes::new(py, b"AA=");
         let output = PyByteArray::new(py, &[0xa5; 2]);
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&invalid),
                 &output,
@@ -542,7 +543,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
         assert_eq!(output.to_vec(), [0xa5; 2]);
 
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&invalid),
                 &output,
@@ -557,7 +558,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
 
         let invalid_custom_padding = PyBytes::new(py, b"A=#");
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&invalid_custom_padding),
                 &output,
@@ -572,7 +573,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
 
         let unpadded = PyBytes::new(py, b"@#8");
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&unpadded),
                 &output,
@@ -587,7 +588,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
 
         let invalid_alphabet = PyBytes::new(py, b"AA!=");
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&invalid_alphabet),
                 &output,
@@ -601,7 +602,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
 
         let output = PyByteArray::new(py, &[0xa5]);
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&valid),
                 &output,
@@ -618,7 +619,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
         assert_eq!(output.to_vec(), [0xa5]);
 
         assert_eq!(
-            decode_advanced_strict_into(
+            decode_configured_strict_into(
                 py,
                 &BytesLike::Bytes(&valid),
                 &output,
@@ -637,7 +638,7 @@ fn advanced_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
 }
 
 #[test]
-fn advanced_into_snapshots_an_aliasing_bytearray() {
+fn configured_into_snapshots_an_aliasing_bytearray() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
@@ -647,11 +648,11 @@ fn advanced_into_snapshots_an_aliasing_bytearray() {
         )
         .unwrap();
         assert_eq!(
-            decode_advanced_into(
+            decode_configured_into(
                 py,
                 &BytesLike::ByteArray(&shared),
                 &shared,
-                prepared.advanced(),
+                prepared.configured(),
                 prepared.semantics,
             )
             .unwrap(),
@@ -662,9 +663,9 @@ fn advanced_into_snapshots_an_aliasing_bytearray() {
 }
 
 #[test]
-fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
-    let decoder = advanced_decoder(b"!", false, true, false);
-    let mut output = vec![0xa5; ADVANCED_STAGING_CAPACITY * 2];
+fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
+    let decoder = configured_decoder(b"!", false, true, false);
+    let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     assert_eq!(decoder.decoded_len(b"Y!Q==", false), Some(1));
     assert_eq!(
         unsafe { decoder.decode_checked_to_ptr(b"Y!Q==", output.as_mut_ptr(), false) },
@@ -676,7 +677,7 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         1
     );
 
-    let canonical = advanced_decoder(b"!", false, true, true);
+    let canonical = configured_decoder(b"!", false, true, true);
     assert_eq!(canonical.decoded_len(b"AAAA", true), Some(3));
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
@@ -686,8 +687,8 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         );
     }
 
-    let symbols = vec![b'A'; ADVANCED_STAGING_CAPACITY * 2];
-    let expected = ADVANCED_STAGING_CAPACITY / 4 * 3 * 2;
+    let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
+    let expected = CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2;
     assert_eq!(decoder.decoded_len(&symbols, true), Some(expected));
     assert_eq!(
         unsafe { decoder.decode_checked_to_ptr(&symbols, output.as_mut_ptr(), true) },
@@ -698,7 +699,7 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         expected
     );
 
-    let mut remapped = advanced_decoder(b"!", false, false, false);
+    let mut remapped = configured_decoder(b"!", false, false, false);
     remapped.table[usize::from(b'A')] = 1;
     assert!(!remapped.preserves_alphanumeric());
     assert_eq!(remapped.decoded_len(b"AAAA", true), Some(3));
@@ -711,7 +712,7 @@ fn advanced_lenient_decoder_covers_dispatch_and_canonical_errors() {
         3
     );
 
-    let mut remapped_canonical = advanced_decoder(b"!", false, false, true);
+    let mut remapped_canonical = configured_decoder(b"!", false, false, true);
     remapped_canonical.table[usize::from(b'A')] = 1;
     assert!(!remapped_canonical.preserves_alphanumeric());
     assert_eq!(remapped_canonical.decoded_len(b"AAAA", true), Some(3));

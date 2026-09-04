@@ -14,15 +14,9 @@ use crate::backend::{Capabilities, CpuFeature};
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod avx2;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod avx2_batch;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod avx512;
 mod scalar;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod ssse3;
+mod x86;
 
 use super::primitives::*;
 
@@ -185,7 +179,7 @@ pub(super) fn initialize_secret_scalar(seed: u64) -> Secret {
 #[inline]
 pub(super) fn initialize_secret_with_capabilities(seed: u64, capabilities: Capabilities) -> Secret {
     if capabilities.supports(CpuFeature::Avx2) {
-        unsafe { avx2::init_secret(seed) }
+        unsafe { x86::avx2::init_secret(seed) }
     } else {
         initialize_secret_scalar(seed)
     }
@@ -272,9 +266,9 @@ type X86Kernel = unsafe fn(LongInput<'_>, &Secret) -> [u64; 8];
 #[inline]
 pub(super) fn select_x86_accumulation_kernel(backend: X86Backend) -> Option<X86Kernel> {
     match backend {
-        X86Backend::Ssse3 => Some(ssse3::accumulate),
-        X86Backend::Avx2 => Some(avx2::accumulate),
-        X86Backend::Avx512 => Some(avx512::accumulate),
+        X86Backend::Ssse3 => Some(x86::ssse3::accumulate),
+        X86Backend::Avx2 => Some(x86::avx2::accumulate),
+        X86Backend::Avx512 => Some(x86::avx512::accumulate),
         X86Backend::Scalar => None,
     }
 }
@@ -379,7 +373,7 @@ impl LongEngine {
         }
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
-            return Some(unsafe { avx2::init_secret(seed) });
+            return Some(unsafe { x86::avx2::init_secret(seed) });
         }
         Some(initialize_secret_scalar(seed))
     }
@@ -491,7 +485,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
-            Some(unsafe { avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
+            Some(unsafe { x86::avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
         }
     }
 
@@ -511,7 +505,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
-            Some(unsafe { avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
+            Some(unsafe { x86::avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
         }
     }
 
@@ -531,7 +525,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
-            Some(unsafe { avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })
+            Some(unsafe { x86::avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })
         }
     }
 }

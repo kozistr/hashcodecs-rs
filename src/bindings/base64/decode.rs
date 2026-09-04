@@ -6,15 +6,15 @@ use crate::bindings::buffer::ascii_or_bytes;
 
 use self::policy::{DecodePolicy, PreparedDecoder};
 
-mod advanced;
 mod batch;
+mod configured;
 mod fallback;
 mod lenient;
 mod output;
 mod policy;
 mod strict;
 
-use advanced::{decode_advanced, decode_advanced_into, decode_advanced_strict_into};
+use configured::{decode_configured, decode_configured_into, decode_configured_strict_into};
 use lenient::{try_decode_lenient, try_decode_lenient_into};
 use strict::{
     decode_strict, decode_strict_into, decode_strict_into_with_altchars,

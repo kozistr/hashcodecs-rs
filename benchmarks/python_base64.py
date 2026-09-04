@@ -84,14 +84,14 @@ def main() -> None:
         help='time MIME-wrapped and noisy lenient decoding',
     )
     mode.add_argument(
-        '--advanced',
+        '--configured',
         action='store_true',
         help='time Python 3.15 ignorechars, canonical, and custom-alphabet decoding',
     )
     add_timing_arguments(parser)
     args = parser.parse_args()
-    if args.advanced and sys.version_info < (3, 15):
-        parser.error('--advanced requires Python 3.15 or newer')
+    if args.configured and sys.version_info < (3, 15):
+        parser.error('--configured requires Python 3.15 or newer')
     configure_timing(args.samples, args.minimum_sample_seconds)
 
     pin_to_one_cpu()
@@ -102,7 +102,7 @@ def main() -> None:
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
 
-            if args.advanced:
+            if args.configured:
                 noisy = b'!'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
                 unpadded = standard.rstrip(b'=')
                 custom = noisy.translate(bytes.maketrans(b'+/', b'@#'))

@@ -281,7 +281,7 @@ def test_large_base64_calls_release_the_gil(assert_releases_gil: GILProgressAsse
     assert_releases_gil(lambda: base64.b64decode(custom, b'@#', validate=True), payload, 128)
 
 
-def test_advanced_decode_fallback_edge_cases() -> None:
+def test_configured_decode_fallback_edge_cases() -> None:
     assert base64.b64decode(b'@!#8', b'@#', padded=False, ignorechars=b'!') == b'\xfb\xff'
     output = bytearray([0xA5] * 4)
     assert base64.b64decode_into(b'@!#8', output, b'@#', padded=False, ignorechars=b'!') == 2
@@ -328,8 +328,8 @@ def test_standard_decode_into_strict_fast_paths(kwargs: dict[str, object]) -> No
         assert malformed == bytes([0xA5] * 8)
 
 
-def test_advanced_decode_native_staging_and_dispatch_paths() -> None:
-    payload = bytes(range(256)) * 32 + b'native advanced decoder tail'
+def test_configured_decode_native_staging_and_dispatch_paths() -> None:
+    payload = bytes(range(256)) * 32 + b'native configured decoder tail'
     encoded = stdlib_base64.b64encode(payload)
 
     translated = encoded.translate(bytes.maketrans(b'+/', b'@#'))
@@ -365,7 +365,7 @@ def test_advanced_decode_native_staging_and_dispatch_paths() -> None:
         b'A' * 4095 + b'?',
     ],
 )
-def test_advanced_decode_native_rejects_invalid_staging(encoded: bytes) -> None:
+def test_configured_decode_native_rejects_invalid_staging(encoded: bytes) -> None:
     with pytest.raises(binascii.Error):
         base64.b64decode(encoded, ignorechars=b'!')
     output = bytearray([0xA5] * len(encoded))
@@ -375,7 +375,7 @@ def test_advanced_decode_native_rejects_invalid_staging(encoded: bytes) -> None:
 
 
 @pytest.mark.parametrize('ignorechars', [b'', b'!', b'!?', b'!?~'])
-def test_advanced_decode_native_special_search_widths(ignorechars: bytes) -> None:
+def test_configured_decode_native_special_search_widths(ignorechars: bytes) -> None:
     encoded = b'Y' + ignorechars + b'WJj'
     assert base64.b64decode(encoded, b'@#', ignorechars=ignorechars) == b'abc'
     output = bytearray(3)
@@ -383,7 +383,7 @@ def test_advanced_decode_native_special_search_widths(ignorechars: bytes) -> Non
     assert output == b'abc'
 
 
-def test_advanced_decode_native_single_altchar_translation() -> None:
+def test_configured_decode_native_single_altchar_translation() -> None:
     assert base64.b64decode(b'@@8=', b'@/', ignorechars=b'') == b'\xfb\xef'
     output = bytearray(2)
     assert base64.b64decode_into(b'@@8=', output, b'@/', ignorechars=b'') == 2
@@ -406,7 +406,7 @@ def test_lenient_unpadded_decode_into_checks_final_output_size() -> None:
         base64.b64decode_into(b'AA', bytearray(), validate=False, padded=False)
 
 
-def test_advanced_lenient_padding_matches_the_running_cpython() -> None:
+def test_configured_lenient_padding_matches_the_running_cpython() -> None:
     encoded = b'AA==AAAA'
     kwargs: dict[str, object] = {'validate': False, 'ignorechars': b'!$%&'}
     stdlib_kwargs = kwargs if PYTHON_315 else {'validate': False}
@@ -450,7 +450,7 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert output == b'\x00'
 
 
-def test_advanced_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
     def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
         raise AssertionError((args, kwargs))
 

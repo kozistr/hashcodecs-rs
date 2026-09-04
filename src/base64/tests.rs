@@ -3,7 +3,10 @@ use super::backend::{self, Backend};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::decode::{self as decode_backend, x86_contracts};
 use super::encode as encode_backend;
-use super::runtime_dispatch::{decode_with_backend, decode_with_backend_ptr, encode_with_backend};
+use super::runtime_dispatch::{
+    decode_valid_prefix_with_backend, decode_with_backend, decode_with_backend_ptr,
+    encode_with_backend, validate_with_backend,
+};
 use super::*;
 use crate::backend::{Capabilities, CpuFeature};
 
@@ -30,6 +33,164 @@ fn standard_and_url_safe_round_trip() {
     assert_eq!(b64decode_urlsafe(b"-_8=").unwrap(), b"\xfb\xff");
     assert_eq!(b64decode(b"YQ==").unwrap(), b"a");
     assert_eq!(b64decode(b"YWI=").unwrap(), b"ab");
+}
+
+#[test]
+fn validation_only_kernels_classify_without_output_storage() {
+    for backend in [
+        Backend::Scalar,
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for (alphabet, symbol) in [
+            (DecodeAlphabet::Standard, b'/'),
+            (DecodeAlphabet::UrlSafe, b'_'),
+            (DecodeAlphabet::Mixed, b'-'),
+        ] {
+            let mut input = vec![symbol; 273];
+            let consumed = validate_with_backend(&input, backend, alphabet).unwrap();
+            if backend == Backend::Scalar {
+                assert_eq!(consumed, 0);
+                continue;
+            }
+            assert!(consumed >= 16);
+            assert!(input.len() - consumed < 16);
+
+            input[15] = b'!';
+            assert_eq!(
+                validate_with_backend(&input, backend, alphabet),
+                Err(Base64Error::InvalidInput)
+            );
+            input[15] = symbol;
+            input[consumed - 1] = b'!';
+            assert_eq!(
+                validate_with_backend(&input, backend, alphabet),
+                Err(Base64Error::InvalidInput)
+            );
+        }
+    }
+
+    let unsupported = [
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ]
+    .into_iter()
+    .find(|&backend| !backend::is_supported(backend))
+    .expect("every host has an unsupported architecture-specific backend");
+    assert_eq!(
+        validate_with_backend(b"AAAA", unsupported, DecodeAlphabet::Standard),
+        Ok(0)
+    );
+
+    if backend::is_supported(Backend::Avx2) {
+        assert_eq!(
+            validate_with_backend(&[b'A'; 32], Backend::Avx2, DecodeAlphabet::Standard),
+            Ok(32)
+        );
+        let mut input = vec![b'A'; 48];
+        assert_eq!(
+            validate_with_backend(&input, Backend::Avx2, DecodeAlphabet::Standard),
+            Ok(48)
+        );
+        input[0] = b'!';
+        assert_eq!(
+            validate_with_backend(&input, Backend::Avx2, DecodeAlphabet::Standard),
+            Err(Base64Error::InvalidInput)
+        );
+    }
+
+    for (alphabet, input) in [
+        (DecodeAlphabet::Standard, b"A".as_slice()),
+        (DecodeAlphabet::UrlSafe, b"_".as_slice()),
+        (DecodeAlphabet::Mixed, b"-".as_slice()),
+    ] {
+        assert_eq!(validate_alphabet(input, alphabet), Ok(()));
+    }
+    let mut input = vec![b'A'; 273];
+    assert_eq!(validate_alphabet(&input, DecodeAlphabet::Standard), Ok(()));
+    input[272] = b'!';
+    assert_eq!(
+        validate_alphabet(&input, DecodeAlphabet::Standard),
+        Err(Base64Error::InvalidInput)
+    );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn valid_prefix_kernels_stop_before_the_first_invalid_block() {
+    let input = [b'A'; 32];
+    let mut output = [0xa5; 24];
+    if let Some((consumed, written)) =
+        unsafe { decode_valid_prefix(&input, output.as_mut_ptr(), DecodeAlphabet::Standard) }
+    {
+        assert_eq!((consumed, written), (32, 24));
+        assert_eq!(output, [0; 24]);
+    }
+
+    for backend in [
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for (alphabet, symbol) in [
+            (DecodeAlphabet::Standard, b'A'),
+            (DecodeAlphabet::UrlSafe, b'_'),
+            (DecodeAlphabet::Mixed, b'-'),
+        ] {
+            let input = vec![symbol; 160];
+            let mut output = vec![0xa5; 120];
+            assert_eq!(
+                unsafe {
+                    decode_valid_prefix_with_backend(&input, output.as_mut_ptr(), backend, alphabet)
+                },
+                (160, 120)
+            );
+        }
+
+        for invalid_at in [0, 15, 16, 31, 32, 63, 64, 127, 128, 159] {
+            let mut input = vec![b'A'; 160];
+            input[invalid_at] = b'!';
+            let mut output = vec![0xa5; 120];
+            let expected_input = invalid_at / 16 * 16;
+            assert_eq!(
+                unsafe {
+                    decode_valid_prefix_with_backend(
+                        &input,
+                        output.as_mut_ptr(),
+                        backend,
+                        DecodeAlphabet::Standard,
+                    )
+                },
+                (expected_input, expected_input / 4 * 3),
+                "backend={backend:?} invalid_at={invalid_at}"
+            );
+        }
+    }
+
+    assert_eq!(
+        unsafe {
+            decode_valid_prefix_with_backend(
+                b"AAAA",
+                std::ptr::dangling_mut(),
+                Backend::Neon,
+                DecodeAlphabet::Standard,
+            )
+        },
+        (0, 0)
+    );
 }
 
 #[test]

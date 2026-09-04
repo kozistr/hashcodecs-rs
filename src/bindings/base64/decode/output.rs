@@ -58,14 +58,6 @@ impl PreparedDecoder {
                 }
                 if let Some(value) = try_decode_strict(py, input, self.direct_alphabet())? {
                     value
-                } else if self.policy.padding == Padding::Padded
-                    && unsafe {
-                        input.with_bytes(|input| {
-                            is_mime_whitespace_input(input, self.policy.altchars == Some(*b"-_"))
-                        })
-                    }
-                {
-                    decode_configured(py, input, self.configured(), self.semantics)?
                 } else if self.policy.padding == Padding::Unpadded
                     && let Some(value) = self.try_unpadded_allocating(py, input)?
                 {
@@ -73,6 +65,7 @@ impl PreparedDecoder {
                 } else if let Some(value) = try_decode_lenient(
                     py,
                     input,
+                    self.policy.altchars,
                     self.policy.padding,
                     self.lenient_table(),
                     self.semantics,
@@ -90,6 +83,7 @@ impl PreparedDecoder {
                 } else if let Some(value) = try_decode_lenient(
                     py,
                     input,
+                    self.policy.altchars,
                     self.policy.padding,
                     self.lenient_table(),
                     self.semantics,
@@ -246,14 +240,6 @@ impl PreparedDecoder {
                     StoreBounds::DeferToFallback,
                 )? {
                     value
-                } else if self.policy.padding == Padding::Padded
-                    && unsafe {
-                        input.with_bytes(|input| {
-                            is_mime_whitespace_input(input, self.policy.altchars == Some(*b"-_"))
-                        })
-                    }
-                {
-                    decode_configured_into(py, input, output, self.configured(), self.semantics)?
                 } else if self.policy.padding == Padding::Unpadded
                     && let Some(value) = self.try_unpadded_into(input, output)?
                 {
@@ -463,21 +449,6 @@ fn canonical_unpadded_input(input: &[u8], altchars: Option<[u8; 2]>) -> bool {
             value & 0x03 == 0
         }
     })
-}
-
-fn is_mime_whitespace_input(input: &[u8], mixed_alphabet: bool) -> bool {
-    let mut saw_whitespace = false;
-    for &byte in input {
-        if matches!(byte, b'\r' | b'\n' | b' ') {
-            saw_whitespace = true;
-        } else if !(byte.is_ascii_alphanumeric()
-            || matches!(byte, b'+' | b'/' | b'=')
-            || (mixed_alphabet && matches!(byte, b'-' | b'_')))
-        {
-            return false;
-        }
-    }
-    saw_whitespace
 }
 
 pub(super) struct BytesWriter(*mut ffi::compat::PyBytesWriter);

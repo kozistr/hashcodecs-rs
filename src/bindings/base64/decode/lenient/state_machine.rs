@@ -1,4 +1,7 @@
-use super::symbols::{is_lenient_symbol, lenient_symbol_count};
+use super::symbols::{decode_byte_kernels, is_lenient_symbol, lenient_symbol_count};
+use crate::base64::{
+    DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout, decode_valid_prefix,
+};
 use crate::bindings::base64::STANDARD_ALPHABET;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -119,6 +122,7 @@ pub(in crate::bindings::base64::decode) unsafe fn decode_lenient_to_ptr<const WR
     output: *mut u8,
     provided: usize,
     table: &[u8; 256],
+    altchars: Option<[u8; 2]>,
     padded: bool,
     continue_after_padding: bool,
 ) -> Result<usize, LenientDecodeError> {
@@ -127,8 +131,79 @@ pub(in crate::bindings::base64::decode) unsafe fn decode_lenient_to_ptr<const WR
     let mut quad_pos = 0;
     let mut leftchar = 0;
     let mut pads = 0;
+    let fast_alphabet = match altchars {
+        None => Some(DecodeAlphabet::Standard),
+        Some(altchars) if altchars == *b"-_" => Some(DecodeAlphabet::Mixed),
+        Some(_) => None,
+    };
+    let symbol_prefix = decode_byte_kernels().symbol_prefix;
 
     while source < input.len() {
+        if quad_pos == 0 {
+            while source < input.len() && table[usize::from(input[source])] >= 64 {
+                if padded && input[source] == b'=' {
+                    pads += 1;
+                }
+                source += 1;
+            }
+            if source == input.len() {
+                break;
+            }
+        }
+
+        let mut prefix_kernel_available = false;
+        if WRITE
+            && quad_pos == 0
+            && let Some(alphabet) = fast_alphabet
+        {
+            let input_capacity = provided.saturating_sub(written) / 12 * 16;
+            let candidate_len = (input.len() - source).min(input_capacity);
+            if let Some((consumed, decoded)) = unsafe {
+                decode_valid_prefix(
+                    &input[source..source + candidate_len],
+                    output.add(written),
+                    alphabet,
+                )
+            } {
+                prefix_kernel_available = true;
+                if consumed != 0 {
+                    debug_assert_eq!(decoded, consumed / 4 * 3);
+                    source += consumed;
+                    written += decoded;
+                    pads = 0;
+                }
+            }
+        }
+        if !prefix_kernel_available
+            && quad_pos == 0
+            && let Some(alphabet) = fast_alphabet
+        {
+            let run = unsafe { symbol_prefix(&input[source..], altchars) };
+            let run = run / 4 * 4;
+            if run >= 16 {
+                let decoded = run / 4 * 3;
+                if provided.saturating_sub(written) < decoded {
+                    return Err(LenientDecodeError::OutputTooSmall);
+                }
+                if WRITE {
+                    let layout = decode_unpadded_layout(&input[source..source + run])
+                        .expect("a quartet-aligned run has a valid layout");
+                    unsafe {
+                        decode_to_ptr_with_unpadded_layout(
+                            &input[source..source + run],
+                            output.add(written),
+                            layout,
+                            alphabet,
+                        )
+                    }
+                    .expect("the SIMD scanner accepted every symbol in the run");
+                }
+                source += run;
+                written += decoded;
+                pads = 0;
+                continue;
+            }
+        }
         while quad_pos == 0 && source + 4 <= input.len() {
             let first = table[usize::from(input[source])];
             let second = table[usize::from(input[source + 1])];

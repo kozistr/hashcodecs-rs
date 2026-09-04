@@ -36,6 +36,27 @@ pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: b
 }
 
 #[target_feature(enable = "neon")]
+pub(crate) unsafe fn validate<const URLSAFE: bool, const MIXED: bool>(
+    input: &[u8],
+) -> Result<usize, Base64Error> {
+    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let mut source = 0;
+    while source + 16 <= input.len() {
+        let mut errors = vdupq_n_u8(0);
+        let chunk_end = (source + DECODE_ERROR_CHECK_INTERVAL).min(input.len() & !15);
+        while source < chunk_end {
+            let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
+            errors = vorrq_u8(errors, decode_indices::<URLSAFE, MIXED>(bytes, tables).1);
+            source += 16;
+        }
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+    }
+    Ok(source)
+}
+
+#[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BLOCKS_ONLY: bool>(
     input: &[u8],

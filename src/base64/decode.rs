@@ -16,7 +16,10 @@ mod tables;
 pub(super) mod x86_contracts;
 
 use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
-use super::runtime_dispatch::{ErrorWritePolicy, decode_with_runtime_backend};
+use super::runtime_dispatch::{
+    ErrorWritePolicy, decode_valid_prefix_with_runtime_backend, decode_with_runtime_backend,
+    validate_with_runtime_backend,
+};
 use super::{
     Base64Error, DECODE_STORE_PADDING, DecodeAlphabet, INVALID_VALUE, MIXED_DECODE,
     STANDARD_DECODE, URLSAFE_DECODE,
@@ -259,6 +262,44 @@ pub(crate) fn decode_unpadded_layout(input: &[u8]) -> Result<DecodeLayout, Base6
         padding: 0,
         output_len,
     })
+}
+
+#[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) fn validate_alphabet(input: &[u8], alphabet: DecodeAlphabet) -> Result<(), Base64Error> {
+    let source = if input.len() >= 16 {
+        validate_with_runtime_backend(input, alphabet)?
+    } else {
+        0
+    };
+    let table = match alphabet {
+        DecodeAlphabet::Standard => &STANDARD_DECODE,
+        DecodeAlphabet::UrlSafe => &URLSAFE_DECODE,
+        DecodeAlphabet::Mixed => &MIXED_DECODE,
+    };
+    if input[source..]
+        .iter()
+        .any(|&byte| table[usize::from(byte)] == INVALID_VALUE)
+    {
+        Err(Base64Error::InvalidInput)
+    } else {
+        Ok(())
+    }
+}
+
+/// Decode complete SIMD blocks until the first block containing a non-alphabet byte.
+///
+/// # Safety
+///
+/// `output` must be valid for the decoded size of `input` and must not overlap it.
+#[inline]
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) unsafe fn decode_valid_prefix(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: DecodeAlphabet,
+) -> Option<(usize, usize)> {
+    unsafe { decode_valid_prefix_with_runtime_backend(input, output, alphabet) }
 }
 
 #[inline]

@@ -6,6 +6,14 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::types::PyList;
 
+pub(super) fn batch_results<T>(length: usize, error: &'static str) -> PyResult<Vec<T>> {
+    let mut results = Vec::new();
+    results
+        .try_reserve_exact(length)
+        .map_err(|_| PyMemoryError::new_err(error))?;
+    Ok(results)
+}
+
 pub(super) fn list_from_fn<'py, T>(
     py: Python<'py>,
     length: usize,
@@ -164,6 +172,11 @@ pub(super) unsafe fn bytes_size(value: *mut ffi::PyObject) -> usize {
 mod tests {
     use super::*;
     use pyo3::types::PyByteArray;
+
+    #[test]
+    fn oversized_batch_capacity_is_an_error() {
+        assert!(batch_results::<u8>(usize::MAX, "batch is too large").is_err());
+    }
 
     #[test]
     fn empty_bytearray_has_a_valid_zero_length_rust_pointer() {

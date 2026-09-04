@@ -32,10 +32,9 @@ pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub(super) const X86_BACKEND_PREFERENCE: [X86Backend; 5] = [
+pub(super) const X86_BACKEND_PREFERENCE: [X86Backend; 4] = [
     X86Backend::Avx512,
     X86Backend::Avx2,
-    X86Backend::Sse41,
     X86Backend::Ssse3,
     X86Backend::Scalar,
 ];
@@ -45,7 +44,6 @@ pub(super) const X86_BACKEND_PREFERENCE: [X86Backend; 5] = [
 pub(super) enum X86Backend {
     Scalar,
     Ssse3,
-    Sse41,
     Avx2,
     Avx512,
 }
@@ -65,7 +63,6 @@ fn x86_backend_supported(capabilities: Capabilities, backend: X86Backend) -> boo
     match backend {
         X86Backend::Scalar => true,
         X86Backend::Ssse3 => capabilities.supports(CpuFeature::Ssse3),
-        X86Backend::Sse41 => capabilities.supports_all(&[CpuFeature::Sse41, CpuFeature::Ssse3]),
         X86Backend::Avx2 => capabilities.supports(CpuFeature::Avx2),
         X86Backend::Avx512 => capabilities.supports(CpuFeature::Avx512F),
     }
@@ -275,7 +272,7 @@ type X86Kernel = unsafe fn(LongInput<'_>, &Secret) -> [u64; 8];
 #[inline]
 pub(super) fn select_x86_accumulation_kernel(backend: X86Backend) -> Option<X86Kernel> {
     match backend {
-        X86Backend::Ssse3 | X86Backend::Sse41 => Some(ssse3::accumulate),
+        X86Backend::Ssse3 => Some(ssse3::accumulate),
         X86Backend::Avx2 => Some(avx2::accumulate),
         X86Backend::Avx512 => Some(avx512::accumulate),
         X86Backend::Scalar => None,

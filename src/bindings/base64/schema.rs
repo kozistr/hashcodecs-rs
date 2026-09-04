@@ -220,4 +220,4 @@ macro_rules! binding {
     };
 }
 
-include!("schema_generated.rs");
+include!("../../../generated/rust/base64_schema.rs");

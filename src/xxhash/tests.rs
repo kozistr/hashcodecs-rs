@@ -214,7 +214,7 @@ fn every_supported_x86_backend_matches_scalar() {
             CpuFeature::Sse41,
             CpuFeature::Ssse3,
         ])),
-        X86Backend::Sse41
+        X86Backend::Ssse3
     );
     assert_eq!(
         select_x86_backend(Capabilities::from_features(&[CpuFeature::Avx2])),
@@ -225,12 +225,7 @@ fn every_supported_x86_backend_matches_scalar() {
         X86Backend::Avx512
     );
     assert!(select_x86_accumulation_kernel(X86Backend::Scalar).is_none());
-    for backend in [
-        X86Backend::Ssse3,
-        X86Backend::Sse41,
-        X86Backend::Avx2,
-        X86Backend::Avx512,
-    ] {
+    for backend in [X86Backend::Ssse3, X86Backend::Avx2, X86Backend::Avx512] {
         assert!(select_x86_accumulation_kernel(backend).is_some());
     }
     for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
@@ -253,10 +248,6 @@ fn every_supported_x86_backend_matches_scalar() {
         let supported = [
             (X86Backend::Scalar, &[][..]),
             (X86Backend::Ssse3, &[CpuFeature::Ssse3][..]),
-            (
-                X86Backend::Sse41,
-                &[CpuFeature::Sse41, CpuFeature::Ssse3][..],
-            ),
             (X86Backend::Avx2, &[CpuFeature::Avx2][..]),
             (X86Backend::Avx512, &[CpuFeature::Avx512F][..]),
         ];

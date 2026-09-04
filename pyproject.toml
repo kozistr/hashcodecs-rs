@@ -69,6 +69,7 @@ include = [
     "/SECURITY.md",
     "/benches",
     "/docs",
+    "/generated",
     "/hashcodecs",
     "/src",
     "/tools",

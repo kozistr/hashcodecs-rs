@@ -165,7 +165,9 @@ writing and preserve bytes beyond the returned length.
 The typed `_hashcodecs.pyi` declaration is the canonical Python API description. It drives the public modules,
 package exports, module stubs, native text signatures and docstrings, and API-reference member lists through
 `tools/generate_api_metadata.py`. The generated `base64.py`, `murmur3.py`, and `xxhash.py` modules organize exports
-without adding per-call wrappers. `py.typed` makes the declarations visible to type checkers.
+without adding per-call wrappers. Generated Rust schemas live under `generated/rust` and are included by thin binding
+modules, so metadata generation never rewrites handwritten Rust source. `py.typed` makes the declarations visible to
+type checkers.
 
 Wheel tests execute the installed package. Coverage paths map its installed location back to the root source package.
 

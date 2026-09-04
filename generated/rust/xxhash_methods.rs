@@ -1,0 +1,186 @@
+// tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.
+
+static mut METHODS: [ffi::PyMethodDef; 7] = [
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_64".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_64_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_64($module, /, s, seed=0)
+--
+
+Compute the canonical XXH3 64-bit hash.
+
+XXH3 does not provide cryptographic security.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 64-bit seed.
+
+Returns:
+    The unsigned 64-bit hash as a Python integer.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> hex(xxh3_64(b''))
+    '0x2d06800538d394c2'".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_128".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_128_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_128($module, /, s, seed=0)
+--
+
+Compute the canonical XXH3 128-bit hash.
+
+The returned integer stores the low 64-bit word in its least significant
+half. XXH3 does not provide cryptographic security.
+
+Args:
+    s: Bytes-like data to hash. The function flattens supported
+        non-contiguous views.
+    seed: Initial unsigned 64-bit seed.
+
+Returns:
+    The unsigned 128-bit hash as a Python integer.
+
+Raises:
+    TypeError: s is not bytes-like or seed is not an integer.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> hex(xxh3_128(b''))
+    '0x99aa06d3014798d86001c324468d497f'".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_64_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_64_batch_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_64_batch($module, /, items, seed=0)
+--
+
+Compute canonical XXH3 64-bit hashes for a list of inputs.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The function returns one unsigned 64-bit integer for each item, in input
+    order.
+
+Raises:
+    TypeError: The container, an item, or seed has an invalid type.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> xxh3_64_batch([b'', b'hello']) == [xxh3_64(b''), xxh3_64(b'hello')]
+    True".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_64_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_64_batch_into_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_64_batch_into($module, /, items, output, seed=0)
+--
+
+Write XXH3 64-bit hashes as packed little-endian bytes.
+
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    output: Destination with at least 8 * len(items) bytes.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The total number of bytes that the function writes.
+
+Raises:
+    TypeError: A container, item, destination, or seed has an invalid type.
+    ValueError: output is too small.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> output = bytearray(8)
+    >>> xxh3_64_batch_into([b'hello'], output)
+    8
+    >>> int.from_bytes(output, 'little') == xxh3_64(b'hello')
+    True".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_128_batch".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_128_batch_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_128_batch($module, /, items, seed=0)
+--
+
+Compute canonical XXH3 128-bit hashes for a list of inputs.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The function returns one unsigned 128-bit integer for each item, in
+    input order.
+
+Raises:
+    TypeError: The container, an item, or seed has an invalid type.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> xxh3_128_batch([b'', b'hello']) == [xxh3_128(b''), xxh3_128(b'hello')]
+    True".as_ptr(),
+    },
+    ffi::PyMethodDef {
+        ml_name: c"xxh3_128_batch_into".as_ptr(),
+        ml_meth: ffi::PyMethodDefPointer {
+            PyCFunctionFastWithKeywords: xxh3_128_batch_into_digest,
+        },
+        ml_flags: METHOD_FLAGS,
+        ml_doc: cr"xxh3_128_batch_into($module, /, items, output, seed=0)
+--
+
+Write XXH3 128-bit hashes as packed little-endian bytes.
+
+The function checks all inputs and the output capacity before it changes
+output. It does not change bytes after the written prefix.
+
+Args:
+    items: A list of bytes-like objects to hash.
+    output: Destination with at least 16 * len(items) bytes.
+    seed: Initial unsigned 64-bit seed shared by every item.
+
+Returns:
+    The total number of bytes that the function writes.
+
+Raises:
+    TypeError: A container, item, destination, or seed has an invalid type.
+    ValueError: output is too small.
+    OverflowError: seed is outside 0 <= seed < 2**64.
+
+Examples:
+    >>> output = bytearray(16)
+    >>> xxh3_128_batch_into([b'hello'], output)
+    16
+    >>> int.from_bytes(output, 'little') == xxh3_128(b'hello')
+    True".as_ptr(),
+    },
+    ffi::PyMethodDef::zeroed(),
+];

@@ -120,7 +120,7 @@ pub(super) struct PreparedPolicy {
 }
 
 impl PreparedPolicy {
-    fn prepare(py: Python<'_>, policy: DecodePolicy<'_, '_>) -> PyResult<(Self, bool)> {
+    fn prepare(policy: DecodePolicy<'_, '_>) -> PyResult<(Self, bool)> {
         let ignorechars_specified = policy.ignorechars.is_some();
         let empty_exact_ignorechars = policy.ignorechars.is_some_and(|value| {
             value
@@ -129,7 +129,7 @@ impl PreparedPolicy {
         });
         let ignored = if let Some(ignorechars) = policy.ignorechars {
             let mut ignored = [false; 256];
-            let ignorechars = contiguous_bytes_like(py, ignorechars, "ignorechars")?;
+            let ignorechars = contiguous_bytes_like(ignorechars, "ignorechars")?;
             unsafe {
                 ignorechars.with_bytes(|bytes| {
                     for &byte in bytes {
@@ -198,7 +198,7 @@ pub(super) struct PreparedDecoder {
 impl PreparedDecoder {
     pub(super) fn new(py: Python<'_>, policy: DecodePolicy<'_, '_>) -> PyResult<Self> {
         let semantics = python_semantics(py);
-        let (policy, empty_exact_ignorechars) = PreparedPolicy::prepare(py, policy)?;
+        let (policy, empty_exact_ignorechars) = PreparedPolicy::prepare(policy)?;
         let route = select_route(&policy, empty_exact_ignorechars, semantics);
         Ok(Self {
             semantics,

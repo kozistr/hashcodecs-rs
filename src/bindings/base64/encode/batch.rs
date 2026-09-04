@@ -27,7 +27,7 @@ pub(in crate::bindings::base64) fn b64encode_batch<'py>(
     b64encode_batch_parsed(py, items, altchars)
 }
 
-fn b64encode_batch_parsed<'py>(
+pub(in crate::bindings::base64) fn b64encode_batch_parsed<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     altchars: Option<[u8; 2]>,
@@ -58,20 +58,6 @@ fn b64encode_batch_parsed<'py>(
     })
 }
 
-pub(in crate::bindings::base64) fn standard_b64encode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_parsed(py, items, None)
-}
-
-pub(in crate::bindings::base64) fn urlsafe_b64encode_batch<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_parsed(py, items, Some(*b"-_"))
-}
-
 /// Encode each item into its matching bytearray and return the byte counts.
 ///
 /// ``items`` and ``outputs`` must be lists of equal length. Each destination must be a different bytearray.
@@ -89,7 +75,7 @@ pub(in crate::bindings::base64) fn b64encode_batch_into<'py>(
     b64encode_batch_into_parsed(py, items, outputs, altchars)
 }
 
-fn b64encode_batch_into_parsed<'py>(
+pub(in crate::bindings::base64) fn b64encode_batch_into_parsed<'py>(
     py: Python<'py>,
     items: &Bound<'py, PyList>,
     outputs: &Bound<'py, PyList>,
@@ -113,7 +99,7 @@ fn b64encode_batch_into_parsed<'py>(
             )),
             Some(Err(error)) => Err(error),
             None => {
-                let input = contiguous_bytes_like(py, &items[index], "s")?;
+                let input = contiguous_bytes_like(&items[index], "s")?;
                 Ok(PyInt::new(
                     py,
                     encode_parsed_into(&input, output, altchars, true, None)?,
@@ -121,20 +107,4 @@ fn b64encode_batch_into_parsed<'py>(
             }
         }
     })
-}
-
-pub(in crate::bindings::base64) fn standard_b64encode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_into_parsed(py, items, outputs, None)
-}
-
-pub(in crate::bindings::base64) fn urlsafe_b64encode_batch_into<'py>(
-    py: Python<'py>,
-    items: &Bound<'py, PyList>,
-    outputs: &Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyList>> {
-    b64encode_batch_into_parsed(py, items, outputs, Some(*b"-_"))
 }

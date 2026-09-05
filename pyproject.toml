@@ -142,6 +142,9 @@ quote-style = "single"
 docstring-code-format = true
 docstring-code-line-length = 80
 
+[tool.pytest.ini_options]
+addopts = "-q --disable-warnings --tb=no --show-capture=no"
+
 [tool.coverage.run]
 branch = true
 source_pkgs = ["hashcodecs"]

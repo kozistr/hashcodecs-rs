@@ -34,6 +34,27 @@ For Python, run the upstream `xxhash` extension beside hashcodecs. Pass 32 equal
 The Rust remainder cases pass two or three equal-size long inputs. Run Python remainder cases with
 `python benchmarks/python_xxhash.py --batch-counts 2 3`.
 
+To measure a branch against its parent, build both extensions with the same Python and Rust toolchains, then run:
+
+```sh
+uv run --frozen --no-sync python benchmarks/compare_xxh3_batches.py path/to/parent/_hashcodecs.pyd path/to/branch/_hashcodecs.pyd
+```
+
+Use the corresponding `.so` paths on Linux or macOS. The comparison loads both builds into one interpreter, pins
+one CPU, and alternates their timing order across 15 samples. It checks matching digests and covers bytes,
+bytearrays, and writable memoryviews. Use `--batch-counts 2 9 32 33 --sizes 64` to inspect small batches and the
+32-result stack boundary. Positive `change_percent` values mean higher branch throughput.
+
+The [32-item parent comparison](docs/benchmarks/xxh3-batch-parent-comparison.csv) records CPython 3.12.10 results
+against parent commit `f17ab86`, measured on 2026-09-05. These paired measurements also cover the 256 KiB
+GIL-detachment threshold and 1 MiB items. The Python XXH3 chart uses the candidate's allocating-batch measurements;
+packed-output and upstream values retain their prior measurements.
+
+Across the 30 paired 32-item cases, branch throughput ranges from 2.59% lower to 2.70% higher than the parent.
+The [stack-boundary comparison](docs/benchmarks/xxh3-batch-boundary-comparison.csv) covers counts 2 and 33 with
+64-byte items: two-item bytearray batches lose 5.40–6.05%, and 33-item bytes batches lose 6.06–7.05%. These
+measurements show residual overhead for some small-input batches; they do not establish zero regression.
+
 The Rust mixed benchmarks use `[1024, 1024, 4096, 4096]`, `[240, 240, 241, 241]`, and the reverse boundary order.
 The 1024/4096 case measures adjacent two-item long runs. The 240/241 cases measure both orders across the
 short/long dispatch boundary.

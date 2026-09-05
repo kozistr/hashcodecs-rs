@@ -9,9 +9,9 @@ pub(super) mod scalar;
 pub(super) mod x86;
 
 pub(super) use scalar::is_lenient_symbol;
-#[cfg(any(not(target_arch = "aarch64"), test))]
-use scalar::symbol_prefix_scalar;
-use scalar::{alphanumeric_prefix_scalar, symbol_count_scalar, translate_scalar};
+use scalar::{alphanumeric_prefix_scalar, symbol_count_scalar};
+#[cfg(not(target_arch = "aarch64"))]
+use scalar::{symbol_prefix_scalar, translate_scalar};
 
 pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

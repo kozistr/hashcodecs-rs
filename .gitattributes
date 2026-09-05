@@ -11,4 +11,4 @@
 /hashcodecs/xxhash.py linguist-generated=true
 /hashcodecs/xxhash.pyi linguist-generated=true
 /docs/api/*.md linguist-generated=true
-/src/bindings/base64/schema_generated.rs linguist-generated=true
+/generated/rust/*.rs linguist-generated=true

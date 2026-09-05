@@ -1,6 +1,7 @@
 import base64 as stdlib_base64
 import binascii
 import random
+import re
 import sys
 import warnings
 from collections.abc import Callable
@@ -272,6 +273,30 @@ def test_decode_routes_preserve_exact_capacity_suffix_and_aliases(
         source = memoryview(shared) if as_view else shared
         assert base64.b64decode_into(source, shared, altchars, **kwargs) == length
         assert shared == payload + encoded[length:]
+
+
+@pytest.mark.parametrize('prefix_length', [0, 12, 16, 28, 32, 60, 64, 76, 4096])
+@pytest.mark.parametrize('altchars', [None, b'@#', b'=_', b'=='])
+@pytest.mark.parametrize('tail', [b'YQ==AAAA', b'YQ=! =AAAA', b'YQ=AAAA', b'YQ', b'YQ==!'])
+def test_lenient_sizing_preserves_padding_semantics_across_simd_runs(
+    prefix_length: int, altchars: bytes | None, tail: bytes
+) -> None:
+    encoded = b'A' * prefix_length + b'!\r\n' + tail
+    try:
+        expected = stdlib_base64.b64decode(encoded, altchars)
+    except binascii.Error as expected_error:
+        with pytest.raises(binascii.Error, match=re.escape(str(expected_error))):
+            base64.b64decode_into(encoded, bytearray(len(encoded)), altchars)
+    else:
+        for extra in (0, 7):
+            output = bytearray(b'\xa5' * (len(expected) + extra))
+            assert base64.b64decode_into(encoded, output, altchars) == len(expected)
+            assert output == expected + b'\xa5' * extra
+        if expected:
+            output = bytearray(b'\xa5' * (len(expected) - 1))
+            with pytest.raises(ValueError, match=rf'requires {len(expected)} bytes'):
+                base64.b64decode_into(encoded, output, altchars)
+            assert output == b'\xa5' * (len(expected) - 1)
 
 
 @pytest.mark.parametrize('validate', [False, True])

@@ -113,6 +113,8 @@ The Python Base64 binding sends strict input to the SIMD core without constructi
 For lenient input, it keeps the MIME whitespace path on normalized SIMD input and decodes other ignored bytes into
 the final Python object or reusable buffer. The native state machine follows the padding behavior of each supported
 CPython patch series. It calls `binascii` for malformed input that needs CPython's exact exception.
+For older CPython padding rules, reusable-output sizing uses the decoder's SIMD alphabet-prefix scanner and
+handles padding between runs to preserve the stop at the first complete padding sequence.
 
 Large aligned x86 encoding may use non-temporal stores after the input exceeds the detected private-cache working
 set. Smaller work stays on ordinary cached stores.

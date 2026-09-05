@@ -6,6 +6,7 @@ use self::murmur3::{PyMurmur3X64Hasher128, PyMurmur3X86Hasher32, PyMurmur3X86Has
 mod arguments;
 mod base64;
 mod buffer;
+mod compatibility;
 mod murmur3;
 mod objects;
 mod runtime;

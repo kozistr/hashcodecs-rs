@@ -296,10 +296,11 @@ def render_binding(module: str, function: ast.FunctionDef) -> str:
     arguments = ',\n                '.join(
         f'Argument::new(values[{index}], {default})' for index, default in enumerate(defaults)
     )
+    callbacks = 'api' if module == 'base64' else 'callbacks'
     return f"""binding! {{
     {constant}: {len(parameters)} {{
         name: c"{function.name}",
-        callback: crate::bindings::{module}::callbacks::{function.name},
+        callback: crate::bindings::{module}::{callbacks}::{function.name},
         parameters: [{parameter_names}],
         max_positional: {max_positional},
         required: {required},

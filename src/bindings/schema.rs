@@ -5,7 +5,7 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 
 use crate::bindings::arguments::parse_raw_arguments;
-use crate::bindings::base64::python_at_least;
+use crate::bindings::compatibility::python_at_least;
 use crate::bindings::runtime::{METHOD_FLAGS, catch_unwind_callback};
 
 pub(super) type Callback = unsafe extern "C" fn(

@@ -280,7 +280,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
         if block + 2 <= schedule.full_blocks() {
             unsafe { _mm_prefetch::<_MM_HINT_T0>(data.as_ptr().add((block + 2) * 1024).cast()) };
         }
-    
+
         acc = unsafe { accumulate_block_chains(acc, data.as_ptr().add(offset), secret.as_ptr()) };
         let secret_ptr = unsafe { secret.as_ptr().add(128) };
 

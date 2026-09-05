@@ -277,14 +277,14 @@ CHARTS = (
             panel(
                 'XXH3-64 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[4.17, 38.33, 68.48, 35.71],
+                hashcodecs_list=[5.79, 45.25, 74.54, 38.00],
                 hashcodecs_packed=[11.70, 59.00, 82.85, 35.19],
                 xxhash=[2.20, 14.84, 30.53, 17.71],
             ),
             panel(
                 'XXH3-128 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[2.64, 27.30, 58.82, 35.05],
+                hashcodecs_list=[2.94, 31.03, 62.79, 38.02],
                 hashcodecs_packed=[7.28, 52.50, 78.08, 35.45],
                 xxhash=[1.05, 9.95, 24.14, 17.45],
             ),

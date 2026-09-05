@@ -20,10 +20,12 @@ The checks are deliberately complementary:
   XXH3 cases use independent equal-length and heterogeneous buffers, with
   distinct lane contents and batch counts through nine to cover SIMD groups and tails.
 
-The Python XXH3 batch bindings retain immutable owners during result allocation.
-For mutable buffers, they finish hashing before allocating Python result containers:
-a GC finalizer can resize a bytearray even while the GIL is held. Subprocess tests
-on CPython 3.10/3.11 trigger finalizers during allocation to check both invariants.
+The Python XXH3 batch bindings finish all input reads before allocating Python
+result containers: a GC finalizer can clear the input list or resize a bytearray
+even while the GIL is held. Up to 32 native results fit on the stack; larger
+batches use a fallible vector. Large immutable inputs keep their owners across
+GIL detachment. Subprocess tests on CPython 3.10/3.11 trigger finalizers during
+allocation and reuse freed storage, covering both sides of the stack boundary.
 
 Run the same checks locally on Linux:
 

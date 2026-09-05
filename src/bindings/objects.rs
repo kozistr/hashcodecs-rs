@@ -37,33 +37,6 @@ where
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-pub(super) fn list_from_callback<'py, T>(
-    py: Python<'py>,
-    length: usize,
-    populate: impl FnOnce(&mut dyn FnMut(Bound<'py, T>)),
-) -> PyResult<Bound<'py, PyList>>
-where
-    T: PyTypeInfo,
-{
-    let py_length = ffi::Py_ssize_t::try_from(length)
-        .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
-    unsafe {
-        let list: Bound<'py, PyList> =
-            Bound::from_owned_ptr_or_err(py, ffi::PyList_New(py_length))?.cast_into_unchecked();
-        let mut index = 0;
-        populate(&mut |item| {
-            assert!(index < length, "list callback produced too many items");
-            // PyList_SET_ITEM steals the new reference. Uninitialized slots stay
-            // null until populated, so dropping a partial list remains safe.
-            ffi::PyList_SET_ITEM(list.as_ptr(), index as ffi::Py_ssize_t, item.into_ptr());
-            index += 1;
-        });
-        assert_eq!(index, length, "list callback produced too few items");
-        Ok(list)
-    }
-}
-
-#[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn exact_bytes_up_to<'py>(
     items: &Bound<'py, PyList>,
     max_length: usize,

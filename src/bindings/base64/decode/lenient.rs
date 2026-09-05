@@ -40,10 +40,12 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
             semantics,
         );
     }
+
     let writer = BytesWriter::new(py, input.len())?;
     let output_address = unsafe { writer.data() } as usize;
     let continue_after_padding = semantics.continues_after_padding;
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
+
     let result = unsafe {
         input.with_bytes(|input| {
             let decode = move || {
@@ -60,6 +62,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
             if detach { py.detach(decode) } else { decode() }
         })
     };
+
     match result {
         Ok(written) => unsafe { writer.finish(py, written).map(Ok) },
         Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
@@ -90,6 +93,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient_into(
             )
         }));
     }
+
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_lenient_slice_into(
@@ -133,6 +137,7 @@ unsafe fn decode_lenient_slice_into(
             }
         }
     }
+
     unsafe {
         decode_lenient_to_ptr::<true>(
             input,

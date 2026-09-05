@@ -36,11 +36,13 @@ unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const 
                 vreinterpretq_u32_u64(mixed_lo),
                 vreinterpretq_u32_u64(mixed_hi),
             );
+
             let low_words = unzipped.0;
             let high_words = unzipped.1;
 
             let swapped_lo = vextq_u64::<1>(input_lo, input_lo);
             let swapped_hi = vextq_u64::<1>(input_hi, input_hi);
+
             // Keep LLVM from lengthening the multiply dependency chain by
             // folding the swapped-data addition into the accumulator first.
             let sum_lo = compiler_guard(vmlal_u32(
@@ -51,6 +53,7 @@ unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const 
             let sum_hi = compiler_guard(vmlal_high_u32(swapped_hi, low_words, high_words));
 
             let acc_ptr = acc.as_mut_ptr().add(acc_offset);
+
             vst1q_u64(acc_ptr, vaddq_u64(vld1q_u64(acc_ptr), sum_lo));
             vst1q_u64(acc_ptr.add(2), vaddq_u64(vld1q_u64(acc_ptr.add(2)), sum_hi));
         }

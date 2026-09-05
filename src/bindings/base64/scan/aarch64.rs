@@ -1,6 +1,6 @@
 use std::arch::aarch64::*;
 
-use super::symbols::{is_lenient_symbol, translate_scalar};
+use super::scalar::{is_lenient_symbol, translate_scalar};
 
 #[target_feature(enable = "neon")]
 pub(super) unsafe fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {

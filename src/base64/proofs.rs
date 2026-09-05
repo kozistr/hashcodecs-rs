@@ -24,6 +24,7 @@ fn scalar_decoders_stay_within_exact_destinations() {
     let quad: [u8; 4] = kani::any();
     let padding: usize = kani::any();
     kani::assume(padding <= 2);
+
     let mut quad_output = [0xa5_u8; 3];
     let result =
         unsafe { decode_quad_ptr(&quad, quad_output.as_mut_ptr(), padding, &STANDARD_DECODE) };
@@ -43,6 +44,7 @@ fn scalar_decoders_stay_within_exact_destinations() {
     let tail: [u8; 3] = kani::any();
     let tail_length: usize = kani::any();
     kani::assume(matches!(tail_length, 2 | 3));
+
     let mut tail_output = [0xa5_u8; 2];
     let result = unsafe {
         decode_unpadded_tail_ptr(

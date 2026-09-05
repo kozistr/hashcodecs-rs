@@ -1,10 +1,12 @@
+//! Decode policy preparation and route selection.
+
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 
 use super::configured::ConfiguredDecoder;
 use super::lenient::lenient_decode_table;
-use crate::bindings::base64::{PythonSemantics, python_semantics};
 use crate::bindings::buffer::contiguous_bytes_like;
+use crate::bindings::compatibility::{PythonSemantics, python_semantics};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Padding {

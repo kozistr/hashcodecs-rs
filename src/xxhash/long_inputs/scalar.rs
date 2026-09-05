@@ -16,8 +16,10 @@ unsafe fn accumulate_stripe(
 ) {
     debug_assert!(data_offset <= data.len() - 64);
     debug_assert!(secret_offset <= secret.as_bytes().len() - 64);
+
     let data = data.as_ptr();
     let secret = secret.as_bytes().as_ptr();
+
     for lane in 0..8 {
         // `LongSchedule` keeps each data stripe in bounds, and every secret
         // offset passed by `accumulate` leaves a complete 64-byte stripe.
@@ -31,6 +33,7 @@ unsafe fn accumulate_stripe(
 #[inline(always)]
 fn scramble(acc: &mut [u64; 8], secret: &Secret) {
     let secret = secret.as_bytes().as_ptr();
+
     for (lane, value) in acc.iter_mut().enumerate() {
         *value ^= *value >> 47;
         // A `Secret` is 192 bytes, so all eight fixed-offset loads are valid.
@@ -43,13 +46,17 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     let data = input.as_bytes();
     let schedule = build_long_input_schedule(input);
     let mut acc = initial_accumulator();
+
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
+
         for stripe in 0..16 {
             unsafe { accumulate_stripe(&mut acc, data, secret, offset + stripe * 64, stripe * 8) };
         }
+
         scramble(&mut acc, secret);
     }
+
     for stripe in 0..schedule.tail_stripes() {
         unsafe {
             accumulate_stripe(
@@ -61,6 +68,8 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
             )
         };
     }
+
     unsafe { accumulate_stripe(&mut acc, data, secret, schedule.last_offset(), 121) };
+
     acc
 }

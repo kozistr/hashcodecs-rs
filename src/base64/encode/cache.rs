@@ -20,6 +20,7 @@ pub(in crate::base64) fn use_streaming_stores(
     let Some(limit) = cached_input_limit else {
         return false;
     };
+
     input_len > limit && output.align_offset(16) == 0
 }
 
@@ -30,6 +31,7 @@ fn detect_private_cache() -> Option<usize> {
     // SAFETY: these CPUID leaves have no memory-safety preconditions.
     let basic_max = unsafe { __cpuid(0) }.eax;
     let extended_max = unsafe { __cpuid(0x8000_0000) }.eax;
+
     private_cache_from_leaves(basic_max, extended_max, deterministic_private_cache)
 }
 
@@ -43,6 +45,7 @@ fn private_cache_from_leaves(
     {
         return Some(bytes);
     }
+
     if extended_max >= 0x8000_001d {
         read_leaf(0x8000_001d)
     } else {
@@ -53,6 +56,7 @@ fn private_cache_from_leaves(
 #[allow(unused_unsafe)]
 fn deterministic_private_cache(leaf: u32) -> Option<usize> {
     let mut largest = None;
+
     for index in 0.. {
         // SAFETY: querying a CPUID leaf and subleaf has no memory-safety preconditions.
         let registers = unsafe { __cpuid_count(leaf, index) };
@@ -63,6 +67,7 @@ fn deterministic_private_cache(leaf: u32) -> Option<usize> {
 
         let level = (registers.eax >> 5) & 0x7;
         let is_data_or_unified = matches!(cache_type, 1 | 3);
+
         if level <= 2 && is_data_or_unified {
             let bytes = deterministic_cache_bytes(registers.ebx, registers.ecx);
             largest = Some(largest.map_or(bytes, |current: usize| current.max(bytes)));
@@ -77,6 +82,7 @@ fn deterministic_cache_bytes(ebx: u32, ecx: u32) -> usize {
     let ways = u128::from((ebx >> 22) + 1);
     let sets = u128::from(ecx) + 1;
     let bytes = line_bytes * partitions * ways * sets;
+
     bytes.min(usize::MAX as u128) as usize
 }
 

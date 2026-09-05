@@ -209,12 +209,15 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     } else {
         layout.output_len
     };
+
     let mut output = allocate_uninitialized_output(allocation_len);
+
     let alphabet = if urlsafe {
         DecodeAlphabet::UrlSafe
     } else {
         DecodeAlphabet::Standard
     };
+
     // The padded store mode may write at most `DECODE_STORE_PADDING` bytes past
     // the initialized result, all within this private allocation.
     unsafe {
@@ -226,6 +229,7 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
             output_has_store_slack,
         )?
     };
+
     // The decoder initializes the result prefix. The function discards the private padding.
     Ok(unsafe { assume_output_initialized(output, layout.output_len) })
 }

@@ -1,12 +1,21 @@
+//! Output allocation, capacity checks, and configured decoding staging.
+
+use core::ptr;
 use std::mem::MaybeUninit;
 use std::slice;
 
-use crate::base64::{
-    DecodeAlphabet, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout, validate_alphabet,
-};
-use crate::bindings::base64::STANDARD_ALPHABET;
+use pyo3::exceptions::{PyMemoryError, PyValueError};
+use pyo3::ffi;
+use pyo3::prelude::*;
+use pyo3::types::{PyByteArray, PyBytes};
 
-use super::Translation;
+use super::configured::Translation;
+use crate::base64::{
+    DecodeAlphabet, STANDARD_ALPHABET, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout,
+    validate_alphabet,
+};
+use crate::bindings::buffer::with_bytearray;
+use crate::bindings::objects::{bytearray_data, bytearray_size, bytes_data_mut};
 
 pub(super) const CONFIGURED_STAGING_CAPACITY: usize = 4096;
 
@@ -165,5 +174,96 @@ impl StagingValidator {
             self.flush()?;
         }
         Some(())
+    }
+}
+
+/// Allocate an uninitialized Python `bytes` payload for direct initialization.
+///
+/// # Safety
+/// If the returned Python object can escape, `init` must have initialized all
+/// `length` bytes. An initialization error may leave bytes unwritten only when
+/// the caller discards the object without reading its payload.
+pub(super) unsafe fn pybytes_with_len<'py, T>(
+    py: Python<'py>,
+    length: usize,
+    init: impl FnOnce(*mut u8) -> T,
+) -> PyResult<(Bound<'py, PyBytes>, T)> {
+    let length = ffi::Py_ssize_t::try_from(length)
+        .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+    unsafe {
+        let raw = ffi::PyBytes_FromStringAndSize(core::ptr::null(), length);
+        let bytes: Bound<'py, PyBytes> =
+            Bound::from_owned_ptr_or_err(py, raw)?.cast_into_unchecked();
+        let buffer = bytes_data_mut(raw);
+        debug_assert!(!buffer.is_null());
+
+        // CPython leaves the payload uninitialized when passed a null source.
+        // Keep it behind a raw pointer until the initializer has written every
+        // byte instead of creating a Rust `&mut [u8]` with invalid contents.
+        let initialized = init(buffer);
+        Ok((bytes, initialized))
+    }
+}
+
+pub(super) fn with_output_ptr<T>(
+    output: &Bound<'_, PyByteArray>,
+    required: usize,
+    callback: impl FnOnce(*mut u8) -> T,
+) -> PyResult<T> {
+    with_bytearray(output, || {
+        let provided = unsafe { bytearray_size(output.as_ptr()) };
+        if provided < required {
+            return Err(output_too_small(required, provided));
+        }
+        Ok(callback(unsafe { bytearray_data(output.as_ptr()) }))
+    })
+}
+
+pub(super) fn output_too_small(required: usize, provided: usize) -> PyErr {
+    PyValueError::new_err(format!(
+        "Base64 output requires {required} bytes but the destination has {provided}"
+    ))
+}
+
+pub(super) struct BytesWriter(*mut ffi::compat::PyBytesWriter);
+
+impl BytesWriter {
+    pub(super) fn new(py: Python<'_>, input_len: usize) -> PyResult<Self> {
+        let capacity = input_len
+            .div_ceil(4)
+            .checked_mul(3)
+            .and_then(|length| ffi::Py_ssize_t::try_from(length).ok())
+            .ok_or_else(|| PyMemoryError::new_err("Base64 output is too large"))?;
+        let writer = unsafe { ffi::compat::PyBytesWriter_Create(capacity) };
+        if writer.is_null() {
+            Err(PyErr::fetch(py))
+        } else {
+            Ok(Self(writer))
+        }
+    }
+
+    pub(super) unsafe fn data(&self) -> *mut u8 {
+        unsafe { ffi::compat::PyBytesWriter_GetData(self.0).cast() }
+    }
+
+    pub(super) unsafe fn finish<'py>(
+        mut self,
+        py: Python<'py>,
+        length: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let length = ffi::Py_ssize_t::try_from(length)
+            .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+        let writer = self.0;
+        self.0 = ptr::null_mut();
+        let output = unsafe { ffi::compat::PyBytesWriter_FinishWithSize(writer, length) };
+        Ok(unsafe { Bound::from_owned_ptr_or_err(py, output)?.cast_into_unchecked() })
+    }
+}
+
+impl Drop for BytesWriter {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe { ffi::compat::PyBytesWriter_Discard(self.0) };
+        }
     }
 }

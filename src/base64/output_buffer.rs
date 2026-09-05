@@ -13,7 +13,9 @@ pub(super) unsafe fn assume_output_initialized(
     length: usize,
 ) -> Vec<u8> {
     debug_assert!(length <= output.len());
+
     let mut output = ManuallyDrop::new(output);
+
     // The caller guarantees that an operation wrote every byte in the returned prefix.
     unsafe { Vec::from_raw_parts(output.as_mut_ptr().cast(), length, output.capacity()) }
 }

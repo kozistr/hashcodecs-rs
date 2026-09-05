@@ -95,6 +95,7 @@ fn decode_alphabet<const URLSAFE: bool, const MIXED: bool>() -> super::super::De
 
 fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u8> {
     assert_eq!(length % 4, 0);
+
     let mut input = Vec::with_capacity(length);
     for group in 0..length / 4 {
         let quartet = if MIXED && group % 2 == 0 {
@@ -108,23 +109,27 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
         };
         input.extend_from_slice(quartet);
     }
+
     input
 }
 
 fn scalar_decoded<const URLSAFE: bool, const MIXED: bool>(input: &[u8]) -> Vec<u8> {
     let table = decode_table::<URLSAFE, MIXED>();
     let mut output = Vec::with_capacity(decoded_len(input.len()));
+
     for quartet in input.as_chunks::<4>().0 {
         let first = table[quartet[0] as usize];
         let second = table[quartet[1] as usize];
         let third = table[quartet[2] as usize];
         let fourth = table[quartet[3] as usize];
+
         output.extend_from_slice(&[
             (first << 2) | (second >> 4),
             (second << 4) | (third >> 2),
             (third << 6) | fourth,
         ]);
     }
+
     output
 }
 
@@ -134,6 +139,7 @@ fn encode_misaligned_boundaries<const URLSAFE: bool>() {
             let input_start = GUARD + input_offset;
             let mut guarded_input = vec![CANARY; input_start + length + GUARD];
             let input = &mut guarded_input[input_start..input_start + length];
+
             for (index, byte) in input.iter_mut().enumerate() {
                 *byte = (index as u8).wrapping_mul(37).wrapping_add(11);
             }
@@ -284,10 +290,12 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
         } else {
             0..block_len
         };
+
         for invalid_index in lanes {
             for &invalid_byte in invalid_bytes::<URLSAFE, MIXED>() {
                 let input_offset = invalid_index & 15;
                 let input_start = GUARD + input_offset;
+
                 let mut guarded_input = vec![CANARY; input_start + block_len + GUARD];
                 guarded_input[input_start..input_start + block_len].fill(b'A');
                 guarded_input[input_start + invalid_index] = invalid_byte;
@@ -297,6 +305,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
                 let output_start = GUARD + output_offset;
                 let output_len = decoded_len(block_len);
                 let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
+
                 let result = unsafe {
                     decode_aarch64::<URLSAFE, MIXED>(
                         input,
@@ -347,6 +356,7 @@ fn decode_rejects_every_invalid_lane_without_tail_writes() {
 
 fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
     let total = 3 * DECODE_ERROR_CHECK_INTERVAL;
+
     for invalid_index in [
         0,
         63,
@@ -367,6 +377,7 @@ fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
             let output_offset = (input_offset * 7 + invalid_index) & 15;
             let output_start = GUARD + output_offset;
             let output_len = decoded_len(total);
+
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
             let result = unsafe {
                 decode_aarch64::<URLSAFE, MIXED>(
@@ -417,7 +428,9 @@ fn full_decode_misaligned_handoffs<const URLSAFE: bool, const MIXED: bool>() {
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect();
         let mut encoded = vec![0; super::super::encoded_len(original_len)];
+
         super::super::encode_scalar(&original, &mut encoded, URLSAFE);
+
         if MIXED {
             for (index, byte) in encoded.iter_mut().enumerate() {
                 if index / 4 % 2 != 0 {
@@ -429,6 +442,7 @@ fn full_decode_misaligned_handoffs<const URLSAFE: bool, const MIXED: bool>() {
                 }
             }
         }
+
         let layout = super::super::decode_layout(&encoded).unwrap();
 
         for input_offset in 0..16 {
@@ -440,6 +454,7 @@ fn full_decode_misaligned_handoffs<const URLSAFE: bool, const MIXED: bool>() {
             let output_offset = (input_offset * 7 + original_len) & 15;
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + original_len + GUARD];
+
             super::super::decode_to_slice_with_layout_and_alphabet(
                 input,
                 &mut guarded_output[output_start..output_start + original_len],
@@ -478,18 +493,21 @@ fn full_decode_misaligned_handoffs<const URLSAFE: bool, const MIXED: bool>() {
 
 fn invalid_scalar_checkpoint_tail<const URLSAFE: bool, const MIXED: bool>() {
     let encoded_len = DECODE_ERROR_CHECK_INTERVAL + 4;
+
     for invalid_index in [DECODE_ERROR_CHECK_INTERVAL, encoded_len - 1] {
         for input_offset in 0..16 {
             let input_start = GUARD + input_offset;
             let mut guarded_input = vec![CANARY; input_start + encoded_len + GUARD];
             guarded_input[input_start..input_start + encoded_len].fill(b'A');
             guarded_input[input_start + invalid_index] = b'!';
+
             let input = &guarded_input[input_start..input_start + encoded_len];
             let layout = super::super::decode_layout(input).unwrap();
 
             let output_offset = (input_offset * 7 + invalid_index) & 15;
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + layout.output_len() + GUARD];
+
             let result = super::super::decode_to_slice_with_layout_and_alphabet(
                 input,
                 &mut guarded_output[output_start..output_start + layout.output_len()],
@@ -535,6 +553,7 @@ fn decode_checkpoint_scalar_and_padding_handoffs_are_exact() {
 
 fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
     const ENCODED_LEN: usize = 3 * 64;
+
     for invalid_index in [0, 63, 64, 127, 128, ENCODED_LEN - 1] {
         for input_offset in [0, 1, 7, 15] {
             let input_start = GUARD + input_offset;
@@ -547,6 +566,7 @@ fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
             let output_start = GUARD + output_offset;
             let output_len = decoded_len(ENCODED_LEN);
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
+
             let result = unsafe {
                 decode_aarch64_validated_blocks::<URLSAFE, MIXED>(
                     input,

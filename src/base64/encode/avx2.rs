@@ -93,10 +93,12 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
         let second = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 24)) };
         let third = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 48)) };
         let fourth = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 72)) };
+
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), first) };
         unsafe { _mm256_storeu_si256(output.add(destination + 32).cast(), second) };
         unsafe { _mm256_storeu_si256(output.add(destination + 64).cast(), third) };
         unsafe { _mm256_storeu_si256(output.add(destination + 96).cast(), fourth) };
+
         load_offset += 96;
         destination += 128;
     }
@@ -104,6 +106,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     while load_offset + 32 <= input.len() {
         let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), encoded) };
+
         load_offset += 24;
         destination += 32;
     }
@@ -116,6 +119,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     let consumed = if source + 16 <= input.len() {
         let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
+
         source + 12
     } else {
         source
@@ -157,6 +161,7 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(144).cast()), &constants) };
         let eighth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
+
         unsafe {
             Store::store(output, first);
             Store::store(output.add(32), second);
@@ -167,10 +172,13 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
             Store::store(output.add(192), seventh);
             Store::store(output.add(224), eighth);
         }
+
         input = unsafe { input.add(192) };
         output = unsafe { output.add(256) };
+
         groups -= 2;
     }
+
     if groups != 0 {
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =
@@ -179,6 +187,7 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(48).cast()), &constants) };
         let fourth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
+
         unsafe {
             Store::store(output, first);
             Store::store(output.add(32), second);
@@ -234,6 +243,7 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
         _mm256_subs_epu8(indices, constants.c51),
         _mm256_cmpgt_epi8(indices, constants.c25),
     );
+
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
 }
 
@@ -400,6 +410,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
 #[target_feature(enable = "avx2")]
 unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
+
     let mut value = unsafe { _mm_loadu_si128(input.cast()) };
     value = _mm_shuffle_epi8(value, shuffle);
 
@@ -422,6 +433,7 @@ unsafe fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) ->
             options(pure, nomem, nostack)
         );
     }
+
     value
 }
 
@@ -436,6 +448,7 @@ unsafe fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) ->
             options(pure, nomem, nostack)
         );
     }
+
     value
 }
 
@@ -443,12 +456,14 @@ unsafe fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) ->
 unsafe fn encode_24_first<const URLSAFE: bool>(input: *const u8) -> __m256i {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let shifted = _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 0, 1, 2, 3, 4, 5, 6));
+
     encode_24_shifted_value::<URLSAFE>(shifted)
 }
 
 #[target_feature(enable = "avx2")]
 unsafe fn encode_24_shifted<const URLSAFE: bool>(input: *const u8) -> __m256i {
     let shifted = unsafe { _mm256_loadu_si256(input.cast()) };
+
     encode_24_shifted_value::<URLSAFE>(shifted)
 }
 
@@ -486,6 +501,7 @@ unsafe fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i 
             options(pure, nomem, nostack)
         );
     }
+
     value
 }
 
@@ -500,6 +516,7 @@ unsafe fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i 
             options(pure, nomem, nostack)
         );
     }
+
     value
 }
 
@@ -526,6 +543,7 @@ fn ascii_from_indices_avx2_128<const URLSAFE: bool>(indices: __m128i) -> __m128i
         0,
         0,
     );
+
     _mm_add_epi8(_mm_shuffle_epi8(offsets, reduced), indices)
 }
 
@@ -552,5 +570,6 @@ fn ascii_from_indices_avx2<const URLSAFE: bool>(indices: __m256i) -> __m256i {
         0,
         0,
     ));
+
     _mm256_add_epi8(_mm256_shuffle_epi8(offsets, reduced), indices)
 }

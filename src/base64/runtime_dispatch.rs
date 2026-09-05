@@ -25,6 +25,7 @@ pub(super) unsafe fn encode_with_runtime_backend(
     allow_streaming_stores: bool,
 ) -> usize {
     let selection = backend::selected_backend();
+
     unsafe {
         encode_with_backend_ptr(
             input,
@@ -93,6 +94,7 @@ pub(super) unsafe fn decode_valid_prefix_with_backend(
     if !backend::is_supported(backend) {
         return (0, 0);
     }
+
     unsafe { decode_valid_prefix_x86_alphabet(input, output, backend, alphabet) }.unwrap_or((0, 0))
 }
 
@@ -106,6 +108,7 @@ pub(super) fn validate_with_backend(
     if !backend::is_supported(backend) {
         return Ok(0);
     }
+
     validate_with_backend_inner(input, backend, alphabet)
 }
 
@@ -148,6 +151,7 @@ fn validate_x86<A: x86_contracts::Decoder>(
     let Some(kernel) = validate_x86_kernel::<A>(backend) else {
         return Ok(0);
     };
+
     unsafe { kernel(input) }
 }
 
@@ -226,6 +230,7 @@ pub(super) fn encode_with_backend(
     if !backend::is_supported(backend) {
         return 0;
     }
+
     unsafe { encode_with_backend_ptr(input, output.as_mut_ptr(), backend, urlsafe, false) }
 }
 
@@ -280,9 +285,11 @@ unsafe fn encode_x86<const URLSAFE: bool>(
             encode_backend::avx2::encode_avx2_with_store::<URLSAFE>(input, output, store_mode)
         };
     }
+
     let Some(kernel) = encode_x86_kernel::<URLSAFE>(backend) else {
         return 0;
     };
+
     unsafe { kernel(input, output) }
 }
 
@@ -323,6 +330,7 @@ pub(super) unsafe fn decode_with_backend_ptr(
     if !backend::is_supported(backend) {
         return Ok((0, 0));
     }
+
     unsafe {
         decode_with_backend_ptr_mode(
             input,
@@ -453,6 +461,7 @@ unsafe fn decode_x86<A: x86_contracts::Decoder, S: x86_contracts::Store>(
     let Some(kernel) = decode_x86_kernel::<A, S>(backend) else {
         return Ok((0, 0));
     };
+
     unsafe { kernel(input, output) }
 }
 

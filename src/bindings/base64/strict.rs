@@ -4,8 +4,8 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::pybytes_with_len;
 use super::policy::ErrorWrites;
+use super::staging::pybytes_with_len;
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
@@ -58,7 +58,7 @@ pub(super) fn decode_strict<'py>(
     })
 }
 
-pub(in crate::bindings::base64::decode) fn decode_strict_into(
+pub(super) fn decode_strict_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
@@ -249,7 +249,7 @@ fn decode_unpadded_with_layout_to_ptr(
     Ok(layout.output_len())
 }
 
-pub(in crate::bindings::base64::decode) fn translate_altchars(
+pub(super) fn translate_altchars(
     input: &[u8],
     [plus, slash]: [u8; 2],
 ) -> PyResult<Option<Vec<u8>>> {

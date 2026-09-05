@@ -27,6 +27,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
         let product = _mm512_mul_epu32(mixed, _mm512_srli_epi64::<32>(mixed));
         let swapped = _mm512_shuffle_epi32::<0x4e>(input);
         let old = unsafe { _mm512_load_si512(acc.0.as_ptr().cast()) };
+
         unsafe {
             _mm512_storeu_si512(
                 acc.0.as_mut_ptr().cast(),
@@ -47,6 +48,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
         let prime = _mm512_set1_epi32(P32_1 as i32);
         let low = _mm512_mul_epu32(mixed, prime);
         let high = _mm512_slli_epi64::<32>(_mm512_mul_epu32(_mm512_srli_epi64::<32>(mixed), prime));
+
         unsafe { _mm512_store_si512(acc.0.as_mut_ptr().cast(), _mm512_add_epi64(low, high)) };
     }
 
@@ -54,6 +56,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);
     let mut acc = AlignedAccumulator(initial_accumulator());
+
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         for stripe in 0..16 {
@@ -65,8 +68,10 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
                 )
             };
         }
+
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
+
     for stripe in 0..schedule.tail_stripes() {
         unsafe {
             accumulate(
@@ -76,6 +81,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
             )
         };
     }
+
     unsafe {
         accumulate(
             &mut acc,
@@ -83,5 +89,6 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
             secret.as_ptr().add(121),
         )
     };
+
     acc.0
 }

@@ -27,6 +27,9 @@ mod methods;
 
 static PYTHON_SEMANTICS: OnceLock<PythonSemantics> = OnceLock::new();
 
+#[cfg(not(Py_GIL_DISABLED))]
+const EXACT_BYTES_BATCH_MAX: usize = 256;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct PythonSemantics {
     version: (u8, u8, u8),
@@ -59,6 +62,7 @@ impl PythonSemantics {
             (3, 14, patch) => patch >= 4,
             (major, minor, _) => (major, minor) >= (3, 15),
         };
+
         Self {
             version,
             binascii_api,
@@ -81,9 +85,6 @@ impl PythonSemantics {
     }
 }
 
-#[cfg(not(Py_GIL_DISABLED))]
-const EXACT_BYTES_BATCH_MAX: usize = 256;
-
 #[inline]
 pub(super) fn python_at_least(py: Python<'_>, version: (u8, u8)) -> bool {
     python_semantics(py).at_least(version)
@@ -105,11 +106,13 @@ fn parse_altchars(
     let Some(value) = value else {
         return Ok(None);
     };
+
     let bytes = if allow_text {
         ascii_or_bytes(py, value, "altchars")?
     } else {
         contiguous_bytes_like(value, "altchars")?
     };
+
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
     if bytes.len() != 2 {
@@ -125,7 +128,9 @@ fn parse_altchars(
             "altchars must be a bytes-like object or ASCII string of length 2",
         ));
     }
+
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
+
     Ok((altchars != *b"+/").then_some(altchars))
 }
 
@@ -165,6 +170,7 @@ fn prepare_b64encode_altchars(
         }
         let alphabet = alphabet.as_bytes();
         let altchars = [alphabet[62], alphabet[63]];
+
         return Ok(Ok((altchars != *b"+/").then_some(altchars)));
     }
 
@@ -179,7 +185,9 @@ fn prepare_b64encode_altchars(
         };
         return Err(PyValueError::new_err(message));
     }
+
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
+
     Ok(Ok((altchars != *b"+/").then_some(altchars)))
 }
 

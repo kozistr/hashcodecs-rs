@@ -36,10 +36,12 @@ where
     O: FnMut(T),
 {
     let mut index = 0;
+
     while index < inputs.len() && inputs[index].len() <= 240 {
         output(short(inputs[index], seed));
         index += 1;
     }
+
     if index == inputs.len() {
         return;
     }
@@ -68,16 +70,19 @@ fn hash_each_input_with_engine<T, S, F, O>(
     O: FnMut(T),
 {
     let mut index = 0;
+
     while index < inputs.len() && inputs[index].len() <= 240 {
         output(short(inputs[index], seed));
         index += 1;
     }
+
     if index == inputs.len() {
         return;
     }
 
     let derived_secret = engine.derive_secret(seed);
     let secret = engine.secret(&derived_secret);
+
     if !engine.has_batch_kernel() {
         while index < inputs.len() {
             if let Some(input) = LongInput::new(inputs[index]) {
@@ -87,8 +92,10 @@ fn hash_each_input_with_engine<T, S, F, O>(
             }
             index += 1;
         }
+
         return;
     }
+
     while index < inputs.len() {
         let Some(run) = LongRun::new(&inputs[index..]) else {
             output(short(inputs[index], seed));
@@ -103,6 +110,7 @@ fn hash_each_input_with_engine<T, S, F, O>(
             emit_long_group4(secret, group, accumulators, finalize, &mut output);
             run_index += 4;
         }
+
         match run.len() - run_index {
             3 => {
                 let group = run.batch3(run_index);
@@ -120,6 +128,7 @@ fn hash_each_input_with_engine<T, S, F, O>(
             }
             _ => {}
         }
+
         index += run.len();
     }
 }
@@ -151,9 +160,11 @@ fn hash_each_input_with_engine<T, S, F, O>(
 #[inline]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let mut hashes = Vec::with_capacity(inputs.len());
+
     hash_each_input(inputs, seed, xxh3_64, finalize_long_64, |hash| {
         hashes.push(hash)
     });
+
     hashes
 }
 
@@ -208,9 +219,11 @@ pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u6
 #[inline]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let mut hashes = Vec::with_capacity(inputs.len());
+
     hash_each_input(inputs, seed, xxh3_128, finalize_long_128, |hash| {
         hashes.push(hash)
     });
+
     hashes
 }
 
@@ -244,14 +257,17 @@ mod tests {
 
     fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
         let mut hashes = Vec::new();
+
         hash_each_input_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
             hashes.push(hash)
         });
+
         hashes
     }
 
     fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]> {
         let mut hashes = Vec::new();
+
         hash_each_input_with_engine(
             inputs,
             17,
@@ -260,6 +276,7 @@ mod tests {
             engine,
             &mut |hash| hashes.push(hash),
         );
+
         hashes
     }
 
@@ -269,6 +286,7 @@ mod tests {
             300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
         ]
         .map(|length| vec![length as u8; length]);
+
         let refs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
         let scalar = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
         assert!(!scalar.has_batch_kernel());
@@ -323,7 +341,9 @@ mod tests {
         let inputs = run.batch2(0);
         let engine = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
         let derived = engine.derive_secret(17);
+
         let mut actual = Vec::new();
+
         emit_long_group2(
             engine.secret(&derived),
             inputs,

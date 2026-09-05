@@ -8,6 +8,7 @@ use pyo3::types::PyList;
 
 pub(super) fn batch_results<T>(length: usize, error: &'static str) -> PyResult<Vec<T>> {
     let mut results = Vec::new();
+
     results
         .try_reserve_exact(length)
         .map_err(|_| PyMemoryError::new_err(error))?;
@@ -24,14 +25,17 @@ where
 {
     let length = ffi::Py_ssize_t::try_from(length)
         .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
+
     unsafe {
         let list: Bound<'py, PyList> =
             Bound::from_owned_ptr_or_err(py, ffi::PyList_New(length))?.cast_into_unchecked();
+
         for index in 0..length {
             // PyList_SET_ITEM steals the new reference.
             // The function publishes the list after PyList_SET_ITEM initializes every slot.
             ffi::PyList_SET_ITEM(list.as_ptr(), index, item(index as usize)?.into_ptr());
         }
+
         Ok(list)
     }
 }
@@ -85,13 +89,16 @@ pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usi
 
 pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
     let length = items.len();
+
     let mut values = Vec::new();
     values
         .try_reserve_exact(length)
         .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
+
     #[cfg(Py_GIL_DISABLED)]
     {
         values.extend(items.iter());
+
         Ok(values)
     }
     #[cfg(not(Py_GIL_DISABLED))]
@@ -100,6 +107,7 @@ pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
             values.push(Bound::from_borrowed_ptr(items.py(), item));
         }
+
         Ok(values)
     }
 }
@@ -110,6 +118,7 @@ pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
     let data: *mut u8 = unsafe { ffi::PyByteArray_AsString(value).cast() };
     #[cfg(not(Py_GIL_DISABLED))]
     let data: *mut u8 = unsafe { ffi::PyByteArray_AS_STRING(value).cast() };
+
     if data.is_null() {
         std::ptr::NonNull::<u8>::dangling().as_ptr()
     } else {

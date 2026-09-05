@@ -13,6 +13,14 @@ use super::tables::{
 };
 use super::x86_contracts::{Decoder, Store};
 
+/// TODO
+/// So my optimization priority would be:
+/// 1. Split bulk and terminal blocks, eliminating the per-iteration padded-store branches.
+/// 2. Cache input_ptr / input_len.
+/// 3. Inspect assembly for spills caused by the 4× unroll.
+/// 4. Benchmark 2× versus 4× unrolling.
+/// 5. Leave the combined error reduction alone unless profiling says otherwise.
+///    I'd inspect cargo asm/Compiler Explorer output for spills and benchmark 2× vs 4×.
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     input: &[u8],
@@ -26,6 +34,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
         let (third, third_error) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
         let (fourth, fourth_error) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+
         let errors = _mm256_or_si256(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
@@ -33,17 +42,20 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         // The padded stores write four bytes into the following block's output,
         // where the next store replaces them. This is safe for exact-output
         // callers because each of these blocks has a complete successor.
         unsafe { store_24_padded(output.add(destination), pack_32(first)) };
         unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
         unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+
         if source + 160 <= input.len() {
             unsafe { store_24_padded(output.add(destination + 72), pack_32(fourth)) };
         } else {
             unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
         }
+
         source += 128;
         destination += 96;
     }
@@ -53,6 +65,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         if source + 64 <= input.len() {
             // A complete following block provides enough in-bounds output for
             // the four-byte overlap, which that block replaces.
@@ -60,6 +73,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         } else {
             unsafe { S::store_24(output.add(destination), pack_32(indices)) };
         }
+
         source += 32;
         destination += 24;
     }
@@ -71,21 +85,26 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
         if !errors_are_zero_ssse3(errors) {
             return Err(Base64Error::InvalidInput);
         }
+
         unsafe { S::store_12(output.add(destination), pack_16_indices(indices)) };
+
         source += 16;
         destination += 12;
     }
+
     Ok((source, destination))
 }
 
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
+
     while source + 128 <= input.len() {
         let (_, first) = unsafe { A::decode_32(input.as_ptr().add(source)) };
         let (_, second) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
         let (_, third) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
         let (_, fourth) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+
         let errors = _mm256_or_si256(
             _mm256_or_si256(first, second),
             _mm256_or_si256(third, fourth),
@@ -93,6 +112,7 @@ pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64E
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         source += 128;
     }
     while source + 32 <= input.len() {
@@ -100,15 +120,19 @@ pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64E
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         source += 32;
     }
+
     if source + 16 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if !errors_are_zero_ssse3(errors) {
             return Err(Base64Error::InvalidInput);
         }
+
         source += 16;
     }
+
     Ok(source)
 }
 
@@ -119,11 +143,13 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 ) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_32(input.as_ptr().add(source)) };
         let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
         let (third, third_error) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
         let (fourth, fourth_error) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+
         let errors = _mm256_or_si256(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
@@ -131,19 +157,24 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
         if _mm256_testz_si256(errors, errors) == 0 {
             break;
         }
+
         unsafe { store_24_exact(output.add(destination), pack_32(first)) };
         unsafe { store_24_exact(output.add(destination + 24), pack_32(second)) };
         unsafe { store_24_exact(output.add(destination + 48), pack_32(third)) };
         unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
+
         source += 128;
         destination += 96;
     }
+
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
         if _mm256_testz_si256(errors, errors) == 0 {
             break;
         }
+
         unsafe { store_24_exact(output.add(destination), pack_32(indices)) };
+
         source += 32;
         destination += 24;
     }
@@ -151,10 +182,12 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if errors_are_zero_ssse3(errors) {
             unsafe { store_12_exact(output.add(destination), pack_16_indices(indices)) };
+
             source += 16;
             destination += 12;
         }
     }
+
     (source, destination)
 }
 
@@ -211,6 +244,7 @@ pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m2
         _mm256_and_si256(dash, _mm256_set1_epi8(-2)),
         _mm256_and_si256(underscore, _mm256_set1_epi8(33)),
     );
+
     (_mm256_add_epi8(indices, corrections), errors)
 }
 
@@ -226,6 +260,7 @@ fn classify_ascii_avx2(
     let low_nibbles = _mm256_and_si256(value, mask);
     let high_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(high_classes), high_nibbles);
     let low_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), low_nibbles);
+
     (high_nibbles, _mm256_and_si256(high_matches, low_matches))
 }
 
@@ -250,6 +285,7 @@ pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
     unsafe { _mm_storel_epi64(output.add(12).cast(), upper) };
 
     let remaining = _mm_cvtsi128_si32(_mm_srli_si128(upper, 8));
+
     unsafe { output.add(20).cast::<i32>().write_unaligned(remaining) };
 }
 

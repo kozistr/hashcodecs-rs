@@ -40,19 +40,24 @@ pub(crate) unsafe fn validate<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
 ) -> Result<usize, Base64Error> {
     let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+
     let mut source = 0;
+
     while source + 16 <= input.len() {
         let mut errors = vdupq_n_u8(0);
         let chunk_end = (source + DECODE_ERROR_CHECK_INTERVAL).min(input.len() & !15);
+
         while source < chunk_end {
             let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
             errors = vorrq_u8(errors, decode_indices::<URLSAFE, MIXED>(bytes, tables).1);
             source += 16;
         }
+
         if vmaxvq_u8(errors) != 0 {
             return Err(Base64Error::InvalidInput);
         }
     }
+
     Ok(source)
 }
 
@@ -63,6 +68,7 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BL
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
     let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+
     let mut source = 0;
     let mut destination = 0;
 
@@ -86,6 +92,7 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BL
         let bulk_remaining = (input.len() - source) & !63;
         let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
         let mut errors = vdupq_n_u8(0);
+
         while source < chunk_end {
             let (decoded, block_errors) =
                 unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
@@ -97,6 +104,7 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BL
             source += 64;
             destination += 48;
         }
+
         if vmaxvq_u8(errors) != 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -126,6 +134,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     tables: DecodeTables,
 ) -> Result<(), Base64Error> {
     let input = unsafe { vld1q_u8(input) };
+
     let (indices, errors) = decode_indices::<URLSAFE, MIXED>(input, tables);
     if vmaxvq_u8(errors) != 0 {
         return Err(Base64Error::InvalidInput);
@@ -137,6 +146,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     for group in 0..4 {
         let source = group * 4;
         let destination = group * 3;
+
         let first = indices_array[source];
         let second = indices_array[source + 1];
         let third = indices_array[source + 2];
@@ -161,10 +171,12 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
     tables: DecodeTables,
 ) -> (uint8x16x3_t, uint8x16_t) {
     let input = unsafe { vld4q_u8(input) };
+
     let (first, first_errors) = decode_indices::<URLSAFE, MIXED>(input.0, tables);
     let (second, second_errors) = decode_indices::<URLSAFE, MIXED>(input.1, tables);
     let (third, third_errors) = decode_indices::<URLSAFE, MIXED>(input.2, tables);
     let (fourth, fourth_errors) = decode_indices::<URLSAFE, MIXED>(input.3, tables);
+
     let errors = vorrq_u8(
         vorrq_u8(first_errors, second_errors),
         vorrq_u8(third_errors, fourth_errors),

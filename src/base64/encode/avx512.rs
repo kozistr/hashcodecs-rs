@@ -16,6 +16,7 @@ pub(in crate::base64) const MULTISHIFT_SHIFTS: [u8; 8] = [10, 4, 22, 16, 42, 36,
 const fn encode_shuffle() -> [u8; 64] {
     let mut shuffle = [0; 64];
     let mut group = 0;
+
     while group < 16 {
         let input = group * 3;
         let output = group * 4;
@@ -25,6 +26,7 @@ const fn encode_shuffle() -> [u8; 64] {
         shuffle[output + 3] = (input + 1) as u8;
         group += 1;
     }
+
     shuffle
 }
 
@@ -42,12 +44,14 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     } else {
         STANDARD_ALPHABET
     };
+
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
     let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
     let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
 
     let mut source = 0;
     let mut destination = 0;
+
     while source + 192 <= input.len() {
         unsafe {
             encode_48(
@@ -100,6 +104,7 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
                 table,
             )
         };
+
         source += 48;
         destination += 64;
     }
@@ -130,5 +135,6 @@ unsafe fn encode_48(
     let input = unsafe { _mm512_maskz_loadu_epi8(INPUT_MASK_48, input.cast()) };
     let shuffled = _mm512_permutexvar_epi8(shuffle, input);
     let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
+
     unsafe { _mm512_storeu_si512(output.cast(), _mm512_permutexvar_epi8(indices, table)) };
 }

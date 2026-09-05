@@ -24,6 +24,7 @@ unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secre
         let product = _mm_mul_epu32(mixed, _mm_shuffle_epi32::<0xb1>(mixed));
         let swapped = _mm_shuffle_epi32::<0x4e>(input);
         let old = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
+
         unsafe {
             _mm_storeu_si128(
                 acc.0.as_mut_ptr().add(vector * 2).cast(),
@@ -37,6 +38,7 @@ unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secre
 #[target_feature(enable = "ssse3")]
 unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
     let prime = _mm_set1_epi32(P32_1 as i32);
+
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let value = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
@@ -47,6 +49,7 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
         );
         let low = _mm_mul_epu32(mixed, prime);
         let high = _mm_slli_epi64::<32>(_mm_mul_epu32(_mm_srli_epi64::<32>(mixed), prime));
+
         unsafe {
             _mm_storeu_si128(
                 acc.0.as_mut_ptr().add(vector * 2).cast(),
@@ -67,6 +70,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);
     let mut acc = AlignedAccumulator(initial_accumulator());
+
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         for stripe in 0..16 {
@@ -78,8 +82,10 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
                 )
             };
         }
+
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
+
     for stripe in 0..schedule.tail_stripes() {
         unsafe {
             accumulate_stripe(
@@ -89,6 +95,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
             )
         };
     }
+
     unsafe {
         accumulate_stripe(
             &mut acc,
@@ -96,5 +103,6 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
             secret.as_ptr().add(121),
         )
     };
+
     acc.0
 }

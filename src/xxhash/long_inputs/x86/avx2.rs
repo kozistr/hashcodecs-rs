@@ -27,9 +27,11 @@ pub(in crate::xxhash::long_inputs) unsafe fn init_secret(seed: u64) -> Secret {
     let negative = 0_u64.wrapping_sub(seed);
     let delta = _mm256_set_epi64x(negative as i64, seed as i64, negative as i64, seed as i64);
     let mut output = [0_u8; 192];
+
     for vector in 0..6 {
         let offset = vector * 32;
         let source = unsafe { _mm256_loadu_si256(SECRET.as_ptr().add(offset).cast()) };
+
         unsafe {
             _mm256_storeu_si256(
                 output.as_mut_ptr().add(offset).cast(),
@@ -37,6 +39,7 @@ pub(in crate::xxhash::long_inputs) unsafe fn init_secret(seed: u64) -> Secret {
             )
         };
     }
+
     Secret(output)
 }
 
@@ -48,6 +51,7 @@ unsafe fn accumulate_vector(acc: __m256i, data: *const u8, secret: *const u8) ->
     let mixed = _mm256_xor_si256(input, secret_values);
     let product = _mm256_mul_epu32(mixed, _mm256_srli_epi64::<32>(mixed));
     let swapped = _mm256_shuffle_epi32::<0x4e>(input);
+
     _mm256_add_epi64(_mm256_add_epi64(acc, swapped), product)
 }
 
@@ -62,6 +66,7 @@ unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
     let prime = _mm256_set1_epi32(P32_1 as i32);
     let low = _mm256_mul_epu32(mixed, prime);
     let high = _mm256_slli_epi64::<32>(_mm256_mul_epu32(_mm256_srli_epi64::<32>(mixed), prime));
+
     _mm256_add_epi64(low, high)
 }
 
@@ -69,6 +74,7 @@ unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn initial() -> Accumulator {
     let initial = AlignedAccumulator(initial_accumulator());
+
     Accumulator {
         low: unsafe { _mm256_load_si256(initial.0.as_ptr().cast()) },
         high: unsafe { _mm256_load_si256(initial.0.as_ptr().add(4).cast()) },
@@ -106,7 +112,9 @@ unsafe fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn finish(acc: Accumulator) -> [u64; 8] {
     let mut output = AlignedAccumulator([0; 8]);
+
     unsafe { store(acc, &mut output) };
+
     output.0
 }
 
@@ -185,6 +193,7 @@ unsafe fn accumulate_block_chains(
             )
         };
     }
+
     unsafe { reduce_chains(acc0, acc1, acc2, acc3) }
 }
 
@@ -218,10 +227,13 @@ unsafe fn accumulate_tail_chains(
         };
         stripe += 4;
     }
+
     let remaining = stripes - stripe;
+
     if remaining >= 1 {
         unsafe { accumulate_registers(&mut acc0, data.add(stripe * 64), secret.add(stripe * 8)) };
     }
+
     if remaining >= 2 {
         unsafe {
             accumulate_registers(
@@ -231,6 +243,7 @@ unsafe fn accumulate_tail_chains(
             )
         };
     }
+
     if remaining == 3 {
         unsafe {
             accumulate_registers(
@@ -243,6 +256,7 @@ unsafe fn accumulate_tail_chains(
 
     let last_secret = unsafe { secret.add(121) };
     let chains = [&mut acc0, &mut acc1, &mut acc2, &mut acc3];
+
     unsafe {
         accumulate_registers(chains[stripes % 4], last, last_secret);
         reduce_chains(acc0, acc1, acc2, acc3)
@@ -260,18 +274,22 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);
     let mut acc = unsafe { initial() };
+
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
         if block + 2 <= schedule.full_blocks() {
             unsafe { _mm_prefetch::<_MM_HINT_T0>(data.as_ptr().add((block + 2) * 1024).cast()) };
         }
+    
         acc = unsafe { accumulate_block_chains(acc, data.as_ptr().add(offset), secret.as_ptr()) };
         let secret_ptr = unsafe { secret.as_ptr().add(128) };
+
         unsafe { scramble_registers(&mut acc, secret_ptr) };
     }
 
     let tail = unsafe { data.as_ptr().add(schedule.tail_offset()) };
     let last = unsafe { data.as_ptr().add(schedule.last_offset()) };
+
     // The final stripe uses a distinct secret and forms the fourth independent
     // update when the regular tail already contains at least three stripes.
     if schedule.tail_stripes() >= 3 {
@@ -284,8 +302,10 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
             let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
             unsafe { accumulate_registers(&mut acc, input, secret_ptr) };
         }
+
         let secret_ptr = unsafe { secret.as_ptr().add(121) };
         unsafe { accumulate_registers(&mut acc, last, secret_ptr) };
     }
+
     unsafe { finish(acc) }
 }

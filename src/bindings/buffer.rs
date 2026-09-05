@@ -358,10 +358,12 @@ fn ranges_overlap(
     if first_len == 0 || second_len == 0 {
         return false;
     }
+
     let first_start = first as usize;
     let second_start = second as usize;
     let first_end = first_start.saturating_add(first_len);
     let second_end = second_start.saturating_add(second_len);
+
     first_start < second_end && second_start < first_end
 }
 
@@ -372,6 +374,7 @@ pub(super) fn bytes_like<'a, 'py>(
     if let Some(bytes) = exact_bytes_like(value) {
         return Ok(bytes);
     }
+
     buffer_bytes_like(value, argument, false)
 }
 
@@ -382,6 +385,7 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     if let Some(bytes) = exact_bytes_like(value) {
         return Ok(bytes);
     }
+
     buffer_bytes_like(value, argument, true)
 }
 
@@ -396,6 +400,7 @@ pub(super) fn contiguous_bytes_like_owned<'py>(
             .map(BytesLike::OwnedByteArray)
             .map_err(Into::into);
     }
+
     buffer_bytes_like(value, argument, true)
 }
 
@@ -407,6 +412,7 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     if let Some(bytes) = exact_bytes_like(value) {
         return Ok(bytes);
     }
+
     if PyString::is_exact_type_of(value) {
         // The exact-type check above establishes the unchecked cast's invariant.
         let text = unsafe { value.cast_unchecked::<PyString>() };
@@ -416,10 +422,12 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
         }
         return Ok(BytesLike::Text(text));
     }
+
     if value.is_instance_of::<PyString>() {
         let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
         return buffer_bytes_like(&encoded, argument, false);
     }
+
     bytes_like(value, argument)
 }
 
@@ -434,11 +442,13 @@ pub(super) fn ascii_or_bytes_owned<'py>(
             .map(BytesLike::OwnedByteArray)
             .map_err(Into::into);
     }
+
     if value.is_instance_of::<PyString>() {
         let py = value.py();
         let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
         return buffer_bytes_like(&encoded, argument, false);
     }
+
     buffer_bytes_like(value, argument, false)
 }
 
@@ -449,10 +459,12 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
         return Some(BytesLike::Bytes(bytes));
     }
+
     if PyByteArray::is_exact_type_of(value) {
         let value = unsafe { value.cast_unchecked::<PyByteArray>() };
         return Some(BytesLike::ByteArray(value));
     }
+
     None
 }
 
@@ -478,14 +490,17 @@ fn buffer_bytes_like<'py>(
         let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
         return exact_memoryview_bytes_like(memoryview, require_contiguous);
     }
+
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         return Err(type_error(argument));
     }
+
     with_critical_section(value, || {
         let buffer = acquire_buffer(value, std::ptr::null_mut())?;
         let c_contiguous = unsafe {
             ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
         };
+
         if require_contiguous && !c_contiguous {
             return Err(PyBufferError::new_err(
                 "memoryview: underlying buffer is not C-contiguous",
@@ -524,10 +539,12 @@ fn exact_memoryview_bytes_like<'py>(
             let owner = owner.cast_into::<PyBytes>()?;
             let owner_len = unsafe { bytes_size(owner.as_ptr()) };
             let owner_data = unsafe { bytes_data(owner.as_ptr()) };
+
             if let Some(offset) = subslice_offset(owner_data, owner_len, data, nbytes) {
                 if offset == 0 && nbytes == owner_len {
                     return Ok(BytesLike::OwnedBytes(owner));
                 }
+
                 return Ok(BytesLike::OwnedBytesSlice {
                     owner,
                     offset,
@@ -550,6 +567,7 @@ fn exact_memoryview_bytes_like<'py>(
     }
 
     drop(buffer);
+
     copy_memoryview(memoryview).map(BytesLike::OwnedBytes)
 }
 
@@ -562,6 +580,7 @@ fn subslice_offset(
     let owner_start = owner_data as usize;
     let slice_start = slice_data as usize;
     let offset = slice_start.checked_sub(owner_start)?;
+
     (offset <= owner_len && slice_len <= owner_len - offset).then_some(offset)
 }
 
@@ -573,12 +592,14 @@ fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Memor
     let c_contiguous = unsafe {
         ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
     };
+
     #[cfg(not(Py_GIL_DISABLED))]
     let try_owner = c_contiguous && nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
     #[cfg(all(Py_GIL_DISABLED, not(any(Py_LIMITED_API, PyPy, GraalPy))))]
     let try_owner = c_contiguous;
     #[cfg(all(Py_GIL_DISABLED, any(Py_LIMITED_API, PyPy, GraalPy)))]
     let try_owner = c_contiguous && nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
+
     let owner = if try_owner {
         Some(memoryview.getattr(intern!(py, "obj"))?)
     } else {
@@ -624,15 +645,18 @@ fn copy_buffer<'py>(py: Python<'py>, buffer: &BorrowedBuffer<'_>) -> PyResult<Bo
                 b'C' as std::ffi::c_char,
             )
         };
+
         if result != 0 {
             return Err(PyErr::fetch(py));
         }
+
         Ok(())
     })
 }
 
 fn copy_memoryview<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Bound<'py, PyBytes>> {
     let py = memoryview.py();
+
     memoryview
         .call_method0(intern!(py, "tobytes"))?
         .cast_into::<PyBytes>()

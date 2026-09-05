@@ -29,9 +29,11 @@ pub(super) fn with_function_bytes<T: Send>(
             Ok(operation(bytes))
         };
     }
+
     let object = unsafe { Bound::from_borrowed_ptr(py, object) };
     let input = bytes_like(&object, "s")?;
     let detach = input.detach_safe() && input.len() >= detach_threshold;
+
     Ok(unsafe {
         input.with_bytes(|bytes| {
             if detach {

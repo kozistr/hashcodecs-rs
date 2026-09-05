@@ -220,6 +220,7 @@ pub(super) fn build_long_input_schedule(input: LongInput<'_>) -> LongSchedule {
     let length = input.len();
     let full_blocks = (length - 1) / 1024;
     let tail_offset = full_blocks * 1024;
+
     LongSchedule {
         full_blocks,
         tail_offset,
@@ -237,12 +238,14 @@ pub(super) fn initial_accumulator() -> [u64; 8] {
 pub(super) fn merge(acc: &[u64; 8], secret: &Secret, offset: usize, start: u64) -> u64 {
     let secret = secret.as_bytes();
     let mut result = start;
+
     for lane in 0..4 {
         result = result.wrapping_add(mul_fold(
             acc[lane * 2] ^ read_u64_le(secret, offset + lane * 16),
             acc[lane * 2 + 1] ^ read_u64_le(secret, offset + lane * 16 + 8),
         ));
     }
+
     avalanche(result)
 }
 
@@ -284,6 +287,7 @@ pub(super) unsafe fn accumulate_x86(
     let Some(kernel) = select_x86_accumulation_kernel(backend) else {
         return scalar::accumulate(input, secret);
     };
+
     unsafe { kernel(input, secret) }
 }
 
@@ -339,6 +343,7 @@ impl LongEngine {
             } else {
                 LongBackend::Scalar
             };
+
             Self { backend }
         }
 
@@ -360,6 +365,7 @@ impl LongEngine {
             Some(kernel) => LongBackend::X86(kernel),
             None => LongBackend::Scalar,
         };
+
         Self {
             backend,
             avx2_available: capabilities.supports(CpuFeature::Avx2),
@@ -371,10 +377,12 @@ impl LongEngine {
         if seed == 0 {
             return None;
         }
+
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
             return Some(unsafe { x86::avx2::init_secret(seed) });
         }
+
         Some(initialize_secret_scalar(seed))
     }
 
@@ -397,8 +405,7 @@ impl LongEngine {
 
     #[inline(always)]
     pub(super) fn accumulate(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
-        let backend = self.backend;
-        match backend {
+        match self.backend {
             LongBackend::Scalar => scalar::accumulate(input, secret),
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             LongBackend::X86(kernel) => unsafe { kernel(input, secret) },
@@ -416,6 +423,7 @@ impl LongEngine {
         if let Some(accumulators) = self.try_accumulate_batch2(inputs, secret) {
             return accumulators;
         }
+
         let [first, second] = inputs.into_inputs();
         [
             self.accumulate(first, secret),
@@ -432,6 +440,7 @@ impl LongEngine {
         if let Some(accumulators) = self.try_accumulate_batch3(inputs, secret) {
             return accumulators;
         }
+
         let [first, second, third] = inputs.into_inputs();
         [
             self.accumulate(first, secret),
@@ -449,6 +458,7 @@ impl LongEngine {
         if let Some(accumulators) = self.try_accumulate_batch4(inputs, secret) {
             return accumulators;
         }
+
         let [first, second, third, fourth] = inputs.into_inputs();
         [
             self.accumulate(first, secret),
@@ -485,6 +495,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
+
             Some(unsafe { x86::avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
         }
     }
@@ -505,6 +516,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
+
             Some(unsafe { x86::avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
         }
     }
@@ -525,6 +537,7 @@ impl LongEngine {
             if !self.avx2_available {
                 return None;
             }
+
             Some(unsafe { x86::avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })
         }
     }
@@ -533,11 +546,13 @@ impl LongEngine {
 pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
     let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
+
     engine.hash(input, engine.secret(&derived), finalize_long_64)
 }
 
 pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 2] {
     let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
+
     engine.hash(input, engine.secret(&derived), finalize_long_128)
 }

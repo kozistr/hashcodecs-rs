@@ -27,6 +27,7 @@ macro_rules! define_accumulate_batch {
 
             for block in 0..schedule.full_blocks() {
                 let offset = block * 1024;
+
                 if block + 2 <= schedule.full_blocks() {
                     let prefetch_offset = (block + 2) * 1024;
                     unsafe {
@@ -35,6 +36,7 @@ macro_rules! define_accumulate_batch {
                         );)+
                     }
                 }
+
                 for stripe in 0..16 {
                     let input_offset = offset + stripe * 64;
                     let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
@@ -46,7 +48,9 @@ macro_rules! define_accumulate_batch {
                         );)+
                     }
                 }
+
                 let secret_ptr = unsafe { secret.as_ptr().add(128) };
+
                 unsafe {
                     $(scramble_registers(&mut $acc, secret_ptr);)+
                 }
@@ -55,6 +59,7 @@ macro_rules! define_accumulate_batch {
             for stripe in 0..schedule.tail_stripes() {
                 let input_offset = schedule.tail_offset() + stripe * 64;
                 let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
+
                 unsafe {
                     $(accumulate_registers(
                         &mut $acc,
@@ -63,8 +68,10 @@ macro_rules! define_accumulate_batch {
                     );)+
                 }
             }
+
             let input_offset = schedule.last_offset();
             let secret_ptr = unsafe { secret.as_ptr().add(121) };
+
             unsafe {
                 $(accumulate_registers(
                     &mut $acc,

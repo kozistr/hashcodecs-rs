@@ -36,12 +36,14 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     } else {
         unsafe { tuple_size(keywords) }
     };
+
     for keyword_index in 0..keyword_count {
         let keyword = unsafe { tuple_item(keywords, keyword_index) };
         let value = unsafe { *args.add(nargs + keyword_index) };
         let parameter_index = parameter_names.iter().position(|parameter| {
             (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, *parameter) }) == 0
         });
+
         let Some(parameter_index) = parameter_index else {
             unsafe {
                 ffi::PyErr_Format(
@@ -53,6 +55,7 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
             }
             return None;
         };
+
         if !values[parameter_index].is_null() {
             unsafe {
                 ffi::PyErr_Format(
@@ -87,6 +90,7 @@ pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
     if seed.is_null() {
         return Some(0);
     }
+
     let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
     if unsafe { ffi::PyErr_Occurred() }.is_null() && value <= u64::from(u32::MAX) {
         Some(value as u32)
@@ -107,7 +111,9 @@ pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
     if seed.is_null() {
         return Some(0);
     }
+
     let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
+
     if unsafe { ffi::PyErr_Occurred() }.is_null() {
         Some(value as u64)
     } else {

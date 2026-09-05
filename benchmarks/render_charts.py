@@ -806,8 +806,7 @@ def main() -> None:
         (OUTPUT / chart.filename).write_text(render(chart), encoding='utf-8', newline='\n')
 
     (
-        (OUTPUT / 'performance-at-a-glance.svg')
-        .write_text(
+        (OUTPUT / 'performance-at-a-glance.svg').write_text(
             render_performance_at_a_glance(), encoding='utf-8', newline='\n'
         )
     )

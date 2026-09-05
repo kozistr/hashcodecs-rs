@@ -54,7 +54,7 @@ fn decode_configured_strict_into(
     output: &Bound<'_, PyByteArray>,
     altchars: [u8; 2],
     padded: bool,
-    transactional_errors: bool,
+    validated_prefix_only: bool,
 ) -> PyResult<Result<usize, Base64Error>> {
     let prepared = PreparedDecoder::new(
         py,
@@ -65,7 +65,7 @@ fn decode_configured_strict_into(
         output,
         altchars,
         prepared.strict_custom(),
-        if transactional_errors {
+        if validated_prefix_only {
             ErrorWrites::ValidatedPrefix
         } else {
             ErrorWrites::MayWrite
@@ -203,7 +203,7 @@ fn lenient_lengths_cover_padding_policies_and_invalid_tails() {
 }
 
 #[test]
-fn lenient_decoder_reports_each_output_boundary_transactionally() {
+fn lenient_decoder_reports_each_output_boundary_before_writing() {
     let table = lenient_decode_table(None);
     let mut output = [0xa5; 8];
     assert_eq!(
@@ -551,7 +551,7 @@ fn configured_strict_specials_cover_padding_and_staging_errors() {
 }
 
 #[test]
-fn configured_strict_into_snapshots_aliases_and_preserves_transactional_errors() {
+fn configured_strict_into_snapshots_aliases_and_honors_error_write_policy() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");

@@ -156,13 +156,17 @@ def test_large_xxh3_batches_release_the_gil(
     assert_releases_gil: GILProgressAssertion,
 ) -> None:
     payload = bytes(range(256)) * (XXH3_DETACH_THRESHOLD // 256)
-    inputs = [payload]
-    expected = [one_shot(payload, 42)]
-    output = bytearray(digest_size)
+    # Keep each detached call long enough for the waiting worker to be
+    # scheduled. Repeating one short batch many times leaves only tiny GIL
+    # release windows, which a busy CI host can miss entirely.
+    inputs = [payload] * 1024
+    expected_hash = one_shot(payload, 42)
+    expected = [expected_hash] * len(inputs)
+    output = bytearray(digest_size * len(inputs))
 
-    assert_releases_gil(lambda: batch(inputs, 42), expected, 128)
-    assert_releases_gil(lambda: batch_into(inputs, output, 42), digest_size, 128)
-    assert output == expected[0].to_bytes(digest_size, 'little')
+    assert_releases_gil(lambda: batch(inputs, 42), expected, 4)
+    assert_releases_gil(lambda: batch_into(inputs, output, 42), len(output), 4)
+    assert output == expected_hash.to_bytes(digest_size, 'little') * len(inputs)
 
 
 @pytest.mark.parametrize('item_count', range(2, 9))

@@ -24,7 +24,7 @@ pub(crate) struct PaddedStore;
 
 pub(crate) trait Decoder {
     fn decode_table() -> &'static [u8; 256];
-    unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i);
+    unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i);
     unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i);
 }
 
@@ -64,7 +64,7 @@ impl Decoder for StandardDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
+    unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_standard(input) }
     }
 
@@ -81,7 +81,7 @@ impl Decoder for UrlSafeDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
+    unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_urlsafe(input) }
     }
 
@@ -98,7 +98,7 @@ impl Decoder for MixedDecoder {
     }
 
     #[inline(always)]
-    unsafe fn decode_32(input: *const u8) -> (__m256i, __m256i) {
+    unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i) {
         unsafe { decode_indices_32_mixed(input) }
     }
 

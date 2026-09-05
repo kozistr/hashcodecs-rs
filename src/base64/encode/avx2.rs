@@ -22,8 +22,8 @@ struct EncodeAvx2Constants {
     field_mask: __m256i,
     field_mul: __m256i,
     translate: __m256i,
-    c51: __m256i,
-    c25: __m256i,
+    last_lowercase_index: __m256i,
+    last_uppercase_index: __m256i,
 }
 
 #[target_feature(enable = "avx2")]
@@ -222,8 +222,8 @@ fn encode_avx2_constants(urlsafe: bool) -> EncodeAvx2Constants {
         field_mask: _mm256_set1_epi32(0x003f_03f0),
         field_mul: black_box(_mm256_set1_epi32(0x0100_0010)),
         translate,
-        c51: _mm256_set1_epi8(51),
-        c25: _mm256_set1_epi8(25),
+        last_lowercase_index: _mm256_set1_epi8(51),
+        last_uppercase_index: _mm256_set1_epi8(25),
     }
 }
 
@@ -240,8 +240,8 @@ unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> _
 
     let indices = _mm256_or_si256(aligned, fields);
     let lut_index = _mm256_sub_epi8(
-        _mm256_subs_epu8(indices, constants.c51),
-        _mm256_cmpgt_epi8(indices, constants.c25),
+        _mm256_subs_epu8(indices, constants.last_lowercase_index),
+        _mm256_cmpgt_epi8(indices, constants.last_uppercase_index),
     );
 
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))

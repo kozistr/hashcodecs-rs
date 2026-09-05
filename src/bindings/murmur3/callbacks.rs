@@ -14,11 +14,11 @@ fn bytes_result(digest: &[u8]) -> *mut ffi::PyObject {
 pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
-    nargsf: isize,
+    nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     unsafe {
-        crate::bindings::schema::murmur3::murmur3_32(args, nargsf, keywords, |py, input, seed| {
+        crate::bindings::schema::murmur3::murmur3_32(args, nargs, keywords, |py, input, seed| {
             let Some(seed) = seed_u32(seed.as_ptr()) else {
                 return std::ptr::null_mut();
             };
@@ -37,13 +37,13 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
 pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
-    nargsf: isize,
+    nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     unsafe {
         crate::bindings::schema::murmur3::murmur3_x86_128_digest(
             args,
-            nargsf,
+            nargs,
             keywords,
             |py, input, seed| {
                 let Some(seed) = seed_u32(seed.as_ptr()) else {
@@ -62,13 +62,13 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
 pub(in crate::bindings) unsafe extern "C" fn murmur3_x64_128_digest(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
-    nargsf: isize,
+    nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
     unsafe {
         crate::bindings::schema::murmur3::murmur3_x64_128_digest(
             args,
-            nargsf,
+            nargs,
             keywords,
             |py, input, seed| {
                 let Some(seed) = seed_u32(seed.as_ptr()) else {

@@ -17,6 +17,13 @@ The checks are deliberately complementary:
   exact Base64 buffers, incremental MurmurHash3 states, and XXH3 batch kernels.
 - libFuzzer runs under sanitizers. Base64 is compared with `base64` 0.23.1,
   MurmurHash3 with `murmur3` 0.5, and XXH3 with `xxhash-rust` 0.8.18.
+  XXH3 cases use independent equal-length and heterogeneous buffers, with
+  distinct lane contents and batch counts through nine to cover SIMD groups and tails.
+
+The Python XXH3 batch bindings retain immutable owners during result allocation.
+For mutable buffers, they finish hashing before allocating Python result containers:
+a GC finalizer can resize a bytearray even while the GIL is held. Subprocess tests
+on CPython 3.10/3.11 trigger finalizers during allocation to check both invariants.
 
 Run the same checks locally on Linux:
 

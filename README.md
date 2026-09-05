@@ -227,13 +227,11 @@ uv build
 Run the primary local checks:
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets --features python -- -D warnings
-cargo test --features python
-uv run --frozen --no-sync ruff check . --no-cache
-uv run --frozen --no-sync ruff format --check .
-uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
+just check
 ```
+
+`just check` builds and reinstalls the current wheel before running Python tests. Run `just full-check` before
+committing to also check release builds, Rust core coverage, and the extracted source distribution.
 
 Optimized paths are also checked with differential fuzzing, Kani, strict-provenance Miri, AddressSanitizer, and
 MemorySanitizer in CI.

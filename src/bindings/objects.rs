@@ -36,6 +36,7 @@ where
     }
 }
 
+#[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn list_from_callback<'py, T>(
     py: Python<'py>,
     length: usize,
@@ -118,7 +119,7 @@ pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<
     #[cfg(Py_GIL_DISABLED)]
     {
         values.extend(items.iter());
-        return Ok(values);
+        Ok(values)
     }
     #[cfg(not(Py_GIL_DISABLED))]
     unsafe {

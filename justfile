@@ -29,6 +29,7 @@ lint:
 
 test:
     cargo test --features python
+    uv run --frozen --no-sync python tools/install_local_wheel.py
     uv run --frozen --no-sync pytest tests --cov=hashcodecs --cov-branch --cov-fail-under=100
 
 test-build:
@@ -47,7 +48,7 @@ verify-sdist:
 # Run the fast local quality gates, including build-tool tests and a strict documentation build.
 check: format-check lint test test-build docs-build
 
-# Run every pre-commit gate from AGENT.md, including extracted-sdist verification.
+# Run every pre-commit gate from AGENTS.md, including extracted-sdist verification.
 full-check: check test-release coverage verify-sdist
 
 build:

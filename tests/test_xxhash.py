@@ -1,8 +1,10 @@
 import inspect
+import subprocess
 import sys
 from array import array
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Barrier
 
 import pytest
@@ -90,6 +92,21 @@ def test_xxh3_batch_matches_one_shot_and_accepts_buffer_inputs() -> None:
     values = [b'', bytearray(b'hello'), memoryview(b'xxhash'), array('B', b'array')]
     assert hashcodecs.xxh3_64_batch(values, 42) == [hashcodecs.xxh3_64(value, 42) for value in values]
     assert hashcodecs.xxh3_128_batch(values, 42) == [hashcodecs.xxh3_128(value, 42) for value in values]
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 12), reason='requires synchronous allocation GC in CPython 3.10/3.11')
+@pytest.mark.parametrize('bits', [64, 128])
+@pytest.mark.parametrize('kind', ['bytes', 'bytearray', 'memoryview', 'mixed'])
+def test_xxh3_batch_survives_gc_finalizers(bits: int, kind: str) -> None:
+    # A regression can read freed memory, so isolate it from the pytest process.
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name('xxhash_gc.py')), str(bits), kind],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires the Python-level buffer protocol')

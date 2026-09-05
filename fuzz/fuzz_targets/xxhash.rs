@@ -22,39 +22,49 @@ fuzz_target!(|bytes: &[u8]| {
         [expected128 as u64, (expected128 >> 64) as u64]
     );
 
-    // Independent heterogeneous allocations exercise every batch remainder,
-    // including more than one complete four-lane group.
-    let mut owned = std::array::from_fn::<_, 9, _>(|index| {
-        let start = input.len().saturating_mul(index) / 9;
-        input[start..].to_vec()
-    });
-    for (index, value) in owned.iter_mut().enumerate() {
-        if let Some(first) = value.first_mut() {
-            *first = first.wrapping_add(index as u8);
-        }
-        if let Some(last) = value.last_mut() {
-            *last ^= (index as u8).wrapping_mul(0x5b);
-        }
-    }
-    let batch = owned.each_ref().map(Vec::as_slice);
-    for width in 1..=batch.len() {
-        let batch = &batch[..width];
-        assert_eq!(
-            xxh3_64_batch(batch, seed),
-            batch
+    // Equal-length long inputs reach the SIMD batch kernels; heterogeneous
+    // inputs exercise run splitting. Keep each lane in an independent allocation.
+    for equal_length in [true, false] {
+        let owned = std::array::from_fn::<_, 9, _>(|index| {
+            let start = if equal_length {
+                0
+            } else {
+                input.len().saturating_mul(index) / 9
+            };
+            let mut value = input[start..]
                 .iter()
-                .map(|value| xxhash_rust::xxh3::xxh3_64_with_seed(value, seed))
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            xxh3_128_batch(batch, seed),
-            batch
-                .iter()
-                .map(|value| {
-                    let hash = xxhash_rust::xxh3::xxh3_128_with_seed(value, seed);
-                    [hash as u64, (hash >> 64) as u64]
-                })
-                .collect::<Vec<_>>()
-        );
+                .map(|byte| byte.wrapping_add(index as u8))
+                .collect::<Vec<_>>();
+            // Guarantee distinct contents even for uniform or empty fuzz input.
+            let first = input
+                .first()
+                .copied()
+                .unwrap_or(0)
+                .wrapping_add(index as u8);
+            if value.is_empty() {
+                value.push(first);
+            } else {
+                value[0] = first;
+            }
+            value
+        });
+        let batch = owned.each_ref().map(Vec::as_slice);
+        let expected64 = batch
+            .iter()
+            .map(|value| xxhash_rust::xxh3::xxh3_64_with_seed(value, seed))
+            .collect::<Vec<_>>();
+        let expected128 = batch
+            .iter()
+            .map(|value| {
+                let hash = xxhash_rust::xxh3::xxh3_128_with_seed(value, seed);
+                [hash as u64, (hash >> 64) as u64]
+            })
+            .collect::<Vec<_>>();
+        // Includes two- and three-lane kernels, four-lane groups, and tails
+        // after one or two complete groups.
+        for width in 1..=batch.len() {
+            assert_eq!(xxh3_64_batch(&batch[..width], seed), expected64[..width]);
+            assert_eq!(xxh3_128_batch(&batch[..width], seed), expected128[..width]);
+        }
     }
 });

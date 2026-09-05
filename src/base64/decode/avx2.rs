@@ -22,10 +22,12 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     let mut destination = 0;
 
     while source + 128 <= input.len() {
-        let (first, first_error) = unsafe { A::decode_32(input.as_ptr().add(source)) };
-        let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
-        let (third, third_error) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
-        let (fourth, fourth_error) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+        let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+        let (second, second_error) =
+            unsafe { A::decode_indices_32(input.as_ptr().add(source + 32)) };
+        let (third, third_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 64)) };
+        let (fourth, fourth_error) =
+            unsafe { A::decode_indices_32(input.as_ptr().add(source + 96)) };
         let errors = _mm256_or_si256(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
@@ -49,7 +51,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     }
 
     while source + 32 <= input.len() {
-        let (indices, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -82,10 +84,10 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
     while source + 128 <= input.len() {
-        let (_, first) = unsafe { A::decode_32(input.as_ptr().add(source)) };
-        let (_, second) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
-        let (_, third) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
-        let (_, fourth) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+        let (_, first) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+        let (_, second) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 32)) };
+        let (_, third) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 64)) };
+        let (_, fourth) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 96)) };
         let errors = _mm256_or_si256(
             _mm256_or_si256(first, second),
             _mm256_or_si256(third, fourth),
@@ -96,7 +98,7 @@ pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64E
         source += 128;
     }
     while source + 32 <= input.len() {
-        let (_, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        let (_, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -120,10 +122,12 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
     let mut source = 0;
     let mut destination = 0;
     while source + 128 <= input.len() {
-        let (first, first_error) = unsafe { A::decode_32(input.as_ptr().add(source)) };
-        let (second, second_error) = unsafe { A::decode_32(input.as_ptr().add(source + 32)) };
-        let (third, third_error) = unsafe { A::decode_32(input.as_ptr().add(source + 64)) };
-        let (fourth, fourth_error) = unsafe { A::decode_32(input.as_ptr().add(source + 96)) };
+        let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+        let (second, second_error) =
+            unsafe { A::decode_indices_32(input.as_ptr().add(source + 32)) };
+        let (third, third_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 64)) };
+        let (fourth, fourth_error) =
+            unsafe { A::decode_indices_32(input.as_ptr().add(source + 96)) };
         let errors = _mm256_or_si256(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
@@ -139,7 +143,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
         destination += 96;
     }
     while source + 32 <= input.len() {
-        let (indices, errors) = unsafe { A::decode_32(input.as_ptr().add(source)) };
+        let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
         if _mm256_testz_si256(errors, errors) == 0 {
             break;
         }

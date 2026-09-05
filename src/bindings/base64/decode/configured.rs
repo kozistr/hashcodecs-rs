@@ -5,7 +5,7 @@ use super::lenient::symbols::{AlphanumericPrefix, TranslateBytes, decode_byte_ke
 use crate::base64::{Base64Error, decode_layout, decode_unpadded_layout};
 use crate::bindings::base64::PythonSemantics;
 use crate::bindings::base64::STANDARD_ALPHABET;
-use crate::bindings::base64::decode::output::BytesWriter;
+use crate::bindings::base64::decode::execution::BytesWriter;
 use crate::bindings::base64::decode::policy::{ErrorWrites, Padding, PreparedPolicy, Validation};
 use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};

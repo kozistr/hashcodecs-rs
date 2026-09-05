@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::output::BytesWriter;
+use super::execution::BytesWriter;
 use super::policy::Padding;
 use crate::base64::Base64Error;
 use crate::bindings::base64::PythonSemantics;

@@ -25,21 +25,21 @@ pub(super) const SECRET: [u8; 192] = [
 ];
 
 #[inline(always)]
-pub(super) fn read_u32_le(s: &[u8], o: usize) -> u32 {
+pub(super) fn read_u32_le(input: &[u8], offset: usize) -> u32 {
     // Length-class dispatch checks this range before optimized callers run.
     // Checked indexing keeps this helper safe if a future caller supplies an invalid range.
     u32::from_le_bytes(
-        s[o..o + 4]
+        input[offset..offset + 4]
             .try_into()
             .expect("four-byte load exceeds input"),
     )
 }
 
 #[inline(always)]
-pub(super) fn read_u64_le(s: &[u8], o: usize) -> u64 {
+pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
     // The `read_u32_le` comment describes the same invariant for a four-byte word.
     u64::from_le_bytes(
-        s[o..o + 8]
+        input[offset..offset + 8]
             .try_into()
             .expect("eight-byte load exceeds input"),
     )

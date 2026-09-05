@@ -8,9 +8,9 @@ use self::policy::{DecodePolicy, PreparedDecoder};
 
 mod batch;
 mod configured;
+mod execution;
 mod fallback;
 mod lenient;
-mod output;
 mod policy;
 mod strict;
 

@@ -40,6 +40,20 @@ COLORS = {
 }
 FALLBACK_COLORS = ('#007f73', '#d55e00', '#356ac3', '#8f4a73', '#a86f00', '#637083')
 
+OFFICIAL_SERIES = {
+    'base64-rust.svg': 'base64',
+    'murmur3-rust.svg': 'murmur3',
+    'xxh3-rust.svg': 'upstream C',
+    'xxh3-rust-batch-remainders.svg': 'upstream C',
+    'base64-python.svg': 'CPython',
+    'base64-python-lenient.svg': 'CPython',
+    'murmur3-python.svg': 'mmh3',
+    'xxh3-python.svg': 'xxhash',
+    'base64-python-batch.svg': 'CPython',
+}
+
+SIZES = ['1 KiB', '4 KiB', '1 MiB', '8 MiB']
+
 
 @dataclass(frozen=True)
 class Panel:
@@ -62,8 +76,6 @@ def panel(title: str, categories: list[str], **series: list[float | None]) -> Pa
         tuple((name.replace('_', ' '), tuple(values)) for name, values in series.items()),
     )
 
-
-SIZES = ['1 KiB', '4 KiB', '1 MiB', '8 MiB']
 
 CHARTS = (
     Chart(
@@ -462,19 +474,6 @@ def color(name: str, index: int) -> str:
     return COLORS.get(name, FALLBACK_COLORS[index % len(FALLBACK_COLORS)])
 
 
-OFFICIAL_SERIES = {
-    'base64-rust.svg': 'base64',
-    'murmur3-rust.svg': 'murmur3',
-    'xxh3-rust.svg': 'upstream C',
-    'xxh3-rust-batch-remainders.svg': 'upstream C',
-    'base64-python.svg': 'CPython',
-    'base64-python-lenient.svg': 'CPython',
-    'murmur3-python.svg': 'mmh3',
-    'xxh3-python.svg': 'xxhash',
-    'base64-python-batch.svg': 'CPython',
-}
-
-
 def render(chart: Chart) -> str:
     width = 1280
     columns = 1 if len(chart.panels) == 1 else 2
@@ -482,6 +481,7 @@ def render(chart: Chart) -> str:
     panel_height = 330
     rows = math.ceil(len(chart.panels) / columns)
     height = 100 + rows * panel_height + 30
+
     chunks = [
         (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -501,14 +501,15 @@ def render(chart: Chart) -> str:
     ]
 
     for panel_index, spec in enumerate(chart.panels):
-        column = panel_index % columns
-        row = panel_index // columns
+        row, column = divmod(panel_index, columns)
+
         origin_x = 50 + column * 610
         origin_y = 100 + row * panel_height
         plot_x = origin_x + 58
         plot_y = origin_y + 70
         plot_width = panel_width - 78
         plot_height = 210
+
         available = [value for _, values in spec.series for value in values if value is not None]
         axis_max = nice_max(max(available))
 
@@ -560,6 +561,7 @@ def render(chart: Chart) -> str:
         x_step = plot_width / max(len(spec.categories) - 1, 1)
         for category_index, category in enumerate(spec.categories):
             x = plot_x + category_index * x_step
+
             chunks.append(
                 f'<text x="{x:.1f}" y="{plot_y + plot_height + 24}" text-anchor="middle" '
                 'fill="#465263" font-family="Segoe UI,Arial,sans-serif" '
@@ -573,19 +575,23 @@ def render(chart: Chart) -> str:
             official_values = next(
                 (candidate for candidate_name, candidate in spec.series if candidate_name == official), None
             )
+
             points = []
             for category_index, value in enumerate(values):
                 if value is None:
                     continue
+
                 x = plot_x + category_index * x_step
                 y = plot_y + plot_height - value / axis_max * plot_height
                 points.append((x, y, value, spec.categories[category_index]))
+
             if len(points) > 1:
                 path = ' '.join(f'{x:.1f},{y:.1f}' for x, y, _, _ in points)
                 chunks.append(
                     f'<polyline points="{path}" fill="none" stroke="{series_color}" '
                     'stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>'
                 )
+
             for x, y, value, category in points:
                 chunks.append(
                     f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="{series_color}" '
@@ -593,6 +599,7 @@ def render(chart: Chart) -> str:
                     f'<title>{esc(spec.title)}: {esc(name)}, {esc(category)}, '
                     f'{value:.2f} GiB/s</title></circle>'
                 )
+
                 label = f'{value:.2f}'
                 if name == 'hashcodecs' and official_values is not None:
                     official_value = official_values[spec.categories.index(category)]
@@ -606,6 +613,7 @@ def render(chart: Chart) -> str:
                     max(x, plot_x + label_width / 2 + 5),
                     plot_x + plot_width - label_width / 2 - 5,
                 )
+
                 candidate_ys = [y + offset for offset in dict.fromkeys(offsets)]
                 candidate_ys.extend(plot_y + 12 + lane * 16 for lane in range(13))
                 label_y = candidate_ys[-1]
@@ -615,6 +623,7 @@ def render(chart: Chart) -> str:
                     label_x + label_width / 2 + 2,
                     label_y + 3,
                 )
+
                 for candidate_y in candidate_ys:
                     candidate = (
                         label_x - label_width / 2 - 2,
@@ -624,14 +633,17 @@ def render(chart: Chart) -> str:
                     )
                     if candidate[1] < plot_y or candidate[3] > plot_y + plot_height:
                         continue
+
                     if any(
                         candidate[0] < right and candidate[2] > left and candidate[1] < bottom and candidate[3] > top
                         for left, top, right, bottom in label_boxes
                     ):
                         continue
+
                     label_y = candidate_y
                     label_box = candidate
                     break
+
                 label_boxes.append(label_box)
                 chunks.append(
                     f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" '
@@ -641,6 +653,7 @@ def render(chart: Chart) -> str:
                 )
 
     chunks.append('</svg>')
+
     return '\n'.join(chunks) + '\n'
 
 
@@ -669,6 +682,7 @@ def render_performance_at_a_glance() -> str:
         )
         for operation in ('Encode', 'Decode')
     )
+
     width = 1200
     height = 460
     panel_width = width / 2
@@ -677,7 +691,9 @@ def render_performance_at_a_glance() -> str:
     bar_height = 48
     bar_gap = 30
     first_bar_y = 178
+
     axis_max = math.ceil(max(value for _, measurements in benchmarks for _, value in measurements) / 2) * 2
+
     chunks = [
         (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -710,6 +726,7 @@ def render_performance_at_a_glance() -> str:
         ours = measurements[0][1]
         pybase64 = measurements[1][1]
         cpython = measurements[2][1]
+
         chunks.extend(
             (
                 (
@@ -730,6 +747,7 @@ def render_performance_at_a_glance() -> str:
             series_color = color(name, series_index)
             label_inside = bar_width >= 150
             value_x = plot_x + bar_width - 12 if label_inside else plot_x + bar_width + 12
+
             chunks.extend(
                 (
                     (
@@ -764,6 +782,7 @@ def render_performance_at_a_glance() -> str:
             '</svg>',
         )
     )
+
     return '\n'.join(chunks) + '\n'
 
 
@@ -771,6 +790,7 @@ def write_csv() -> None:
     with (OUTPUT / 'results.csv').open('w', newline='', encoding='utf-8') as output:
         writer = csv.writer(output, lineterminator='\n')
         writer.writerow(('chart', 'panel', 'input', 'implementation', 'gib_per_second'))
+
         for chart in CHARTS:
             for spec in chart.panels:
                 for name, values in spec.series:
@@ -781,11 +801,17 @@ def write_csv() -> None:
 
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
+
     for chart in CHARTS:
         (OUTPUT / chart.filename).write_text(render(chart), encoding='utf-8', newline='\n')
-    (OUTPUT / 'performance-at-a-glance.svg').write_text(
-        render_performance_at_a_glance(), encoding='utf-8', newline='\n'
+
+    (
+        (OUTPUT / 'performance-at-a-glance.svg')
+        .write_text(
+            render_performance_at_a_glance(), encoding='utf-8', newline='\n'
+        )
     )
+
     write_csv()
 
 

@@ -32,6 +32,7 @@ fn empty_vectors() {
         [0x6001_c324_468d_497f, 0x99aa_06d3_0147_98d8]
     );
 }
+
 #[test]
 fn batches_match_one_shot() {
     let values: [&[u8]; 3] = [b"", b"hello", b"xxhash"];

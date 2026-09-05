@@ -84,8 +84,36 @@ pub(super) fn mix16(
     secret_offset: usize,
     seed: u64,
 ) -> u64 {
-    let lo = read_u64_le(data, data_offset) ^ read_u64_le(secret, secret_offset).wrapping_add(seed);
-    let hi = read_u64_le(data, data_offset + 8)
-        ^ read_u64_le(secret, secret_offset + 8).wrapping_sub(seed);
+    assert!(
+        data_offset
+            .checked_add(16)
+            .is_some_and(|end| end <= data.len())
+    );
+    assert!(
+        secret_offset
+            .checked_add(16)
+            .is_some_and(|end| end <= secret.len())
+    );
+
+    unsafe {
+        mix16_ptr(
+            data.as_ptr().add(data_offset),
+            secret.as_ptr().add(secret_offset),
+            seed,
+        )
+    }
+}
+
+#[inline(always)]
+unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
+    let data_lo = u64::from_le(unsafe { data.cast::<u64>().read_unaligned() });
+    let data_hi = u64::from_le(unsafe { data.add(8).cast::<u64>().read_unaligned() });
+
+    let secret_lo = u64::from_le(unsafe { secret.cast::<u64>().read_unaligned() });
+    let secret_hi = u64::from_le(unsafe { secret.add(8).cast::<u64>().read_unaligned() });
+
+    let lo = data_lo ^ secret_lo.wrapping_add(seed);
+    let hi = data_hi ^ secret_hi.wrapping_sub(seed);
+
     mul_fold(lo, hi)
 }

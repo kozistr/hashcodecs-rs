@@ -16,18 +16,24 @@ pub(in crate::base64) const DECODE_SHUFFLE: [u8; 64] = decode_shuffle();
 const fn decode_shuffle() -> [u8; 64] {
     let mut shuffle = [0; 64];
     let mut lane = 0;
+
     while lane < 4 {
         let mut group = 0;
+
         while group < 4 {
             let source = lane * 16 + group * 4;
             let destination = lane * 12 + group * 3;
+
             shuffle[destination] = (source + 2) as u8;
             shuffle[destination + 1] = (source + 1) as u8;
             shuffle[destination + 2] = source as u8;
+
             group += 1;
         }
+
         lane += 1;
     }
+
     shuffle
 }
 

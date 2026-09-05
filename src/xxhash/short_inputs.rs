@@ -4,9 +4,11 @@ use super::primitives::*;
 
 pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
+
     if len == 0 {
         return avalanche64(seed ^ (read_u64_le(&SECRET, 56) ^ read_u64_le(&SECRET, 64)));
     }
+
     if len <= 3 {
         let combined = (input[0] as u32) << 16
             | (input[len >> 1] as u32) << 24
@@ -17,6 +19,7 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
                 ^ ((read_u32_le(&SECRET, 0) ^ read_u32_le(&SECRET, 4)) as u64).wrapping_add(seed),
         );
     }
+
     if len <= 8 {
         let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
         let input_word = read_u32_le(input, len - 4) as u64 | (read_u32_le(input, 0) as u64) << 32;
@@ -25,10 +28,12 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
             len,
         );
     }
+
     let lo = read_u64_le(input, 0)
         ^ (read_u64_le(&SECRET, 24) ^ read_u64_le(&SECRET, 32)).wrapping_add(seed);
     let hi = read_u64_le(input, len - 8)
         ^ (read_u64_le(&SECRET, 40) ^ read_u64_le(&SECRET, 48)).wrapping_sub(seed);
+
     avalanche(
         (len as u64)
             .wrapping_add(lo.swap_bytes())
@@ -40,56 +45,69 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
 pub(super) fn xxh3_64_len_17_to_128(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
     let mut acc = (len as u64).wrapping_mul(P64_1);
+
     if len > 32 {
         if len > 64 {
             if len > 96 {
                 acc = acc.wrapping_add(mix16(input, 48, &SECRET, 96, seed));
                 acc = acc.wrapping_add(mix16(input, len - 64, &SECRET, 112, seed));
             }
+
             acc = acc.wrapping_add(mix16(input, 32, &SECRET, 64, seed));
             acc = acc.wrapping_add(mix16(input, len - 48, &SECRET, 80, seed));
         }
+
         acc = acc.wrapping_add(mix16(input, 16, &SECRET, 32, seed));
         acc = acc.wrapping_add(mix16(input, len - 32, &SECRET, 48, seed));
     }
+
     acc = acc.wrapping_add(mix16(input, 0, &SECRET, 0, seed));
     acc = acc.wrapping_add(mix16(input, len - 16, &SECRET, 16, seed));
+
     avalanche(acc)
 }
 
 pub(super) fn xxh3_64_len_129_to_240(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
     let mut acc = (len as u64).wrapping_mul(P64_1);
+
     for i in 0..8 {
         acc = acc.wrapping_add(mix16(input, 16 * i, &SECRET, 16 * i, seed));
     }
+
     acc = avalanche(acc);
+
     for i in 8..(len / 16) {
         acc = acc.wrapping_add(mix16(input, 16 * i, &SECRET, 3 + 16 * (i - 8), seed));
     }
+
     avalanche(acc.wrapping_add(mix16(input, len - 16, &SECRET, 119, seed)))
 }
 
 pub(super) fn xxh3_128_len_64(input: &[u8], seed: u64) -> [u64; 2] {
     let acc = [64_u64.wrapping_mul(P64_1), 0];
     let acc = mix32(acc, input, 16, 32, 32, seed);
+
     final128(mix32(acc, input, 0, 48, 0, seed), 64, seed)
 }
 
 pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
+
     if len == 0 {
         return [
             avalanche64(seed ^ (read_u64_le(&SECRET, 64) ^ read_u64_le(&SECRET, 72))),
             avalanche64(seed ^ (read_u64_le(&SECRET, 80) ^ read_u64_le(&SECRET, 88))),
         ];
     }
+
     if len <= 3 {
         let c = (input[0] as u32) << 16
             | (input[len >> 1] as u32) << 24
             | input[len - 1] as u32
             | (len as u32) << 8;
         let h = c.swap_bytes().rotate_left(13);
+
         return [
             avalanche64(
                 c as u64
@@ -103,6 +121,7 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
             ),
         ];
     }
+
     if len <= 8 {
         let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
         let input_word = read_u32_le(input, 0) as u64 | (read_u32_le(input, len - 4) as u64) << 32;
@@ -118,18 +137,23 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
         lo ^= lo >> 28;
         return [lo, avalanche(hi)];
     }
+
     let lo = read_u64_le(input, 0);
     let mut hi = read_u64_le(input, len - 8);
     let product =
         ((lo ^ hi ^ (read_u64_le(&SECRET, 32) ^ read_u64_le(&SECRET, 40)).wrapping_sub(seed))
             as u128)
             * P64_1 as u128;
+
     let mut low = (product as u64).wrapping_add(((len - 1) as u64) << 54);
     let mut high = (product >> 64) as u64;
+
     hi ^= (read_u64_le(&SECRET, 48) ^ read_u64_le(&SECRET, 56)).wrapping_add(seed);
     high = high.wrapping_add(hi.wrapping_add((hi as u32 as u64).wrapping_mul(P32_2 - 1)));
     low ^= high.swap_bytes();
+
     let product = (low as u128) * P64_2 as u128;
+
     [
         avalanche(product as u64),
         avalanche(((product >> 64) as u64).wrapping_add(high.wrapping_mul(P64_2))),
@@ -166,23 +190,30 @@ pub(super) fn final128(acc: [u64; 2], len: usize, seed: u64) -> [u64; 2] {
 pub(super) fn xxh3_128_len_17_to_128(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
+
     for i in (0..=((len - 1) / 32)).rev() {
         acc = mix32(acc, input, i * 16, len - 16 * (i + 1), i * 32, seed);
     }
+
     final128(acc, len, seed)
 }
 
 pub(super) fn xxh3_128_len_129_to_240(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
+
     for i in (0..128).step_by(32) {
         acc = mix32(acc, input, i, i + 16, i, seed);
     }
+
     acc = [avalanche(acc[0]), avalanche(acc[1])];
+
     for index in 4..(len / 32) {
         let offset = index * 32;
         acc = mix32(acc, input, offset, offset + 16, 3 + (index - 4) * 32, seed);
     }
+
     acc = mix32(acc, input, len - 16, len - 32, 103, 0u64.wrapping_sub(seed));
+
     final128(acc, len, seed)
 }

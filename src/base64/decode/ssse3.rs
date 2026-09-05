@@ -84,6 +84,7 @@ pub(crate) unsafe fn decode_prefix_ssse3<A: Decoder>(
 ) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 64 <= input.len() {
         let (first, first_errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         let (second, second_errors) =
@@ -106,6 +107,7 @@ pub(crate) unsafe fn decode_prefix_ssse3<A: Decoder>(
         source += 64;
         destination += 48;
     }
+
     while source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if !errors_are_zero_ssse3(errors) {
@@ -115,6 +117,7 @@ pub(crate) unsafe fn decode_prefix_ssse3<A: Decoder>(
         source += 16;
         destination += 12;
     }
+
     (source, destination)
 }
 
@@ -127,6 +130,7 @@ pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, _
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
     let offsets = unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) };
+
     (
         _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices)),
         errors,
@@ -143,6 +147,7 @@ pub(super) unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __
     let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, high_nibbles));
     let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
     let correction = _mm_and_si128(underscore, _mm_set1_epi8(33));
+
     (_mm_add_epi8(indices, correction), errors)
 }
 
@@ -162,6 +167,7 @@ pub(super) unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m1
         _mm_and_si128(dash, _mm_set1_epi8(-2)),
         _mm_and_si128(underscore, _mm_set1_epi8(33)),
     );
+
     (_mm_add_epi8(indices, corrections), errors)
 }
 
@@ -177,6 +183,7 @@ pub(super) fn classify_ascii_ssse3(
     let low_nibbles = _mm_and_si128(value, mask);
     let high_matches = _mm_shuffle_epi8(high_classes, high_nibbles);
     let low_matches = _mm_shuffle_epi8(low_classes, low_nibbles);
+
     (high_nibbles, _mm_and_si128(high_matches, low_matches))
 }
 
@@ -190,6 +197,7 @@ pub(super) fn pack_16_indices(indices: __m128i) -> __m128i {
     let merged = _mm_maddubs_epi16(indices, _mm_set1_epi32(0x0140_0140));
     let packed = _mm_madd_epi16(merged, _mm_set1_epi32(0x0001_1000));
     let shuffle = unsafe { _mm_loadu_si128(PACK_SHUFFLE.as_ptr().cast()) };
+
     _mm_shuffle_epi8(packed, shuffle)
 }
 

@@ -69,6 +69,7 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
 #[inline]
 unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
     let input = unsafe { vld3_u8(input) };
+
     let first = vshr_n_u8::<2>(input.0);
     let second = vand_u8(
         vsli_n_u8::<4>(vshr_n_u8::<4>(input.1), input.0),
@@ -97,6 +98,7 @@ unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
 #[inline]
 unsafe fn encode_48(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
     let input = unsafe { vld3q_u8(input) };
+
     let first = vshrq_n_u8::<2>(input.0);
     let second = vandq_u8(
         vsliq_n_u8::<4>(vshrq_n_u8::<4>(input.1), input.0),

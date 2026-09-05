@@ -1,20 +1,18 @@
+//! Python encoding entry points and prepared encoding.
+
 use core::slice;
 
-use pyo3::exceptions::{PyOverflowError, PyValueError};
+use pyo3::exceptions::{PyAssertionError, PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
+use pyo3::{PyTypeInfo, ffi};
 
-use super::decode::translate_bytes;
-use super::{pybytes_with_len, with_output_ptr};
-use crate::base64::{encode_to_ptr, encode_to_ptr_cached, encoded_len};
-use crate::bindings::buffer::BytesLike;
+use super::scan::translate_bytes;
+use super::staging::{pybytes_with_len, with_output_ptr};
+use crate::base64::{STANDARD_ALPHABET, encode_to_ptr, encode_to_ptr_cached, encoded_len};
+use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
+use crate::bindings::compatibility::{parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
-
-mod batch;
-
-pub(super) use self::batch::{
-    b64encode_batch, b64encode_batch_into, b64encode_batch_into_parsed, b64encode_batch_parsed,
-};
 
 #[derive(Clone, Copy)]
 enum EncodeAlphabet {
@@ -237,7 +235,7 @@ fn encode_slice_to_ptr(
 ) -> PyResult<usize> {
     let required = encoder.output_len(input.len());
     if provided < required {
-        return Err(super::output_too_small(required, provided));
+        return Err(super::staging::output_too_small(required, provided));
     }
     unsafe { encoder.encode_to_ptr(input, output) };
     Ok(required)
@@ -309,4 +307,163 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
         }
     }
     debug_assert_eq!(destination, 0);
+}
+
+type PreparedAltchars = Result<Option<[u8; 2]>, PyErr>;
+
+// Python 3.15 constructs a custom alphabet before consuming the input, but
+// binascii validates its byte length afterward. The inner result preserves
+// that otherwise-observable error ordering without sending valid calls back
+// through Python's encoder.
+fn prepare_b64encode_altchars(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<PreparedAltchars> {
+    let length = value.len()?;
+    if length != 2 {
+        let value = value.repr()?.to_string();
+        if python_at_least(py, (3, 15)) {
+            return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
+        }
+        return Err(PyAssertionError::new_err(value));
+    }
+
+    if python_at_least(py, (3, 15))
+        && !PyBytes::is_exact_type_of(value)
+        && !PyByteArray::is_exact_type_of(value)
+    {
+        let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
+        let alphabet = unsafe {
+            Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr()))?
+        };
+        let alphabet = match alphabet.cast_into::<PyBytes>() {
+            Ok(alphabet) => alphabet,
+            Err(error) => return Ok(Err(error.into())),
+        };
+        if alphabet.as_bytes().len() != STANDARD_ALPHABET.len() {
+            return Ok(Err(PyValueError::new_err("alphabet must have length 64")));
+        }
+        let alphabet = alphabet.as_bytes();
+        let altchars = [alphabet[62], alphabet[63]];
+
+        return Ok(Ok((altchars != *b"+/").then_some(altchars)));
+    }
+
+    let bytes = contiguous_bytes_like(value, "altchars")?;
+    #[cfg(Py_GIL_DISABLED)]
+    let bytes = bytes.into_stable()?;
+    if bytes.len() != 2 {
+        let message = if python_at_least(py, (3, 15)) {
+            "alphabet must have length 64"
+        } else {
+            "maketrans arguments must have same length"
+        };
+        return Err(PyValueError::new_err(message));
+    }
+
+    let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
+
+    Ok(Ok((altchars != *b"+/").then_some(altchars)))
+}
+
+pub(super) fn encode_parsed<'py>(
+    py: Python<'py>,
+    input: &Bound<'py, PyAny>,
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    wrapcol: Option<usize>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let input = contiguous_bytes_like(input, "s")?;
+    encode(py, &input, altchars, padded, wrapcol)
+}
+
+pub(super) fn encode_parsed_into(
+    input: &BytesLike<'_, '_>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<[u8; 2]>,
+    padded: bool,
+    wrapcol: Option<usize>,
+) -> PyResult<usize> {
+    encode_into(input, output, altchars, padded, wrapcol)
+}
+
+/// Encode with the standard Base64 alphabet.
+pub(super) fn standard_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, None, true, None)
+}
+
+/// Encode with the standard Base64 alphabet into a reusable output.
+pub(super) fn standard_b64encode_into(
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(s, "s")?;
+    encode_parsed_into(&input, output, None, true, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet.
+pub(super) fn urlsafe_b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    padded: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    encode_parsed(py, s, Some(*b"-_"), padded, None)
+}
+
+/// Encode with the URL-safe Base64 alphabet into a reusable output.
+pub(super) fn urlsafe_b64encode_into(
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    padded: bool,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(s, "s")?;
+    encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
+}
+
+pub(super) fn b64encode<'py>(
+    py: Python<'py>,
+    s: &Bound<'py, PyAny>,
+    altchars: Option<&Bound<'py, PyAny>>,
+    padded: bool,
+    wrapcol: i128,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let Some(altchars) = altchars else {
+        let input = contiguous_bytes_like(s, "s")?;
+        let wrapcol = normalize_wrapcol(wrapcol)?;
+        return encode(py, &input, None, padded, wrapcol);
+    };
+    let parse_altchars_first = python_at_least(py, (3, 15));
+    let parsed_altchars = parse_altchars_first
+        .then(|| prepare_b64encode_altchars(py, altchars))
+        .transpose()?;
+    let input = contiguous_bytes_like(s, "s")?;
+    let altchars = if let Some(parsed_altchars) = parsed_altchars {
+        parsed_altchars?
+    } else {
+        prepare_b64encode_altchars(py, altchars)??
+    };
+    let wrapcol = normalize_wrapcol(wrapcol)?;
+    encode(py, &input, altchars, padded, wrapcol)
+}
+
+pub(super) fn b64encode_into(
+    py: Python<'_>,
+    s: &Bound<'_, PyAny>,
+    output: &Bound<'_, PyByteArray>,
+    altchars: Option<&Bound<'_, PyAny>>,
+    padded: bool,
+    wrapcol: i128,
+) -> PyResult<usize> {
+    let input = contiguous_bytes_like(s, "s")?;
+    let altchars = parse_altchars(py, altchars, false)?;
+    encode_parsed_into(
+        &input,
+        output,
+        altchars,
+        padded,
+        normalize_wrapcol(wrapcol)?,
+    )
 }

@@ -1,7 +1,36 @@
-use pyo3::ffi;
-use pyo3::types::{PyByteArray, PyList};
+//! CPython registration and callbacks, routed to encode, decode, or batch.
 
-use super::*;
+use super::{batch, decode, encode};
+use crate::bindings::runtime::{add_methods, return_function_result};
+use crate::bindings::schema::base64::{BINDING_COUNT, register_all};
+use pyo3::prelude::*;
+use pyo3::types::{PyByteArray, PyInt, PyList, PyModule};
+use pyo3::{PyTypeInfo, ffi};
+use std::sync::Once;
+
+static mut METHODS: [ffi::PyMethodDef; BINDING_COUNT + 1] =
+    [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];
+
+static METHODS_INIT: Once = Once::new();
+
+pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
+    let version_info = module.py().version_info();
+    let version = (version_info.major, version_info.minor);
+    METHODS_INIT.call_once(|| unsafe { register_all(methods, version) });
+    unsafe { add_methods(module, methods) }
+}
+
+fn return_bound<T: PyTypeInfo>(
+    py: Python<'_>,
+    result: PyResult<Bound<'_, T>>,
+) -> *mut ffi::PyObject {
+    unsafe { return_function_result(py, result.map(Bound::into_ptr)) }
+}
+
+fn return_usize(py: Python<'_>, result: PyResult<usize>) -> *mut ffi::PyObject {
+    unsafe { return_function_result(py, result.map(|value| PyInt::new(py, value).into_ptr())) }
+}
 
 macro_rules! callback {
     ($name:ident, |$py:ident; $($parameter:ident),+| $body:block) => {
@@ -18,7 +47,7 @@ macro_rules! callback {
 
 callback! {
     standard_b64encode, |py; s| {
-        return_bound(py, super::standard_b64encode(py, s.raw(py)))
+        return_bound(py, encode::standard_b64encode(py, s.raw(py)))
     }
 }
 
@@ -26,7 +55,7 @@ callback! {
     standard_b64encode_into, |py; s, output| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::standard_b64encode_into(s.raw(py), output)
+            encode::standard_b64encode_into(s.raw(py), output)
         })();
         return_usize(py, result)
     }
@@ -36,7 +65,7 @@ callback! {
     urlsafe_b64encode, |py; s, padded| {
         let result = padded
             .truthy(py)
-            .and_then(|padded| super::urlsafe_b64encode(py, s.raw(py), padded));
+            .and_then(|padded| encode::urlsafe_b64encode(py, s.raw(py), padded));
         return_bound(py, result)
     }
 }
@@ -45,7 +74,7 @@ callback! {
     urlsafe_b64encode_into, |py; s, output, padded| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::urlsafe_b64encode_into(s.raw(py), output, padded.truthy(py)?)
+            encode::urlsafe_b64encode_into(s.raw(py), output, padded.truthy(py)?)
         })();
         return_usize(py, result)
     }
@@ -54,7 +83,7 @@ callback! {
 callback! {
     b64encode, |py; s, altchars, padded, wrapcol| {
         let result = (|| {
-            super::b64encode(
+            encode::b64encode(
                 py,
                 s.raw(py),
                 altchars.optional(py),
@@ -70,7 +99,7 @@ callback! {
     b64encode_batch, |py; items, altchars| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64encode_batch(py, items, altchars.optional(py))
+            batch::b64encode_batch(py, items, altchars.optional(py))
         })();
         return_bound(py, result)
     }
@@ -81,7 +110,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64encode_batch_into(py, items, outputs, altchars.optional(py))
+            batch::b64encode_batch_into(py, items, outputs, altchars.optional(py))
         })();
         return_bound(py, result)
     }
@@ -91,7 +120,7 @@ callback! {
     standard_b64encode_batch, |py; items| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64encode_batch_parsed(py, items, None)
+            batch::b64encode_batch_parsed(py, items, None)
         })();
         return_bound(py, result)
     }
@@ -102,7 +131,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64encode_batch_into_parsed(py, items, outputs, None)
+            batch::b64encode_batch_into_parsed(py, items, outputs, None)
         })();
         return_bound(py, result)
     }
@@ -112,7 +141,7 @@ callback! {
     urlsafe_b64encode_batch, |py; items| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64encode_batch_parsed(py, items, Some(*b"-_"))
+            batch::b64encode_batch_parsed(py, items, Some(*b"-_"))
         })();
         return_bound(py, result)
     }
@@ -123,7 +152,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64encode_batch_into_parsed(py, items, outputs, Some(*b"-_"))
+            batch::b64encode_batch_into_parsed(py, items, outputs, Some(*b"-_"))
         })();
         return_bound(py, result)
     }
@@ -133,7 +162,7 @@ callback! {
     b64encode_into, |py; s, output, altchars, padded, wrapcol| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::b64encode_into(
+            encode::b64encode_into(
                 py,
                 s.raw(py),
                 output,
@@ -149,7 +178,7 @@ callback! {
 callback! {
     b64decode, |py; s, altchars, validate, padded, ignorechars, canonical| {
         let result = (|| {
-            super::b64decode(
+            decode::b64decode(
                 py,
                 s.raw(py),
                 altchars.optional(py),
@@ -165,7 +194,7 @@ callback! {
 
 callback! {
     standard_b64decode, |py; s| {
-        return_bound(py, super::standard_b64decode(py, s.raw(py)))
+        return_bound(py, decode::standard_b64decode(py, s.raw(py)))
     }
 }
 
@@ -173,7 +202,7 @@ callback! {
     standard_b64decode_into, |py; s, output| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::standard_b64decode_into(py, s.raw(py), output)
+            decode::standard_b64decode_into(py, s.raw(py), output)
         })();
         return_usize(py, result)
     }
@@ -183,7 +212,7 @@ callback! {
     standard_b64decode_batch, |py; items| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64decode_batch_parsed(py, items, None, false)
+            batch::b64decode_batch_parsed(py, items, None, false)
         })();
         return_bound(py, result)
     }
@@ -194,7 +223,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64decode_batch_into_parsed(py, items, outputs, None, false)
+            batch::b64decode_batch_into_parsed(py, items, outputs, None, false)
         })();
         return_bound(py, result)
     }
@@ -204,7 +233,7 @@ callback! {
     urlsafe_b64decode_batch, |py; items| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64decode_batch_parsed(py, items, Some(*b"-_"), false)
+            batch::b64decode_batch_parsed(py, items, Some(*b"-_"), false)
         })();
         return_bound(py, result)
     }
@@ -215,7 +244,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64decode_batch_into_parsed(py, items, outputs, Some(*b"-_"), false)
+            batch::b64decode_batch_into_parsed(py, items, outputs, Some(*b"-_"), false)
         })();
         return_bound(py, result)
     }
@@ -225,7 +254,7 @@ callback! {
     b64decode_batch, |py; items, altchars, validate| {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
-            super::b64decode_batch(py, items, altchars.optional(py), validate.truthy(py)?)
+            batch::b64decode_batch(py, items, altchars.optional(py), validate.truthy(py)?)
         })();
         return_bound(py, result)
     }
@@ -236,7 +265,7 @@ callback! {
         let result = (|| {
             let items = items.raw(py).cast::<PyList>()?;
             let outputs = outputs.raw(py).cast::<PyList>()?;
-            super::b64decode_batch_into(
+            batch::b64decode_batch_into(
                 py,
                 items,
                 outputs,
@@ -252,7 +281,7 @@ callback! {
     b64decode_into, |py; s, output, altchars, validate, padded, ignorechars, canonical| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::b64decode_into(
+            decode::b64decode_into(
                 py,
                 s.raw(py),
                 output,
@@ -271,7 +300,7 @@ callback! {
     urlsafe_b64decode, |py; s, padded| {
         let result = padded
             .truthy(py)
-            .and_then(|padded| super::urlsafe_b64decode(py, s.raw(py), padded));
+            .and_then(|padded| decode::urlsafe_b64decode(py, s.raw(py), padded));
         return_bound(py, result)
     }
 }
@@ -280,7 +309,7 @@ callback! {
     urlsafe_b64decode_into, |py; s, output, padded| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            super::urlsafe_b64decode_into(py, s.raw(py), output, padded.truthy(py)?)
+            decode::urlsafe_b64decode_into(py, s.raw(py), output, padded.truthy(py)?)
         })();
         return_usize(py, result)
     }

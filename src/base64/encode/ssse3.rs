@@ -10,31 +10,38 @@ use std::arch::x86_64::*;
 pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 52 <= input.len() {
         let first = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source)) };
         let second = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source + 12)) };
         let third = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source + 24)) };
         let fourth = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source + 36)) };
+
         unsafe { _mm_storeu_si128(output.add(destination).cast(), first) };
         unsafe { _mm_storeu_si128(output.add(destination + 16).cast(), second) };
         unsafe { _mm_storeu_si128(output.add(destination + 32).cast(), third) };
         unsafe { _mm_storeu_si128(output.add(destination + 48).cast(), fourth) };
+
         source += 48;
         destination += 64;
     }
+
     // Loading a vector reads 16 bytes, so leave enough bytes for the load.
     while source + 16 <= input.len() {
         let encoded = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source)) };
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
+
         source += 12;
         destination += 16;
     }
+
     source
 }
 
 #[target_feature(enable = "ssse3")]
 unsafe fn encode_12<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
+
     let mut value = unsafe { _mm_loadu_si128(input.cast()) };
     value = _mm_shuffle_epi8(value, shuffle);
 
@@ -42,8 +49,10 @@ unsafe fn encode_12<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let higher = unsafe { mulhi_epu16_exact_ssse3(higher, _mm_set1_epi32(0x0400_0040)) };
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
     let lower = _mm_mullo_epi16(lower, _mm_set1_epi32(0x0100_0010));
+
     ascii_from_indices::<URLSAFE>(_mm_or_si128(higher, lower))
 }
+
 // LLVM can expand this constant multiply into a long widen/shift/pack
 // sequence. Keep the single SSE2 instruction on the SSSE3 fallback path.
 #[inline]
@@ -57,8 +66,10 @@ unsafe fn mulhi_epu16_exact_ssse3(mut value: __m128i, multiplier: __m128i) -> __
             options(pure, nomem, nostack)
         );
     }
+
     value
 }
+
 #[target_feature(enable = "ssse3")]
 fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
@@ -82,5 +93,6 @@ fn ascii_from_indices<const URLSAFE: bool>(indices: __m128i) -> __m128i {
         0,
         0,
     );
+
     _mm_add_epi8(_mm_shuffle_epi8(offsets, reduced), indices)
 }

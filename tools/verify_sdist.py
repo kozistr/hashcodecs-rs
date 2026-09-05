@@ -110,6 +110,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('sdist', nargs='?', type=Path, help='existing .tar.gz source distribution')
     arguments = parser.parse_args()
+
     project_root = Path(__file__).resolve().parents[1]
 
     with tempfile.TemporaryDirectory(prefix='hashcodecs-sdist-') as temporary:

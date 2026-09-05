@@ -8,7 +8,7 @@ pub(in crate::bindings) const BINDING_COUNT: usize = 24;
 binding! {
     B64ENCODE: 4 {
         name: c"b64encode",
-        callback: crate::bindings::base64::callbacks::b64encode,
+        callback: crate::bindings::base64::api::b64encode,
         parameters: [c"s", c"altchars", c"padded", c"wrapcol"],
         max_positional: 2,
         required: 1,
@@ -67,7 +67,7 @@ pub(in crate::bindings) unsafe fn b64encode(
 binding! {
     B64ENCODE_BATCH: 2 {
         name: c"b64encode_batch",
-        callback: crate::bindings::base64::callbacks::b64encode_batch,
+        callback: crate::bindings::base64::api::b64encode_batch,
         parameters: [c"items", c"altchars"],
         max_positional: 2,
         required: 1,
@@ -120,7 +120,7 @@ pub(in crate::bindings) unsafe fn b64encode_batch(
 binding! {
     B64ENCODE_BATCH_INTO: 3 {
         name: c"b64encode_batch_into",
-        callback: crate::bindings::base64::callbacks::b64encode_batch_into,
+        callback: crate::bindings::base64::api::b64encode_batch_into,
         parameters: [c"items", c"outputs", c"altchars"],
         max_positional: 3,
         required: 2,
@@ -181,7 +181,7 @@ pub(in crate::bindings) unsafe fn b64encode_batch_into(
 binding! {
     B64ENCODE_INTO: 5 {
         name: c"b64encode_into",
-        callback: crate::bindings::base64::callbacks::b64encode_into,
+        callback: crate::bindings::base64::api::b64encode_into,
         parameters: [c"s", c"output", c"altchars", c"padded", c"wrapcol"],
         max_positional: 3,
         required: 2,
@@ -242,7 +242,7 @@ pub(in crate::bindings) unsafe fn b64encode_into(
 binding! {
     B64DECODE: 6 {
         name: c"b64decode",
-        callback: crate::bindings::base64::callbacks::b64decode,
+        callback: crate::bindings::base64::api::b64decode,
         parameters: [c"s", c"altchars", c"validate", c"padded", c"ignorechars", c"canonical"],
         max_positional: 3,
         required: 1,
@@ -308,7 +308,7 @@ pub(in crate::bindings) unsafe fn b64decode(
 binding! {
     B64DECODE_BATCH: 3 {
         name: c"b64decode_batch",
-        callback: crate::bindings::base64::callbacks::b64decode_batch,
+        callback: crate::bindings::base64::api::b64decode_batch,
         parameters: [c"items", c"altchars", c"validate"],
         max_positional: 3,
         required: 1,
@@ -364,7 +364,7 @@ pub(in crate::bindings) unsafe fn b64decode_batch(
 binding! {
     B64DECODE_BATCH_INTO: 4 {
         name: c"b64decode_batch_into",
-        callback: crate::bindings::base64::callbacks::b64decode_batch_into,
+        callback: crate::bindings::base64::api::b64decode_batch_into,
         parameters: [c"items", c"outputs", c"altchars", c"validate"],
         max_positional: 4,
         required: 2,
@@ -428,7 +428,7 @@ pub(in crate::bindings) unsafe fn b64decode_batch_into(
 binding! {
     B64DECODE_INTO: 7 {
         name: c"b64decode_into",
-        callback: crate::bindings::base64::callbacks::b64decode_into,
+        callback: crate::bindings::base64::api::b64decode_into,
         parameters: [c"s", c"output", c"altchars", c"validate", c"padded", c"ignorechars", c"canonical"],
         max_positional: 4,
         required: 2,
@@ -501,7 +501,7 @@ pub(in crate::bindings) unsafe fn b64decode_into(
 binding! {
     STANDARD_B64ENCODE: 1 {
         name: c"standard_b64encode",
-        callback: crate::bindings::base64::callbacks::standard_b64encode,
+        callback: crate::bindings::base64::api::standard_b64encode,
         parameters: [c"s"],
         max_positional: 1,
         required: 1,
@@ -546,7 +546,7 @@ pub(in crate::bindings) unsafe fn standard_b64encode(
 binding! {
     STANDARD_B64ENCODE_INTO: 2 {
         name: c"standard_b64encode_into",
-        callback: crate::bindings::base64::callbacks::standard_b64encode_into,
+        callback: crate::bindings::base64::api::standard_b64encode_into,
         parameters: [c"s", c"output"],
         max_positional: 2,
         required: 2,
@@ -597,7 +597,7 @@ pub(in crate::bindings) unsafe fn standard_b64encode_into(
 binding! {
     STANDARD_B64ENCODE_BATCH: 1 {
         name: c"standard_b64encode_batch",
-        callback: crate::bindings::base64::callbacks::standard_b64encode_batch,
+        callback: crate::bindings::base64::api::standard_b64encode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -629,7 +629,7 @@ pub(in crate::bindings) unsafe fn standard_b64encode_batch(
 binding! {
     STANDARD_B64ENCODE_BATCH_INTO: 2 {
         name: c"standard_b64encode_batch_into",
-        callback: crate::bindings::base64::callbacks::standard_b64encode_batch_into,
+        callback: crate::bindings::base64::api::standard_b64encode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -662,7 +662,7 @@ pub(in crate::bindings) unsafe fn standard_b64encode_batch_into(
 binding! {
     STANDARD_B64DECODE_BATCH: 1 {
         name: c"standard_b64decode_batch",
-        callback: crate::bindings::base64::callbacks::standard_b64decode_batch,
+        callback: crate::bindings::base64::api::standard_b64decode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -694,7 +694,7 @@ pub(in crate::bindings) unsafe fn standard_b64decode_batch(
 binding! {
     STANDARD_B64DECODE_BATCH_INTO: 2 {
         name: c"standard_b64decode_batch_into",
-        callback: crate::bindings::base64::callbacks::standard_b64decode_batch_into,
+        callback: crate::bindings::base64::api::standard_b64decode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -727,7 +727,7 @@ pub(in crate::bindings) unsafe fn standard_b64decode_batch_into(
 binding! {
     STANDARD_B64DECODE: 1 {
         name: c"standard_b64decode",
-        callback: crate::bindings::base64::callbacks::standard_b64decode,
+        callback: crate::bindings::base64::api::standard_b64decode,
         parameters: [c"s"],
         max_positional: 1,
         required: 1,
@@ -777,7 +777,7 @@ pub(in crate::bindings) unsafe fn standard_b64decode(
 binding! {
     STANDARD_B64DECODE_INTO: 2 {
         name: c"standard_b64decode_into",
-        callback: crate::bindings::base64::callbacks::standard_b64decode_into,
+        callback: crate::bindings::base64::api::standard_b64decode_into,
         parameters: [c"s", c"output"],
         max_positional: 2,
         required: 2,
@@ -829,7 +829,7 @@ pub(in crate::bindings) unsafe fn standard_b64decode_into(
 binding! {
     URLSAFE_B64ENCODE_BATCH: 1 {
         name: c"urlsafe_b64encode_batch",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_batch,
+        callback: crate::bindings::base64::api::urlsafe_b64encode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -861,7 +861,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch(
 binding! {
     URLSAFE_B64ENCODE_BATCH_INTO: 2 {
         name: c"urlsafe_b64encode_batch_into",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_batch_into,
+        callback: crate::bindings::base64::api::urlsafe_b64encode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -894,7 +894,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch_into(
 binding! {
     URLSAFE_B64DECODE_BATCH: 1 {
         name: c"urlsafe_b64decode_batch",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_batch,
+        callback: crate::bindings::base64::api::urlsafe_b64decode_batch,
         parameters: [c"items"],
         max_positional: 1,
         required: 1,
@@ -926,7 +926,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch(
 binding! {
     URLSAFE_B64DECODE_BATCH_INTO: 2 {
         name: c"urlsafe_b64decode_batch_into",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_batch_into,
+        callback: crate::bindings::base64::api::urlsafe_b64decode_batch_into,
         parameters: [c"items", c"outputs"],
         max_positional: 2,
         required: 2,
@@ -959,7 +959,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch_into(
 binding! {
     URLSAFE_B64ENCODE: 2 {
         name: c"urlsafe_b64encode",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64encode,
+        callback: crate::bindings::base64::api::urlsafe_b64encode,
         parameters: [c"s", c"padded"],
         max_positional: 1,
         required: 1,
@@ -1006,7 +1006,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode(
 binding! {
     URLSAFE_B64ENCODE_INTO: 3 {
         name: c"urlsafe_b64encode_into",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64encode_into,
+        callback: crate::bindings::base64::api::urlsafe_b64encode_into,
         parameters: [c"s", c"output", c"padded"],
         max_positional: 2,
         required: 2,
@@ -1059,7 +1059,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_into(
 binding! {
     URLSAFE_B64DECODE: 2 {
         name: c"urlsafe_b64decode",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64decode,
+        callback: crate::bindings::base64::api::urlsafe_b64decode,
         parameters: [c"s", c"padded"],
         max_positional: 1,
         required: 1,
@@ -1135,7 +1135,7 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode(
 binding! {
     URLSAFE_B64DECODE_INTO: 3 {
         name: c"urlsafe_b64decode_into",
-        callback: crate::bindings::base64::callbacks::urlsafe_b64decode_into,
+        callback: crate::bindings::base64::api::urlsafe_b64decode_into,
         parameters: [c"s", c"output", c"padded"],
         max_positional: 2,
         required: 2,

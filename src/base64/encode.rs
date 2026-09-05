@@ -169,8 +169,10 @@ fn b64encode_into_with_alphabet(
 fn b64encode_with_alphabet(input: &[u8], urlsafe: bool) -> String {
     let output_len = encoded_len(input.len());
     let mut output = allocate_uninitialized_output(output_len);
+
     // The output allocation contains exactly `output_len` writable bytes.
     unsafe { encode_to_ptr(input, output.as_mut_ptr().cast(), urlsafe) };
+
     // `encode_to_ptr` initializes every output byte.
     let output = unsafe { assume_output_initialized(output, output_len) };
 

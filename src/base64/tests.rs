@@ -118,6 +118,7 @@ fn validation_only_kernels_classify_without_output_storage() {
     }
     let mut input = vec![b'A'; 273];
     assert_eq!(validate_alphabet(&input, DecodeAlphabet::Standard), Ok(()));
+
     input[272] = b'!';
     assert_eq!(
         validate_alphabet(&input, DecodeAlphabet::Standard),
@@ -211,6 +212,7 @@ fn rejects_invalid_input() {
         b64decode(b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA!"),
         Err(Base64Error::InvalidInput)
     );
+
     let mut invalid_wide = [b'A'; 128];
     invalid_wide[127] = b'!';
     assert_eq!(b64decode(&invalid_wide), Err(Base64Error::InvalidInput));

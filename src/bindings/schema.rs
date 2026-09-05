@@ -5,7 +5,7 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 
 use crate::bindings::arguments::parse_raw_arguments;
-use crate::bindings::base64::python_at_least;
+use crate::bindings::compatibility::python_at_least;
 use crate::bindings::runtime::{METHOD_FLAGS, catch_unwind_callback};
 
 pub(super) type Callback = unsafe extern "C" fn(
@@ -93,6 +93,7 @@ impl Argument {
         if self.value.is_null() {
             return Ok(self.default_bool(py));
         }
+
         let truthy = unsafe { ffi::PyObject_IsTrue(self.value) };
         if truthy == -1 {
             Err(PyErr::fetch(py))
@@ -118,6 +119,7 @@ impl Argument {
                 _ => unreachable!("binding argument does not have an integer default"),
             };
         }
+
         self.raw(py).extract::<i128>()
     }
 }
@@ -162,6 +164,7 @@ impl<const N: usize> Binding<N> {
         operation: impl FnOnce(Python<'_>, [*mut ffi::PyObject; N]) -> *mut ffi::PyObject,
     ) -> *mut ffi::PyObject {
         let py = unsafe { Python::assume_attached() };
+
         catch_unwind_callback(py, || unsafe {
             let Some(values) = parse_raw_arguments(
                 args,
@@ -174,6 +177,7 @@ impl<const N: usize> Binding<N> {
             ) else {
                 return ptr::null_mut();
             };
+
             operation(py, values)
         })
     }
@@ -192,7 +196,9 @@ impl<const N: usize> Binding<N> {
             ml_flags: METHOD_FLAGS,
             ml_doc: self.documentation.select(version).as_ptr(),
         };
+
         unsafe { methods.add(*method_count).write(method) };
+
         *method_count += 1;
     }
 }

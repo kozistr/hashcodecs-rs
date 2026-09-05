@@ -93,6 +93,7 @@ fn supports_backend(capabilities: Capabilities, backend: Backend) -> bool {
             CpuFeature::Ssse3,
         ],
     };
+
     capabilities.supports_all(required)
 }
 

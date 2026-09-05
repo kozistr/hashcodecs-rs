@@ -61,6 +61,7 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
 #[target_feature(enable = "ssse3,sse4.1")]
 pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
+
     while source + 64 <= input.len() {
         let (_, first) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         let (_, second) = unsafe { A::decode_indices_16(input.as_ptr().add(source + 16)) };
@@ -72,6 +73,7 @@ pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64E
         }
         source += 64;
     }
+
     while source + 16 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if _mm_testz_si128(errors, errors) == 0 {
@@ -79,6 +81,7 @@ pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64E
         }
         source += 16;
     }
+
     Ok(source)
 }
 
@@ -89,6 +92,7 @@ pub(crate) unsafe fn decode_prefix_sse41<A: Decoder>(
 ) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
+
     while source + 64 <= input.len() {
         let (first, first_errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         let (second, second_errors) =
@@ -111,6 +115,7 @@ pub(crate) unsafe fn decode_prefix_sse41<A: Decoder>(
         source += 64;
         destination += 48;
     }
+
     while source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
         if _mm_testz_si128(errors, errors) == 0 {
@@ -120,5 +125,6 @@ pub(crate) unsafe fn decode_prefix_sse41<A: Decoder>(
         source += 16;
         destination += 12;
     }
+
     (source, destination)
 }

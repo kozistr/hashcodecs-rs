@@ -34,7 +34,7 @@ lint:
 
 test:
     cargo test --features python {{ cargo_flags }}
-    uv run --frozen --no-sync python tools/install_local_wheel.py
+    uv run python tools/install_local_wheel.py
     {{ pytest_base }} tests --cov=hashcodecs --cov-branch --cov-fail-under=100 {{ pytest_flags }} --cov-report=term:skip-covered
 
 test-build:

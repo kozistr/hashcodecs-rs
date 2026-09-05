@@ -67,13 +67,18 @@ include = [
     "/README.md",
     "/SAFETY.md",
     "/SECURITY.md",
-    "/benches",
-    "/docs",
-    "/generated",
-    "/hashcodecs",
-    "/src",
-    "/tools",
+    "benches/**/*",
+    "docs/**/*",
+    "generated/**/*",
+    "hashcodecs/**/*",
+    "src/**/*",
+    "tools/**/*",
 ]
+
+exclude = [
+    "docs/benchmarks/*", 
+]
+
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
 

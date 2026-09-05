@@ -4,11 +4,8 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::{output_too_small, pybytes_with_len};
-use super::configured::ConfiguredDecoder;
-use super::fallback::decoding_error;
-use super::policy::{ErrorWrites, Padding, StoreBounds};
-use super::{decode_configured, decode_configured_strict_into};
+use super::super::pybytes_with_len;
+use super::policy::ErrorWrites;
 use crate::base64::{
     Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
@@ -16,30 +13,23 @@ use crate::base64::{
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,
 };
-use crate::bindings::base64::PythonSemantics;
 use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StrictDecodeError {
-    InvalidLayout,
-    InvalidAlphabet,
-}
-
-fn decode_strict_native<'py>(
+pub(super) fn decode_strict<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
-) -> PyResult<Result<Bound<'py, PyBytes>, StrictDecodeError>> {
+) -> PyResult<Result<Bound<'py, PyBytes>, Base64Error>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_strict_native(py, &BytesLike::OwnedVec(input), alphabet);
+        return decode_strict(py, &BytesLike::OwnedVec(input), alphabet);
     }
     let layout = match unsafe { input.with_bytes(decode_layout) } {
         Ok(layout) => layout,
         Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
-            return Ok(Err(StrictDecodeError::InvalidLayout));
+            return Ok(Err(Base64Error::InvalidInput));
         }
     };
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -63,31 +53,9 @@ fn decode_strict_native<'py>(
     Ok(match result {
         Ok(()) => Ok(output),
         Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
-            Err(StrictDecodeError::InvalidAlphabet)
+            Err(Base64Error::InvalidInput)
         }
     })
-}
-
-pub(in crate::bindings::base64::decode) fn try_decode_strict<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    alphabet: DecodeAlphabet,
-) -> PyResult<Option<Bound<'py, PyBytes>>> {
-    Ok(decode_strict_native(py, input, alphabet)?.ok())
-}
-
-pub(in crate::bindings::base64::decode) fn decode_strict<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    alphabet: DecodeAlphabet,
-) -> PyResult<Bound<'py, PyBytes>> {
-    match decode_strict_native(py, input, alphabet)? {
-        Ok(output) => Ok(output),
-        Err(StrictDecodeError::InvalidLayout) => Err(decoding_error(py, "Incorrect padding")),
-        Err(StrictDecodeError::InvalidAlphabet) => {
-            Err(decoding_error(py, "Only base64 data is allowed"))
-        }
-    }
 }
 
 pub(in crate::bindings::base64::decode) fn decode_strict_into(
@@ -157,7 +125,7 @@ fn decode_strict_with_layout_to_ptr(
         });
     }
     let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
-    if error_writes.transactional() {
+    if error_writes.validated_prefix_only() {
         decode_to_slice_with_layout_and_alphabet_validated_blocks(input, output, layout, alphabet)?;
     } else {
         decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
@@ -165,17 +133,19 @@ fn decode_strict_with_layout_to_ptr(
     Ok(layout.output_len())
 }
 
-fn decode_unpadded<'py>(
+pub(super) fn decode_unpadded<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
     alphabet: DecodeAlphabet,
-) -> PyResult<Bound<'py, PyBytes>> {
+) -> PyResult<Result<Bound<'py, PyBytes>, Base64Error>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
         return decode_unpadded(py, &BytesLike::OwnedVec(input), alphabet);
     }
-    let layout = unsafe { input.with_bytes(decode_unpadded_layout) }
-        .map_err(|_| decoding_error(py, "Incorrect padding"))?;
+    let layout = match unsafe { input.with_bytes(decode_unpadded_layout) } {
+        Ok(layout) => layout,
+        Err(error) => return Ok(Err(error)),
+    };
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len(), |output| {
@@ -193,11 +163,10 @@ fn decode_unpadded<'py>(
             })
         })
     }?;
-    result.map_err(|_| decoding_error(py, "Only base64 data is allowed"))?;
-    Ok(output)
+    Ok(result.map(|()| output))
 }
 
-fn decode_unpadded_into(
+pub(super) fn decode_unpadded_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
@@ -270,7 +239,7 @@ fn decode_unpadded_with_layout_to_ptr(
         });
     }
     let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
-    if error_writes.transactional() {
+    if error_writes.validated_prefix_only() {
         decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
             input, output, layout, alphabet,
         )?;
@@ -302,121 +271,4 @@ pub(in crate::bindings::base64::decode) fn translate_altchars(
         }
     }));
     Ok(Some(translated))
-}
-
-pub(in crate::bindings::base64::decode) fn decode_strict_with_altchars<'decoder, 'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
-    semantics: PythonSemantics,
-) -> PyResult<Bound<'py, PyBytes>> {
-    match altchars {
-        None => decode_strict(py, input, DecodeAlphabet::Standard),
-        Some([b'-', b'_']) => decode_strict(py, input, DecodeAlphabet::Mixed),
-        Some(_) => decode_configured(py, input, custom(), semantics),
-    }
-}
-
-pub(in crate::bindings::base64::decode) fn decode_unpadded_with_altchars<'decoder, 'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
-    semantics: PythonSemantics,
-) -> PyResult<Bound<'py, PyBytes>> {
-    match altchars {
-        None => decode_unpadded(py, input, DecodeAlphabet::Standard),
-        Some([b'-', b'_']) => decode_unpadded(py, input, DecodeAlphabet::Mixed),
-        Some(_) => decode_configured(py, input, custom(), semantics),
-    }
-}
-
-pub(in crate::bindings::base64::decode) fn decode_strict_into_with_altchars<'decoder>(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
-    error_writes: ErrorWrites,
-) -> PyResult<Result<usize, Base64Error>> {
-    match altchars {
-        None => decode_strict_into(input, output, DecodeAlphabet::Standard, error_writes),
-        Some([b'-', b'_']) => {
-            decode_strict_into(input, output, DecodeAlphabet::Mixed, error_writes)
-        }
-        Some(altchars) => {
-            decode_configured_strict_into(input, output, altchars, custom(), error_writes)
-        }
-    }
-}
-
-pub(in crate::bindings::base64::decode) fn decode_unpadded_into_with_altchars<'decoder>(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    custom: impl FnOnce() -> &'decoder ConfiguredDecoder,
-    error_writes: ErrorWrites,
-) -> PyResult<Result<usize, Base64Error>> {
-    match altchars {
-        None => decode_unpadded_into(input, output, DecodeAlphabet::Standard, error_writes),
-        Some([b'-', b'_']) => {
-            decode_unpadded_into(input, output, DecodeAlphabet::Mixed, error_writes)
-        }
-        Some(altchars) => {
-            decode_configured_strict_into(input, output, altchars, custom(), error_writes)
-        }
-    }
-}
-
-pub(in crate::bindings::base64::decode) fn try_decode_urlsafe_315<'py>(
-    py: Python<'py>,
-    input: &BytesLike<'_, '_>,
-    padding: Padding,
-    error_writes: ErrorWrites,
-) -> PyResult<Option<Bound<'py, PyBytes>>> {
-    if (padding.is_padded() || error_writes.transactional())
-        && let Some(output) = try_decode_strict(py, input, DecodeAlphabet::UrlSafe)?
-    {
-        return Ok(Some(output));
-    }
-    if !padding.is_padded() {
-        match decode_unpadded(py, input, DecodeAlphabet::UrlSafe) {
-            Ok(output) => return Ok(Some(output)),
-            Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-            Err(_) => {}
-        }
-    }
-    Ok(None)
-}
-
-pub(in crate::bindings::base64::decode) fn try_decode_urlsafe_315_into(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    padding: Padding,
-    error_writes: ErrorWrites,
-    store_bounds: StoreBounds,
-) -> PyResult<Option<usize>> {
-    if padding.is_padded() || error_writes.transactional() {
-        match decode_strict_into(input, output, DecodeAlphabet::UrlSafe, error_writes)? {
-            Ok(written) => return Ok(Some(written)),
-            Err(Base64Error::OutputTooSmall { required, provided })
-                if store_bounds == StoreBounds::ReportImmediately =>
-            {
-                return Err(output_too_small(required, provided));
-            }
-            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
-        }
-    }
-    if !padding.is_padded() {
-        match decode_unpadded_into(input, output, DecodeAlphabet::UrlSafe, error_writes)? {
-            Ok(written) => return Ok(Some(written)),
-            Err(Base64Error::OutputTooSmall { required, provided })
-                if store_bounds == StoreBounds::ReportImmediately =>
-            {
-                return Err(output_too_small(required, provided));
-            }
-            Err(Base64Error::OutputTooSmall { .. }) | Err(Base64Error::InvalidInput) => {}
-        }
-    }
-    Ok(None)
 }

@@ -6,21 +6,145 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::{STANDARD_ALPHABET, output_too_small, with_output_ptr};
+use super::configured::{
+    ConfiguredDecoder, decode_configured, decode_configured_into, decode_configured_strict_into,
+};
 use super::fallback::{
     canonical_padding, decode_with_binascii, decoding_error, warn_legacy_altchars,
 };
+use super::lenient::{try_decode_lenient, try_decode_lenient_into};
 use super::policy::{
-    ConfiguredShortcut, DecodeRoute, ErrorWrites, Padding, PreparedDecoder, StoreBounds,
+    ConfiguredShortcut, DecodeAttempt, DecodeRoute, ErrorWrites, Padding, PreparedDecoder,
 };
-use super::{
-    decode_configured, decode_configured_into, decode_strict, decode_strict_into,
-    decode_strict_into_with_altchars, decode_strict_with_altchars,
-    decode_unpadded_into_with_altchars, decode_unpadded_with_altchars, try_decode_lenient,
-    try_decode_lenient_into, try_decode_strict, try_decode_urlsafe_315,
-    try_decode_urlsafe_315_into,
-};
+use super::strict::{decode_strict, decode_strict_into, decode_unpadded, decode_unpadded_into};
 use crate::base64::{Base64Error, DecodeAlphabet};
 use crate::bindings::buffer::BytesLike;
+
+#[derive(Clone, Copy)]
+enum NativeDecoder<'a> {
+    Direct(DecodeAlphabet, Padding),
+    CustomStrict(&'a ConfiguredDecoder, [u8; 2]),
+    Configured(&'a ConfiguredDecoder),
+}
+
+// Storage owns allocation and writes; PreparedDecoder owns the order of attempts.
+trait DecodeOutput<'py> {
+    type Value;
+    const REUSABLE: bool;
+
+    fn native(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        decoder: NativeDecoder<'_>,
+        prepared: &PreparedDecoder,
+        writes: ErrorWrites,
+    ) -> PyResult<Result<Self::Value, Base64Error>>;
+
+    fn lenient(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        prepared: &PreparedDecoder,
+    ) -> PyResult<Result<Self::Value, Base64Error>>;
+
+    fn store_fallback(&self, bytes: Bound<'py, PyBytes>) -> PyResult<Self::Value>;
+}
+
+struct Allocating;
+
+impl<'py> DecodeOutput<'py> for Allocating {
+    type Value = Bound<'py, PyBytes>;
+    const REUSABLE: bool = false;
+
+    fn native(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        decoder: NativeDecoder<'_>,
+        prepared: &PreparedDecoder,
+        _writes: ErrorWrites,
+    ) -> PyResult<Result<Self::Value, Base64Error>> {
+        match decoder {
+            NativeDecoder::Direct(alphabet, Padding::Padded) => decode_strict(py, input, alphabet),
+            NativeDecoder::Direct(alphabet, Padding::Unpadded) => {
+                decode_unpadded(py, input, alphabet)
+            }
+            NativeDecoder::CustomStrict(decoder, _) | NativeDecoder::Configured(decoder) => {
+                decode_configured(py, input, decoder, prepared.semantics)
+            }
+        }
+    }
+
+    fn lenient(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        prepared: &PreparedDecoder,
+    ) -> PyResult<Result<Self::Value, Base64Error>> {
+        try_decode_lenient(
+            py,
+            input,
+            prepared.policy.altchars,
+            prepared.policy.padding,
+            prepared.lenient_table(),
+            prepared.semantics,
+        )
+    }
+
+    fn store_fallback(&self, bytes: Bound<'py, PyBytes>) -> PyResult<Self::Value> {
+        Ok(bytes)
+    }
+}
+
+impl<'py> DecodeOutput<'py> for Bound<'py, PyByteArray> {
+    type Value = usize;
+    const REUSABLE: bool = true;
+
+    fn native(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        decoder: NativeDecoder<'_>,
+        prepared: &PreparedDecoder,
+        writes: ErrorWrites,
+    ) -> PyResult<Result<usize, Base64Error>> {
+        match decoder {
+            NativeDecoder::Direct(alphabet, Padding::Padded) => {
+                decode_strict_into(input, self, alphabet, writes)
+            }
+            NativeDecoder::Direct(alphabet, Padding::Unpadded) => {
+                decode_unpadded_into(input, self, alphabet, writes)
+            }
+            NativeDecoder::CustomStrict(decoder, altchars) => {
+                decode_configured_strict_into(input, self, altchars, decoder, writes)
+            }
+            NativeDecoder::Configured(decoder) => {
+                decode_configured_into(py, input, self, decoder, prepared.semantics)
+            }
+        }
+    }
+
+    fn lenient(
+        &self,
+        _py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        prepared: &PreparedDecoder,
+    ) -> PyResult<Result<usize, Base64Error>> {
+        try_decode_lenient_into(
+            input,
+            self,
+            prepared.policy.altchars,
+            prepared.policy.padding,
+            prepared.lenient_table(),
+            prepared.semantics,
+        )
+    }
+
+    fn store_fallback(&self, bytes: Bound<'py, PyBytes>) -> PyResult<usize> {
+        copy_decoded_into(&bytes, self)
+    }
+}
 
 impl PreparedDecoder {
     pub(super) fn decode_allocating<'py>(
@@ -28,382 +152,208 @@ impl PreparedDecoder {
         py: Python<'py>,
         input: &BytesLike<'_, 'py>,
     ) -> PyResult<Bound<'py, PyBytes>> {
-        let value = match self.route {
-            DecodeRoute::Configured(shortcut) => {
-                self.decode_configured_allocating(py, input, shortcut)?
-            }
-            DecodeRoute::Strict { urlsafe_315 } => {
-                if urlsafe_315
-                    && let Some(value) = try_decode_urlsafe_315(
-                        py,
-                        input,
-                        self.policy.padding,
-                        self.policy.error_writes(),
-                    )?
-                {
-                    return Ok(value);
-                }
-                self.decode_strict_allocating(py, input)?
-            }
-            DecodeRoute::LenientDirect { urlsafe_315 } => {
-                if urlsafe_315
-                    && let Some(value) = try_decode_urlsafe_315(
-                        py,
-                        input,
-                        self.policy.padding,
-                        self.policy.error_writes(),
-                    )?
-                {
-                    return Ok(value);
-                }
-                if let Some(value) = try_decode_strict(py, input, self.direct_alphabet())? {
-                    value
-                } else if self.policy.padding == Padding::Unpadded
-                    && let Some(value) = self.try_unpadded_allocating(py, input)?
-                {
-                    value
-                } else if let Some(value) = try_decode_lenient(
-                    py,
-                    input,
-                    self.policy.altchars,
-                    self.policy.padding,
-                    self.lenient_table(),
-                    self.semantics,
-                )? {
-                    value
-                } else {
-                    self.decode_binascii(py, input)?
-                }
-            }
-            DecodeRoute::LenientCustom => {
-                if self.policy.padding == Padding::Unpadded
-                    && let Some(value) = self.try_unpadded_allocating(py, input)?
-                {
-                    value
-                } else if let Some(value) = try_decode_lenient(
-                    py,
-                    input,
-                    self.policy.altchars,
-                    self.policy.padding,
-                    self.lenient_table(),
-                    self.semantics,
-                )? {
-                    value
-                } else {
-                    self.decode_binascii(py, input)?
-                }
-            }
-        };
-        self.finish(py, input, value)
+        // All attempts and the warning scan must observe one stable input.
+        #[cfg(Py_GIL_DISABLED)]
+        if let Some(input) = input.snapshot_mutable()? {
+            return self.execute(py, &BytesLike::OwnedVec(input), &Allocating);
+        }
+        self.execute(py, input, &Allocating)
     }
 
-    fn decode_configured_allocating<'py>(
+    pub(super) fn decode_into<'py>(
         &self,
         py: Python<'py>,
         input: &BytesLike<'_, 'py>,
-        shortcut: ConfiguredShortcut,
-    ) -> PyResult<Bound<'py, PyBytes>> {
-        if shortcut == ConfiguredShortcut::StandardStrict {
-            match decode_strict(py, input, DecodeAlphabet::Standard) {
-                Ok(value) => {
-                    let canonical_input = !self.policy.canonical
-                        || unsafe {
-                            input.with_bytes(|input| {
-                                let padding = usize::from(input.ends_with(b"="))
-                                    + usize::from(input.ends_with(b"=="));
-                                canonical_padding(&input[..input.len() - padding])
-                            })
-                        };
-                    if canonical_input {
-                        return Ok(value);
-                    }
-                    return Err(decoding_error(py, "Non-zero padding bits"));
-                }
-                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                Err(_) => {}
-            }
-        }
-        if shortcut == ConfiguredShortcut::CanonicalUnpadded
-            && unsafe {
-                input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
-            }
-        {
-            match decode_unpadded_with_altchars(
-                py,
-                input,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.semantics,
-            ) {
-                Ok(value) => return Ok(value),
-                Err(error) if error.is_instance_of::<PyMemoryError>(py) => return Err(error),
-                Err(_) => {}
-            }
-        }
-        decode_configured(py, input, self.configured(), self.semantics)
-    }
-
-    fn decode_strict_allocating<'py>(
-        &self,
-        py: Python<'py>,
-        input: &BytesLike<'_, 'py>,
-    ) -> PyResult<Bound<'py, PyBytes>> {
-        let result = if self.policy.padding == Padding::Padded {
-            decode_strict_with_altchars(
-                py,
-                input,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.semantics,
-            )
-        } else {
-            decode_unpadded_with_altchars(
-                py,
-                input,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.semantics,
-            )
-        };
-        match result {
-            Ok(value) => Ok(value),
-            Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
-            Err(_) => self.decode_binascii(py, input),
-        }
-    }
-
-    fn try_unpadded_allocating<'py>(
-        &self,
-        py: Python<'py>,
-        input: &BytesLike<'_, 'py>,
-    ) -> PyResult<Option<Bound<'py, PyBytes>>> {
-        match decode_unpadded_with_altchars(
-            py,
-            input,
-            self.policy.altchars,
-            || self.strict_custom(),
-            self.semantics,
-        ) {
-            Ok(value) => Ok(Some(value)),
-            Err(error) if error.is_instance_of::<PyMemoryError>(py) => Err(error),
-            Err(_) => Ok(None),
-        }
-    }
-
-    pub(super) fn decode_into(
-        &self,
-        py: Python<'_>,
-        input: &BytesLike<'_, '_>,
-        output: &Bound<'_, PyByteArray>,
+        output: &Bound<'py, PyByteArray>,
     ) -> PyResult<usize> {
-        // Every route and the compatibility-warning scan must observe the same bytes.
+        #[cfg(Py_GIL_DISABLED)]
+        if let Some(input) = input.snapshot_mutable()? {
+            return self.execute(py, &BytesLike::OwnedVec(input), output);
+        }
         if let Some(input) = input.snapshot_for_output(output)? {
-            return self.decode_into(py, &BytesLike::OwnedVec(input), output);
+            return self.execute(py, &BytesLike::OwnedVec(input), output);
         }
-        let value = match self.route {
-            DecodeRoute::Configured(shortcut) => {
-                self.decode_configured_into(py, input, output, shortcut)?
-            }
-            DecodeRoute::Strict { urlsafe_315 } => {
-                if urlsafe_315
-                    && let Some(value) = try_decode_urlsafe_315_into(
-                        input,
-                        output,
-                        self.policy.padding,
-                        self.policy.error_writes(),
-                        self.policy.store_bounds(),
-                    )?
-                {
-                    return Ok(value);
-                }
-                self.decode_strict_into(py, input, output)?
-            }
-            DecodeRoute::LenientDirect { urlsafe_315 } => {
-                if urlsafe_315
-                    && let Some(value) = try_decode_urlsafe_315_into(
-                        input,
-                        output,
-                        self.policy.padding,
-                        self.policy.error_writes(),
-                        self.policy.store_bounds(),
-                    )?
-                {
-                    return Ok(value);
-                }
-                if let Some(value) = accept_into(
-                    decode_strict_into(
-                        input,
-                        output,
-                        self.direct_alphabet(),
-                        ErrorWrites::PreserveOutput,
-                    )?,
-                    StoreBounds::DeferToFallback,
-                )? {
-                    value
-                } else if self.policy.padding == Padding::Unpadded
-                    && let Some(value) = self.try_unpadded_into(input, output)?
-                {
-                    value
-                } else if let Some(value) = try_decode_lenient_into(
-                    input,
-                    output,
-                    self.policy.altchars,
-                    self.policy.padding,
-                    self.lenient_table(),
-                    self.semantics,
-                )? {
-                    value
-                } else {
-                    self.decode_binascii_into(py, input, output)?
-                }
-            }
-            DecodeRoute::LenientCustom => {
-                if self.policy.padding == Padding::Unpadded
-                    && let Some(value) = self.try_unpadded_into(input, output)?
-                {
-                    value
-                } else if let Some(value) = try_decode_lenient_into(
-                    input,
-                    output,
-                    self.policy.altchars,
-                    self.policy.padding,
-                    self.lenient_table(),
-                    self.semantics,
-                )? {
-                    value
-                } else {
-                    self.decode_binascii_into(py, input, output)?
-                }
-            }
-        };
-        self.finish(py, input, value)
+        self.execute(py, input, output)
     }
 
-    fn decode_configured_into(
+    fn execute<'py, O: DecodeOutput<'py>>(
         &self,
-        py: Python<'_>,
-        input: &BytesLike<'_, '_>,
-        output: &Bound<'_, PyByteArray>,
-        shortcut: ConfiguredShortcut,
-    ) -> PyResult<usize> {
-        if shortcut == ConfiguredShortcut::StandardStrict {
-            let canonical_input = !self.policy.canonical
-                || unsafe {
-                    input.with_bytes(|input| {
-                        let padding = usize::from(input.ends_with(b"="))
-                            + usize::from(input.ends_with(b"=="));
-                        let data = &input[..input.len().saturating_sub(padding)];
-                        data.last().is_none_or(|last| {
-                            !STANDARD_ALPHABET.contains(last) || canonical_padding(data)
-                        })
-                    })
-                };
-            if canonical_input
-                && let Ok(value) = decode_strict_into(
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        output: &O,
+    ) -> PyResult<O::Value> {
+        let (urlsafe_315, direct, strict) = match self.route {
+            DecodeRoute::Configured(shortcut) => {
+                let value = self.configured_output(py, input, output, shortcut)?;
+                return self.finish(py, input, value);
+            }
+            DecodeRoute::Strict { urlsafe_315 } => (urlsafe_315, false, true),
+            DecodeRoute::LenientDirect { urlsafe_315 } => (urlsafe_315, true, false),
+            DecodeRoute::LenientCustom => (false, false, false),
+        };
+
+        if urlsafe_315 {
+            if (self.policy.padding.is_padded() || !strict)
+                && let Some(value) = self.try_native(
+                    py,
                     input,
                     output,
-                    DecodeAlphabet::Standard,
-                    ErrorWrites::PreserveOutput,
+                    NativeDecoder::Direct(DecodeAlphabet::UrlSafe, Padding::Padded),
+                    self.attempt,
+                )?
+            {
+                return Ok(value);
+            }
+            if !self.policy.padding.is_padded()
+                && let Some(value) = self.try_native(
+                    py,
+                    input,
+                    output,
+                    NativeDecoder::Direct(DecodeAlphabet::UrlSafe, Padding::Unpadded),
+                    self.attempt,
                 )?
             {
                 return Ok(value);
             }
         }
+
+        let value = if strict {
+            self.try_native(
+                py,
+                input,
+                output,
+                self.strict_decoder(self.policy.padding),
+                self.attempt,
+            )?
+        } else {
+            let padded = if direct {
+                self.try_native(
+                    py,
+                    input,
+                    output,
+                    self.strict_decoder(Padding::Padded),
+                    DecodeAttempt::Probe,
+                )?
+            } else {
+                None
+            };
+            if padded.is_some() {
+                padded
+            } else {
+                let unpadded = if self.policy.padding == Padding::Unpadded {
+                    self.try_native(
+                        py,
+                        input,
+                        output,
+                        self.strict_decoder(Padding::Unpadded),
+                        self.attempt,
+                    )?
+                } else {
+                    None
+                };
+                if unpadded.is_some() {
+                    unpadded
+                } else {
+                    DecodeAttempt::Strict
+                        .accept(output.lenient(py, input, self)?)
+                        .map_err(|error| native_error(py, error))?
+                }
+            }
+        };
+        let value = match value {
+            Some(value) => value,
+            None => output.store_fallback(decode_with_binascii(
+                py,
+                self.semantics,
+                input,
+                self.policy.altchars,
+                self.policy.validation,
+                self.policy.padding,
+            )?)?,
+        };
+        self.finish(py, input, value)
+    }
+
+    fn strict_decoder(&self, padding: Padding) -> NativeDecoder<'_> {
+        match self.policy.altchars {
+            None => NativeDecoder::Direct(DecodeAlphabet::Standard, padding),
+            Some([b'-', b'_']) => NativeDecoder::Direct(DecodeAlphabet::Mixed, padding),
+            Some(altchars) => NativeDecoder::CustomStrict(self.strict_custom(), altchars),
+        }
+    }
+
+    fn try_native<'py, O: DecodeOutput<'py>>(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        output: &O,
+        decoder: NativeDecoder<'_>,
+        attempt: DecodeAttempt,
+    ) -> PyResult<Option<O::Value>> {
+        attempt
+            .accept(output.native(py, input, decoder, self, attempt.error_writes())?)
+            .map_err(|error| native_error(py, error))
+    }
+
+    fn configured_output<'py, O: DecodeOutput<'py>>(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, 'py>,
+        output: &O,
+        shortcut: ConfiguredShortcut,
+    ) -> PyResult<O::Value> {
+        if shortcut == ConfiguredShortcut::StandardStrict {
+            // Reusable output must reject noncanonical bits before writing. Allocating
+            // output retains its specific padding-bit error after alphabet validation.
+            let canonical = !self.policy.canonical
+                || unsafe {
+                    input.with_bytes(|input| {
+                        let padding = usize::from(input.ends_with(b"="))
+                            + usize::from(input.ends_with(b"=="));
+                        let data = &input[..input.len() - padding];
+                        data.last().is_none_or(|last| {
+                            !STANDARD_ALPHABET.contains(last) || canonical_padding(data)
+                        })
+                    })
+                };
+            if (!O::REUSABLE || canonical)
+                && let Some(value) = self.try_native(
+                    py,
+                    input,
+                    output,
+                    NativeDecoder::Direct(DecodeAlphabet::Standard, Padding::Padded),
+                    DecodeAttempt::Probe,
+                )?
+            {
+                if canonical {
+                    return Ok(value);
+                }
+                return Err(decoding_error(py, "Non-zero padding bits"));
+            }
+        }
         if shortcut == ConfiguredShortcut::CanonicalUnpadded
             && unsafe {
                 input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
             }
-            && let Ok(value) = decode_unpadded_into_with_altchars(
+            && let Some(value) = self.try_native(
+                py,
                 input,
                 output,
-                self.policy.altchars,
-                || self.strict_custom(),
-                ErrorWrites::PreserveOutput,
+                self.strict_decoder(Padding::Unpadded),
+                DecodeAttempt::Probe,
             )?
         {
             return Ok(value);
         }
-        decode_configured_into(py, input, output, self.configured(), self.semantics)
-    }
-
-    fn decode_strict_into(
-        &self,
-        py: Python<'_>,
-        input: &BytesLike<'_, '_>,
-        output: &Bound<'_, PyByteArray>,
-    ) -> PyResult<usize> {
-        let result = if self.policy.padding == Padding::Padded {
-            decode_strict_into_with_altchars(
+        output
+            .native(
+                py,
                 input,
-                output,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.policy.error_writes(),
+                NativeDecoder::Configured(self.configured()),
+                self,
+                ErrorWrites::ValidatedPrefix,
             )?
-        } else {
-            decode_unpadded_into_with_altchars(
-                input,
-                output,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.policy.error_writes(),
-            )?
-        };
-        if let Some(value) = accept_into(result, self.policy.store_bounds())? {
-            Ok(value)
-        } else {
-            self.decode_binascii_into(py, input, output)
-        }
-    }
-
-    fn try_unpadded_into(
-        &self,
-        input: &BytesLike<'_, '_>,
-        output: &Bound<'_, PyByteArray>,
-    ) -> PyResult<Option<usize>> {
-        accept_into(
-            decode_unpadded_into_with_altchars(
-                input,
-                output,
-                self.policy.altchars,
-                || self.strict_custom(),
-                self.policy.error_writes(),
-            )?,
-            self.policy.store_bounds(),
-        )
-    }
-
-    fn direct_alphabet(&self) -> DecodeAlphabet {
-        match self.policy.altchars {
-            None => DecodeAlphabet::Standard,
-            Some([b'-', b'_']) => DecodeAlphabet::Mixed,
-            Some(_) => unreachable!("the prepared route limits direct lenient decoding"),
-        }
-    }
-
-    fn decode_binascii<'py>(
-        &self,
-        py: Python<'py>,
-        input: &BytesLike<'_, 'py>,
-    ) -> PyResult<Bound<'py, PyBytes>> {
-        decode_with_binascii(
-            py,
-            self.semantics,
-            input,
-            self.policy.altchars,
-            self.policy.validation,
-            self.policy.padding,
-        )
-    }
-
-    fn decode_binascii_into(
-        &self,
-        py: Python<'_>,
-        input: &BytesLike<'_, '_>,
-        output: &Bound<'_, PyByteArray>,
-    ) -> PyResult<usize> {
-        let decoded = self.decode_binascii(py, input)?;
-        copy_decoded_into(&decoded, output)
+            .map_err(|error| native_error(py, error))
     }
 
     fn finish<T>(&self, py: Python<'_>, input: &BytesLike<'_, '_>, value: T) -> PyResult<T> {
@@ -419,15 +369,10 @@ impl PreparedDecoder {
     }
 }
 
-fn accept_into(result: Result<usize, Base64Error>, bounds: StoreBounds) -> PyResult<Option<usize>> {
-    match result {
-        Ok(value) => Ok(Some(value)),
-        Err(Base64Error::OutputTooSmall { required, provided })
-            if bounds == StoreBounds::ReportImmediately =>
-        {
-            Err(output_too_small(required, provided))
-        }
-        Err(Base64Error::OutputTooSmall { .. } | Base64Error::InvalidInput) => Ok(None),
+fn native_error(py: Python<'_>, error: Base64Error) -> PyErr {
+    match error {
+        Base64Error::InvalidInput => decoding_error(py, "Incorrect padding"),
+        Base64Error::OutputTooSmall { required, provided } => output_too_small(required, provided),
     }
 }
 

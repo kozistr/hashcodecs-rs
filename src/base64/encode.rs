@@ -26,7 +26,7 @@ use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 ///
 /// # Returns
 ///
-/// The function returns a new Base64 string. The string uses `+` and `/` for values 62 and 63.
+/// The string uses `+` and `/` for values 62 and 63.
 ///
 /// # Examples
 ///
@@ -47,10 +47,6 @@ pub fn b64encode(input: &[u8]) -> String {
 /// # Arguments
 ///
 /// * `input` - Contains the bytes to encode.
-///
-/// # Returns
-///
-/// The function returns a new padded URL-safe Base64 string.
 ///
 /// # Examples
 ///

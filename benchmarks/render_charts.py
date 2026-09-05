@@ -219,7 +219,7 @@ CHARTS = (
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[8.28, 17.38, 4.71, 5.09],
+                hashcodecs=[7.94, 16.93, 4.39, 4.93],
                 CPython=[0.93, 1.08, 0.84, 0.90],
                 pybase64=[3.09, 8.01, 3.26, 3.57],
             ),
@@ -233,7 +233,7 @@ CHARTS = (
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[6.78, 13.41, 5.04, 5.41],
+                hashcodecs=[6.57, 13.23, 4.78, 5.19],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
             ),
@@ -246,16 +246,16 @@ CHARTS = (
             panel(
                 'MIME whitespace',
                 SIZES,
-                returned_bytes=[2.48, 3.02, 1.95, 1.93],
-                reusable_bytearray=[2.62, 3.09, 3.26, 2.89],
+                returned_bytes=[2.82, 4.36, 3.15, 3.36],
+                reusable_bytearray=[1.18, 1.33, 1.35, 1.34],
                 CPython=[0.85, 0.94, 0.85, 0.84],
                 pybase64=[2.46, 3.76, 2.67, 2.62],
             ),
             panel(
                 'Ignored non-alphabet bytes',
                 SIZES,
-                returned_bytes=[1.66, 2.06, 1.60, 1.61],
-                reusable_bytearray=[1.86, 2.19, 2.30, 2.18],
+                returned_bytes=[2.85, 4.44, 3.16, 3.39],
+                reusable_bytearray=[1.20, 1.37, 1.41, 1.39],
                 CPython=[0.85, 0.94, 0.83, 0.84],
                 pybase64=[2.55, 3.96, 2.62, 2.74],
             ),
@@ -307,9 +307,9 @@ CHARTS = (
         'Reusable Python Base64 buffers',
         (
             panel('Standard encode', SIZES, hashcodecs=[13.69, 26.58, 39.96, 30.29]),
-            panel('Standard decode', SIZES, hashcodecs=[10.21, 19.54, 29.44, 18.91]),
+            panel('Standard decode', SIZES, hashcodecs=[9.34, 17.73, 29.04, 18.89]),
             panel('URL-safe encode', SIZES, hashcodecs=[12.97, 25.80, 40.06, 30.25]),
-            panel('URL-safe decode', SIZES, hashcodecs=[8.75, 15.33, 20.81, 17.46]),
+            panel('URL-safe decode', SIZES, hashcodecs=[7.57, 14.04, 20.41, 17.13]),
         ),
     ),
     Chart(

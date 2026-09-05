@@ -50,10 +50,6 @@ impl Murmur3X86Hasher32 {
     ///
     /// * `seed` - Specifies the initial unsigned 32-bit hash seed.
     ///
-    /// # Returns
-    ///
-    /// The function returns a hasher that can receive bytes through `update`.
-    ///
     /// # Examples
     ///
     ///     use hashcodecs::murmur3::{Murmur3X86Hasher32, murmur3_x86_32};
@@ -78,9 +74,7 @@ impl Murmur3X86Hasher32 {
     ///
     /// * `input` - Contains the next message bytes.
     ///
-    /// # Returns
-    ///
-    /// The method returns unit. The hasher can receive more input after this call.
+    /// The hasher can receive more input after this call.
     ///
     /// # Examples
     ///

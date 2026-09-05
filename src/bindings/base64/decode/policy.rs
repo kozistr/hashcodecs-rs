@@ -36,20 +36,46 @@ impl Validation {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ErrorWrites {
-    PreserveOutput,
+    /// Direct SIMD probes may write complete validated blocks; the remaining
+    /// suffix stays untouched so a lenient retry can produce a shorter result.
+    /// Custom-alphabet probes validate the entire input before writing.
+    ValidatedPrefix,
+    /// A strict attempt may also write within the failing block.
     MayWrite,
 }
 
 impl ErrorWrites {
-    pub(super) fn transactional(self) -> bool {
-        self == Self::PreserveOutput
+    pub(super) fn validated_prefix_only(self) -> bool {
+        self == Self::ValidatedPrefix
     }
 }
 
+/// Probes defer capacity failures to the next decoder; strict attempts report them.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum StoreBounds {
-    DeferToFallback,
-    ReportImmediately,
+pub(super) enum DecodeAttempt {
+    Probe,
+    Strict,
+}
+
+impl DecodeAttempt {
+    pub(super) fn error_writes(self) -> ErrorWrites {
+        match self {
+            Self::Probe => ErrorWrites::ValidatedPrefix,
+            Self::Strict => ErrorWrites::MayWrite,
+        }
+    }
+
+    pub(super) fn accept<T>(
+        self,
+        result: Result<T, crate::base64::Base64Error>,
+    ) -> Result<Option<T>, crate::base64::Base64Error> {
+        use crate::base64::Base64Error;
+        match result {
+            Ok(value) => Ok(Some(value)),
+            Err(error @ Base64Error::OutputTooSmall { .. }) if self == Self::Strict => Err(error),
+            Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => Ok(None),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -173,22 +199,6 @@ impl PreparedPolicy {
         self.validation.is_strict()
     }
 
-    pub(super) fn error_writes(&self) -> ErrorWrites {
-        if self.strict_mode() {
-            ErrorWrites::MayWrite
-        } else {
-            ErrorWrites::PreserveOutput
-        }
-    }
-
-    pub(super) fn store_bounds(&self) -> StoreBounds {
-        if self.strict_mode() {
-            StoreBounds::ReportImmediately
-        } else {
-            StoreBounds::DeferToFallback
-        }
-    }
-
     pub(super) fn strict_custom(&self) -> Self {
         Self {
             altchars: self.altchars,
@@ -205,6 +215,7 @@ pub(super) struct PreparedDecoder {
     pub(super) semantics: PythonSemantics,
     pub(super) policy: PreparedPolicy,
     pub(super) route: DecodeRoute,
+    pub(super) attempt: DecodeAttempt,
     configured: std::sync::OnceLock<Box<ConfiguredDecoder>>,
     strict_custom: std::sync::OnceLock<Box<ConfiguredDecoder>>,
     lenient_table: std::sync::OnceLock<Box<[u8; 256]>>,
@@ -217,6 +228,11 @@ impl PreparedDecoder {
         let route = select_route(&policy, empty_exact_ignorechars, semantics);
         Ok(Self {
             semantics,
+            attempt: if policy.strict_mode() {
+                DecodeAttempt::Strict
+            } else {
+                DecodeAttempt::Probe
+            },
             policy,
             route,
             configured: std::sync::OnceLock::new(),
@@ -374,12 +390,28 @@ mod tests {
     }
 
     #[test]
-    fn policy_enums_expose_write_and_bound_semantics() {
-        let lenient = prepared_policy(None, Validation::Lenient, Padding::Padded, false, false);
-        let strict = prepared_policy(None, Validation::Strict, Padding::Padded, false, false);
-        assert_eq!(lenient.error_writes(), ErrorWrites::PreserveOutput);
-        assert_eq!(lenient.store_bounds(), StoreBounds::DeferToFallback);
-        assert_eq!(strict.error_writes(), ErrorWrites::MayWrite);
-        assert_eq!(strict.store_bounds(), StoreBounds::ReportImmediately);
+    fn attempts_bound_probe_writes_and_report_strict_capacity_errors() {
+        use crate::base64::Base64Error;
+        let small = Base64Error::OutputTooSmall {
+            required: 3,
+            provided: 2,
+        };
+        assert_eq!(
+            DecodeAttempt::Probe.error_writes(),
+            ErrorWrites::ValidatedPrefix
+        );
+        assert_eq!(DecodeAttempt::Strict.error_writes(), ErrorWrites::MayWrite);
+        assert_eq!(DecodeAttempt::Probe.accept::<usize>(Err(small)), Ok(None));
+        assert_eq!(
+            DecodeAttempt::Strict.accept::<usize>(Err(small)),
+            Err(small)
+        );
+        for attempt in [DecodeAttempt::Probe, DecodeAttempt::Strict] {
+            assert_eq!(
+                attempt.accept::<usize>(Err(Base64Error::InvalidInput)),
+                Ok(None)
+            );
+            assert_eq!(attempt.accept(Ok(3)), Ok(Some(3)));
+        }
     }
 }

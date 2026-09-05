@@ -102,6 +102,13 @@ Output allocation and failure behavior vary by API:
 - Base64 reusable-output batches stop at the first error and retain prior destination writes;
 - the XXH3 binding validates and stabilizes all packed-batch inputs before it mutates the destination.
 
+The Python Base64 binding stabilizes overlapping or free-threaded mutable input before decoding.
+A prepared policy selects the same attempt order for allocating and reusable outputs. Storage adapters own
+allocation and writes; native status values determine retries before the binding constructs Python errors.
+Direct probes write only complete validated blocks and preserve the remaining suffix for retries.
+Custom-alphabet probes validate the whole input first; strict attempts may write within a failing block.
+Strict and lenient scanners keep their distinct padding transitions and share byte-processing kernels.
+
 The Python Base64 binding sends strict input to the SIMD core without constructing a discarded Python exception.
 For lenient input, it keeps the MIME whitespace path on normalized SIMD input and decodes other ignored bytes into
 the final Python object or reusable buffer. The native state machine follows the padding behavior of each supported
@@ -113,7 +120,7 @@ set. Smaller work stays on ordinary cached stores.
 ### MurmurHash3
 
 The `x86_32`, `x86_128`, and `x64_128` modules each own one-shot calls, incremental state, scalar block mixing,
-tail handling, and finalization. All variants use `incremental.rs` for pending blocks and `primitives.rs` for
+tail handling, and finalization. All variants use `block_buffer.rs` for pending blocks and `primitives.rs` for
 little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX2 using explicit size thresholds.
 
 ### XXH3

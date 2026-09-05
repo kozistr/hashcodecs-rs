@@ -35,10 +35,6 @@ use super::{
 ///
 /// * `input` - Contains the padded standard Base64 bytes to decode.
 ///
-/// # Returns
-///
-/// The function returns a new vector that contains the decoded bytes.
-///
 /// # Errors
 ///
 /// The function returns `Base64Error::InvalidInput` for invalid characters, padding, or group alignment.
@@ -63,10 +59,6 @@ pub fn b64decode(input: &[u8]) -> Result<Vec<u8>, Base64Error> {
 /// # Arguments
 ///
 /// * `input` - Contains the padded URL-safe Base64 bytes to decode.
-///
-/// # Returns
-///
-/// The function returns a new vector that contains the decoded bytes.
 ///
 /// # Errors
 ///

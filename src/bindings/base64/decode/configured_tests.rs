@@ -66,7 +66,7 @@ fn decode_configured_strict_into(
         altchars,
         prepared.strict_custom(),
         if transactional_errors {
-            ErrorWrites::PreserveOutput
+            ErrorWrites::ValidatedPrefix
         } else {
             ErrorWrites::MayWrite
         },
@@ -731,7 +731,7 @@ fn configured_into_snapshots_an_aliasing_bytearray() {
                 prepared.semantics,
             )
             .unwrap(),
-            2
+            Ok(2)
         );
         assert_eq!(&shared.to_vec()[..2], b"\xfb\xff");
     });

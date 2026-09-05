@@ -49,10 +49,6 @@ impl Murmur3X64Hasher128 {
     ///
     /// * `seed` - Specifies the initial unsigned 32-bit seed for both lanes.
     ///
-    /// # Returns
-    ///
-    /// The function returns a hasher that can receive bytes through `update`.
-    ///
     /// # Examples
     ///
     ///     use hashcodecs::murmur3::{Murmur3X64Hasher128, murmur3_x64_128};
@@ -77,9 +73,7 @@ impl Murmur3X64Hasher128 {
     ///
     /// * `input` - Contains the next message bytes.
     ///
-    /// # Returns
-    ///
-    /// The method returns unit. The hasher can receive more input after this call.
+    /// The hasher can receive more input after this call.
     ///
     /// # Examples
     ///

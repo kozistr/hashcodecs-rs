@@ -5,10 +5,8 @@ use super::lenient::symbols::{AlphanumericPrefix, TranslateBytes, decode_byte_ke
 use crate::base64::{Base64Error, decode_layout, decode_unpadded_layout};
 use crate::bindings::base64::PythonSemantics;
 use crate::bindings::base64::STANDARD_ALPHABET;
-use crate::bindings::base64::decode::fallback::decoding_error;
 use crate::bindings::base64::decode::output::BytesWriter;
 use crate::bindings::base64::decode::policy::{ErrorWrites, Padding, PreparedPolicy, Validation};
-use crate::bindings::base64::output_too_small;
 use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
@@ -198,18 +196,13 @@ impl StrictSpecials {
     pub(super) fn forbidden(table: &[u8; 256]) -> Self {
         let mut bytes = [0_u8; 3];
         let mut count = 0;
-        for (value, &byte) in STANDARD_ALPHABET.iter().enumerate() {
+        for &byte in STANDARD_ALPHABET {
             if table[usize::from(byte)] == INVALID_CONFIGURED_VALUE {
                 if count == bytes.len() {
                     return Self::Many;
                 }
                 bytes[count] = byte;
                 count += 1;
-            } else if table[usize::from(byte)] < 64 {
-                debug_assert!(
-                    table[usize::from(byte)] == value as u8
-                        || STANDARD_ALPHABET[usize::from(table[usize::from(byte)])] != byte
-                );
             }
         }
         match (count, bytes) {
@@ -259,7 +252,7 @@ pub(super) fn decode_configured_strict_into(
     }
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            if error_writes.transactional() {
+            if error_writes.validated_prefix_only() {
                 let Some(required) = decoder.decoded_len(input, false) else {
                     return Err(Base64Error::InvalidInput);
                 };
@@ -288,7 +281,7 @@ pub(in crate::bindings::base64::decode) fn decode_configured<'py>(
     input: &BytesLike<'_, '_>,
     decoder: &ConfiguredDecoder,
     semantics: PythonSemantics,
-) -> PyResult<Bound<'py, PyBytes>> {
+) -> PyResult<Result<Bound<'py, PyBytes>, Base64Error>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
         return decode_configured(py, &BytesLike::OwnedVec(input), decoder, semantics);
@@ -310,24 +303,23 @@ pub(in crate::bindings::base64::decode) fn decode_configured<'py>(
         })
     };
     let Some(written) = result else {
-        return Err(decoding_error(py, "Incorrect padding"));
+        return Ok(Err(Base64Error::InvalidInput));
     };
-    unsafe { writer.finish(py, written) }
+    unsafe { writer.finish(py, written).map(Ok) }
 }
 
 unsafe fn decode_configured_slice_into(
-    py: Python<'_>,
     input: &[u8],
     output: *mut u8,
     provided: usize,
     decoder: &ConfiguredDecoder,
     continue_after_padding: bool,
-) -> PyResult<usize> {
+) -> Result<usize, Base64Error> {
     let Some(required) = decoder.decoded_len(input, continue_after_padding) else {
-        return Err(decoding_error(py, "Incorrect padding"));
+        return Err(Base64Error::InvalidInput);
     };
     if provided < required {
-        return Err(output_too_small(required, provided));
+        return Err(Base64Error::OutputTooSmall { required, provided });
     }
     let written = unsafe { decoder.decode_validated_to_ptr(input, output, continue_after_padding) };
     debug_assert_eq!(written, required);
@@ -335,41 +327,39 @@ unsafe fn decode_configured_slice_into(
 }
 
 pub(in crate::bindings::base64::decode) fn decode_configured_into(
-    py: Python<'_>,
+    _py: Python<'_>,
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     decoder: &ConfiguredDecoder,
     semantics: PythonSemantics,
-) -> PyResult<usize> {
+) -> PyResult<Result<usize, Base64Error>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return decode_configured_into(py, &BytesLike::OwnedVec(input), output, decoder, semantics);
+        return decode_configured_into(
+            _py,
+            &BytesLike::OwnedVec(input),
+            output,
+            decoder,
+            semantics,
+        );
     }
     let continue_after_padding = semantics.continues_after_padding;
     if let Some(input) = input.snapshot_for_output(output)? {
-        return with_bytearray(output, || unsafe {
+        return Ok(with_bytearray(output, || unsafe {
             decode_configured_slice_into(
-                py,
                 &input,
                 bytearray_data(output.as_ptr()),
                 bytearray_size(output.as_ptr()),
                 decoder,
                 continue_after_padding,
             )
-        });
+        }));
     }
-    unsafe {
+    Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            decode_configured_slice_into(
-                py,
-                input,
-                output,
-                provided,
-                decoder,
-                continue_after_padding,
-            )
+            decode_configured_slice_into(input, output, provided, decoder, continue_after_padding)
         })
-    }
+    })
 }
 
 #[cfg(test)]

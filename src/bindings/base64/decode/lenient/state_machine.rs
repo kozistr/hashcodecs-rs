@@ -38,8 +38,8 @@ pub(in crate::bindings::base64::decode) fn decoded_symbol_len(symbols: usize) ->
 ///
 /// Current CPython versions continue after a complete padding sequence, so a
 /// branchless symbol count plus the trailing padding state determines the
-/// result. Older versions use the sequential fallback to honor their early
-/// stop at the first complete padding sequence.
+/// result. Older versions scan alphabet runs and stop at the first complete
+/// padding sequence.
 pub(in crate::bindings::base64::decode) fn lenient_decoded_len(
     input: &[u8],
     altchars: Option<[u8; 2]>,
@@ -69,21 +69,15 @@ pub(in crate::bindings::base64::decode) fn lenient_decoded_len(
     let mut source = 0;
     let mut symbols = 0;
     let mut pads = 0;
+    let symbol_prefix = decode_byte_kernels().symbol_prefix;
 
     while source < input.len() {
-        while source + 8 <= input.len() {
-            if !input[source..source + 8]
-                .iter()
-                .all(|&byte| is_lenient_symbol(byte, altchars))
-            {
-                break;
-            }
-            symbols += 8;
+        let run = unsafe { symbol_prefix(&input[source..], altchars) };
+        if run != 0 {
+            symbols += run;
             pads = 0;
-            source += 8;
-        }
-        if source == input.len() {
-            break;
+            source += run;
+            continue;
         }
 
         let byte = input[source];
@@ -96,11 +90,6 @@ pub(in crate::bindings::base64::decode) fn lenient_decoded_len(
             }
             continue;
         }
-        if !is_lenient_symbol(byte, altchars) {
-            continue;
-        }
-        symbols += 1;
-        pads = 0;
     }
 
     let quad_pos = symbols % 4;

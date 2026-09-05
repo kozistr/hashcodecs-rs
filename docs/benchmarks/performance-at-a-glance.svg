@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="460" viewBox="0 0 1200 460" role="img" aria-labelledby="title desc">
 <title id="title">CPython 3.12 standard Base64 throughput</title>
-<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches 24.43 GiB/s encoding and 17.38 GiB/s decoding. Both panels use the same throughput scale. Higher is better.</desc>
+<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches 24.43 GiB/s encoding and 16.93 GiB/s decoding. Both panels use the same throughput scale. Higher is better.</desc>
 <rect width="100%" height="100%" rx="18" fill="#f7faf9"/>
 <text x="600" y="52" text-anchor="middle" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="750">Python Base64 performance at a glance</text>
 <text x="600" y="84" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">Standard · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>
@@ -23,8 +23,8 @@
 <text x="900.0" y="152" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">16&#215; CPython · 2&#215; pybase64</text>
 <text x="744.0" y="210" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">hashcodecs</text>
 <rect x="760.0" y="178" width="410" height="48" rx="8" fill="#e7ecef"/>
-<rect x="760.0" y="178" width="274.1" height="48" rx="8" fill="#007f73"/>
-<text x="1022.1" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">17.38</text>
+<rect x="760.0" y="178" width="267.0" height="48" rx="8" fill="#007f73"/>
+<text x="1015.0" y="209" text-anchor="end" fill="#ffffff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">16.93</text>
 <text x="744.0" y="288" text-anchor="end" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="650">pybase64</text>
 <rect x="760.0" y="256" width="410" height="48" rx="8" fill="#e7ecef"/>
 <rect x="760.0" y="256" width="126.3" height="48" rx="8" fill="#8f4a73"/>

@@ -145,7 +145,7 @@ impl ConfiguredDecoder {
     fn scan<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
-        mut sink: S,
+        sink: S,
         continue_after_padding: bool,
     ) -> Option<usize> {
         if self.validation == Validation::Strict
@@ -154,7 +154,19 @@ impl ConfiguredDecoder {
         {
             return self.scan_strict_specials::<S, CHECKED>(input, sink);
         }
+        match self.validation {
+            Validation::Strict => self.scan_strict::<S, CHECKED>(input, sink),
+            Validation::Lenient => {
+                self.scan_lenient::<S, CHECKED>(input, sink, continue_after_padding)
+            }
+        }
+    }
 
+    fn scan_strict<S: ScanSink, const CHECKED: bool>(
+        &self,
+        input: &[u8],
+        mut sink: S,
+    ) -> Option<usize> {
         let preserves_alphanumeric = self.preserves_alphanumeric();
         let equals_is_data = self.table[usize::from(b'=')] < 64;
         let mut source = 0;
@@ -162,34 +174,74 @@ impl ConfiguredDecoder {
         let mut padding = 0;
         let mut saw_padding = false;
         let mut last_value = 0;
+
+        while source < input.len() {
+            if preserves_alphanumeric && !saw_padding {
+                let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
+                if run != 0 {
+                    sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
+                    if CHECKED {
+                        symbols += run;
+                        last_value = self.table[usize::from(input[source + run - 1])];
+                    }
+                    source += run;
+                    continue;
+                }
+            }
+            let byte = input[source];
+            source += 1;
+            let value = self.table[usize::from(byte)];
+            if value < 64 {
+                if CHECKED && saw_padding {
+                    return None;
+                }
+                sink.push_value::<CHECKED>(value)?;
+                if CHECKED {
+                    symbols += 1;
+                    last_value = value;
+                }
+            } else if byte == b'=' && !equals_is_data {
+                if CHECKED && !self.padding.is_padded() {
+                    return None;
+                }
+                saw_padding = true;
+                if CHECKED {
+                    padding += 1;
+                }
+            } else if CHECKED && !is_ignored_value(value) {
+                return None;
+            }
+        }
+        self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
+    }
+
+    fn scan_lenient<S: ScanSink, const CHECKED: bool>(
+        &self,
+        input: &[u8],
+        mut sink: S,
+        continue_after_padding: bool,
+    ) -> Option<usize> {
+        let preserves_alphanumeric = self.preserves_alphanumeric();
+        let equals_is_data = self.table[usize::from(b'=')] < 64;
+        let mut source = 0;
+        let mut symbols = 0;
+        let mut padding = 0;
         let mut quad_pos = 0;
         let mut leftchar = 0;
 
         while source < input.len() {
-            if preserves_alphanumeric && (self.validation == Validation::Lenient || !saw_padding) {
+            if preserves_alphanumeric {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
                     if CHECKED {
                         symbols += run;
                     }
-                    if self.validation == Validation::Strict {
-                        if CHECKED {
-                            last_value = self.table[usize::from(input[source + run - 1])];
-                        }
-                    } else {
-                        padding = 0;
-                        quad_pos = (quad_pos + run) & 3;
-                        if CHECKED && self.canonical {
-                            let value = self.table[usize::from(input[source + run - 1])];
-                            leftchar = match quad_pos {
-                                0 => 0,
-                                1 => value,
-                                2 => value & 0x0f,
-                                3 => value & 0x03,
-                                _ => unreachable!("Base64 quartet position is bounded"),
-                            };
-                        }
+                    padding = 0;
+                    quad_pos = (quad_pos + run) & 3;
+                    if CHECKED && self.canonical {
+                        let value = self.table[usize::from(input[source + run - 1])];
+                        leftchar = partial_value(quad_pos, value);
                     }
                     source += run;
                     continue;
@@ -199,30 +251,6 @@ impl ConfiguredDecoder {
             let byte = input[source];
             source += 1;
             let value = self.table[usize::from(byte)];
-
-            if self.validation == Validation::Strict {
-                if value < 64 {
-                    if CHECKED && saw_padding {
-                        return None;
-                    }
-                    sink.push_value::<CHECKED>(value)?;
-                    if CHECKED {
-                        symbols += 1;
-                        last_value = value;
-                    }
-                } else if byte == b'=' && !equals_is_data {
-                    if CHECKED && !self.padding.is_padded() {
-                        return None;
-                    }
-                    saw_padding = true;
-                    if CHECKED {
-                        padding += 1;
-                    }
-                } else if CHECKED && !is_ignored_value(value) {
-                    return None;
-                }
-                continue;
-            }
 
             if self.padding.is_padded() && byte == b'=' && !equals_is_data {
                 padding += 1;
@@ -249,19 +277,10 @@ impl ConfiguredDecoder {
             padding = 0;
             quad_pos = (quad_pos + 1) & 3;
             if CHECKED && self.canonical {
-                leftchar = match quad_pos {
-                    0 => 0,
-                    1 => value,
-                    2 => value & 0x0f,
-                    3 => value & 0x03,
-                    _ => unreachable!("Base64 quartet position is bounded"),
-                };
+                leftchar = partial_value(quad_pos, value);
             }
         }
 
-        if self.validation == Validation::Strict {
-            return self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value);
-        }
         if CHECKED
             && (quad_pos == 1
                 || (self.padding.is_padded() && quad_pos != 0 && quad_pos + padding < 4)
@@ -355,5 +374,15 @@ impl ConfiguredDecoder {
             }
         }
         sink.finish::<CHECKED>(decoded_symbol_len(symbols))
+    }
+}
+
+fn partial_value(quad_pos: usize, value: u8) -> u8 {
+    match quad_pos {
+        0 => 0,
+        1 => value,
+        2 => value & 0x0f,
+        3 => value & 0x03,
+        _ => unreachable!("Base64 quartet position is bounded"),
     }
 }

@@ -1,9 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::super::output_too_small;
 use super::output::BytesWriter;
 use super::policy::Padding;
+use crate::base64::Base64Error;
 use crate::bindings::base64::PythonSemantics;
 use crate::bindings::buffer::{BytesLike, with_bytearray};
 use crate::bindings::objects::{bytearray_data, bytearray_size};
@@ -28,7 +28,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
     padding: Padding,
     table: &[u8; 256],
     semantics: PythonSemantics,
-) -> PyResult<Option<Bound<'py, PyBytes>>> {
+) -> PyResult<Result<Bound<'py, PyBytes>, Base64Error>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
         return try_decode_lenient(
@@ -61,8 +61,10 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient<'py>(
         })
     };
     match result {
-        Ok(written) => unsafe { writer.finish(py, written).map(Some) },
-        Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => Ok(None),
+        Ok(written) => unsafe { writer.finish(py, written).map(Ok) },
+        Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
+            Ok(Err(Base64Error::InvalidInput))
+        }
     }
 }
 
@@ -73,10 +75,10 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient_into(
     padding: Padding,
     table: &[u8; 256],
     semantics: PythonSemantics,
-) -> PyResult<Option<usize>> {
+) -> PyResult<Result<usize, Base64Error>> {
     let continue_after_padding = semantics.continues_after_padding;
     if let Some(input) = input.snapshot_for_output(output)? {
-        return with_bytearray(output, || unsafe {
+        return Ok(with_bytearray(output, || unsafe {
             decode_lenient_slice_into(
                 &input,
                 bytearray_data(output.as_ptr()),
@@ -86,9 +88,9 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient_into(
                 padding.is_padded(),
                 continue_after_padding,
             )
-        });
+        }));
     }
-    unsafe {
+    Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_lenient_slice_into(
                 input,
@@ -100,7 +102,7 @@ pub(in crate::bindings::base64::decode) fn try_decode_lenient_into(
                 continue_after_padding,
             )
         })
-    }
+    })
 }
 
 /// Decode lenient input without partially writing an undersized destination.
@@ -117,21 +119,21 @@ unsafe fn decode_lenient_slice_into(
     altchars: Option<[u8; 2]>,
     padded: bool,
     continue_after_padding: bool,
-) -> PyResult<Option<usize>> {
+) -> Result<usize, Base64Error> {
     let maximum = input.len().div_ceil(4) * 3;
     if provided < maximum {
         let required = lenient_decoded_len(input, altchars, padded, continue_after_padding);
         match required {
             Ok(required) if provided < required => {
-                return Err(output_too_small(required, provided));
+                return Err(Base64Error::OutputTooSmall { required, provided });
             }
             Ok(_) => {}
             Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
-                return Ok(None);
+                return Err(Base64Error::InvalidInput);
             }
         }
     }
-    Ok(unsafe {
+    unsafe {
         decode_lenient_to_ptr::<true>(
             input,
             output,
@@ -142,5 +144,5 @@ unsafe fn decode_lenient_slice_into(
             continue_after_padding,
         )
     }
-    .ok())
+    .map_err(|_| Base64Error::InvalidInput)
 }

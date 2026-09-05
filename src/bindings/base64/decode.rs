@@ -14,13 +14,7 @@ mod output;
 mod policy;
 mod strict;
 
-use configured::{decode_configured, decode_configured_into, decode_configured_strict_into};
-use lenient::{try_decode_lenient, try_decode_lenient_into};
-use strict::{
-    decode_strict, decode_strict_into, decode_strict_into_with_altchars,
-    decode_strict_with_altchars, decode_unpadded_into_with_altchars, decode_unpadded_with_altchars,
-    translate_altchars, try_decode_strict, try_decode_urlsafe_315, try_decode_urlsafe_315_into,
-};
+use strict::translate_altchars;
 
 pub(super) use self::batch::{
     b64decode_batch, b64decode_batch_into, b64decode_batch_into_parsed, b64decode_batch_parsed,

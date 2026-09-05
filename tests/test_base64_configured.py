@@ -1,6 +1,7 @@
 import base64 as stdlib_base64
 import binascii
 import random
+import re
 import sys
 import warnings
 from collections.abc import Callable
@@ -14,6 +15,7 @@ PYTHON_315 = sys.version_info >= (3, 15)
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
+
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
@@ -219,6 +221,91 @@ def test_strict_custom_decode_preserves_detailed_errors_and_capacity_ordering() 
         with pytest.raises(ValueError, match=rf'requires {required} bytes'):
             base64.b64decode_into(encoded, output, b'=_', validate=True, padded=padded)
         assert output == bytes([0xA5] * output_size)
+
+
+@pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=_'])
+@pytest.mark.parametrize('validate', [False, True])
+@pytest.mark.parametrize('encoded', [b'A', b'AA=!', b'AA!A', b'AAAAA', b'A' * 4096 + b'AA!A'])
+def test_decode_fallback_preserves_cpython_error_messages(
+    encoded: bytes, altchars: bytes | None, validate: bool
+) -> None:
+    with pytest.raises(binascii.Error) as expected:
+        stdlib_base64.b64decode(encoded, altchars, validate=validate)
+    with pytest.raises(binascii.Error) as allocating:
+        base64.b64decode(encoded, altchars, validate=validate)
+    with pytest.raises(binascii.Error) as reusable:
+        base64.b64decode_into(encoded, bytearray(len(encoded)), altchars, validate=validate)
+    assert str(allocating.value) == str(expected.value)
+    assert str(reusable.value) == str(expected.value)
+
+
+@pytest.mark.parametrize('length', [63, 64, 65, 4095, 4096, 4097])
+@pytest.mark.parametrize(
+    ('altchars', 'kwargs'),
+    [
+        (None, {}),
+        (b'-_', {}),
+        (b'@#', {}),
+        (b'@#', {'padded': False}),
+        (None, {'canonical': True}),
+        (None, {'ignorechars': b'! \r\n', 'validate': True}),
+        (b'@#', {'ignorechars': b'! \r\n', 'validate': False}),
+    ],
+)
+def test_decode_routes_preserve_exact_capacity_suffix_and_aliases(
+    length: int, altchars: bytes | None, kwargs: dict[str, object]
+) -> None:
+    payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
+    encoded = stdlib_base64.b64encode(payload, altchars)
+    if kwargs.get('padded') is False:
+        encoded = encoded.rstrip(b'=')
+    if not kwargs.get('canonical'):
+        encoded = b'!'.join(encoded[index : index + 76] for index in range(0, len(encoded), 76))
+    assert base64.b64decode(encoded, altchars, **kwargs) == payload
+
+    for extra in (0, 17):
+        output = bytearray(b'\xa5' * (length + extra))
+        assert base64.b64decode_into(encoded, output, altchars, **kwargs) == length
+        assert output == payload + b'\xa5' * extra
+
+    for as_view in (False, True):
+        shared = bytearray(encoded)
+        source = memoryview(shared) if as_view else shared
+        assert base64.b64decode_into(source, shared, altchars, **kwargs) == length
+        assert shared == payload + encoded[length:]
+
+
+@pytest.mark.parametrize('prefix_length', [0, 12, 16, 28, 32, 60, 64, 76, 4096])
+@pytest.mark.parametrize('altchars', [None, b'@#', b'=_', b'=='])
+@pytest.mark.parametrize('tail', [b'YQ==AAAA', b'YQ=! =AAAA', b'YQ=AAAA', b'YQ', b'YQ==!'])
+def test_lenient_sizing_preserves_padding_semantics_across_simd_runs(
+    prefix_length: int, altchars: bytes | None, tail: bytes
+) -> None:
+    encoded = b'A' * prefix_length + b'!\r\n' + tail
+    try:
+        expected = stdlib_base64.b64decode(encoded, altchars)
+    except binascii.Error as expected_error:
+        with pytest.raises(binascii.Error, match=re.escape(str(expected_error))):
+            base64.b64decode_into(encoded, bytearray(len(encoded)), altchars)
+    else:
+        for extra in (0, 7):
+            output = bytearray(b'\xa5' * (len(expected) + extra))
+            assert base64.b64decode_into(encoded, output, altchars) == len(expected)
+            assert output == expected + b'\xa5' * extra
+        if expected:
+            output = bytearray(b'\xa5' * (len(expected) - 1))
+            with pytest.raises(ValueError, match=rf'requires {len(expected)} bytes'):
+                base64.b64decode_into(encoded, output, altchars)
+            assert output == b'\xa5' * (len(expected) - 1)
+
+
+@pytest.mark.parametrize('validate', [False, True])
+@pytest.mark.parametrize('encoded', [b'AB==', b'AAB=', b'A' * 4096 + b'AB=='])
+def test_configured_canonical_failure_preserves_reusable_output(validate: bool, encoded: bytes) -> None:
+    output = bytearray(b'\xa5' * len(encoded))
+    with pytest.raises(binascii.Error):
+        base64.b64decode_into(encoded, output, validate=validate, canonical=True, ignorechars=b'! \r\n')
+    assert output == b'\xa5' * len(encoded)
 
 
 def test_strict_custom_decode_uses_staged_translation() -> None:

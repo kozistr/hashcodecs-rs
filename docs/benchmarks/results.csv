@@ -235,24 +235,6 @@ Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,pybase64,2.55
 Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,pybase64,3.96
 Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,pybase64,2.62
 Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,pybase64,2.74
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",64 B,parent,0.17
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",4 KiB,parent,5.31
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",1 MiB,parent,3.95
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",64 B,branch,0.29
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",4 KiB,branch,7.95
-Python Base64 decode: parent vs branch (CPython 3.14),"Custom strict, returned bytes",1 MiB,branch,3.81
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",64 B,parent,0.16
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",4 KiB,parent,5.66
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",1 MiB,parent,10.11
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",64 B,branch,0.21
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",4 KiB,branch,6.60
-Python Base64 decode: parent vs branch (CPython 3.14),"Configured, reusable output",1 MiB,branch,11.30
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",64 B,parent,0.43
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",4 KiB,parent,7.02
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",1 MiB,parent,2.12
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",64 B,branch,0.50
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",4 KiB,branch,7.54
-Python Base64 decode: parent vs branch (CPython 3.14),"Late noise, returned bytes",1 MiB,branch,4.40
 Python MurmurHash3 throughput,x86 32-bit one-shot,1 KiB,hashcodecs,3.56
 Python MurmurHash3 throughput,x86 32-bit one-shot,4 KiB,hashcodecs,3.85
 Python MurmurHash3 throughput,x86 32-bit one-shot,1 MiB,hashcodecs,4.00

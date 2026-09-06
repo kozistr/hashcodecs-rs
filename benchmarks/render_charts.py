@@ -262,30 +262,6 @@ CHARTS = (
         ),
     ),
     Chart(
-        'base64-python-decode-parent.svg',
-        'Python Base64 decode: parent vs branch (CPython 3.14)',
-        (
-            panel(
-                'Custom strict, returned bytes',
-                ['64 B', '4 KiB', '1 MiB'],
-                parent=[0.166, 5.306, 3.950],
-                branch=[0.295, 7.950, 3.806],
-            ),
-            panel(
-                'Configured, reusable output',
-                ['64 B', '4 KiB', '1 MiB'],
-                parent=[0.162, 5.658, 10.106],
-                branch=[0.213, 6.604, 11.303],
-            ),
-            panel(
-                'Late noise, returned bytes',
-                ['64 B', '4 KiB', '1 MiB'],
-                parent=[0.433, 7.018, 2.115],
-                branch=[0.499, 7.545, 4.397],
-            ),
-        ),
-    ),
-    Chart(
         'murmur3-python.svg',
         'Python MurmurHash3 throughput',
         tuple(

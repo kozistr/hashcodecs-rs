@@ -88,55 +88,6 @@ noisy cases insert `!` at the same boundaries. Both cases measure returned bytes
 
 [![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
 
-## Python Base64 Decoder Parent Comparison
-
-Build the parent and branch extensions with the same Python and Rust toolchains, then run:
-
-```sh
-uv run --frozen --no-sync python benchmarks/compare_base64_decode.py path/to/parent/_hashcodecs.pyd path/to/branch/_hashcodecs.pyd --minimum-sample-seconds 0.1
-```
-
-Use `.so` paths on Linux or macOS. The comparison pins one CPU and alternates parent and branch timing order
-across 15 samples of at least 0.1 seconds. It checks matching results before timing and checks the unused suffix
-of reusable outputs. Positive `change_percent` values mean higher branch throughput.
-
-The default cases cover standard, URL-safe, custom, configured, MIME, and noisy decoding at 64 bytes, 4 KiB,
-and 1 MiB. Use `--kinds bytearray memoryview` for buffer inputs and `--modes batch` for 32-item batches.
-Configured options apply to the one-shot APIs. The noise-prefix cases append `YWJj` after the specified number
-of ignored bytes; other sizes describe the decoded payload before inserting noise.
-
-The parent is commit `c0e61899b824a232dcf19f0df2ba8b3dd9672a7e`. Both builds use CPython 3.14.6 and
-Rust 1.98.1 on Windows x64 with an Intel Core Ultra 7 265K. These measurements cover Python decoding;
-the existing CPython 3.12 encoding and hashing charts retain their previous results.
-
-[![Python Base64 decoder parent comparison](docs/benchmarks/base64-python-decode-parent.svg)](docs/benchmarks/base64-python-decode-parent.svg)
-
-Selected throughput changes from the main comparison:
-
-| Workload | 64 B | 4 KiB | 1 MiB |
-| --- | ---: | ---: | ---: |
-| Custom strict, returned bytes | +77.7% | +49.8% | -3.7% |
-| Configured, reusable output | +31.0% | +16.7% | +11.9% |
-| Late noise, returned bytes | +15.4% | +7.5% | +107.9% |
-
-For a 1 MiB ignored prefix followed by `YWJj`, returned decoding improves by 92.3% in lenient mode and
-2,276.7% with `ignorechars=b'!'`. The allocation regression test limits traced peak memory to 128 KiB for
-this input, which produces three bytes of output.
-
-[Final comparison timings](docs/benchmarks/base64-decode-parent-comparison.csv) cover returned and reusable
-outputs. Large allocating-output timings varied by about 10% even in an unchanged-parent control, so small
-changes in those cases do not establish a regression or improvement.
-
-Configured decoding skips staging copies for complete untranslated quartets. Translated runs retain their
-copy loop, with hot metadata before a SIMD-aligned scratch buffer to stabilize large-input throughput.
-
-The decoder skips padded probes for incomplete quartets and skips a strict probe when it finds noise in the first
-or last 64 bytes of a large input. Noise confined to the interior can still trigger a retry. For large inputs,
-it trims discarded prefixes before allocating lenient output. For allocations above the writer's small-input path,
-it excludes up to two trailing padding bytes from the symbol-count capacity bound, unless the custom alphabet
-treats `=` as data. This avoids shrinking clean results without a counting pass. Noise elsewhere can still leave
-excess capacity.
-
 ## Python Memoryview Inputs
 
 Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length contiguous views

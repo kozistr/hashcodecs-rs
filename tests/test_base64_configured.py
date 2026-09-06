@@ -3,6 +3,7 @@ import binascii
 import random
 import re
 import sys
+import tracemalloc
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -17,6 +18,39 @@ ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
 
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+
+
+@pytest.mark.parametrize('options', [{}, {'altchars': b'@#'}, {'ignorechars': b'!'}])
+def test_large_discarded_prefix_does_not_reserve_an_input_sized_output(options: dict[str, object]) -> None:
+    encoded = b'!' * (1024 * 1024) + b'YWJj'
+    tracemalloc.start()
+    try:
+        assert base64.b64decode(encoded, **options) == b'abc'
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < len(encoded) // 8
+
+
+@pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=_', b'=='])
+@pytest.mark.parametrize('remainder', range(3))
+@pytest.mark.parametrize('kind', [bytes, bytearray, memoryview])
+def test_large_lenient_decode_preserves_exact_output_boundaries(
+    altchars: bytes | None, remainder: int, kind: Callable[[bytes], object]
+) -> None:
+    payload = bytes(range(256)) * 1024 + b'x' * remainder
+    encoded = stdlib_base64.b64encode(payload, altchars)
+    for value in (encoded, encoded[:-4] + b'!!!!' + encoded[-4:], b'!!!!' + encoded):
+        expected = stdlib_base64.b64decode(value, altchars)
+        assert base64.b64decode(kind(value), altchars) == expected
+        for extra in (0, 1, 16):
+            output = bytearray(b'.' * (len(expected) + extra))
+            assert base64.b64decode_into(kind(value), output, altchars) == len(expected)
+            assert output == expected + b'.' * extra
+        output = bytearray(b'.' * (len(expected) - 1))
+        with pytest.raises(ValueError, match='destination'):
+            base64.b64decode_into(kind(value), output, altchars)
+        assert output == b'.' * len(output)
 
 
 def _decode_keyword_outcome(

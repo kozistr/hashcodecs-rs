@@ -10,6 +10,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::configured::Translation;
+use super::lenient::decoded_len_upper_bound;
 use crate::base64::{
     DecodeAlphabet, STANDARD_ALPHABET, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout,
     validate_alphabet,
@@ -37,18 +38,23 @@ unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> 
     Some(layout.output_len())
 }
 
+#[repr(align(32))]
+struct StagingBuffer([MaybeUninit<u8>; CONFIGURED_STAGING_CAPACITY]);
+
+// Keep hot metadata beside the start of the SIMD-aligned scratch buffer.
+#[repr(C)]
 pub(super) struct StagingWriter {
-    staging: [MaybeUninit<u8>; CONFIGURED_STAGING_CAPACITY],
     staged: usize,
     output: *mut u8,
     written: usize,
     translation: Option<Translation>,
+    staging: StagingBuffer,
 }
 
 impl StagingWriter {
     pub(super) fn new(output: *mut u8, translation: Option<Translation>) -> Self {
         Self {
-            staging: [MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY],
+            staging: StagingBuffer([MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY]),
             staged: 0,
             output,
             written: 0,
@@ -65,33 +71,71 @@ impl StagingWriter {
     }
 
     pub(super) fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
+        if self.translation.is_some() {
+            return self.push_staged_symbols::<CHECKED>(input);
+        }
+
+        let mut source = 0;
+        while source < input.len() {
+            // Complete untranslated quartets need no staging copy. Preserve
+            // fragments until a full staging buffer or the final flush.
+            if self.staged == 0 {
+                let direct = (input.len() - source) / 4 * 4;
+                if direct != 0 {
+                    self.written += unsafe {
+                        decode_staging::<CHECKED>(
+                            &input[source..source + direct],
+                            self.output.add(self.written),
+                        )?
+                    };
+                    source += direct;
+                    continue;
+                }
+            }
+
+            let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
+            self.push_staged_symbols::<CHECKED>(&input[source..source + copied])?;
+            source += copied;
+        }
+
+        Some(())
+    }
+
+    fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
         while source < input.len() {
             let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
+
             // The initialized staging range is exactly `0..staged`. Extend it
             // only after copying every byte in the new suffix.
             unsafe {
                 self.staging
+                    .0
                     .as_mut_ptr()
                     .add(self.staged)
                     .cast::<u8>()
                     .copy_from_nonoverlapping(input.as_ptr().add(source), copied)
             };
+
             self.staged += copied;
             source += copied;
+
             if self.staged == CONFIGURED_STAGING_CAPACITY {
                 self.flush::<CHECKED>()?;
             }
         }
+
         Some(())
     }
 
     pub(super) fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
-        self.staging[self.staged].write(STANDARD_ALPHABET[usize::from(value)]);
+        self.staging.0[self.staged].write(STANDARD_ALPHABET[usize::from(value)]);
         self.staged += 1;
+
         if self.staged == CONFIGURED_STAGING_CAPACITY {
             self.flush::<CHECKED>()?;
         }
+
         Some(())
     }
 
@@ -99,14 +143,17 @@ impl StagingWriter {
         // Push methods initialize every byte in this prefix before increasing
         // `staged`; no code reads the uninitialized suffix.
         let staging = unsafe {
-            slice::from_raw_parts_mut(self.staging.as_mut_ptr().cast::<u8>(), self.staged)
+            slice::from_raw_parts_mut(self.staging.0.as_mut_ptr().cast::<u8>(), self.staged)
         };
+
         if let Some(translation) = self.translation {
             translation.apply(staging);
         }
+
         self.written +=
             unsafe { decode_staging::<CHECKED>(staging, self.output.add(self.written))? };
         self.staged = 0;
+
         Some(())
     }
 
@@ -114,20 +161,22 @@ impl StagingWriter {
         if self.staged != 0 {
             self.flush::<CHECKED>()?;
         }
+
         Some(self.written)
     }
 }
 
+#[repr(C)]
 pub(super) struct StagingValidator {
-    staging: [MaybeUninit<u8>; CONFIGURED_STAGING_CAPACITY],
     staged: usize,
     translation: Option<Translation>,
+    staging: StagingBuffer,
 }
 
 impl StagingValidator {
     pub(super) fn new(translation: Option<Translation>) -> Self {
         Self {
-            staging: [MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY],
+            staging: StagingBuffer([MaybeUninit::uninit(); CONFIGURED_STAGING_CAPACITY]),
             staged: 0,
             translation,
         }
@@ -137,20 +186,25 @@ impl StagingValidator {
         let mut source = 0;
         while source < input.len() {
             let copied = (input.len() - source).min(CONFIGURED_STAGING_CAPACITY - self.staged);
+
             // As with `StagingWriter`, `0..staged` is the sole initialized range.
             unsafe {
                 self.staging
+                    .0
                     .as_mut_ptr()
                     .add(self.staged)
                     .cast::<u8>()
                     .copy_from_nonoverlapping(input.as_ptr().add(source), copied)
             };
+
             self.staged += copied;
             source += copied;
+
             if self.staged == CONFIGURED_STAGING_CAPACITY {
                 self.flush()?;
             }
         }
+
         Some(())
     }
 
@@ -158,14 +212,17 @@ impl StagingValidator {
         // Every byte in this prefix was initialized by `push`; the remainder
         // of the array stays uninitialized and is never exposed.
         let staging = unsafe {
-            slice::from_raw_parts_mut(self.staging.as_mut_ptr().cast::<u8>(), self.staged)
+            slice::from_raw_parts_mut(self.staging.0.as_mut_ptr().cast::<u8>(), self.staged)
         };
+
         if let Some(translation) = self.translation {
             translation.apply(staging);
         }
+
         decode_unpadded_layout(staging).ok()?;
         validate_alphabet(staging, DecodeAlphabet::Standard).ok()?;
         self.staged = 0;
+
         Some(())
     }
 
@@ -173,6 +230,7 @@ impl StagingValidator {
         if self.staged != 0 {
             self.flush()?;
         }
+
         Some(())
     }
 }
@@ -190,6 +248,7 @@ pub(super) unsafe fn pybytes_with_len<'py, T>(
 ) -> PyResult<(Bound<'py, PyBytes>, T)> {
     let length = ffi::Py_ssize_t::try_from(length)
         .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+
     unsafe {
         let raw = ffi::PyBytes_FromStringAndSize(core::ptr::null(), length);
         let bytes: Bound<'py, PyBytes> =
@@ -201,6 +260,7 @@ pub(super) unsafe fn pybytes_with_len<'py, T>(
         // Keep it behind a raw pointer until the initializer has written every
         // byte instead of creating a Rust `&mut [u8]` with invalid contents.
         let initialized = init(buffer);
+
         Ok((bytes, initialized))
     }
 }
@@ -228,12 +288,21 @@ pub(super) fn output_too_small(required: usize, provided: usize) -> PyErr {
 pub(super) struct BytesWriter(*mut ffi::compat::PyBytesWriter);
 
 impl BytesWriter {
-    pub(super) fn new(py: Python<'_>, input_len: usize) -> PyResult<Self> {
-        let capacity = input_len
-            .div_ceil(4)
-            .checked_mul(3)
-            .and_then(|length| ffi::Py_ssize_t::try_from(length).ok())
-            .ok_or_else(|| PyMemoryError::new_err("Base64 output is too large"))?;
+    #[inline]
+    pub(super) fn capacity_for_input(input: &[u8], table: &[u8; 256]) -> usize {
+        // Small outputs fit the CPython/PyO3 writer's inline storage. Tightening
+        // their bound cannot save a resize, so avoid inspecting padding there.
+        if input.len() <= 256 {
+            input.len().div_ceil(4) * 3
+        } else {
+            decoded_len_upper_bound(input, table)
+        }
+    }
+
+    pub(super) fn new(py: Python<'_>, capacity: usize) -> PyResult<Self> {
+        let capacity = ffi::Py_ssize_t::try_from(capacity)
+            .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+
         let writer = unsafe { ffi::compat::PyBytesWriter_Create(capacity) };
         if writer.is_null() {
             Err(PyErr::fetch(py))
@@ -253,9 +322,12 @@ impl BytesWriter {
     ) -> PyResult<Bound<'py, PyBytes>> {
         let length = ffi::Py_ssize_t::try_from(length)
             .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
+
         let writer = self.0;
         self.0 = ptr::null_mut();
+
         let output = unsafe { ffi::compat::PyBytesWriter_FinishWithSize(writer, length) };
+
         Ok(unsafe { Bound::from_owned_ptr_or_err(py, output)?.cast_into_unchecked() })
     }
 }
@@ -264,6 +336,23 @@ impl Drop for BytesWriter {
     fn drop(&mut self) {
         if !self.0.is_null() {
             unsafe { ffi::compat::PyBytesWriter_Discard(self.0) };
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scratch_buffers_are_aligned_and_follow_hot_metadata() {
+        assert_eq!(std::mem::align_of::<StagingBuffer>(), 32);
+        for offset in [
+            std::mem::offset_of!(StagingWriter, staging),
+            std::mem::offset_of!(StagingValidator, staging),
+        ] {
+            assert!(offset <= 64);
+            assert_eq!(offset % 32, 0);
         }
     }
 }

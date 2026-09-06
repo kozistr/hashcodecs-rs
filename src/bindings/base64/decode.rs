@@ -15,6 +15,7 @@ use super::policy::{
     ConfiguredShortcut, DecodeAttempt, DecodePolicy, DecodeRoute, ErrorWrites, Padding,
     PreparedDecoder, Validation,
 };
+use super::scan::is_lenient_symbol;
 use super::staging::{output_too_small, with_output_ptr};
 use super::strict::{
     decode_strict, decode_strict_into, decode_unpadded, decode_unpadded_into, translate_altchars,
@@ -22,6 +23,7 @@ use super::strict::{
 use crate::base64::{Base64Error, DecodeAlphabet, STANDARD_ALPHABET};
 use crate::bindings::buffer::{BytesLike, ascii_or_bytes};
 use crate::bindings::compatibility::{PythonSemantics, parse_altchars};
+use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
 #[derive(Clone, Copy)]
 enum NativeDecoder<'a> {
@@ -85,14 +87,16 @@ impl<'py> DecodeOutput<'py> for Allocating {
         input: &BytesLike<'_, 'py>,
         prepared: &PreparedDecoder,
     ) -> PyResult<Result<Self::Value, Base64Error>> {
-        try_decode_lenient(
-            py,
-            input,
-            prepared.policy.altchars,
-            prepared.policy.padding,
-            prepared.lenient_table(),
-            prepared.semantics,
-        )
+        prepared.with_lenient_table(|table| {
+            try_decode_lenient(
+                py,
+                input,
+                prepared.policy.altchars,
+                prepared.policy.padding,
+                table,
+                prepared.semantics,
+            )
+        })
     }
 
     fn store_fallback(&self, bytes: Bound<'py, PyBytes>) -> PyResult<Self::Value> {
@@ -134,14 +138,16 @@ impl<'py> DecodeOutput<'py> for Bound<'py, PyByteArray> {
         input: &BytesLike<'_, 'py>,
         prepared: &PreparedDecoder,
     ) -> PyResult<Result<usize, Base64Error>> {
-        try_decode_lenient_into(
-            input,
-            self,
-            prepared.policy.altchars,
-            prepared.policy.padding,
-            prepared.lenient_table(),
-            prepared.semantics,
-        )
+        prepared.with_lenient_table(|table| {
+            try_decode_lenient_into(
+                input,
+                self,
+                prepared.policy.altchars,
+                prepared.policy.padding,
+                table,
+                prepared.semantics,
+            )
+        })
     }
 
     fn store_fallback(&self, bytes: Bound<'py, PyBytes>) -> PyResult<usize> {
@@ -229,7 +235,11 @@ impl PreparedDecoder {
                 self.attempt,
             )?
         } else {
-            let padded = if direct {
+            let padded = if direct && {
+                let length = input.len();
+                length.is_multiple_of(4)
+                    && (length < BASE64_DETACH_THRESHOLD || !self.has_edge_noise(input))
+            } {
                 self.try_native(
                     py,
                     input,
@@ -282,6 +292,19 @@ impl PreparedDecoder {
             None => NativeDecoder::Direct(DecodeAlphabet::Standard, padding),
             Some([b'-', b'_']) => NativeDecoder::Direct(DecodeAlphabet::Mixed, padding),
             Some(altchars) => NativeDecoder::CustomStrict(self.strict_custom(), altchars),
+        }
+    }
+
+    fn has_edge_noise(&self, input: &BytesLike<'_, '_>) -> bool {
+        // A noisy edge rules out a successful strict probe without walking the
+        // whole input. Clean edges still go through full native validation.
+        unsafe {
+            input.with_bytes(|input| {
+                input[..64]
+                    .iter()
+                    .chain(&input[input.len() - 64..])
+                    .any(|&byte| byte != b'=' && !is_lenient_symbol(byte, self.policy.altchars))
+            })
         }
     }
 

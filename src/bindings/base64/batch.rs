@@ -351,10 +351,13 @@ pub(super) fn b64decode_batch_parsed<'py>(
     let items = list_items(items)?;
     let length = items.len();
     let mut items = items.into_iter();
-    let decoder = PreparedDecoder::new(
+
+    let decoder = PreparedDecoder::new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
+        length,
     )?;
+
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;
@@ -392,10 +395,13 @@ pub(super) fn b64decode_batch_into_parsed<'py>(
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::AsciiOrBytes)?
         .into_iter()
         .peekable();
-    let decoder = PreparedDecoder::new(
+
+    let decoder = PreparedDecoder::new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
+        items.len(),
     )?;
+
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
         match prepared

@@ -34,31 +34,47 @@ pub(super) fn try_decode_lenient<'py>(
             semantics,
         );
     }
-    let writer = BytesWriter::new(py, input.len())?;
-    let output_address = unsafe { writer.data() } as usize;
-    let continue_after_padding = semantics.continues_after_padding;
-    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
-    let result = unsafe {
+    let detach_safe = input.detach_safe();
+
+    // BytesWriter allocates bytes outside cyclic GC and cannot run Python callbacks.
+    // Keep sizing and decoding in one borrow of the stable input.
+    unsafe {
         input.with_bytes(|input| {
+            let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
+            // Leading discarded bytes cannot affect a quantum. Skip them before
+            // reserving output without adding a counting pass over the payload.
+            let start = if input.len() < BASE64_DETACH_THRESHOLD {
+                0
+            } else {
+                input
+                    .iter()
+                    .position(|&byte| table[usize::from(byte)] < 64)
+                    .unwrap_or(input.len())
+            };
+
+            let input = &input[start..];
+            let capacity = BytesWriter::capacity_for_input(input, table);
+            let writer = BytesWriter::new(py, capacity)?;
+            let output_address = writer.data() as usize;
             let decode = move || {
                 decode_lenient_to_ptr::<true>(
                     input,
                     output_address as *mut u8,
-                    input.len().div_ceil(4) * 3,
+                    capacity,
                     table,
                     altchars,
                     padding.is_padded(),
-                    continue_after_padding,
+                    semantics.continues_after_padding,
                 )
             };
-            if detach { py.detach(decode) } else { decode() }
+
+            match if detach { py.detach(decode) } else { decode() } {
+                Ok(written) => writer.finish(py, written).map(Ok),
+                Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
+                    Ok(Err(Base64Error::InvalidInput))
+                }
+            }
         })
-    };
-    match result {
-        Ok(written) => unsafe { writer.finish(py, written).map(Ok) },
-        Err(LenientDecodeError::InvalidInput | LenientDecodeError::OutputTooSmall) => {
-            Ok(Err(Base64Error::InvalidInput))
-        }
     }
 }
 
@@ -84,6 +100,7 @@ pub(super) fn try_decode_lenient_into(
             )
         }));
     }
+
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_lenient_slice_into(
@@ -114,7 +131,7 @@ unsafe fn decode_lenient_slice_into(
     padded: bool,
     continue_after_padding: bool,
 ) -> Result<usize, Base64Error> {
-    let maximum = input.len().div_ceil(4) * 3;
+    let maximum = decoded_len_upper_bound(input, table);
     if provided < maximum {
         let required = lenient_decoded_len(input, altchars, padded, continue_after_padding);
         match required {
@@ -127,6 +144,7 @@ unsafe fn decode_lenient_slice_into(
             }
         }
     }
+
     unsafe {
         decode_lenient_to_ptr::<true>(
             input,
@@ -147,16 +165,46 @@ pub(super) enum LenientDecodeError {
     OutputTooSmall,
 }
 
-pub(super) fn lenient_decode_table(altchars: Option<[u8; 2]>) -> [u8; 256] {
+pub(super) const STANDARD_LENIENT_TABLE: [u8; 256] = {
     let mut table = [64_u8; 256];
-    for (value, &byte) in STANDARD_ALPHABET.iter().enumerate() {
-        table[usize::from(byte)] = value as u8;
+    let mut value = 0;
+
+    while value < 64 {
+        table[STANDARD_ALPHABET[value] as usize] = value as u8;
+        value += 1;
     }
+
+    table
+};
+
+pub(super) const MIXED_LENIENT_TABLE: [u8; 256] = {
+    let mut table = STANDARD_LENIENT_TABLE;
+    table[b'-' as usize] = 62;
+    table[b'_' as usize] = 63;
+    table
+};
+
+pub(super) fn lenient_decode_table(altchars: Option<[u8; 2]>) -> [u8; 256] {
+    let mut table = STANDARD_LENIENT_TABLE;
     if let Some([plus, slash]) = altchars {
         table[usize::from(plus)] = 62;
         table[usize::from(slash)] = 63;
     }
+
     table
+}
+
+#[inline]
+pub(super) fn decoded_len_upper_bound(input: &[u8], table: &[u8; 256]) -> usize {
+    // Treat every byte as a symbol except up to two trailing padding bytes.
+    // This bounds even partial writes on malformed input and is exact for clean
+    // input, avoiding a shrink of the allocated result. Custom '=' aliases are data.
+    let trailing_padding = if table[usize::from(b'=')] >= 64 {
+        usize::from(input.ends_with(b"=")) + usize::from(input.ends_with(b"=="))
+    } else {
+        0
+    };
+    decoded_symbol_len(input.len() - trailing_padding)
 }
 
 #[inline]
@@ -217,12 +265,15 @@ pub(super) fn lenient_decoded_len(
 
         let byte = input[source];
         source += 1;
+
         if padded && byte == b'=' && !is_lenient_symbol(b'=', altchars) {
             pads += 1;
             let quad_pos = symbols % 4;
+
             if quad_pos >= 2 && quad_pos + pads >= 4 {
                 return Ok(decoded_symbol_len(symbols));
             }
+
             continue;
         }
     }
@@ -255,6 +306,7 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
     let mut quad_pos = 0;
     let mut leftchar = 0;
     let mut pads = 0;
+
     let fast_alphabet = match altchars {
         None => Some(DecodeAlphabet::Standard),
         Some(altchars) if altchars == *b"-_" => Some(DecodeAlphabet::Mixed),
@@ -268,14 +320,17 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 if padded && input[source] == b'=' {
                     pads += 1;
                 }
+
                 source += 1;
             }
+
             if source == input.len() {
                 break;
             }
         }
 
         let mut prefix_kernel_available = false;
+
         if WRITE
             && quad_pos == 0
             && let Some(alphabet) = fast_alphabet
@@ -298,6 +353,7 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 }
             }
         }
+
         if !prefix_kernel_available
             && quad_pos == 0
             && let Some(alphabet) = fast_alphabet
@@ -309,6 +365,7 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 if provided.saturating_sub(written) < decoded {
                     return Err(LenientDecodeError::OutputTooSmall);
                 }
+
                 if WRITE {
                     let layout = decode_unpadded_layout(&input[source..source + run])
                         .expect("a quartet-aligned run has a valid layout");
@@ -322,9 +379,11 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                     }
                     .expect("the SIMD scanner accepted every symbol in the run");
                 }
+
                 source += run;
                 written += decoded;
                 pads = 0;
+
                 continue;
             }
         }
@@ -333,17 +392,21 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
             let second = table[usize::from(input[source + 1])];
             let third = table[usize::from(input[source + 2])];
             let fourth = table[usize::from(input[source + 3])];
+
             if first | second | third | fourth >= 64 {
                 break;
             }
+
             if provided.saturating_sub(written) < 3 {
                 return Err(LenientDecodeError::OutputTooSmall);
             }
+
             let decoded = [
                 (first << 2) | (second >> 4),
                 (second << 4) | (third >> 2),
                 (third << 6) | fourth,
             ];
+
             if WRITE {
                 unsafe {
                     output
@@ -351,20 +414,24 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                         .copy_from_nonoverlapping(decoded.as_ptr(), 3)
                 };
             }
+
             written += 3;
             source += 4;
         }
+
         if source == input.len() {
             break;
         }
 
         let byte = input[source];
         source += 1;
+
         if padded && byte == b'=' && table[usize::from(b'=')] >= 64 {
             pads += 1;
             if !continue_after_padding && quad_pos >= 2 && quad_pos + pads >= 4 {
                 return Ok(written);
             }
+
             continue;
         }
 
@@ -372,6 +439,7 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
         if value >= 64 {
             continue;
         }
+
         pads = 0;
         match quad_pos {
             0 => {
@@ -425,6 +493,47 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capacity_bound_covers_noise_padding_and_equals_aliases() {
+        for (input, expected) in [
+            (b"".as_slice(), 0),
+            (b"=", 0),
+            (b"==", 0),
+            (b"A", 0),
+            (b"AA", 1),
+            (b"AA==", 1),
+            (b"AAA=", 2),
+            (b"AAAA", 3),
+            (b"AA!==", 2),
+            (b"====", 1),
+        ] {
+            assert_eq!(
+                decoded_len_upper_bound(input, &STANDARD_LENIENT_TABLE),
+                expected
+            );
+            let table = lenient_decode_table(Some(*b"=_"));
+            assert_eq!(
+                decoded_len_upper_bound(input, &table),
+                decoded_symbol_len(input.len())
+            );
+        }
+        for length in [0, 4, 256, 260, 4096] {
+            let mut input = vec![b'A'; length];
+            if length != 0 {
+                input[length - 2..].fill(b'=');
+            }
+            let expected = length / 4 * 3 - if length > 256 { 2 } else { 0 };
+            assert_eq!(
+                BytesWriter::capacity_for_input(&input, &STANDARD_LENIENT_TABLE),
+                expected
+            );
+            assert_eq!(
+                BytesWriter::capacity_for_input(&input, &lenient_decode_table(Some(*b"=_"))),
+                length / 4 * 3
+            );
+        }
+    }
 
     #[test]
     fn legacy_lenient_sizing_rejects_incomplete_input() {

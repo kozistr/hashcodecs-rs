@@ -2,8 +2,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
 use super::super::lenient::{
-    LenientDecodeError, decode_lenient_to_ptr, decoded_symbol_len, lenient_decode_table,
-    lenient_decoded_len,
+    LenientDecodeError, decode_lenient_to_ptr, decoded_len_upper_bound, decoded_symbol_len,
+    lenient_decode_table, lenient_decoded_len,
 };
 use super::super::policy::{DecodePolicy, ErrorWrites, Padding, PreparedDecoder, Validation};
 use super::super::scan::scalar::{
@@ -447,6 +447,87 @@ fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
     let mut validator = StagingValidator::new(None);
     assert_eq!(validator.push(b"AA?"), Some(()));
     assert_eq!(validator.finish(), None);
+}
+
+#[test]
+fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
+    Python::initialize();
+    Python::attach(|py| {
+        let ignored = PyBytes::new(py, b"!");
+        for altchars in [None, Some(*b"@#"), Some(*b"=_"), Some(*b"==")] {
+            for validation in [Validation::Strict, Validation::Lenient] {
+                for padded in [false, true] {
+                    for ignorechars_specified in [false, true] {
+                        let prepared = PreparedDecoder::new(
+                            py,
+                            DecodePolicy::new(
+                                altchars,
+                                Some(validation.is_strict()),
+                                padded,
+                                ignorechars_specified.then_some(ignored.as_any()),
+                                false,
+                            ),
+                        )
+                        .unwrap();
+                        let decoder = prepared.configured();
+                        for prefix in [0, 4, 128, 4096] {
+                            for tail in [
+                                b"".as_slice(),
+                                b"A",
+                                b"AA",
+                                b"AAA",
+                                b"AA==",
+                                b"====",
+                                b"AA=A==",
+                                b"!!AA==",
+                                b"AA!A==",
+                            ] {
+                                let mut input = vec![b'A'; prefix];
+                                input.extend_from_slice(tail);
+                                let capacity = decoded_len_upper_bound(&input, &decoder.table);
+                                for continue_after_padding in [false, true] {
+                                    let mut output = vec![0xa5; capacity + 17];
+                                    let written = unsafe {
+                                        decoder.decode_checked_to_ptr(
+                                            &input,
+                                            output.as_mut_ptr().add(1),
+                                            continue_after_padding,
+                                        )
+                                    };
+                                    assert!(written.is_none_or(|written| written <= capacity));
+                                    assert_eq!(output[0], 0xa5);
+                                    assert!(
+                                        output[capacity + 1..].iter().all(|&byte| byte == 0xa5)
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
+    for length in [4, 16, 4092, 4096, 4100, 8192] {
+        let input = vec![b'A'; length];
+        let required = length / 4 * 3;
+        for split in 0..=5.min(length) {
+            let mut output = vec![0xa5; required + 17];
+            let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
+            assert_eq!(writer.push_symbols::<true>(&input[..split]), Some(()));
+            assert_eq!(writer.push_symbols::<true>(&input[split..]), Some(()));
+            assert_eq!(writer.finish::<true>(), Some(required));
+            assert_eq!(output[0], 0xa5);
+            assert!(output[1..=required].iter().all(|&byte| byte == 0));
+            assert!(output[required + 1..].iter().all(|&byte| byte == 0xa5));
+        }
+    }
+    let mut output = [0xa5; 3];
+    let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
+    assert_eq!(writer.push_symbols::<true>(b"AA!A"), None);
 }
 
 #[test]

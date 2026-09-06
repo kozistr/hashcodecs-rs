@@ -179,6 +179,16 @@ fn valid_prefix_kernels_stop_before_the_first_invalid_block() {
                 (expected_input, expected_input / 4 * 3),
                 "backend={backend:?} invalid_at={invalid_at}"
             );
+            assert!(
+                output[..expected_input / 4 * 3]
+                    .iter()
+                    .all(|&byte| byte == 0)
+            );
+            assert!(
+                output[expected_input / 4 * 3..]
+                    .iter()
+                    .all(|&byte| byte == 0xa5)
+            );
         }
     }
 

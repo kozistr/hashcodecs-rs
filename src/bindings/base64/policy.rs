@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 
 use super::configured::ConfiguredDecoder;
-use super::lenient::lenient_decode_table;
+use super::lenient::{MIXED_LENIENT_TABLE, STANDARD_LENIENT_TABLE, lenient_decode_table};
 use crate::bindings::buffer::contiguous_bytes_like;
 use crate::bindings::compatibility::{PythonSemantics, python_semantics};
 
@@ -151,6 +151,22 @@ impl IgnoredBytes {
         let byte = usize::from(byte);
         self.0[byte / 64] & (1_u64 << (byte % 64)) != 0
     }
+
+    pub(super) fn iter(self) -> impl Iterator<Item = u8> {
+        self.0
+            .into_iter()
+            .enumerate()
+            .flat_map(|(index, mut word)| {
+                std::iter::from_fn(move || {
+                    if word == 0 {
+                        return None;
+                    }
+                    let byte = index * 64 + word.trailing_zeros() as usize;
+                    word &= word - 1;
+                    Some(byte as u8)
+                })
+            })
+    }
 }
 
 pub(super) struct PreparedPolicy {
@@ -220,7 +236,7 @@ pub(super) struct PreparedDecoder {
     pub(super) attempt: DecodeAttempt,
     configured: std::sync::OnceLock<Box<ConfiguredDecoder>>,
     strict_custom: std::sync::OnceLock<Box<ConfiguredDecoder>>,
-    lenient_table: std::sync::OnceLock<Box<[u8; 256]>>,
+    lenient_table: Option<Box<[u8; 256]>>,
 }
 
 impl PreparedDecoder {
@@ -239,8 +255,22 @@ impl PreparedDecoder {
             route,
             configured: std::sync::OnceLock::new(),
             strict_custom: std::sync::OnceLock::new(),
-            lenient_table: std::sync::OnceLock::new(),
+            lenient_table: None,
         })
+    }
+
+    pub(super) fn new_for_batch(
+        py: Python<'_>,
+        policy: DecodePolicy<'_, '_>,
+        count: usize,
+    ) -> PyResult<Self> {
+        let mut decoder = Self::new(py, policy)?;
+
+        if count > 1 && decoder.route == DecodeRoute::LenientCustom {
+            decoder.lenient_table = Some(Box::new(lenient_decode_table(decoder.policy.altchars)));
+        }
+
+        Ok(decoder)
     }
 
     pub(super) fn configured(&self) -> &ConfiguredDecoder {
@@ -253,9 +283,23 @@ impl PreparedDecoder {
             .get_or_init(|| Box::new(ConfiguredDecoder::new(&self.policy.strict_custom())))
     }
 
-    pub(super) fn lenient_table(&self) -> &[u8; 256] {
-        self.lenient_table
-            .get_or_init(|| Box::new(lenient_decode_table(self.policy.altchars)))
+    #[inline]
+    pub(super) fn with_lenient_table<T>(&self, decode: impl FnOnce(&[u8; 256]) -> T) -> T {
+        let custom;
+
+        let table = match self.policy.altchars {
+            None => &STANDARD_LENIENT_TABLE,
+            Some([b'-', b'_']) => &MIXED_LENIENT_TABLE,
+            Some(_) => match &self.lenient_table {
+                Some(table) => table,
+                None => {
+                    custom = lenient_decode_table(self.policy.altchars);
+                    &custom
+                }
+            },
+        };
+
+        decode(table)
     }
 }
 

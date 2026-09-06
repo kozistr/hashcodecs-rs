@@ -3,7 +3,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
-use super::lenient::decoded_symbol_len;
+use super::lenient::{decoded_symbol_len, lenient_decode_table};
 use super::policy::{ErrorWrites, Padding, PreparedPolicy, Validation};
 use super::scan::{AlphanumericPrefix, TranslateBytes, decode_byte_kernels};
 use super::staging::{BytesWriter, StagingValidator, StagingWriter};
@@ -100,20 +100,23 @@ impl ConfiguredDecoder {
         let altchars = policy.altchars;
         let ignored = policy.ignored.unwrap_or_default();
 
-        let mut table = [INVALID_CONFIGURED_VALUE; 256];
-        for byte in u8::MIN..=u8::MAX {
-            if ignored.contains(byte) {
+        let mut table = lenient_decode_table(None);
+        for byte in ignored.iter() {
+            if table[usize::from(byte)] >= 64 {
                 table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
             }
         }
-        for (value, &byte) in STANDARD_ALPHABET[..62].iter().enumerate() {
-            table[usize::from(byte)] = value as u8;
-        }
         let custom_alphabet = altchars.is_some() && policy.ignorechars_specified;
-        if !custom_alphabet {
-            table[usize::from(b'+')] = 62;
-            table[usize::from(b'/')] = 63;
+        if custom_alphabet {
+            for byte in b"+/" {
+                table[usize::from(*byte)] = if ignored.contains(*byte) {
+                    IGNORED_CONFIGURED_VALUE
+                } else {
+                    INVALID_CONFIGURED_VALUE
+                };
+            }
         }
+
         if let Some([plus, slash]) = altchars {
             if !custom_alphabet || plus != b'=' {
                 table[usize::from(plus)] = 62;
@@ -123,9 +126,20 @@ impl ConfiguredDecoder {
             }
         }
 
-        let strict_specials = StrictSpecials::new(&table, policy.padding.is_padded());
-        let strict_forbidden = StrictSpecials::forbidden(&table);
+        let strict_specials = if policy.ignored.is_some() {
+            StrictSpecials::new(&table, policy.padding.is_padded())
+        } else {
+            StrictSpecials::None
+        };
+
+        let strict_forbidden = if custom_alphabet {
+            StrictSpecials::forbidden(&table)
+        } else {
+            StrictSpecials::None
+        };
+
         let translation = Translation::new(&table, altchars, kernels.translate);
+
         Self {
             table,
             validation: policy.validation,
@@ -284,11 +298,28 @@ pub(super) fn decode_configured<'py>(
         return decode_configured(py, &BytesLike::OwnedVec(input), decoder, semantics);
     }
     let continue_after_padding = semantics.continues_after_padding;
-    let writer = BytesWriter::new(py, input.len())?;
-    let output_address = unsafe { writer.data() } as usize;
-    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
-    let result = unsafe {
+    let detach_safe = input.detach_safe();
+
+    // As in lenient decoding, bytes allocation cannot run Python callbacks.
+    // Size and decode within one borrow so the allocation matches the input.
+    unsafe {
         input.with_bytes(|input| {
+            let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
+            let start = if input.len() < BASE64_DETACH_THRESHOLD {
+                0
+            } else {
+                input
+                    .iter()
+                    .position(|&byte| {
+                        byte == b'=' || !is_ignored_value(decoder.table[usize::from(byte)])
+                    })
+                    .unwrap_or(input.len())
+            };
+
+            let input = &input[start..];
+            let writer =
+                BytesWriter::new(py, BytesWriter::capacity_for_input(input, &decoder.table))?;
+            let output_address = writer.data() as usize;
             let decode = move || {
                 decoder.decode_checked_to_ptr(
                     input,
@@ -296,13 +327,14 @@ pub(super) fn decode_configured<'py>(
                     continue_after_padding,
                 )
             };
-            if detach { py.detach(decode) } else { decode() }
+
+            let Some(written) = (if detach { py.detach(decode) } else { decode() }) else {
+                return Ok(Err(Base64Error::InvalidInput));
+            };
+
+            writer.finish(py, written).map(Ok)
         })
-    };
-    let Some(written) = result else {
-        return Ok(Err(Base64Error::InvalidInput));
-    };
-    unsafe { writer.finish(py, written).map(Ok) }
+    }
 }
 
 unsafe fn decode_configured_slice_into(
@@ -340,6 +372,7 @@ pub(super) fn decode_configured_into(
             semantics,
         );
     }
+
     let continue_after_padding = semantics.continues_after_padding;
     if let Some(input) = input.snapshot_for_output(output)? {
         return Ok(with_bytearray(output, || unsafe {
@@ -352,6 +385,7 @@ pub(super) fn decode_configured_into(
             )
         }));
     }
+
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_configured_slice_into(input, output, provided, decoder, continue_after_padding)
@@ -543,13 +577,16 @@ impl ConfiguredDecoder {
                     continue;
                 }
             }
+
             let byte = input[source];
             source += 1;
+
             let value = self.table[usize::from(byte)];
             if value < 64 {
                 if CHECKED && saw_padding {
                     return None;
                 }
+
                 sink.push_value::<CHECKED>(value)?;
                 if CHECKED {
                     symbols += 1;
@@ -559,6 +596,7 @@ impl ConfiguredDecoder {
                 if CHECKED && !self.padding.is_padded() {
                     return None;
                 }
+
                 saw_padding = true;
                 if CHECKED {
                     padding += 1;
@@ -567,6 +605,7 @@ impl ConfiguredDecoder {
                 return None;
             }
         }
+
         self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
     }
 
@@ -592,19 +631,23 @@ impl ConfiguredDecoder {
                     if CHECKED {
                         symbols += run;
                     }
+
                     padding = 0;
                     quad_pos = (quad_pos + run) & 3;
                     if CHECKED && self.canonical {
                         let value = self.table[usize::from(input[source + run - 1])];
                         leftchar = partial_value(quad_pos, value);
                     }
+
                     source += run;
+
                     continue;
                 }
             }
 
             let byte = input[source];
             source += 1;
+
             let value = self.table[usize::from(byte)];
 
             if self.padding.is_padded() && byte == b'=' && !equals_is_data {
@@ -617,20 +660,26 @@ impl ConfiguredDecoder {
                 {
                     return None;
                 }
+
                 if !continue_after_padding && quad_pos >= 2 && quad_pos + padding >= 4 {
                     return sink.finish::<CHECKED>(decoded_symbol_len(symbols));
                 }
+
                 continue;
             }
+
             if value >= 64 {
                 continue;
             }
+
             sink.push_value::<CHECKED>(value)?;
             if CHECKED {
                 symbols += 1;
             }
+
             padding = 0;
             quad_pos = (quad_pos + 1) & 3;
+
             if CHECKED && self.canonical {
                 leftchar = partial_value(quad_pos, value);
             }
@@ -659,6 +708,7 @@ impl ConfiguredDecoder {
         } else {
             input.len()
         };
+
         if CHECKED && self.strict_forbidden.find(&input[..data_end]).is_some() {
             return None;
         }
@@ -666,16 +716,19 @@ impl ConfiguredDecoder {
         let mut source = 0;
         let mut symbols = 0;
         let mut last_value = 0;
+
         while source < data_end {
             let run_end = self
                 .strict_specials
                 .find(&input[source..data_end])
                 .map_or(data_end, |offset| source + offset);
+
             if source != run_end {
                 sink.push_symbols::<CHECKED>(&input[source..run_end], true)?;
                 symbols += run_end - source;
                 last_value = self.table[usize::from(input[run_end - 1])];
             }
+
             source = run_end;
             if source != data_end {
                 let byte = input[source];
@@ -683,6 +736,7 @@ impl ConfiguredDecoder {
                     is_ignored_value(self.table[usize::from(byte)]),
                     "strict special-byte search only returns discarded bytes"
                 );
+
                 source += 1;
             }
         }
@@ -700,6 +754,7 @@ impl ConfiguredDecoder {
                 }
             }
         }
+
         self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
     }
 
@@ -718,9 +773,11 @@ impl ConfiguredDecoder {
                 3 => 1,
                 _ => return None,
             };
+
             if self.padding.is_padded() && padding != expected_padding {
                 return None;
             }
+
             if self.canonical
                 && ((remainder == 2 && last_value & 0x0f != 0)
                     || (remainder == 3 && last_value & 0x03 != 0))
@@ -728,6 +785,7 @@ impl ConfiguredDecoder {
                 return None;
             }
         }
+
         sink.finish::<CHECKED>(decoded_symbol_len(symbols))
     }
 }

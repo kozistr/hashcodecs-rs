@@ -162,9 +162,11 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
             break;
         }
 
-        unsafe { store_24_exact(output.add(destination), pack_32(first)) };
-        unsafe { store_24_exact(output.add(destination + 24), pack_32(second)) };
-        unsafe { store_24_exact(output.add(destination + 48), pack_32(third)) };
+        // All four blocks are valid. Each following store replaces the four
+        // overlap bytes; the final exact store bounds writes to this prefix.
+        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
         unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;

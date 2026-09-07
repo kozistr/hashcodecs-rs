@@ -255,10 +255,10 @@ unsafe fn accumulate_tail_chains(
     }
 
     let last_secret = unsafe { secret.add(121) };
-    let chains = [&mut acc0, &mut acc1, &mut acc2, &mut acc3];
 
     unsafe {
-        accumulate_registers(chains[stripes % 4], last, last_secret);
+        accumulate_registers(&mut acc3, last, last_secret);
+
         reduce_chains(acc0, acc1, acc2, acc3)
     }
 }

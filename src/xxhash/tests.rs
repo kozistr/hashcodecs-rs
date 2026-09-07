@@ -136,6 +136,39 @@ fn matches_reference_at_every_length_through_two_blocks() {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_tail_hashes_match_reference_at_every_length() {
+    use super::long_inputs::{finalize_long_64, finalize_long_128};
+
+    if !backend::capabilities().supports(CpuFeature::Avx2) {
+        return;
+    }
+
+    let input = (0..1024)
+        .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
+        .collect::<Vec<_>>();
+    for length in 241..=1024 {
+        let input = &input[..length];
+        let long_input = LongInput::new(input).unwrap();
+        for seed in [0, 0xd6e8_feb8_6659_fd93] {
+            let secret = initialize_secret_scalar(seed);
+            let acc = unsafe { accumulate_x86(long_input, &secret, X86Backend::Avx2) };
+            assert_eq!(
+                finalize_long_64(length, &secret, acc),
+                c_xxh3_64(input, seed),
+                "AVX2 XXH3-64 mismatch for length {length}, seed {seed:#x}",
+            );
+
+            assert_eq!(
+                finalize_long_128(length, &secret, acc),
+                c_xxh3_128(input, seed),
+                "AVX2 XXH3-128 mismatch for length {length}, seed {seed:#x}",
+            );
+        }
+    }
+}
+
 #[test]
 fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
     const LENGTHS: &[usize] = &[

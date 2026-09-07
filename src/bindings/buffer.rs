@@ -1,5 +1,7 @@
 use pyo3::PyTypeInfo;
-use pyo3::exceptions::{PyBufferError, PyMemoryError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyBufferError, PyMemoryError, PyTypeError, PyUnicodeEncodeError, PyValueError,
+};
 use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
@@ -405,7 +407,7 @@ pub(super) fn contiguous_bytes_like_owned<'py>(
 }
 
 pub(super) fn ascii_or_bytes<'a, 'py>(
-    py: Python<'py>,
+    _py: Python<'py>,
     value: &'a Bound<'py, PyAny>,
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
@@ -424,7 +426,7 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     }
 
     if value.is_instance_of::<PyString>() {
-        let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
+        let encoded = encode_ascii(value)?;
         return buffer_bytes_like(&encoded, argument, false);
     }
 
@@ -444,12 +446,24 @@ pub(super) fn ascii_or_bytes_owned<'py>(
     }
 
     if value.is_instance_of::<PyString>() {
-        let py = value.py();
-        let encoded = value.call_method1(intern!(py, "encode"), ("ascii",))?;
+        let encoded = encode_ascii(value)?;
         return buffer_bytes_like(&encoded, argument, false);
     }
 
     buffer_bytes_like(value, argument, false)
+}
+
+fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py = value.py();
+    value
+        .call_method1(intern!(py, "encode"), ("ascii",))
+        .map_err(|error| {
+            if error.is_instance_of::<PyUnicodeEncodeError>(py) {
+                PyValueError::new_err("string argument should contain only ASCII characters")
+            } else {
+                error
+            }
+        })
 }
 
 #[inline]

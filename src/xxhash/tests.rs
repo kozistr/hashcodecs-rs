@@ -1,13 +1,12 @@
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::backend::{self, CpuFeature};
 
+use super::long_inputs::{LongInput, accumulate_long_input_scalar, initialize_secret_scalar};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::long_inputs::{
-    LongInput, X86Backend, accumulate_x86, initialize_secret_with_capabilities,
+    X86Backend, accumulate_x86, initialize_secret_with_capabilities,
     select_x86_accumulation_kernel, select_x86_backend,
 };
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use super::long_inputs::{accumulate_long_input_scalar, initialize_secret_scalar};
 use super::*;
 use core::ffi::c_void;
 
@@ -185,6 +184,33 @@ fn randomized_inputs_match_the_official_c_implementation() {
         let seed = state;
         assert_eq!(xxh3_64(&input, seed), c_xxh3_64(&input, seed));
         assert_eq!(xxh3_128(&input, seed), c_xxh3_128(&input, seed));
+    }
+}
+
+#[test]
+fn scalar_long_inputs_match_reference_and_native_backend() {
+    use super::long_inputs::{LongEngine, finalize_long_64, finalize_long_128};
+
+    let input: Vec<u8> = (0..4161)
+        .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
+        .collect();
+    let native = LongEngine::new();
+    for length in [241, 256, 511, 512, 1023, 1024, 1025, 2048, 4161] {
+        let input = &input[..length];
+        let long_input = LongInput::new(input).unwrap();
+        for seed in [0, 1, 0xfeed_beef_cafe_babe] {
+            let secret = initialize_secret_scalar(seed);
+            let acc = accumulate_long_input_scalar(long_input, &secret);
+            assert_eq!(
+                finalize_long_64(length, &secret, acc),
+                c_xxh3_64(input, seed)
+            );
+            assert_eq!(
+                finalize_long_128(length, &secret, acc),
+                c_xxh3_128(input, seed)
+            );
+            assert_eq!(native.accumulate(long_input, &secret), acc);
+        }
     }
 }
 

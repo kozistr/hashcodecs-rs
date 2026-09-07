@@ -1,5 +1,6 @@
 import sys
 import threading
+import time
 from collections.abc import Callable
 
 import pytest
@@ -30,7 +31,13 @@ def assert_releases_gil() -> GILProgressAssertion:
             sys.setswitchinterval(10.0)
             start.set()
             result = expected
+            deadline = time.monotonic() + 1.0
             for _ in range(repetitions):
+                result = operation()
+            # Fast native calls can finish before the OS schedules the worker.
+            # Keep calling the operation within a bounded window; waiting here
+            # would release the GIL and make the assertion a false positive.
+            while not progressed.is_set() and time.monotonic() < deadline:
                 result = operation()
             progressed_during_call = progressed.is_set()
         finally:

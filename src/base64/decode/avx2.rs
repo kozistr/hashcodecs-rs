@@ -45,18 +45,13 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        // The padded stores write four bytes into the following block's output,
-        // where the next store replaces them. This is safe for exact-output
-        // callers because each of these blocks has a complete successor.
+        // Overlap only within this validated group. Its final store must honor
+        // the caller's contract before validation of the next group can fail.
         unsafe { store_24_padded(output.add(destination), pack_32(first)) };
         unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
         unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
 
-        if source + 160 <= input.len() {
-            unsafe { store_24_padded(output.add(destination + 72), pack_32(fourth)) };
-        } else {
-            unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
-        }
+        unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
         destination += 96;
@@ -68,13 +63,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        if source + 64 <= input.len() {
-            // A complete following block provides enough in-bounds output for
-            // the four-byte overlap, which that block replaces.
-            unsafe { store_24_padded(output.add(destination), pack_32(indices)) };
-        } else {
-            unsafe { S::store_24(output.add(destination), pack_32(indices)) };
-        }
+        unsafe { S::store_24(output.add(destination), pack_32(indices)) };
 
         source += 32;
         destination += 24;

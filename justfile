@@ -41,7 +41,7 @@ test-build:
     {{ pytest_base }} build_tests {{ pytest_flags }}
 
 coverage:
-    cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines {{ cargo_flags }}
+    cargo llvm-cov --lib --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines {{ cargo_flags }}
 
 test-release:
     cargo test --release --features python {{ cargo_flags }}

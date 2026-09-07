@@ -8,6 +8,24 @@ use super::super::encode::aarch64::encode as encode_aarch64;
 const CANARY: u8 = 0xa5;
 const GUARD: usize = 32;
 
+#[test]
+fn prefix_probe_defers_to_the_fallback_without_writing() {
+    for alphabet in [
+        super::super::DecodeAlphabet::Standard,
+        super::super::DecodeAlphabet::UrlSafe,
+        super::super::DecodeAlphabet::Mixed,
+    ] {
+        let mut output = [CANARY; 96];
+        assert_eq!(
+            unsafe {
+                super::super::decode_valid_prefix(&[b'A'; 128], output.as_mut_ptr(), alphabet)
+            },
+            None
+        );
+        assert_eq!(output, [CANARY; 96]);
+    }
+}
+
 fn decoded_len(encoded_len: usize) -> usize {
     encoded_len / 4 * 3
 }

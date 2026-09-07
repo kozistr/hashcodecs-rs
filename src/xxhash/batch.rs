@@ -1,10 +1,11 @@
-use super::long_inputs::{
-    LongBatch, LongEngine, LongInput, LongRun, Secret, finalize_long_64, finalize_long_128,
-};
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+use super::long_inputs::{LongBatch, LongRun};
+use super::long_inputs::{LongEngine, LongInput, Secret, finalize_long_64, finalize_long_128};
 use super::one_shot::{xxh3_64, xxh3_128};
 
 macro_rules! emit_long_group {
     ($name:ident, $size:literal, $($acc:ident),+ $(,)?) => {
+        #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
         #[inline(always)]
         fn $name<T, F, O>(
             secret: &Secret,
@@ -83,19 +84,48 @@ fn hash_each_input_with_engine<T, S, F, O>(
     let derived_secret = engine.derive_secret(seed);
     let secret = engine.secret(&derived_secret);
 
-    if !engine.has_batch_kernel() {
-        while index < inputs.len() {
-            if let Some(input) = LongInput::new(inputs[index]) {
-                output(engine.hash(input, secret, finalize));
-            } else {
-                output(short(inputs[index], seed));
-            }
-            index += 1;
-        }
-
+    // Only x86 has an accelerated batch kernel. Keep its scheduling path out
+    // of production builds on architectures that process inputs individually.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if engine.has_batch_kernel() {
+        hash_input_runs(
+            &inputs[index..],
+            seed,
+            short,
+            finalize,
+            engine,
+            secret,
+            output,
+        );
         return;
     }
 
+    while index < inputs.len() {
+        if let Some(input) = LongInput::new(inputs[index]) {
+            output(engine.hash(input, secret, finalize));
+        } else {
+            output(short(inputs[index], seed));
+        }
+        index += 1;
+    }
+}
+
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+#[inline(always)]
+fn hash_input_runs<T, S, F, O>(
+    inputs: &[&[u8]],
+    seed: u64,
+    short: S,
+    finalize: F,
+    engine: &LongEngine,
+    secret: &Secret,
+    mut output: O,
+) where
+    S: Copy + Fn(&[u8], u64) -> T,
+    F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
+    O: FnMut(T),
+{
+    let mut index = 0;
     while index < inputs.len() {
         let Some(run) = LongRun::new(&inputs[index..]) else {
             output(short(inputs[index], seed));
@@ -250,7 +280,7 @@ pub fn xxh3_128_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([
     hash_each_input(inputs, seed, xxh3_128, finalize_long_128, output);
 }
 
-#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::backend::Capabilities;
@@ -331,6 +361,44 @@ mod tests {
                 .map(|input| xxh3_128(input, 17))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn grouped_runs_match_one_shot_with_scalar_and_native_engines() {
+        let owned = [
+            300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
+        ]
+        .map(|length| vec![length as u8; length]);
+        let inputs = owned.each_ref().map(Vec::as_slice);
+        for engine in [
+            LongEngine::new_with_capabilities(Capabilities::from_features(&[])),
+            LongEngine::new(),
+        ] {
+            let derived = engine.derive_secret(17);
+            let secret = engine.secret(&derived);
+            let mut hashes_64 = Vec::new();
+            hash_input_runs(
+                &inputs,
+                17,
+                xxh3_64,
+                finalize_long_64,
+                &engine,
+                secret,
+                |hash| hashes_64.push(hash),
+            );
+            assert_eq!(hashes_64, inputs.map(|input| xxh3_64(input, 17)));
+            let mut hashes_128 = Vec::new();
+            hash_input_runs(
+                &inputs,
+                17,
+                xxh3_128,
+                finalize_long_128,
+                &engine,
+                secret,
+                |hash| hashes_128.push(hash),
+            );
+            assert_eq!(hashes_128, inputs.map(|input| xxh3_128(input, 17)));
+        }
     }
 
     #[test]

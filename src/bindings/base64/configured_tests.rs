@@ -42,7 +42,7 @@ fn configured_decoder(
         padding: Padding::new(padded),
         canonical,
         alphanumeric_prefix: alphanumeric_prefix_scalar,
-        strict_specials: StrictSpecials::new(&table, padded),
+        strict_specials: StrictSpecials::new(&table),
         strict_forbidden: StrictSpecials::forbidden(&table),
         translation: Translation::new(&table, None, decode_byte_kernels().translate),
     }
@@ -354,7 +354,7 @@ fn strict_special_search_covers_every_width() {
         for &byte in ignored_bytes {
             table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
-        let specials = StrictSpecials::new(&table, true);
+        let specials = StrictSpecials::new(&table);
         assert!(matches!(
             (expected, specials),
             (0, StrictSpecials::None)

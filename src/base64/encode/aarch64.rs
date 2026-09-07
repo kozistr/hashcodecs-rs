@@ -6,10 +6,12 @@ use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
-    let alphabet = if URLSAFE {
-        URLSAFE_ALPHABET
-    } else {
-        STANDARD_ALPHABET
+    let alphabet = const {
+        if URLSAFE {
+            URLSAFE_ALPHABET
+        } else {
+            STANDARD_ALPHABET
+        }
     };
 
     let table = uint8x16x4_t(

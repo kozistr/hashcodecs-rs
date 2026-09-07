@@ -3,14 +3,9 @@
 #[cfg(not(any(kani, miri)))]
 use std::sync::OnceLock;
 
-#[cfg(any(
-    all(target_arch = "aarch64", target_endian = "little"),
-    target_arch = "x86",
-    target_arch = "x86_64"
-))]
-use crate::backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::{Capabilities, CpuFeature};
+use crate::backend::CpuFeature;
+use crate::backend::{self, Capabilities};
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
@@ -20,7 +15,7 @@ mod x86;
 
 use super::primitives::*;
 
-#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(test)]
 pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     scalar::accumulate(input, secret)
 }
@@ -82,9 +77,11 @@ impl<'a> LongInput<'a> {
     }
 }
 
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 #[derive(Clone, Copy, Debug)]
 pub(super) struct LongBatch<'a, const N: usize>([LongInput<'a>; N]);
 
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 impl<'a, const N: usize> LongBatch<'a, N> {
     #[inline(always)]
     pub(super) fn into_inputs(self) -> [LongInput<'a>; N] {
@@ -97,11 +94,13 @@ impl<'a, const N: usize> LongBatch<'a, N> {
     }
 }
 
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 #[derive(Clone, Copy, Debug)]
 pub(super) struct LongRun<'batch, 'input> {
     inputs: &'batch [&'input [u8]],
 }
 
+#[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 impl<'batch, 'input> LongRun<'batch, 'input> {
     #[inline(always)]
     pub(super) fn new(inputs: &'batch [&'input [u8]]) -> Option<Self> {
@@ -331,14 +330,28 @@ impl LongEngine {
 
     #[inline(always)]
     pub(super) fn new() -> Self {
+        Self::new_with_capabilities(backend::capabilities())
+    }
+
+    #[inline(always)]
+    pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            Self::new_with_capabilities(backend::capabilities())
+            let selected = select_x86_backend(capabilities);
+            let backend = match select_x86_accumulation_kernel(selected) {
+                Some(kernel) => LongBackend::X86(kernel),
+                None => LongBackend::Scalar,
+            };
+
+            Self {
+                backend,
+                avx2_available: capabilities.supports(CpuFeature::Avx2),
+            }
         }
 
         #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
         {
-            let backend = if backend::capabilities().supports(crate::backend::CpuFeature::Neon) {
+            let backend = if capabilities.supports(crate::backend::CpuFeature::Neon) {
                 LongBackend::Neon
             } else {
                 LongBackend::Scalar
@@ -352,23 +365,11 @@ impl LongEngine {
             target_arch = "x86",
             target_arch = "x86_64"
         )))]
-        Self {
-            backend: LongBackend::Scalar,
-        }
-    }
-
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    #[inline(always)]
-    pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
-        let selected = select_x86_backend(capabilities);
-        let backend = match select_x86_accumulation_kernel(selected) {
-            Some(kernel) => LongBackend::X86(kernel),
-            None => LongBackend::Scalar,
-        };
-
-        Self {
-            backend,
-            avx2_available: capabilities.supports(CpuFeature::Avx2),
+        {
+            let _ = capabilities;
+            Self {
+                backend: LongBackend::Scalar,
+            }
         }
     }
 
@@ -391,6 +392,7 @@ impl LongEngine {
         derived.as_ref().unwrap_or(&DEFAULT_SECRET)
     }
 
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn has_batch_kernel(&self) -> bool {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -414,14 +416,16 @@ impl LongEngine {
         }
     }
 
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn accumulate_batch2(
         &self,
         inputs: LongBatch<'_, 2>,
         secret: &Secret,
     ) -> [[u64; 8]; 2] {
-        if let Some(accumulators) = self.try_accumulate_batch2(inputs, secret) {
-            return accumulators;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2_available {
+            return unsafe { x86::avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) };
         }
 
         let [first, second] = inputs.into_inputs();
@@ -431,14 +435,16 @@ impl LongEngine {
         ]
     }
 
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn accumulate_batch3(
         &self,
         inputs: LongBatch<'_, 3>,
         secret: &Secret,
     ) -> [[u64; 8]; 3] {
-        if let Some(accumulators) = self.try_accumulate_batch3(inputs, secret) {
-            return accumulators;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2_available {
+            return unsafe { x86::avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) };
         }
 
         let [first, second, third] = inputs.into_inputs();
@@ -449,14 +455,16 @@ impl LongEngine {
         ]
     }
 
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
     #[inline(always)]
     pub(super) fn accumulate_batch4(
         &self,
         inputs: LongBatch<'_, 4>,
         secret: &Secret,
     ) -> [[u64; 8]; 4] {
-        if let Some(accumulators) = self.try_accumulate_batch4(inputs, secret) {
-            return accumulators;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2_available {
+            return unsafe { x86::avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) };
         }
 
         let [first, second, third, fourth] = inputs.into_inputs();
@@ -477,69 +485,6 @@ impl LongEngine {
     ) -> T {
         let acc = self.accumulate(input, secret);
         finalize(input.len(), secret, acc)
-    }
-
-    #[inline(always)]
-    pub(super) fn try_accumulate_batch2(
-        &self,
-        inputs: LongBatch<'_, 2>,
-        secret: &Secret,
-    ) -> Option<[[u64; 8]; 2]> {
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-        {
-            let _ = (self, inputs, secret);
-            None
-        }
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        {
-            if !self.avx2_available {
-                return None;
-            }
-
-            Some(unsafe { x86::avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) })
-        }
-    }
-
-    #[inline(always)]
-    pub(super) fn try_accumulate_batch3(
-        &self,
-        inputs: LongBatch<'_, 3>,
-        secret: &Secret,
-    ) -> Option<[[u64; 8]; 3]> {
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-        {
-            let _ = (self, inputs, secret);
-            None
-        }
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        {
-            if !self.avx2_available {
-                return None;
-            }
-
-            Some(unsafe { x86::avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) })
-        }
-    }
-
-    #[inline(always)]
-    pub(super) fn try_accumulate_batch4(
-        &self,
-        inputs: LongBatch<'_, 4>,
-        secret: &Secret,
-    ) -> Option<[[u64; 8]; 4]> {
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-        {
-            let _ = (self, inputs, secret);
-            None
-        }
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        {
-            if !self.avx2_available {
-                return None;
-            }
-
-            Some(unsafe { x86::avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) })
-        }
     }
 }
 

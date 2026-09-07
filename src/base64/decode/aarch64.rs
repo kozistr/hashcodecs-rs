@@ -24,7 +24,31 @@ pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_mode::<URLSAFE, MIXED, false>(input, output) }
+    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let mut source = 0;
+    let mut destination = 0;
+
+    while source + 64 <= input.len() {
+        let bulk_remaining = (input.len() - source) & !63;
+        let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
+        let mut errors = vdupq_n_u8(0);
+
+        while source < chunk_end {
+            let (decoded, block_errors) =
+                unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
+
+            errors = vorrq_u8(errors, block_errors);
+            unsafe { store_decoded_64(output.add(destination), decoded) };
+            source += 64;
+            destination += 48;
+        }
+
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+    }
+
+    unsafe { decode_tail::<URLSAFE, MIXED>(input, output, tables, source, destination) }
 }
 
 #[target_feature(enable = "neon")]
@@ -32,7 +56,24 @@ pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: b
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    unsafe { decode_mode::<URLSAFE, MIXED, true>(input, output) }
+    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let mut source = 0;
+    let mut destination = 0;
+
+    while source + 64 <= input.len() {
+        let (decoded, errors) =
+            unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
+
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
+        }
+
+        unsafe { store_decoded_64(output.add(destination), decoded) };
+        source += 64;
+        destination += 48;
+    }
+
+    unsafe { decode_tail::<URLSAFE, MIXED>(input, output, tables, source, destination) }
 }
 
 #[target_feature(enable = "neon")]
@@ -63,53 +104,13 @@ pub(crate) unsafe fn validate<const URLSAFE: bool, const MIXED: bool>(
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BLOCKS_ONLY: bool>(
+unsafe fn decode_tail<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
+    tables: DecodeTables,
+    mut source: usize,
+    mut destination: usize,
 ) -> Result<(usize, usize), Base64Error> {
-    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
-
-    let mut source = 0;
-    let mut destination = 0;
-
-    if VALIDATED_BLOCKS_ONLY {
-        while source + 64 <= input.len() {
-            let (decoded, errors) =
-                unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
-
-            if vmaxvq_u8(errors) != 0 {
-                return Err(Base64Error::InvalidInput);
-            }
-
-            unsafe { store_decoded_64(output.add(destination), decoded) };
-
-            source += 64;
-            destination += 48;
-        }
-    }
-
-    while source + 64 <= input.len() {
-        let bulk_remaining = (input.len() - source) & !63;
-        let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
-        let mut errors = vdupq_n_u8(0);
-
-        while source < chunk_end {
-            let (decoded, block_errors) =
-                unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
-
-            errors = vorrq_u8(errors, block_errors);
-
-            unsafe { store_decoded_64(output.add(destination), decoded) };
-
-            source += 64;
-            destination += 48;
-        }
-
-        if vmaxvq_u8(errors) != 0 {
-            return Err(Base64Error::InvalidInput);
-        }
-    }
-
     while source + 16 <= input.len() {
         unsafe {
             decode_16::<URLSAFE, MIXED>(
@@ -210,47 +211,81 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
         vqtbl1q_u8(tables.low_classes, low_nibbles),
     );
 
-    let offset_indices = if MIXED {
-        let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
-        let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
-        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
-        let offset_indices = vaddq_u8(high_nibbles, slash);
-        let offset_indices = vbslq_u8(dash, vdupq_n_u8(8), offset_indices);
-        vbslq_u8(underscore, vdupq_n_u8(9), offset_indices)
-    } else if !URLSAFE {
-        let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
-        vaddq_u8(high_nibbles, slash)
-    } else {
-        high_nibbles
+    let translate: unsafe fn(uint8x16_t, uint8x16_t, uint8x16_t) -> uint8x16_t = const {
+        if MIXED {
+            translate_mixed
+        } else if URLSAFE {
+            translate_urlsafe
+        } else {
+            translate_standard
+        }
     };
 
-    let mut indices = vaddq_u8(value, vqtbl1q_u8(tables.offsets, offset_indices));
+    (
+        unsafe { translate(value, high_nibbles, tables.offsets) },
+        errors,
+    )
+}
 
-    if URLSAFE && !MIXED {
-        let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
-        indices = vaddq_u8(indices, vandq_u8(underscore, vdupq_n_u8(33)));
-    }
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn translate_standard(
+    value: uint8x16_t,
+    high_nibbles: uint8x16_t,
+    offsets: uint8x16_t,
+) -> uint8x16_t {
+    let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
+    let offset_indices = vaddq_u8(high_nibbles, slash);
+    vaddq_u8(value, vqtbl1q_u8(offsets, offset_indices))
+}
 
-    (indices, errors)
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn translate_urlsafe(
+    value: uint8x16_t,
+    high_nibbles: uint8x16_t,
+    offsets: uint8x16_t,
+) -> uint8x16_t {
+    let indices = vaddq_u8(value, vqtbl1q_u8(offsets, high_nibbles));
+    let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
+    vaddq_u8(indices, vandq_u8(underscore, vdupq_n_u8(33)))
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn translate_mixed(
+    value: uint8x16_t,
+    high_nibbles: uint8x16_t,
+    offsets: uint8x16_t,
+) -> uint8x16_t {
+    let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
+    let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
+    let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
+    let offset_indices = vaddq_u8(high_nibbles, slash);
+    let offset_indices = vbslq_u8(dash, vdupq_n_u8(8), offset_indices);
+    let offset_indices = vbslq_u8(underscore, vdupq_n_u8(9), offset_indices);
+    vaddq_u8(value, vqtbl1q_u8(offsets, offset_indices))
 }
 
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
-    let (high_classes, low_classes, offsets) = if MIXED {
-        (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &MIXED_OFFSETS)
-    } else if URLSAFE {
-        (
-            &URLSAFE_HIGH_CLASSES,
-            &URLSAFE_LOW_CLASSES,
-            &URLSAFE_OFFSETS,
-        )
-    } else {
-        (
-            &STANDARD_HIGH_CLASSES,
-            &STANDARD_LOW_CLASSES,
-            &STANDARD_OFFSETS,
-        )
+    let (high_classes, low_classes, offsets) = const {
+        if MIXED {
+            (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &MIXED_OFFSETS)
+        } else if URLSAFE {
+            (
+                &URLSAFE_HIGH_CLASSES,
+                &URLSAFE_LOW_CLASSES,
+                &URLSAFE_OFFSETS,
+            )
+        } else {
+            (
+                &STANDARD_HIGH_CLASSES,
+                &STANDARD_LOW_CLASSES,
+                &STANDARD_OFFSETS,
+            )
+        }
     };
 
     unsafe {

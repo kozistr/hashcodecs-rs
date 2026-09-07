@@ -61,7 +61,7 @@ jobs:
 
       - name: Check Rust core line coverage
         run: |
-          cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
+          cargo llvm-cov --lib --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
           cargo llvm-cov report --ignore-filename-regex 'avx512\.rs$' --cobertura --output-path coverage.xml
 
       - name: Upload Rust coverage to Codecov
@@ -223,7 +223,9 @@ jobs:
 
       - name: Check Rust core line coverage
         run: |
-          if ! cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines; then
+          # Use one core test binary so generic coverage maps do not conflict
+          # with the separately built sanitizer executable.
+          if ! cargo llvm-cov --lib --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines; then
             cargo llvm-cov report --text --show-instantiations --ignore-filename-regex 'avx512\.rs$'
             exit 1
           fi

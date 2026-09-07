@@ -86,27 +86,27 @@ unsafe fn decode_mode<const URLSAFE: bool, const MIXED: bool, const VALIDATED_BL
             source += 64;
             destination += 48;
         }
-    } else {
-        while source + 64 <= input.len() {
-            let bulk_remaining = (input.len() - source) & !63;
-            let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
-            let mut errors = vdupq_n_u8(0);
+    }
 
-            while source < chunk_end {
-                let (decoded, block_errors) =
-                    unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
+    while source + 64 <= input.len() {
+        let bulk_remaining = (input.len() - source) & !63;
+        let chunk_end = source + bulk_remaining.min(DECODE_ERROR_CHECK_INTERVAL);
+        let mut errors = vdupq_n_u8(0);
 
-                errors = vorrq_u8(errors, block_errors);
+        while source < chunk_end {
+            let (decoded, block_errors) =
+                unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
 
-                unsafe { store_decoded_64(output.add(destination), decoded) };
+            errors = vorrq_u8(errors, block_errors);
 
-                source += 64;
-                destination += 48;
-            }
+            unsafe { store_decoded_64(output.add(destination), decoded) };
 
-            if vmaxvq_u8(errors) != 0 {
-                return Err(Base64Error::InvalidInput);
-            }
+            source += 64;
+            destination += 48;
+        }
+
+        if vmaxvq_u8(errors) != 0 {
+            return Err(Base64Error::InvalidInput);
         }
     }
 

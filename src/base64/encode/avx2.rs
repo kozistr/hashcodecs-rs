@@ -153,6 +153,14 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(48).cast()), &constants) };
         let fourth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
+
+        unsafe {
+            Store::store(output, first);
+            Store::store(output.add(32), second);
+            Store::store(output.add(64), third);
+            Store::store(output.add(96), fourth);
+        }
+
         let fifth =
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(96).cast()), &constants) };
         let sixth =
@@ -163,10 +171,6 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
 
         unsafe {
-            Store::store(output, first);
-            Store::store(output.add(32), second);
-            Store::store(output.add(64), third);
-            Store::store(output.add(96), fourth);
             Store::store(output.add(128), fifth);
             Store::store(output.add(160), sixth);
             Store::store(output.add(192), seventh);

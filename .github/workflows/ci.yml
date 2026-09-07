@@ -222,7 +222,11 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Check Rust core line coverage
-        run: cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines
+        run: |
+          if ! cargo llvm-cov --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines; then
+            cargo llvm-cov report --text --show-instantiations --ignore-filename-regex 'avx512\.rs$'
+            exit 1
+          fi
 
   rust_sanitizers:
     name: Rust / Safety / ${{ matrix.name }}

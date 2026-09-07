@@ -21,9 +21,21 @@
 - Configure Ruff for Python 3.12 with a line length of 119 and keep both lint and format checks clean.
 - Keep type information through the checked-in stubs and `py.typed` marker.
 
+## Code Quality
+
+- Add a new empty line properly between lines.
+- Do not add a redundant one-line wrapper style function.
+
 ## Validation
 
 Run these gates before committing:
+
+```sh
+just format
+just lint
+```
+
+Run these gates before opening a PR:
 
 ```sh
 just full-check
@@ -37,6 +49,7 @@ Maintain 100% Rust core line coverage and 100% Python facade branch coverage. Th
 - Pin benchmark processes to one logical CPU and do not run benchmarks in CI.
 - Benchmark only the functionality changed by the branch and refresh only its corresponding README or BENCHMARK charts.
 - Use a complete clean benchmark run only for changes that can affect every benchmark group.
+- Don't need to add as-is/to-be comparison charts to the documentations.
 
 ## Delivery
 

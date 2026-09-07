@@ -251,6 +251,63 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         assert base64.b64encode(BufferList()) == b'YWJj'
 
 
+@pytest.mark.parametrize('valid_symbols', [32, 128])
+@pytest.mark.parametrize('altchars', [None, b'-_'])
+def test_lenient_retry_preserves_suffix_after_avx2_validation_boundary(
+    valid_symbols: int, altchars: bytes | None
+) -> None:
+    encoded = b'A' * valid_symbols + b'!' * 32
+    expected = bytes(valid_symbols // 4 * 3)
+    output = bytearray(b'~' * (len(expected) + 40))
+    written = base64.b64decode_into(encoded, output, altchars)
+    assert written == len(expected)
+    assert output == expected + b'~' * 40
+
+    outputs = [bytearray(b'~' * (len(expected) + 40)) for _ in range(2)]
+    assert base64.b64decode_batch_into([encoded] * 2, outputs, altchars) == [len(expected)] * 2
+    assert outputs == [expected + b'~' * 40] * 2
+
+
+@pytest.mark.parametrize('api', ['b64decode', 'b64decode_into', 'b64decode_batch', 'b64decode_batch_into'])
+@pytest.mark.parametrize('text', ['é', '\ud800'])
+def test_string_subclass_ascii_failures_are_normalized(api: str, text: str) -> None:
+    class StringSubclass(str):
+        pass
+
+    value = StringSubclass(text)
+    args = ([value],) if 'batch' in api else (value,)
+    if api.endswith('_into'):
+        args += ([bytearray(16)],) if 'batch' in api else (bytearray(16),)
+    with pytest.raises(ValueError, match='ASCII') as error:
+        getattr(base64, api)(*args)
+    with pytest.raises(ValueError, match='ASCII') as reference:
+        stdlib_base64.b64decode(value)
+    assert type(error.value) is type(reference.value)
+    assert str(error.value) == str(reference.value)
+
+
+@pytest.mark.parametrize('api', ['b64decode', 'b64decode_into', 'b64decode_batch', 'b64decode_batch_into'])
+@pytest.mark.parametrize('exception', [RuntimeError, ValueError, UnicodeDecodeError])
+def test_string_subclass_preserves_unrelated_encode_exceptions(api: str, exception: type[Exception]) -> None:
+    failure = (
+        UnicodeDecodeError('ascii', b'\xff', 0, 1, 'custom decode failure')
+        if exception is UnicodeDecodeError
+        else exception('custom encode failure')
+    )
+
+    class RaisingString(str):
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
+            raise failure
+
+    value = RaisingString('YWJj')
+    args = ([value],) if 'batch' in api else (value,)
+    if api.endswith('_into'):
+        args += ([bytearray(16)],) if 'batch' in api else (bytearray(16),)
+    with pytest.raises(exception) as error:
+        getattr(base64, api)(*args)
+    assert error.value is failure
+
+
 def test_large_ascii_string_decode() -> None:
     payload = bytes(range(256)) * 512
     encoded = stdlib_base64.b64encode(payload).decode('ascii')

@@ -3,14 +3,9 @@
 #[cfg(not(any(kani, miri)))]
 use std::sync::OnceLock;
 
-#[cfg(any(
-    all(target_arch = "aarch64", target_endian = "little"),
-    target_arch = "x86",
-    target_arch = "x86_64"
-))]
-use crate::backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::backend::{Capabilities, CpuFeature};
+use crate::backend::CpuFeature;
+use crate::backend::{self, Capabilities};
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
@@ -20,7 +15,7 @@ mod x86;
 
 use super::primitives::*;
 
-#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(test)]
 pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     scalar::accumulate(input, secret)
 }
@@ -331,14 +326,28 @@ impl LongEngine {
 
     #[inline(always)]
     pub(super) fn new() -> Self {
+        Self::new_with_capabilities(backend::capabilities())
+    }
+
+    #[inline(always)]
+    pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            Self::new_with_capabilities(backend::capabilities())
+            let selected = select_x86_backend(capabilities);
+            let backend = match select_x86_accumulation_kernel(selected) {
+                Some(kernel) => LongBackend::X86(kernel),
+                None => LongBackend::Scalar,
+            };
+
+            Self {
+                backend,
+                avx2_available: capabilities.supports(CpuFeature::Avx2),
+            }
         }
 
         #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
         {
-            let backend = if backend::capabilities().supports(crate::backend::CpuFeature::Neon) {
+            let backend = if capabilities.supports(crate::backend::CpuFeature::Neon) {
                 LongBackend::Neon
             } else {
                 LongBackend::Scalar
@@ -352,23 +361,11 @@ impl LongEngine {
             target_arch = "x86",
             target_arch = "x86_64"
         )))]
-        Self {
-            backend: LongBackend::Scalar,
-        }
-    }
-
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    #[inline(always)]
-    pub(super) fn new_with_capabilities(capabilities: Capabilities) -> Self {
-        let selected = select_x86_backend(capabilities);
-        let backend = match select_x86_accumulation_kernel(selected) {
-            Some(kernel) => LongBackend::X86(kernel),
-            None => LongBackend::Scalar,
-        };
-
-        Self {
-            backend,
-            avx2_available: capabilities.supports(CpuFeature::Avx2),
+        {
+            let _ = capabilities;
+            Self {
+                backend: LongBackend::Scalar,
+            }
         }
     }
 

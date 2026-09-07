@@ -495,6 +495,26 @@ def test_configured_decode_native_rejects_invalid_staging(encoded: bytes) -> Non
     assert output == bytes([0xA5] * len(encoded))
 
 
+@pytest.mark.parametrize('ignorechars', [b'=', b'=!', b'=!@', b'=!@#'])
+@pytest.mark.parametrize(
+    ('encoded', 'padded', 'expected'),
+    [(b'AA=', False, b'\x00'), (b'A=AAA', False, bytes(3)), (b'A=AAA', True, bytes(3))],
+)
+@pytest.mark.parametrize('validate', [None, True])
+def test_strict_explicitly_ignored_equals(
+    ignorechars: bytes, encoded: bytes, padded: bool, expected: bytes, validate: bool | None
+) -> None:
+    options = {'ignorechars': ignorechars, 'padded': padded}
+    if validate is not None:
+        options['validate'] = validate
+    if PYTHON_315:
+        assert stdlib_base64.b64decode(encoded, **options) == expected
+    assert base64.b64decode(encoded, **options) == expected
+    output = bytearray(b'~' * (len(expected) + 8))
+    assert base64.b64decode_into(encoded, output, **options) == len(expected)
+    assert output == expected + b'~' * 8
+
+
 @pytest.mark.parametrize('ignorechars', [b'', b'!', b'!?', b'!?~'])
 def test_configured_decode_native_special_search_widths(ignorechars: bytes) -> None:
     encoded = b'Y' + ignorechars + b'WJj'

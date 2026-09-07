@@ -250,7 +250,7 @@ pub fn xxh3_128_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([
     hash_each_input(inputs, seed, xxh3_128, finalize_long_128, output);
 }
 
-#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::backend::Capabilities;

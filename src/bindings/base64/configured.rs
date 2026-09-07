@@ -127,7 +127,7 @@ impl ConfiguredDecoder {
         }
 
         let strict_specials = if policy.ignored.is_some() {
-            StrictSpecials::new(&table, policy.padding.is_padded())
+            StrictSpecials::new(&table)
         } else {
             StrictSpecials::None
         };
@@ -170,14 +170,12 @@ pub(super) enum StrictSpecials {
 }
 
 impl StrictSpecials {
-    pub(super) fn new(table: &[u8; 256], padded: bool) -> Self {
-        let equals_is_padding = padded && table[usize::from(b'=')] >= 64;
+    pub(super) fn new(table: &[u8; 256]) -> Self {
         let mut bytes = [0_u8; 3];
         let mut count = 0;
         for byte in u8::MIN..=u8::MAX {
             let value = table[usize::from(byte)];
-            let discarded = is_ignored_value(value) && !(equals_is_padding && byte == b'=');
-            if discarded {
+            if is_ignored_value(value) {
                 if count == bytes.len() {
                     return Self::Many;
                 }
@@ -557,7 +555,6 @@ impl ConfiguredDecoder {
         mut sink: S,
     ) -> Option<usize> {
         let preserves_alphanumeric = self.preserves_alphanumeric();
-        let equals_is_data = self.table[usize::from(b'=')] < 64;
         let mut source = 0;
         let mut symbols = 0;
         let mut padding = 0;
@@ -592,7 +589,7 @@ impl ConfiguredDecoder {
                     symbols += 1;
                     last_value = value;
                 }
-            } else if byte == b'=' && !equals_is_data {
+            } else if byte == b'=' && !is_ignored_value(value) {
                 if CHECKED && !self.padding.is_padded() {
                     return None;
                 }
@@ -702,7 +699,8 @@ impl ConfiguredDecoder {
         mut sink: S,
     ) -> Option<usize> {
         sink.set_translation(self.translation);
-        let equals_is_padding = self.padding.is_padded() && self.table[usize::from(b'=')] >= 64;
+        let equals_is_padding =
+            self.padding.is_padded() && self.table[usize::from(b'=')] == INVALID_CONFIGURED_VALUE;
         let data_end = if equals_is_padding {
             memchr::memchr(b'=', input).unwrap_or(input.len())
         } else {

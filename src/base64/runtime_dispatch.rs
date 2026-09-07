@@ -354,7 +354,10 @@ unsafe fn decode_with_backend_ptr_mode(
 ) -> Result<(usize, usize), Base64Error> {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        let _ = error_write_policy;
+        // Physical capacity alone does not permit writes beyond a validated
+        // prefix: a lenient retry may discard the following invalid blocks.
+        let output_has_store_slack =
+            output_has_store_slack && error_write_policy == ErrorWritePolicy::Partial;
         unsafe { decode_x86_alphabet(input, output, backend, alphabet, output_has_store_slack) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -482,11 +485,58 @@ fn decode_x86_kernel<A: x86_contracts::Decoder, S: x86_contracts::Store>(
     }
 }
 
-#[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     use crate::base64::{b64encode, encode_scalar};
 
+    #[test]
+    fn validated_blocks_preserve_suffix_before_invalid_successor() {
+        for backend in [
+            Backend::Avx512Vbmi,
+            Backend::Avx2,
+            Backend::Sse41,
+            Backend::Ssse3,
+            Backend::Neon,
+        ] {
+            if !backend::is_supported(backend) {
+                continue;
+            }
+            for symbols in [32, 128] {
+                let mut input = vec![b'A'; symbols];
+                input.extend_from_slice(&[b'!'; 32]);
+                for alphabet in [
+                    DecodeAlphabet::Standard,
+                    DecodeAlphabet::UrlSafe,
+                    DecodeAlphabet::Mixed,
+                ] {
+                    for slack in [false, true] {
+                        let mut output = vec![0xa5; input.len()];
+                        assert_eq!(
+                            unsafe {
+                                decode_with_backend_ptr_mode(
+                                    &input,
+                                    output.as_mut_ptr(),
+                                    backend,
+                                    alphabet,
+                                    slack,
+                                    ErrorWritePolicy::ValidatedBlocksOnly,
+                                )
+                            },
+                            Err(Base64Error::InvalidInput)
+                        );
+                        assert!(
+                            output[symbols / 4 * 3..].iter().all(|&byte| byte == 0xa5),
+                            "{backend:?}, {symbols}, {alphabet:?}, slack={slack}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn every_x86_backend_has_a_dispatch_path_without_running_unsupported_instructions() {
         for backend in [
@@ -524,6 +574,7 @@ mod tests {
         );
     }
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn avx2_cached_and_streaming_dispatch_match() {
         if backend::is_supported(Backend::Avx2) {
@@ -531,6 +582,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn check_avx2_cached_and_streaming_dispatch() {
         let input = vec![0x5a_u8; 192];
         let expected = b64encode(&input);

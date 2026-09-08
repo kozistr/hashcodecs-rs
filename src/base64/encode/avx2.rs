@@ -52,7 +52,9 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     #[cfg(target_arch = "x86_64")]
     {
         let groups = (input.len() - load_offset - 8) / 96;
-        if groups != 0 {
+        // Amortize the helper's fixed call and register-save costs across at
+        // least two groups. Shorter prefixes use the inline 24-byte loop.
+        if groups >= 2 {
             if store_mode == Avx2StoreMode::Streaming {
                 used_streaming_stores = true;
                 unsafe {
@@ -85,8 +87,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
         }
     }
 
-    // The helper's fixed call and register-save costs outweigh its scheduling
-    // benefit on small inputs. This loop is also the 32-bit x86 fallback.
+    // The assembly helper is unavailable on 32-bit x86.
     #[cfg(target_arch = "x86")]
     while load_offset + 104 <= input.len() {
         let first = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
@@ -296,8 +297,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
         10, 9, 11, 10,
     );
 
-    let higher_mask = _mm256_set1_epi32(0x0fc0_fc00);
-    let higher_multiplier = _mm256_set1_epi32(0x0400_0040);
+    let align_multiplier = _mm256_set1_epi32(0x0010_0001);
     let lower_mask = _mm256_set1_epi32(0x003f_03f0);
     let lower_multiplier = _mm256_set1_epi32(0x0100_0010);
     let reduction_base = _mm256_set1_epi8(51);
@@ -323,8 +323,8 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
 
     // Keep the actual branch target aligned, rather than placing an alignment
     // directive in a Rust loop where LLVM's backedge label precedes the NOPs.
-    // Eight input constants plus eight early-clobber outputs occupy all YMM
-    // registers on x86-64, preventing accidental input/output register aliasing.
+    // Seven input constants plus eight early-clobber outputs leave one YMM
+    // register free while preventing accidental input/output register aliasing.
     unsafe {
         asm!(
             ".p2align 5",
@@ -337,14 +337,14 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
             "vpshufb {value1}, {value1}, {shuffle}",
             "vpshufb {value2}, {value2}, {shuffle}",
             "vpshufb {value3}, {value3}, {shuffle}",
-            "vpand {temporary0}, {value0}, {higher_mask}",
-            "vpand {temporary1}, {value1}, {higher_mask}",
-            "vpand {temporary2}, {value2}, {higher_mask}",
-            "vpand {temporary3}, {value3}, {higher_mask}",
-            "vpmulhuw {temporary0}, {temporary0}, {higher_multiplier}",
-            "vpmulhuw {temporary1}, {temporary1}, {higher_multiplier}",
-            "vpmulhuw {temporary2}, {temporary2}, {higher_multiplier}",
-            "vpmulhuw {temporary3}, {temporary3}, {higher_multiplier}",
+            "vpmullw {temporary0}, {value0}, {align_multiplier}",
+            "vpmullw {temporary1}, {value1}, {align_multiplier}",
+            "vpmullw {temporary2}, {value2}, {align_multiplier}",
+            "vpmullw {temporary3}, {value3}, {align_multiplier}",
+            "vpsrlw {temporary0}, {temporary0}, 10",
+            "vpsrlw {temporary1}, {temporary1}, 10",
+            "vpsrlw {temporary2}, {temporary2}, 10",
+            "vpsrlw {temporary3}, {temporary3}, 10",
             "vpand {value0}, {value0}, {lower_mask}",
             "vpand {value1}, {value1}, {lower_mask}",
             "vpand {value2}, {value2}, {lower_mask}",
@@ -391,8 +391,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
             output = inout(reg) output => _,
             groups = inout(reg) groups => _,
             shuffle = in(ymm_reg) shuffle,
-            higher_mask = in(ymm_reg) higher_mask,
-            higher_multiplier = in(ymm_reg) higher_multiplier,
+            align_multiplier = in(ymm_reg) align_multiplier,
             lower_mask = in(ymm_reg) lower_mask,
             lower_multiplier = in(ymm_reg) lower_multiplier,
             reduction_base = in(ymm_reg) reduction_base,

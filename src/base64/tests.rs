@@ -599,8 +599,9 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
     const CANARY: u8 = 0xa5;
 
     // 32 activates the special first load, 52 activates the first shifted
-    // load, and 124 activates the four-block unrolled shifted loop. The other
-    // explicit boundaries exercise the AVX2 and scalar terminal tails.
+    // load, and 220 activates the assembly helper after a shorter group stays
+    // in the inline loop. The other explicit boundaries exercise the AVX2 and
+    // scalar terminal tails.
     for length in (0..=160).chain([191, 192, 195, 196, 219, 220, 255, 256, 4095, 4096]) {
         let mut guarded_input = vec![CANARY; GUARD + length + GUARD];
         for (index, byte) in guarded_input[GUARD..GUARD + length].iter_mut().enumerate() {

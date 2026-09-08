@@ -33,6 +33,40 @@ fn empty_vectors() {
 }
 
 #[test]
+fn prepared_seeds_match_one_shot_across_length_classes() {
+    let input = (0..=2048)
+        .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
+        .collect::<Vec<_>>();
+
+    for seed in [0, 1, 0x0123_4567_89ab_cdef, u64::MAX] {
+        let prepared = PreparedXxh3::new(seed);
+        for length in [0, 16, 17, 32, 64, 128, 129, 240, 241, 1024, 2048] {
+            assert_eq!(
+                prepared.hash_64(&input[..length]),
+                xxh3_64(&input[..length], seed)
+            );
+            assert_eq!(
+                prepared.hash_128(&input[..length]),
+                xxh3_128(&input[..length], seed)
+            );
+        }
+    }
+
+    assert_eq!(
+        format!("{:?}", PreparedXxh3::new(42)),
+        "PreparedXxh3 { seed: 42, .. }"
+    );
+    assert_eq!(
+        PreparedXxh3::default().hash_64(b"default"),
+        xxh3_64(b"default", 0)
+    );
+    assert_eq!(
+        PreparedXxh3::new(42).clone().hash_128(b"clone"),
+        xxh3_128(b"clone", 42)
+    );
+}
+
+#[test]
 fn batches_match_one_shot() {
     let values: [&[u8]; 3] = [b"", b"hello", b"xxhash"];
     assert_eq!(xxh3_64_batch(&values, 42), values.map(|v| xxh3_64(v, 42)));
@@ -94,8 +128,8 @@ fn batches_match_one_shot() {
 }
 
 #[test]
-fn batches_consume_contiguous_equal_length_runs() {
-    let owned = [300, 300, 17, 512, 512, 241, 241, 241].map(|length| {
+fn batches_consume_contiguous_equal_stripe_runs() {
+    let owned = [257, 258, 259, 260, 17, 1025, 1026, 1088, 1089].map(|length| {
         (0..length)
             .map(|index| (index as u8).wrapping_mul(43).wrapping_add(length as u8))
             .collect::<Vec<_>>()

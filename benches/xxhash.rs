@@ -6,9 +6,10 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const SIZES: [usize; 15] = [
+const SIZES: [usize; 16] = [
     16,
     17,
+    32,
     64,
     128,
     129,
@@ -23,8 +24,9 @@ const SIZES: [usize; 15] = [
     1024 * 1024,
     8 * 1024 * 1024,
 ];
-const MIXED_BATCHES: [(&str, [usize; 4]); 3] = [
+const MIXED_BATCHES: [(&str, [usize; 4]); 4] = [
     ("two_long_runs", [1024, 1024, 4 * 1024, 4 * 1024]),
+    ("nearby_long_lengths", [257, 258, 259, 260]),
     ("short_then_long_boundary", [240, 240, 241, 241]),
     ("long_then_short_boundary", [241, 241, 240, 240]),
 ];
@@ -158,10 +160,42 @@ fn batch(c: &mut Criterion) {
     }
 }
 
+fn prepared_seed(c: &mut Criterion) {
+    for size in [241, 1024] {
+        let input = data(size, 17);
+        let prepared = hashcodecs::xxhash::PreparedXxh3::new(42);
+        assert_eq!(
+            prepared.hash_64(&input),
+            hashcodecs::xxhash::xxh3_64(&input, 42)
+        );
+        assert_eq!(
+            prepared.hash_128(&input),
+            hashcodecs::xxhash::xxh3_128(&input, 42)
+        );
+
+        let mut group = c.benchmark_group(format!("xxh3_prepared/{size}"));
+        group.throughput(Throughput::Bytes(size as u64));
+        group.bench_function("one_shot_64", |bench| {
+            bench.iter(|| hashcodecs::xxhash::xxh3_64(black_box(&input), 42))
+        });
+        group.bench_function("prepared_64", |bench| {
+            bench.iter(|| prepared.hash_64(black_box(&input)))
+        });
+        group.bench_function("one_shot_128", |bench| {
+            bench.iter(|| hashcodecs::xxhash::xxh3_128(black_box(&input), 42))
+        });
+        group.bench_function("prepared_128", |bench| {
+            bench.iter(|| prepared.hash_128(black_box(&input)))
+        });
+        group.finish();
+    }
+}
+
 fn xxhash(c: &mut Criterion) {
     support::pin_to_one_cpu();
     one_shot(c);
     batch(c);
+    prepared_seed(c);
 }
 
 criterion_group! {

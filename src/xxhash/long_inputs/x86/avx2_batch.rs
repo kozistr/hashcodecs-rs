@@ -1,4 +1,4 @@
-//! Interleaved AVX2 kernels for equal-length long-input batches.
+//! Interleaved AVX2 kernels for long-input batches with equal stripe counts.
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -15,7 +15,7 @@ macro_rules! define_accumulate_batch {
         #[target_feature(enable = "avx2")]
         /// # Safety
         /// The caller must have detected AVX2 support. All inputs must have the
-        /// same length.
+        /// same `(length - 1) / 64` stripe count.
         pub(in crate::xxhash::long_inputs) unsafe fn $name(
             inputs: [LongInput<'_>; $size],
             secret: &Secret,
@@ -69,13 +69,12 @@ macro_rules! define_accumulate_batch {
                 }
             }
 
-            let input_offset = schedule.last_offset();
             let secret_ptr = unsafe { secret.as_ptr().add(121) };
 
             unsafe {
                 $(accumulate_registers(
                     &mut $acc,
-                    data[$index].as_ptr().add(input_offset),
+                    data[$index].as_ptr().add(inputs[$index].len() - 64),
                     secret_ptr,
                 );)+
                 [$(finish($acc)),+]

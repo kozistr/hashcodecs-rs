@@ -58,15 +58,17 @@ The [stack-boundary comparison](docs/benchmarks/xxh3-batch-boundary-comparison.c
 64-byte items: two-item bytearray batches lose 5.40–6.05%, and 33-item bytes batches lose 6.06–7.05%. These
 measurements show residual overhead for some small-input batches; they do not establish zero regression.
 
-The Rust mixed benchmarks use `[1024, 1024, 4096, 4096]`, `[240, 240, 241, 241]`, and the reverse boundary order.
-The 1024/4096 case measures adjacent two-item long runs. The 240/241 cases measure both orders across the
-short/long dispatch boundary.
+The Rust mixed benchmarks use `[1024, 1024, 4096, 4096]`, `[257, 258, 259, 260]`, `[240, 240, 241, 241]`, and the
+reverse boundary order. The 1024/4096 case measures adjacent two-item long runs. The 257–260 case measures a
+four-item run with one shared stripe count and distinct final stripes. The 240/241 cases measure both orders across
+the short/long dispatch boundary.
 
 Use the focused one-shot run to cover the AVX2 four-chain boundaries:
 
 ```sh
 cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_(64|128)/(240|241|512|768|1024|1536|2048|4096)/hashcodecs"
 cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_batch/mixed/.*/hashcodecs_(64|128)"
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_prepared"
 ```
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)

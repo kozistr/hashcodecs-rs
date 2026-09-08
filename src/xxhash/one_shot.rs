@@ -3,7 +3,8 @@
 use super::long_inputs::{LongInput, xxh3_64_over_240_bytes, xxh3_128_over_240_bytes};
 use super::short_inputs::{
     xxh3_64_len_0_to_16, xxh3_64_len_17_to_128, xxh3_64_len_129_to_240, xxh3_128_len_0_to_16,
-    xxh3_128_len_17_to_128, xxh3_128_len_64, xxh3_128_len_129_to_240,
+    xxh3_128_len_17_to_128, xxh3_128_len_32, xxh3_128_len_64, xxh3_128_len_128,
+    xxh3_128_len_129_to_240,
 };
 
 /// Computes the canonical XXH3 64-bit hash in one call.
@@ -61,11 +62,13 @@ pub fn xxh3_64(input: &[u8], seed: u64) -> u64 {
 ///     assert_eq!(low64, 0x6001_c324_468d_497f);
 ///     assert_eq!(high64, 0x99aa_06d3_0147_98d8);
 ///
-#[inline]
+#[inline(always)]
 pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
     match input.len() {
         0..=16 => xxh3_128_len_0_to_16(input, seed),
+        32 => xxh3_128_len_32(input, seed),
         64 => xxh3_128_len_64(input, seed),
+        128 => xxh3_128_len_128(input, seed),
         17..=128 => xxh3_128_len_17_to_128(input, seed),
         129..=240 => xxh3_128_len_129_to_240(input, seed),
         _ => xxh3_128_over_240_bytes(LongInput::new(input).unwrap(), seed),

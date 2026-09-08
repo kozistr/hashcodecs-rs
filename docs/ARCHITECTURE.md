@@ -128,7 +128,8 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 ### XXH3
 
 `one_shot.rs` selects the input-length class. `short_inputs.rs` contains the formulas for 0 to 240 bytes.
-`long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. XXH3-64 and XXH3-128 share these modules.
+`long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. `prepared.rs` retains one derived
+secret for repeated calls with the same seed. XXH3-64 and XXH3-128 share these modules.
 `long_inputs/aarch64.rs` and the kernels under `long_inputs/x86/` contain the ISA-specific implementations.
 The scalar long-input flow and backend selection use the same module. These kernels handle inputs longer than 240 bytes.
 

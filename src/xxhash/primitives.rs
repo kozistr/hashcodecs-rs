@@ -105,7 +105,7 @@ pub(super) fn mix16(
 }
 
 #[inline(always)]
-unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
+pub(super) unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
     let data_lo = u64::from_le(unsafe { data.cast::<u64>().read_unaligned() });
     let data_hi = u64::from_le(unsafe { data.add(8).cast::<u64>().read_unaligned() });
 

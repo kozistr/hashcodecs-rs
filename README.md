@@ -25,7 +25,7 @@ Move byte-heavy work into Rust without changing your Python inputs. `hashcodecs`
 
 - Base64 encode and decode with standard, URL-safe, padded, unpadded, wrapped, and canonical modes.
 - MurmurHash3 x86-32, x86-128, and x64-128 with one-shot and incremental APIs.
-- Bit-for-bit compatible XXH3-64 and XXH3-128 with allocating and allocation-free native batch APIs.
+- Bit-for-bit compatible XXH3-64 and XXH3-128 with prepared seeds and allocating and allocation-free native batch APIs.
 - Caller-managed `*_into` outputs for allocation-sensitive workloads.
 - Runtime dispatch across AVX-512, AVX2, SSE4.1, SSSE3, NEON, and scalar implementations where applicable.
 - Direct CPython buffer handling for `bytes`, `bytearray`, and `memoryview` inputs.
@@ -114,6 +114,13 @@ assert_eq!(
 assert_eq!(
     hashcodecs::xxhash::xxh3_64(b"", 0),
     0x2d06_8005_38d3_94c2
+);
+
+let seeded_input = vec![7; 1024];
+let prepared = hashcodecs::xxhash::PreparedXxh3::new(42);
+assert_eq!(
+    prepared.hash_64(&seeded_input),
+    hashcodecs::xxhash::xxh3_64(&seeded_input, 42)
 );
 
 let inputs: &[&[u8]] = &[b"hello", b"world"];
@@ -211,9 +218,10 @@ cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 
 ## Performance snapshot
 
-In the full 2026-09-02 hashcodecs-only run on the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at
-90.07 GiB/s. With 256 B items in batches of 64, the Base64 batch API reaches 11.84 GiB/s for encode and 6.23 GiB/s for
-decode. The run pins one logical CPU and uses 15 samples with a 0.2-second minimum per sample. Read the
+In the focused 2026-09-09 hashcodecs-only run on the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input
+at 91.27 GiB/s. In the full 2026-09-02 run, the Base64 batch API reaches 11.84 GiB/s for encode and 6.23 GiB/s for
+decode with 256 B items in batches of 64. Each run pins one logical CPU and uses 15 samples with a 0.2-second
+minimum per sample. Read the
 [benchmark details](BENCHMARK.md) and [raw comparison results](docs/benchmarks/results.csv).
 
 ## Development

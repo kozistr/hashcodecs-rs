@@ -4,7 +4,7 @@ use super::long_inputs::{LongEngine, LongInput, Secret, finalize_long_64, finali
 use super::one_shot::{xxh3_64, xxh3_128};
 
 macro_rules! emit_long_group {
-    ($name:ident, $size:literal, $($acc:ident),+ $(,)?) => {
+    ($name:ident, $size:literal, $(($acc:ident, $index:literal)),+ $(,)?) => {
         #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
         #[inline(always)]
         fn $name<T, F, O>(
@@ -18,15 +18,21 @@ macro_rules! emit_long_group {
             O: FnMut(T),
         {
             let [$($acc),+] = accumulators;
-            let length = inputs.input(0).len();
-            $(output(finalize(length, secret, $acc));)+
+            $(output(finalize(inputs.input($index).len(), secret, $acc));)+
         }
     };
 }
 
-emit_long_group!(emit_long_group2, 2, acc0, acc1);
-emit_long_group!(emit_long_group3, 3, acc0, acc1, acc2);
-emit_long_group!(emit_long_group4, 4, acc0, acc1, acc2, acc3);
+emit_long_group!(emit_long_group2, 2, (acc0, 0), (acc1, 1));
+emit_long_group!(emit_long_group3, 3, (acc0, 0), (acc1, 1), (acc2, 2));
+emit_long_group!(
+    emit_long_group4,
+    4,
+    (acc0, 0),
+    (acc1, 1),
+    (acc2, 2),
+    (acc3, 3),
+);
 
 /// Runs one batch loop for vector outputs and callback outputs.
 #[inline(always)]
@@ -166,7 +172,7 @@ fn hash_input_runs<T, S, F, O>(
 /// Computes canonical XXH3 64-bit hashes for a batch without copying inputs.
 ///
 /// The result order matches the input order. The function shares seed setup across the batch.
-/// The AVX2 kernel can process two to four adjacent long inputs of equal size at one time.
+/// The AVX2 kernel can process two to four adjacent long inputs with equal stripe counts at one time.
 ///
 /// # Arguments
 ///
@@ -224,7 +230,7 @@ pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u6
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
 ///
 /// The result order matches the input order. The function shares seed setup across the batch.
-/// The AVX2 kernel can process two to four adjacent long inputs of equal size at one time.
+/// The AVX2 kernel can process two to four adjacent long inputs with equal stripe counts at one time.
 ///
 /// # Arguments
 ///
@@ -366,7 +372,7 @@ mod tests {
     #[test]
     fn grouped_runs_match_one_shot_with_scalar_and_native_engines() {
         let owned = [
-            300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
+            257, 258, 259, 260, 17, 1025, 1026, 1088, 17, 1089, 1090, 17, 2048,
         ]
         .map(|length| vec![length as u8; length]);
         let inputs = owned.each_ref().map(Vec::as_slice);
@@ -399,6 +405,17 @@ mod tests {
             );
             assert_eq!(hashes_128, inputs.map(|input| xxh3_128(input, 17)));
         }
+    }
+
+    #[test]
+    fn long_runs_stop_at_short_inputs_and_stripe_boundaries() {
+        let owned = [257, 258, 260, 17, 261, 320, 321].map(|length| vec![0; length]);
+        let refs = owned.each_ref().map(Vec::as_slice);
+
+        assert_eq!(LongRun::new(&refs).unwrap().len(), 3);
+        assert!(LongRun::new(&refs[3..]).is_none());
+        assert_eq!(LongRun::new(&refs[4..]).unwrap().len(), 2);
+        assert_eq!(LongRun::new(&refs[6..]).unwrap().len(), 1);
     }
 
     #[test]

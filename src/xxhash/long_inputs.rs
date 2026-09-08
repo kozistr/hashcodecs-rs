@@ -75,6 +75,12 @@ impl<'a> LongInput<'a> {
     pub(super) fn len(self) -> usize {
         self.0.len()
     }
+
+    #[inline(always)]
+    #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
+    pub(super) fn regular_stripes(self) -> usize {
+        (self.len() - 1) / 64
+    }
 }
 
 #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
@@ -105,9 +111,12 @@ impl<'batch, 'input> LongRun<'batch, 'input> {
     #[inline(always)]
     pub(super) fn new(inputs: &'batch [&'input [u8]]) -> Option<Self> {
         let first = LongInput::new(inputs.first()?)?;
+        let stripes = first.regular_stripes();
         let run_length = inputs
             .iter()
-            .take_while(|input| input.len() == first.len())
+            .take_while(|input| {
+                LongInput::new(input).is_some_and(|input| input.regular_stripes() == stripes)
+            })
             .count();
         Some(Self {
             inputs: &inputs[..run_length],

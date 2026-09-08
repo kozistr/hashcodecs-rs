@@ -9,11 +9,13 @@
 mod batch;
 mod long_inputs;
 mod one_shot;
+mod prepared;
 mod primitives;
 mod short_inputs;
 
 pub use batch::{xxh3_64_batch, xxh3_64_batch_for_each, xxh3_128_batch, xxh3_128_batch_for_each};
 pub use one_shot::{xxh3_64, xxh3_128};
+pub use prepared::PreparedXxh3;
 
 #[cfg(all(test, miri))]
 mod miri_tests;

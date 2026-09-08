@@ -139,7 +139,9 @@ fn matches_reference_at_every_length_through_two_blocks() {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
 fn avx2_tail_hashes_match_reference_at_every_length() {
-    use super::long_inputs::{finalize_long_64, finalize_long_128};
+    use crate::backend::Capabilities;
+
+    use super::long_inputs::{LongEngine, finalize_long_64, finalize_long_128};
 
     if !backend::capabilities().supports(CpuFeature::Avx2) {
         return;
@@ -148,6 +150,8 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
     let input = (0..1024)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
+    let engine =
+        LongEngine::new_with_capabilities(Capabilities::from_features(&[CpuFeature::Avx2]));
     for length in 241..=1024 {
         let input = &input[..length];
         let long_input = LongInput::new(input).unwrap();
@@ -164,6 +168,12 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
                 finalize_long_128(length, &secret, acc),
                 c_xxh3_128(input, seed),
                 "AVX2 XXH3-128 mismatch for length {length}, seed {seed:#x}",
+            );
+
+            assert_eq!(
+                engine.hash_128(long_input, &secret),
+                c_xxh3_128(input, seed),
+                "dispatched AVX2 XXH3-128 mismatch for length {length}, seed {seed:#x}",
             );
         }
     }
@@ -222,12 +232,15 @@ fn randomized_inputs_match_the_official_c_implementation() {
 
 #[test]
 fn scalar_long_inputs_match_reference_and_native_backend() {
+    use crate::backend::Capabilities;
+
     use super::long_inputs::{LongEngine, finalize_long_64, finalize_long_128};
 
     let input: Vec<u8> = (0..4161)
         .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
         .collect();
     let native = LongEngine::new();
+    let scalar = LongEngine::new_with_capabilities(Capabilities::from_features(&[]));
     for length in [241, 256, 511, 512, 1023, 1024, 1025, 2048, 4161] {
         let input = &input[..length];
         let long_input = LongInput::new(input).unwrap();
@@ -240,6 +253,10 @@ fn scalar_long_inputs_match_reference_and_native_backend() {
             );
             assert_eq!(
                 finalize_long_128(length, &secret, acc),
+                c_xxh3_128(input, seed)
+            );
+            assert_eq!(
+                scalar.hash_128(long_input, &secret),
                 c_xxh3_128(input, seed)
             );
             assert_eq!(native.accumulate(long_input, &secret), acc);

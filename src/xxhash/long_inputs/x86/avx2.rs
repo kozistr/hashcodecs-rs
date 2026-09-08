@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use crate::xxhash::long_inputs::{
-    LongInput, Secret, build_long_input_schedule, initial_accumulator,
+    LongInput, Secret, build_long_input_schedule, finalize_long_128_pairwise, initial_accumulator,
 };
 use crate::xxhash::primitives::{P32_1, SECRET};
 
@@ -263,13 +263,8 @@ unsafe fn accumulate_tail_chains(
     }
 }
 
-#[target_feature(enable = "avx2")]
-/// # Safety
-/// The caller must have detected AVX2 support.
-pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
-    input: LongInput<'_>,
-    secret: &Secret,
-) -> [u64; 8] {
+#[inline(always)]
+unsafe fn accumulate_input(input: LongInput<'_>, secret: &Secret) -> Accumulator {
     let data = input.as_bytes();
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);
@@ -307,5 +302,28 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
         unsafe { accumulate_registers(&mut acc, last, secret_ptr) };
     }
 
-    unsafe { finish(acc) }
+    acc
+}
+
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must have detected AVX2 support.
+pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
+    input: LongInput<'_>,
+    secret: &Secret,
+) -> [u64; 8] {
+    unsafe { finish(accumulate_input(input, secret)) }
+}
+
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must have detected AVX2 support.
+pub(in crate::xxhash::long_inputs) unsafe fn hash_128(
+    input: LongInput<'_>,
+    secret: &Secret,
+) -> [u64; 2] {
+    let length = input.len();
+    let acc = unsafe { finish(accumulate_input(input, secret)) };
+
+    finalize_long_128_pairwise(length, secret, acc)
 }

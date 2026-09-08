@@ -234,15 +234,19 @@ pub(super) fn initial_accumulator() -> [u64; 8] {
 }
 
 #[inline(always)]
+fn merge_lane(acc: &[u64; 8], secret: &[u8; 192], offset: usize, lane: usize) -> u64 {
+    mul_fold(
+        acc[lane * 2] ^ read_u64_le(secret, offset + lane * 16),
+        acc[lane * 2 + 1] ^ read_u64_le(secret, offset + lane * 16 + 8),
+    )
+}
+
+#[inline(always)]
 pub(super) fn merge(acc: &[u64; 8], secret: &Secret, offset: usize, start: u64) -> u64 {
-    let secret = secret.as_bytes();
     let mut result = start;
 
     for lane in 0..4 {
-        result = result.wrapping_add(mul_fold(
-            acc[lane * 2] ^ read_u64_le(secret, offset + lane * 16),
-            acc[lane * 2 + 1] ^ read_u64_le(secret, offset + lane * 16 + 8),
-        ));
+        result = result.wrapping_add(merge_lane(acc, secret.as_bytes(), offset, lane));
     }
 
     avalanche(result)
@@ -259,6 +263,21 @@ pub(super) fn finalize_long_128(length: usize, secret: &Secret, acc: [u64; 8]) -
         merge(&acc, secret, 11, (length as u64).wrapping_mul(P64_1)),
         merge(&acc, secret, 117, !(length as u64).wrapping_mul(P64_2)),
     ]
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[inline(always)]
+fn finalize_long_128_pairwise(length: usize, secret: &Secret, acc: [u64; 8]) -> [u64; 2] {
+    let secret = secret.as_bytes();
+    let mut low = (length as u64).wrapping_mul(P64_1);
+    let mut high = !(length as u64).wrapping_mul(P64_2);
+
+    for lane in 0..4 {
+        low = low.wrapping_add(merge_lane(&acc, secret, 11, lane));
+        high = high.wrapping_add(merge_lane(&acc, secret, 117, lane));
+    }
+
+    [avalanche(low), avalanche(high)]
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -303,6 +322,8 @@ pub(super) struct LongEngine {
     backend: LongBackend,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     avx2_available: bool,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2_selected: bool,
 }
 
 #[cfg(not(any(kani, miri)))]
@@ -313,6 +334,8 @@ static LONG_ENGINE: LongEngine = LongEngine {
     backend: LongBackend::Scalar,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     avx2_available: false,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2_selected: false,
 };
 
 impl LongEngine {
@@ -346,6 +369,7 @@ impl LongEngine {
             Self {
                 backend,
                 avx2_available: capabilities.supports(CpuFeature::Avx2),
+                avx2_selected: selected == X86Backend::Avx2,
             }
         }
 
@@ -486,6 +510,16 @@ impl LongEngine {
         let acc = self.accumulate(input, secret);
         finalize(input.len(), secret, acc)
     }
+
+    #[inline(always)]
+    pub(super) fn hash_128(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 2] {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2_selected {
+            return unsafe { x86::avx2::hash_128(input, secret) };
+        }
+
+        self.hash(input, secret, finalize_long_128)
+    }
 }
 
 pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
@@ -499,5 +533,5 @@ pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 
     let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
 
-    engine.hash(input, engine.secret(&derived), finalize_long_128)
+    engine.hash_128(input, engine.secret(&derived))
 }

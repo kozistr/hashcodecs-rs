@@ -153,6 +153,7 @@ def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[
         (b'Y WJj', None, {'ignorechars': b' ', 'validate': False}),
         (b'Y WJj', None, {'ignorechars': b''}),
         (b'AB==', None, {'canonical': True}),
+        (b'AB==AA', None, {'canonical': True}),
         (b'AA==', None, {'canonical': True}),
         (b'AP', None, {'padded': False, 'canonical': True}),
         (b'@#8', b'@#', {'padded': False, 'ignorechars': b''}),

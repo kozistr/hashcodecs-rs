@@ -32,18 +32,34 @@ enum ExactBytesBatch<'a, 'py> {
 // allocating Python objects or detaching from the interpreter.
 fn exact_bytes_batch<'a, 'py>(
     items: &'a Bound<'py, PyList>,
-) -> PyResult<Option<ExactBytesBatch<'a, 'py>>> {
-    let Some(total) = exact_bytes_total(items) else {
-        return Ok(None);
-    };
+    total: usize,
+) -> PyResult<ExactBytesBatch<'a, 'py>> {
     if total >= XXH3_DETACH_THRESHOLD {
         let retained = exact_bytes_up_to(items, usize::MAX)?
             .expect("the exact-bytes scan and retention observe the same GIL-protected list");
-        return Ok(Some(ExactBytesBatch::Retained(retained)));
+        return Ok(ExactBytesBatch::Retained(retained));
     }
     let mut inputs = batch_results(items.len(), BATCH_TOO_LARGE)?;
     inputs.extend((0..items.len()).map(|index| unsafe { exact_bytes_at(items, index) }));
-    Ok(Some(ExactBytesBatch::Borrowed(inputs)))
+    Ok(ExactBytesBatch::Borrowed(inputs))
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+fn with_small_exact_bytes<'a, 'py, T>(
+    items: &'a Bound<'py, PyList>,
+    total: usize,
+    operation: impl FnOnce(&[&'a [u8]]) -> T,
+) -> Option<T> {
+    if items.len() > STACK_BATCH_RESULTS || total >= XXH3_DETACH_THRESHOLD {
+        return None;
+    }
+
+    let mut inputs = [&[][..]; STACK_BATCH_RESULTS];
+    let inputs = &mut inputs[..items.len()];
+    for (index, input) in inputs.iter_mut().enumerate() {
+        *input = unsafe { exact_bytes_at(items, index) };
+    }
+    Some(operation(inputs))
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
@@ -126,25 +142,29 @@ fn batch_hashes<'a, T: Copy + Default + Send + Sync>(
     // avoids retaining small immutable inputs across a GC reentrancy point.
     // The hash callback must only fill native output, without calling Python.
     #[cfg(not(Py_GIL_DISABLED))]
-    if items.len() <= STACK_BATCH_RESULTS
-        && exact_bytes_total(items).is_some_and(|total| total < XXH3_DETACH_THRESHOLD)
     {
-        let mut inputs = [&[][..]; STACK_BATCH_RESULTS];
-        let inputs = &mut inputs[..items.len()];
-        for (index, input) in inputs.iter_mut().enumerate() {
-            *input = unsafe { exact_bytes_at(items, index) };
-        }
-        return hash_into_scratch(inputs, seed, scratch, hash);
-    }
-    #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(exact) = exact_bytes_batch(items)? {
-        return match exact {
-            ExactBytesBatch::Borrowed(inputs) => hash_into_scratch(&inputs, seed, scratch, hash),
-            ExactBytesBatch::Retained(retained) => {
-                let inputs = borrow_retained(&retained)?;
-                py.detach(|| hash_into_scratch(&inputs, seed, scratch, hash))
+        let exact_total = exact_bytes_total(items);
+        if items.len() <= STACK_BATCH_RESULTS
+            && exact_total.is_some_and(|total| total < XXH3_DETACH_THRESHOLD)
+        {
+            let mut inputs = [&[][..]; STACK_BATCH_RESULTS];
+            let inputs = &mut inputs[..items.len()];
+            for (index, input) in inputs.iter_mut().enumerate() {
+                *input = unsafe { exact_bytes_at(items, index) };
             }
-        };
+            return hash_into_scratch(inputs, seed, scratch, hash);
+        }
+        if let Some(total) = exact_total {
+            return match exact_bytes_batch(items, total)? {
+                ExactBytesBatch::Borrowed(inputs) => {
+                    hash_into_scratch(&inputs, seed, scratch, hash)
+                }
+                ExactBytesBatch::Retained(retained) => {
+                    let inputs = borrow_retained(&retained)?;
+                    py.detach(|| hash_into_scratch(&inputs, seed, scratch, hash))
+                }
+            };
+        }
     }
     let items = list_items(items)?;
     let parsed = parse_batch(&items)?;
@@ -306,8 +326,13 @@ pub(super) fn xxh3_64_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(exact) = exact_bytes_batch(items)? {
-        return match exact {
+    if let Some(total) = exact_bytes_total(items) {
+        if let Some(written) =
+            with_small_exact_bytes(items, total, |inputs| write_direct_64(output, inputs, seed))
+        {
+            return written;
+        }
+        return match exact_bytes_batch(items, total)? {
             ExactBytesBatch::Borrowed(inputs) => write_direct_64(output, &inputs, seed),
             ExactBytesBatch::Retained(retained) => {
                 with_bytearray(output, || packed_output_len(output, retained.len(), 8))?;
@@ -349,8 +374,13 @@ pub(super) fn xxh3_128_batch_into(
     seed: u64,
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(exact) = exact_bytes_batch(items)? {
-        return match exact {
+    if let Some(total) = exact_bytes_total(items) {
+        if let Some(written) = with_small_exact_bytes(items, total, |inputs| {
+            write_direct_128(output, inputs, seed)
+        }) {
+            return written;
+        }
+        return match exact_bytes_batch(items, total)? {
             ExactBytesBatch::Borrowed(inputs) => write_direct_128(output, &inputs, seed),
             ExactBytesBatch::Retained(retained) => {
                 with_bytearray(output, || packed_output_len(output, retained.len(), 16))?;

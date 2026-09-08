@@ -85,6 +85,7 @@ fn is_ignored_value(value: u8) -> bool {
 
 pub(super) struct ConfiguredDecoder {
     pub(super) table: [u8; 256],
+    preserves_alphanumeric: bool,
     pub(super) validation: Validation,
     pub(super) padding: Padding,
     pub(super) canonical: bool,
@@ -98,6 +99,8 @@ impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
         let kernels = decode_byte_kernels();
         let altchars = policy.altchars;
+        let preserves_alphanumeric =
+            altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()));
         let ignored = policy.ignored.unwrap_or_default();
 
         let mut table = lenient_decode_table(None);
@@ -142,6 +145,7 @@ impl ConfiguredDecoder {
 
         Self {
             table,
+            preserves_alphanumeric,
             validation: policy.validation,
             padding: policy.padding,
             canonical: policy.canonical,
@@ -151,13 +155,14 @@ impl ConfiguredDecoder {
             translation,
         }
     }
+}
 
-    pub(super) fn preserves_alphanumeric(&self) -> bool {
-        STANDARD_ALPHABET[..62]
-            .iter()
-            .enumerate()
-            .all(|(value, &byte)| self.table[usize::from(byte)] == value as u8)
-    }
+#[cfg(test)]
+fn preserves_alphanumeric(table: &[u8; 256]) -> bool {
+    STANDARD_ALPHABET[..62]
+        .iter()
+        .enumerate()
+        .all(|(value, &byte)| table[usize::from(byte)] == value as u8)
 }
 
 #[derive(Clone, Copy)]
@@ -554,7 +559,6 @@ impl ConfiguredDecoder {
         input: &[u8],
         mut sink: S,
     ) -> Option<usize> {
-        let preserves_alphanumeric = self.preserves_alphanumeric();
         let mut source = 0;
         let mut symbols = 0;
         let mut padding = 0;
@@ -562,7 +566,7 @@ impl ConfiguredDecoder {
         let mut last_value = 0;
 
         while source < input.len() {
-            if preserves_alphanumeric && !saw_padding {
+            if self.preserves_alphanumeric && !saw_padding {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
@@ -612,7 +616,6 @@ impl ConfiguredDecoder {
         mut sink: S,
         continue_after_padding: bool,
     ) -> Option<usize> {
-        let preserves_alphanumeric = self.preserves_alphanumeric();
         let equals_is_data = self.table[usize::from(b'=')] < 64;
         let mut source = 0;
         let mut symbols = 0;
@@ -621,7 +624,7 @@ impl ConfiguredDecoder {
         let mut leftchar = 0;
 
         while source < input.len() {
-            if preserves_alphanumeric {
+            if self.preserves_alphanumeric {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
@@ -649,16 +652,10 @@ impl ConfiguredDecoder {
 
             if self.padding.is_padded() && byte == b'=' && !equals_is_data {
                 padding += 1;
-                if CHECKED
-                    && self.canonical
-                    && quad_pos >= 2
-                    && quad_pos + padding >= 4
-                    && leftchar != 0
-                {
-                    return None;
-                }
-
                 if !continue_after_padding && quad_pos >= 2 && quad_pos + padding >= 4 {
+                    if CHECKED && self.canonical && leftchar != 0 {
+                        return None;
+                    }
                     return sink.finish::<CHECKED>(decoded_symbol_len(symbols));
                 }
 

@@ -5,7 +5,9 @@ use super::super::lenient::{
     LenientDecodeError, decode_lenient_to_ptr, decoded_len_upper_bound, decoded_symbol_len,
     lenient_decode_table, lenient_decoded_len,
 };
-use super::super::policy::{DecodePolicy, ErrorWrites, Padding, PreparedDecoder, Validation};
+use super::super::policy::{
+    DecodePolicy, ErrorWrites, Padding, PreparedDecoder, PreparedPolicy, Validation,
+};
 use super::super::scan::scalar::{
     alphanumeric_prefix_scalar, symbol_prefix_scalar, translate_bytes_scalar,
 };
@@ -34,6 +36,7 @@ fn configured_decoder(
     }
     ConfiguredDecoder {
         table,
+        preserves_alphanumeric: super::preserves_alphanumeric(&table),
         validation: if strict_mode {
             Validation::Strict
         } else {
@@ -338,6 +341,31 @@ fn configured_decoder_compacts_ignored_bytes_into_its_decode_table() {
     let decoder = configured_decoder(b"!", true, true, false);
     assert_eq!(decoder.table[usize::from(b'!')], IGNORED_CONFIGURED_VALUE);
     assert_eq!(decoder.table[usize::from(b'?')], 64);
+}
+
+#[test]
+fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
+    for (altchars, expected) in [
+        (None, true),
+        (Some(*b"-_"), true),
+        (Some(*b"@#"), true),
+        (Some(*b"A#"), false),
+        (Some(*b"#z"), false),
+    ] {
+        let decoder = ConfiguredDecoder::new(&PreparedPolicy {
+            altchars,
+            validation: Validation::Lenient,
+            padding: Padding::Padded,
+            ignorechars_specified: true,
+            ignored: None,
+            canonical: false,
+        });
+        assert_eq!(decoder.preserves_alphanumeric, expected);
+        assert_eq!(
+            decoder.preserves_alphanumeric,
+            super::preserves_alphanumeric(&decoder.table)
+        );
+    }
 }
 
 #[test]
@@ -826,6 +854,13 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
             None
         );
     }
+    assert_eq!(canonical.decoded_len(b"AB==AA", true), Some(3));
+    assert_eq!(
+        unsafe { canonical.decode_checked_to_ptr(b"AB==AA", output.as_mut_ptr(), true) },
+        Some(3)
+    );
+    assert_eq!(&output[..3], b"\x00\x10\x00");
+    assert_eq!(canonical.decoded_len(b"AB==AA", false), None);
 
     let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
     let expected = CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2;
@@ -841,7 +876,7 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
 
     let mut remapped = configured_decoder(b"!", false, false, false);
     remapped.table[usize::from(b'A')] = 1;
-    assert!(!remapped.preserves_alphanumeric());
+    remapped.preserves_alphanumeric = false;
     assert_eq!(remapped.decoded_len(b"AAAA", true), Some(3));
     assert_eq!(
         unsafe { remapped.decode_checked_to_ptr(b"AAAA", output.as_mut_ptr(), true) },
@@ -854,6 +889,6 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
 
     let mut remapped_canonical = configured_decoder(b"!", false, false, true);
     remapped_canonical.table[usize::from(b'A')] = 1;
-    assert!(!remapped_canonical.preserves_alphanumeric());
+    remapped_canonical.preserves_alphanumeric = false;
     assert_eq!(remapped_canonical.decoded_len(b"AAAA", true), Some(3));
 }

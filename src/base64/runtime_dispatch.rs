@@ -58,6 +58,62 @@ pub(super) unsafe fn decode_with_runtime_backend(
 }
 
 #[inline]
+#[cfg(any(feature = "python", test))]
+pub(super) unsafe fn decode_standard_validated_with_runtime_backend(
+    input: &[u8],
+    output: *mut u8,
+) -> (usize, usize) {
+    unsafe {
+        decode_standard_validated_with_backend_inner(
+            input,
+            output,
+            backend::selected_backend().backend,
+        )
+    }
+}
+
+#[inline]
+#[cfg(test)]
+pub(super) unsafe fn decode_standard_validated_with_backend(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+) -> (usize, usize) {
+    if !backend::is_supported(backend) {
+        return (0, 0);
+    }
+
+    unsafe { decode_standard_validated_with_backend_inner(input, output, backend) }
+}
+
+#[inline]
+#[cfg(any(feature = "python", test))]
+unsafe fn decode_standard_validated_with_backend_inner(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+) -> (usize, usize) {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        unsafe {
+            decode_x86::<x86_contracts::ValidatedStandardDecoder, x86_contracts::ExactStore>(
+                input, output, backend,
+            )
+        }
+        .expect("validated standard Base64 remains valid")
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if backend == Backend::Neon {
+            return unsafe { decode_aarch64::decode_standard_validated(input, output) };
+        }
+        let _ = (input, output, backend);
+        (0, 0)
+    }
+}
+
+#[inline]
 pub(super) fn validate_with_runtime_backend(
     input: &[u8],
     alphabet: DecodeAlphabet,

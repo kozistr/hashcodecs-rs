@@ -12,8 +12,8 @@ use pyo3::types::{PyByteArray, PyBytes};
 use super::configured::Translation;
 use super::lenient::decoded_len_upper_bound;
 use crate::base64::{
-    DecodeAlphabet, STANDARD_ALPHABET, decode_to_ptr_with_unpadded_layout, decode_unpadded_layout,
-    validate_alphabet,
+    DecodeAlphabet, STANDARD_ALPHABET, decode_standard_validated_to_ptr,
+    decode_to_ptr_with_unpadded_layout, decode_unpadded_layout, validate_alphabet,
 };
 use crate::bindings::buffer::with_bytearray;
 use crate::bindings::objects::{bytearray_data, bytearray_size, bytes_data_mut};
@@ -22,20 +22,16 @@ pub(super) const CONFIGURED_STAGING_CAPACITY: usize = 4096;
 
 #[inline]
 unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> Option<usize> {
-    let layout = if CHECKED {
-        decode_unpadded_layout(input).ok()?
-    } else {
-        decode_unpadded_layout(input).expect("validated configured Base64 staging remains valid")
-    };
-    let decoded = unsafe {
-        decode_to_ptr_with_unpadded_layout(input, output, layout, DecodeAlphabet::Standard)
-    };
     if CHECKED {
-        decoded.ok()?;
+        let layout = decode_unpadded_layout(input).ok()?;
+        unsafe {
+            decode_to_ptr_with_unpadded_layout(input, output, layout, DecodeAlphabet::Standard)
+        }
+        .ok()?;
+        Some(layout.output_len())
     } else {
-        decoded.expect("validated configured Base64 staging remains valid");
+        Some(unsafe { decode_standard_validated_to_ptr(input, output) })
     }
-    Some(layout.output_len())
 }
 
 #[repr(align(32))]

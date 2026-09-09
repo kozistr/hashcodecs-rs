@@ -31,8 +31,8 @@ pub(crate) use alphabet::{DecodeAlphabet, STANDARD_ALPHABET};
 pub(crate) use decode::DecodeLayout;
 #[cfg(any(feature = "python", test))]
 pub(crate) use decode::{
-    decode_layout, decode_to_ptr_with_layout, decode_to_ptr_with_unpadded_layout,
-    decode_to_slice_with_layout_and_alphabet,
+    decode_layout, decode_standard_validated_to_ptr, decode_to_ptr_with_layout,
+    decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_validated_blocks,
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,

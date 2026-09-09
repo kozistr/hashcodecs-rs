@@ -2,8 +2,6 @@ use pyo3::PyTypeInfo;
 use pyo3::exceptions::PyMemoryError;
 use pyo3::ffi;
 use pyo3::prelude::*;
-#[cfg(not(Py_GIL_DISABLED))]
-use pyo3::types::PyBytes;
 use pyo3::types::PyList;
 
 pub(super) fn batch_results<T>(length: usize, error: &'static str) -> PyResult<Vec<T>> {
@@ -41,28 +39,6 @@ where
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-pub(super) fn exact_bytes_up_to<'py>(
-    items: &Bound<'py, PyList>,
-    max_length: usize,
-) -> PyResult<Option<Vec<Bound<'py, PyBytes>>>> {
-    unsafe {
-        let length = ffi::PyList_GET_SIZE(items.as_ptr());
-        let mut values = Vec::new();
-        values
-            .try_reserve_exact(length as usize)
-            .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
-        for index in 0..length {
-            let item = ffi::PyList_GET_ITEM(items.as_ptr(), index);
-            if ffi::PyBytes_CheckExact(item) == 0 || ffi::Py_SIZE(item) as usize > max_length {
-                return Ok(None);
-            }
-            values.push(Bound::from_borrowed_ptr(items.py(), item).cast_into_unchecked());
-        }
-        Ok(Some(values))
-    }
-}
-
-#[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
@@ -87,29 +63,44 @@ pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usi
     }
 }
 
-pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+pub(super) fn list_items_and_all<'py>(
+    items: &Bound<'py, PyList>,
+    mut predicate: impl FnMut(&Bound<'py, PyAny>) -> bool,
+) -> PyResult<(Vec<Bound<'py, PyAny>>, bool)> {
     let length = items.len();
 
     let mut values = Vec::new();
     values
         .try_reserve_exact(length)
         .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
+    let mut all = true;
 
     #[cfg(Py_GIL_DISABLED)]
     {
-        values.extend(items.iter());
+        for item in items.iter() {
+            all &= predicate(&item);
+            values.push(item);
+        }
 
-        Ok(values)
+        Ok((values, all))
     }
     #[cfg(not(Py_GIL_DISABLED))]
     unsafe {
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
-            values.push(Bound::from_borrowed_ptr(items.py(), item));
+            let item = Bound::from_borrowed_ptr(items.py(), item);
+            all &= predicate(&item);
+            values.push(item);
         }
 
-        Ok(values)
+        Ok((values, all))
     }
+}
+
+pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let (items, all) = list_items_and_all(items, |_| true)?;
+    debug_assert!(all);
+    Ok(items)
 }
 
 #[inline]

@@ -31,7 +31,7 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
             _mm_or_si128(first_errors, second_errors),
             _mm_or_si128(third_errors, fourth_errors),
         );
-        if !errors_are_zero_ssse3(errors) {
+        if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
             return Err(Base64Error::InvalidInput);
         }
         unsafe { S::store_12(output.add(destination), pack_16_indices(first)) };
@@ -43,7 +43,7 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
     }
     while source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
-        if !errors_are_zero_ssse3(errors) {
+        if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
             return Err(Base64Error::InvalidInput);
         }
         unsafe { S::store_12(output.add(destination), pack_16_indices(indices)) };
@@ -127,14 +127,27 @@ pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, _
     let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+
+    (translate_standard(value, high_nibbles), errors)
+}
+
+#[target_feature(enable = "ssse3")]
+#[inline]
+#[cfg(any(feature = "python", test))]
+pub(super) unsafe fn decode_indices_16_standard_validated(input: *const u8) -> (__m128i, __m128i) {
+    let value = unsafe { _mm_loadu_si128(input.cast()) };
+    let high_nibbles = high_nibbles(value);
+
+    (translate_standard(value, high_nibbles), _mm_setzero_si128())
+}
+
+#[target_feature(enable = "ssse3")]
+fn translate_standard(value: __m128i, high_nibbles: __m128i) -> __m128i {
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
     let offsets = unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) };
 
-    (
-        _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices)),
-        errors,
-    )
+    _mm_add_epi8(value, _mm_shuffle_epi8(offsets, offset_indices))
 }
 
 #[target_feature(enable = "ssse3")]
@@ -178,13 +191,17 @@ pub(super) fn classify_ascii_ssse3(
     low_classes: __m128i,
 ) -> (__m128i, __m128i) {
     // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
-    let mask = _mm_set1_epi8(0x0f);
-    let high_nibbles = _mm_and_si128(_mm_srli_epi16(value, 4), mask);
-    let low_nibbles = _mm_and_si128(value, mask);
+    let high_nibbles = high_nibbles(value);
+    let low_nibbles = _mm_and_si128(value, _mm_set1_epi8(0x0f));
     let high_matches = _mm_shuffle_epi8(high_classes, high_nibbles);
     let low_matches = _mm_shuffle_epi8(low_classes, low_nibbles);
 
     (high_nibbles, _mm_and_si128(high_matches, low_matches))
+}
+
+#[target_feature(enable = "ssse3")]
+fn high_nibbles(value: __m128i) -> __m128i {
+    _mm_and_si128(_mm_srli_epi16(value, 4), _mm_set1_epi8(0x0f))
 }
 
 #[target_feature(enable = "ssse3")]

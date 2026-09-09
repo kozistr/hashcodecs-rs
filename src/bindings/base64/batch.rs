@@ -19,14 +19,15 @@ use crate::bindings::buffer::{
 };
 use crate::bindings::compatibility::parse_altchars;
 #[cfg(not(Py_GIL_DISABLED))]
-use crate::bindings::objects::exact_bytes_up_to;
+use crate::bindings::objects::list_items_and_all;
 use crate::bindings::objects::{batch_results, list_from_fn, list_items};
 
 const BATCH_TOO_LARGE: &str = "Base64 batch is too large";
+const LINEAR_OUTPUT_IDENTITIES_MAX: usize = 32;
 
 struct BatchOutputs<'py> {
     outputs: Vec<Bound<'py, PyByteArray>>,
-    identities: HashSet<*mut ffi::PyObject>,
+    identities: Option<HashSet<*mut ffi::PyObject>>,
     ranges: OnceLock<Vec<BufferRange>>,
 }
 
@@ -36,7 +37,14 @@ impl<'py> BatchOutputs<'py> {
     }
 
     fn contains_identity(&self, identity: *mut ffi::PyObject) -> bool {
-        self.identities.contains(&identity)
+        self.identities.as_ref().map_or_else(
+            || {
+                self.outputs
+                    .iter()
+                    .any(|output| output.as_ptr() == identity)
+            },
+            |identities| identities.contains(&identity),
+        )
     }
 
     fn ranges(&self) -> PyResult<&[BufferRange]> {
@@ -85,15 +93,25 @@ fn batch_outputs<'py>(
     }
 
     let mut parsed = batch_results(outputs.len(), BATCH_TOO_LARGE)?;
-    let mut identities = HashSet::new();
-    identities
-        .try_reserve(outputs.len())
-        .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
+    let mut identities = (outputs.len() > LINEAR_OUTPUT_IDENTITIES_MAX).then(HashSet::new);
+    if let Some(identities) = &mut identities {
+        identities
+            .try_reserve(outputs.len())
+            .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
+    }
     for (index, output) in list_items(outputs)?.into_iter().enumerate() {
         let output = output
             .cast_into::<PyByteArray>()
             .map_err(|_| PyTypeError::new_err(format!("outputs[{index}] must be a bytearray")))?;
-        if !identities.insert(output.as_ptr()) {
+        let duplicate = identities.as_mut().map_or_else(
+            || {
+                parsed
+                    .iter()
+                    .any(|retained: &Bound<'py, PyByteArray>| retained.as_ptr() == output.as_ptr())
+            },
+            |identities| !identities.insert(output.as_ptr()),
+        );
+        if duplicate {
             return Err(PyValueError::new_err(
                 "outputs must contain distinct bytearrays",
             ));
@@ -250,18 +268,30 @@ pub(super) fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    if let Some(items) = exact_bytes_up_to(items, EXACT_BYTES_BATCH_MAX)? {
+    let (items, exact_bytes_fast_path) = list_items_and_all(items, |item| {
+        PyBytes::is_exact_type_of(item)
+            && unsafe { item.cast_unchecked::<PyBytes>() }.as_bytes().len() <= EXACT_BYTES_BATCH_MAX
+    })?;
+    #[cfg(Py_GIL_DISABLED)]
+    let items = list_items(items)?;
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    if exact_bytes_fast_path {
         // Validation retains every input before allocating the output list.
         // Creating a GC-tracked Python object can run finalizers which mutate
         // the original list.
         let length = items.len();
         let mut items = items.into_iter();
         return list_from_fn(py, length, |_| {
-            let item = items.next().expect("batch item count is exact");
+            let item = unsafe {
+                items
+                    .next()
+                    .expect("batch item count is exact")
+                    .cast_into_unchecked::<PyBytes>()
+            };
             encode_exact(py, item.as_bytes(), altchars, true, None)
         });
     }
-    let items = list_items(items)?;
     let length = items.len();
     let mut items = items.into_iter();
     list_from_fn(py, length, |_| {

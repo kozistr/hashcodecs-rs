@@ -29,8 +29,7 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
             _mm_or_si128(first_errors, second_errors),
             _mm_or_si128(third_errors, fourth_errors),
         );
-
-        if _mm_testz_si128(errors, errors) == 0 {
+        if !A::accepts_errors(_mm_testz_si128(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -45,7 +44,7 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
 
     while source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
-        if _mm_testz_si128(errors, errors) == 0 {
+        if !A::accepts_errors(_mm_testz_si128(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
 

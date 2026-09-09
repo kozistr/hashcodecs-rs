@@ -7,22 +7,35 @@ use std::arch::x86_64::*;
 
 use super::super::{MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
 
+#[cfg(any(feature = "python", test))]
+use super::avx2::decode_indices_32_standard_validated;
 use super::avx2::{
     decode_indices_32_mixed, decode_indices_32_standard, decode_indices_32_urlsafe, store_24_exact,
     store_24_padded,
 };
+#[cfg(any(feature = "python", test))]
+use super::ssse3::decode_indices_16_standard_validated;
 use super::ssse3::{
     decode_indices_16_mixed, decode_indices_16_standard, decode_indices_16_urlsafe, store_12_exact,
     store_12_padded,
 };
 
 pub(crate) struct StandardDecoder;
+#[cfg(any(feature = "python", test))]
+pub(crate) struct ValidatedStandardDecoder;
 pub(crate) struct UrlSafeDecoder;
 pub(crate) struct MixedDecoder;
 pub(crate) struct ExactStore;
 pub(crate) struct PaddedStore;
 
 pub(crate) trait Decoder {
+    const CHECK_INPUT: bool = true;
+
+    #[inline(always)]
+    fn accepts_errors(errors_are_zero: bool) -> bool {
+        !Self::CHECK_INPUT || errors_are_zero
+    }
+
     fn decode_table() -> &'static [u8; 256];
     unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i);
     unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i);
@@ -71,6 +84,26 @@ impl Decoder for StandardDecoder {
     #[inline(always)]
     unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i) {
         unsafe { decode_indices_16_standard(input) }
+    }
+}
+
+#[cfg(any(feature = "python", test))]
+impl Decoder for ValidatedStandardDecoder {
+    const CHECK_INPUT: bool = false;
+
+    #[inline(always)]
+    fn decode_table() -> &'static [u8; 256] {
+        &STANDARD_DECODE
+    }
+
+    #[inline(always)]
+    unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i) {
+        unsafe { decode_indices_32_standard_validated(input) }
+    }
+
+    #[inline(always)]
+    unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i) {
+        unsafe { decode_indices_16_standard_validated(input) }
     }
 }
 

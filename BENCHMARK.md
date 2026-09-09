@@ -9,8 +9,9 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
-The standard, URL-safe, and lenient Python decode charts report CPython 3.12.10 measurements from 2026-09-05.
-Each decode value is the median of 15 samples lasting at least 0.2 seconds each, with one logical CPU pinned.
+The standard and URL-safe Python decode panels report CPython 3.12.10 measurements from 2026-09-09; the lenient
+decode chart retains its 2026-09-05 measurements. Each value is the median of 15 samples lasting at least 0.2
+seconds each, with one logical CPU pinned.
 
 ## Timing Controls
 

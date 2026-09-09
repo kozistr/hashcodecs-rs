@@ -92,7 +92,7 @@ CHARTS = (
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[17.92, 25.22, 28.31, 18.79],
+                hashcodecs=[18.33, 26.09, 30.23, 19.10],
                 base64=[3.76, 3.98, 3.79, 3.56],
                 base64_turbo=[17.37, 23.28, 20.50, 16.87],
             ),
@@ -106,7 +106,7 @@ CHARTS = (
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[17.39, 23.84, 27.01, 18.89],
+                hashcodecs=[17.84, 24.78, 28.64, 19.06],
                 base64=[3.76, 4.03, 3.81, 3.57],
                 base64_turbo=[17.37, 23.16, 20.87, 17.10],
             ),
@@ -219,7 +219,7 @@ CHARTS = (
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[7.94, 16.93, 4.39, 4.93],
+                hashcodecs=[7.91, 17.12, 4.72, 5.30],
                 CPython=[0.93, 1.08, 0.84, 0.90],
                 pybase64=[3.09, 8.01, 3.26, 3.57],
             ),
@@ -233,7 +233,7 @@ CHARTS = (
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[6.57, 13.23, 4.78, 5.19],
+                hashcodecs=[6.61, 13.45, 4.69, 5.25],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
             ),

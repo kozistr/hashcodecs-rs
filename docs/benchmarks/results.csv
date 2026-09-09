@@ -11,10 +11,10 @@ Rust Base64 throughput,Standard encode,1 KiB,base64 turbo,25.11
 Rust Base64 throughput,Standard encode,4 KiB,base64 turbo,33.92
 Rust Base64 throughput,Standard encode,1 MiB,base64 turbo,37.81
 Rust Base64 throughput,Standard encode,8 MiB,base64 turbo,30.99
-Rust Base64 throughput,Standard decode,1 KiB,hashcodecs,17.92
-Rust Base64 throughput,Standard decode,4 KiB,hashcodecs,25.22
-Rust Base64 throughput,Standard decode,1 MiB,hashcodecs,28.31
-Rust Base64 throughput,Standard decode,8 MiB,hashcodecs,18.79
+Rust Base64 throughput,Standard decode,1 KiB,hashcodecs,18.33
+Rust Base64 throughput,Standard decode,4 KiB,hashcodecs,26.09
+Rust Base64 throughput,Standard decode,1 MiB,hashcodecs,30.23
+Rust Base64 throughput,Standard decode,8 MiB,hashcodecs,19.10
 Rust Base64 throughput,Standard decode,1 KiB,base64,3.76
 Rust Base64 throughput,Standard decode,4 KiB,base64,3.98
 Rust Base64 throughput,Standard decode,1 MiB,base64,3.79
@@ -35,10 +35,10 @@ Rust Base64 throughput,URL-safe encode,1 KiB,base64 turbo,25.41
 Rust Base64 throughput,URL-safe encode,4 KiB,base64 turbo,33.95
 Rust Base64 throughput,URL-safe encode,1 MiB,base64 turbo,38.29
 Rust Base64 throughput,URL-safe encode,8 MiB,base64 turbo,31.16
-Rust Base64 throughput,URL-safe decode,1 KiB,hashcodecs,17.39
-Rust Base64 throughput,URL-safe decode,4 KiB,hashcodecs,23.84
-Rust Base64 throughput,URL-safe decode,1 MiB,hashcodecs,27.01
-Rust Base64 throughput,URL-safe decode,8 MiB,hashcodecs,18.89
+Rust Base64 throughput,URL-safe decode,1 KiB,hashcodecs,17.84
+Rust Base64 throughput,URL-safe decode,4 KiB,hashcodecs,24.78
+Rust Base64 throughput,URL-safe decode,1 MiB,hashcodecs,28.64
+Rust Base64 throughput,URL-safe decode,8 MiB,hashcodecs,19.06
 Rust Base64 throughput,URL-safe decode,1 KiB,base64,3.76
 Rust Base64 throughput,URL-safe decode,4 KiB,base64,4.03
 Rust Base64 throughput,URL-safe decode,1 MiB,base64,3.81
@@ -167,10 +167,10 @@ Python Base64 throughput,Standard encode,1 KiB,pybase64,5.02
 Python Base64 throughput,Standard encode,4 KiB,pybase64,13.11
 Python Base64 throughput,Standard encode,1 MiB,pybase64,2.68
 Python Base64 throughput,Standard encode,8 MiB,pybase64,2.91
-Python Base64 throughput,Standard decode,1 KiB,hashcodecs,7.94
-Python Base64 throughput,Standard decode,4 KiB,hashcodecs,16.93
-Python Base64 throughput,Standard decode,1 MiB,hashcodecs,4.39
-Python Base64 throughput,Standard decode,8 MiB,hashcodecs,4.93
+Python Base64 throughput,Standard decode,1 KiB,hashcodecs,7.91
+Python Base64 throughput,Standard decode,4 KiB,hashcodecs,17.12
+Python Base64 throughput,Standard decode,1 MiB,hashcodecs,4.72
+Python Base64 throughput,Standard decode,8 MiB,hashcodecs,5.30
 Python Base64 throughput,Standard decode,1 KiB,CPython,0.93
 Python Base64 throughput,Standard decode,4 KiB,CPython,1.08
 Python Base64 throughput,Standard decode,1 MiB,CPython,0.84
@@ -191,10 +191,10 @@ Python Base64 throughput,URL-safe encode,1 KiB,pybase64,0.96
 Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.19
 Python Base64 throughput,URL-safe encode,1 MiB,pybase64,0.84
 Python Base64 throughput,URL-safe encode,8 MiB,pybase64,0.84
-Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,6.57
-Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,13.23
-Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.78
-Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.19
+Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,6.61
+Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,13.45
+Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.69
+Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.25
 Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.47
 Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.74
 Python Base64 throughput,URL-safe decode,1 MiB,CPython,0.60

@@ -8,8 +8,9 @@ use std::arch::x86_64::*;
 use super::super::Base64Error;
 use super::ssse3::{errors_are_zero_ssse3, pack_16_indices, store_12_exact};
 use super::tables::{
-    MIXED_LOW_CLASSES, PACK_SHUFFLE, STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES, STANDARD_OFFSETS,
-    URLSAFE_HIGH_CLASSES, URLSAFE_LOW_CLASSES, URLSAFE_OFFSETS,
+    MIXED_LOW_CLASSES_COMPLEMENT, PACK_SHUFFLE, STANDARD_HIGH_CLASSES,
+    STANDARD_LOW_CLASSES_COMPLEMENT, STANDARD_OFFSETS, URLSAFE_HIGH_CLASSES,
+    URLSAFE_LOW_CLASSES_COMPLEMENT, URLSAFE_OFFSETS,
 };
 use super::x86_contracts::{Decoder, Store};
 
@@ -28,6 +29,9 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 ) -> Result<(usize, usize), Base64Error> {
     let mut source = 0;
     let mut destination = 0;
+    // Half-cache-line output starts favor one packed 256-bit store, while
+    // cache-line-aligned buffers remain faster with the two narrow stores.
+    let use_wide_overlapping_stores = output.addr() & 63 == 32;
 
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
@@ -45,12 +49,15 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        // Overlap only within this validated group. Its final store must honor
-        // the caller's contract before validation of the next group can fail.
-        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
-        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
-        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
-
+        if use_wide_overlapping_stores {
+            unsafe { store_24_padded_wide(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded_wide(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded_wide(output.add(destination + 48), pack_32(third)) };
+        } else {
+            unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        }
         unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -134,6 +141,8 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 ) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
+    // Match `decode_avx2`'s store shape after this group validates.
+    let use_wide_overlapping_stores = output.addr() & 63 == 32;
 
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
@@ -151,11 +160,17 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
             break;
         }
 
-        // All four blocks are valid. Each following store replaces the four
-        // overlap bytes; the final exact store bounds writes to this prefix.
-        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
-        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
-        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        // All four blocks are valid. Each following store replaces the
+        // preceding overlap; the final exact store bounds writes to this prefix.
+        if use_wide_overlapping_stores {
+            unsafe { store_24_padded_wide(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded_wide(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded_wide(output.add(destination + 48), pack_32(third)) };
+        } else {
+            unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        }
         unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -190,7 +205,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
@@ -208,7 +223,7 @@ pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, _
 pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
 
     let offsets =
@@ -225,7 +240,7 @@ pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __
 pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
@@ -249,14 +264,17 @@ fn classify_ascii_avx2(
     high_classes: __m128i,
     low_classes: __m128i,
 ) -> (__m256i, __m256i) {
-    // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
+    // Invalid high/low nibble pairs share a class bit. High-bit bytes make the
+    // raw low-byte shuffle return zero, leaving the invalid high-class guard.
     let mask = _mm256_set1_epi8(0x0f);
     let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), mask);
-    let low_nibbles = _mm256_and_si256(value, mask);
     let high_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(high_classes), high_nibbles);
-    let low_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), low_nibbles);
+    let low_mismatches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), value);
 
-    (high_nibbles, _mm256_and_si256(high_matches, low_matches))
+    (
+        high_nibbles,
+        _mm256_andnot_si256(low_mismatches, high_matches),
+    )
 }
 
 #[target_feature(enable = "avx2")]
@@ -288,4 +306,13 @@ pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
 pub(super) unsafe fn store_24_padded(output: *mut u8, value: __m256i) {
     unsafe { _mm_storeu_si128(output.cast(), _mm256_castsi256_si128(value)) };
     unsafe { _mm_storeu_si128(output.add(12).cast(), _mm256_extracti128_si256(value, 1)) };
+}
+
+#[inline(always)]
+unsafe fn store_24_padded_wide(output: *mut u8, value: __m256i) {
+    // Close the four-byte gap between 128-bit lanes, then let the following
+    // store replace the eight padding bytes at the end.
+    let packed =
+        unsafe { _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 1, 2, 4, 5, 6, 7, 7)) };
+    unsafe { _mm256_storeu_si256(output.cast(), packed) };
 }

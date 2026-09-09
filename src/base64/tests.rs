@@ -790,6 +790,42 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_classifier_matches_tables_for_every_adjacent_byte_word() {
+    if !backend::is_supported(Backend::Avx2) {
+        return;
+    }
+
+    for (alphabet, table) in [
+        (DecodeAlphabet::Standard, &STANDARD_DECODE),
+        (DecodeAlphabet::UrlSafe, &URLSAFE_DECODE),
+        (DecodeAlphabet::Mixed, &MIXED_DECODE),
+    ] {
+        for word in 0..=u16::MAX {
+            let bytes = word.to_ne_bytes();
+            let mut input = [0; 128];
+            for pair in input.as_chunks_mut::<2>().0 {
+                pair.copy_from_slice(&bytes);
+            }
+
+            let expected = if bytes
+                .into_iter()
+                .all(|byte| table[byte as usize] != INVALID_VALUE)
+            {
+                Ok(input.len())
+            } else {
+                Err(Base64Error::InvalidInput)
+            };
+            assert_eq!(
+                validate_with_backend(&input, Backend::Avx2, alphabet),
+                expected,
+                "alphabet={alphabet:?} word={word:#06x}"
+            );
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_streaming_encoder_matches_scalar() {
@@ -1238,6 +1274,65 @@ fn avx2_interior_stores_respect_exact_slice_boundaries() {
                         .all(|&byte| byte == CANARY)
                 );
             }
+        }
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_overlapping_stores_respect_exact_slice_boundaries() {
+    if !backend::is_supported(Backend::Avx2) {
+        return;
+    }
+
+    const GUARD: usize = 64;
+    const CANARY: u8 = 0xa5;
+    const LENGTH: usize = 96;
+
+    let input: Vec<u8> = (0..LENGTH)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect();
+
+    for (encoded, alphabet) in [
+        (
+            base64::engine::general_purpose::STANDARD.encode(&input),
+            DecodeAlphabet::Standard,
+        ),
+        (
+            base64::engine::general_purpose::URL_SAFE.encode(&input),
+            DecodeAlphabet::UrlSafe,
+        ),
+    ] {
+        for cache_line_offset in [0, 32] {
+            let mut output = vec![CANARY; GUARD + 64 + LENGTH + GUARD];
+            let aligned = output.as_mut_ptr().align_offset(64);
+            let start = aligned + cache_line_offset;
+            let decoded = &mut output[start..start + LENGTH];
+
+            assert_eq!(decoded.as_ptr().addr() & 63, cache_line_offset);
+            assert_eq!(
+                decode_with_backend(encoded.as_bytes(), decoded, Backend::Avx2, alphabet),
+                Ok((encoded.len(), LENGTH))
+            );
+            assert_eq!(decoded, input);
+            assert!(output[..start].iter().all(|&byte| byte == CANARY));
+            assert!(output[start + LENGTH..].iter().all(|&byte| byte == CANARY));
+
+            output.fill(CANARY);
+            assert_eq!(
+                unsafe {
+                    decode_valid_prefix_with_backend(
+                        encoded.as_bytes(),
+                        output.as_mut_ptr().add(start),
+                        Backend::Avx2,
+                        alphabet,
+                    )
+                },
+                (encoded.len(), LENGTH)
+            );
+            assert_eq!(&output[start..start + LENGTH], input);
+            assert!(output[..start].iter().all(|&byte| byte == CANARY));
+            assert!(output[start + LENGTH..].iter().all(|&byte| byte == CANARY));
         }
     }
 }

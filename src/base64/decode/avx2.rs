@@ -8,8 +8,9 @@ use std::arch::x86_64::*;
 use super::super::Base64Error;
 use super::ssse3::{errors_are_zero_ssse3, pack_16_indices, store_12_exact};
 use super::tables::{
-    MIXED_LOW_CLASSES, PACK_SHUFFLE, STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES, STANDARD_OFFSETS,
-    URLSAFE_HIGH_CLASSES, URLSAFE_LOW_CLASSES, URLSAFE_OFFSETS,
+    MIXED_LOW_CLASSES_COMPLEMENT, PACK_SHUFFLE, STANDARD_HIGH_CLASSES,
+    STANDARD_LOW_CLASSES_COMPLEMENT, STANDARD_OFFSETS, URLSAFE_HIGH_CLASSES,
+    URLSAFE_LOW_CLASSES_COMPLEMENT, URLSAFE_OFFSETS,
 };
 use super::x86_contracts::{Decoder, Store};
 
@@ -190,7 +191,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
@@ -208,7 +209,7 @@ pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, _
 pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
 
     let offsets =
@@ -225,7 +226,7 @@ pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __
 pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m256i) {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
-    let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES.as_ptr().cast()) };
+    let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
@@ -249,14 +250,17 @@ fn classify_ascii_avx2(
     high_classes: __m128i,
     low_classes: __m128i,
 ) -> (__m256i, __m256i) {
-    // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
+    // Invalid high/low nibble pairs share a class bit. High-bit bytes make the
+    // raw low-byte shuffle return zero, leaving the invalid high-class guard.
     let mask = _mm256_set1_epi8(0x0f);
     let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), mask);
-    let low_nibbles = _mm256_and_si256(value, mask);
     let high_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(high_classes), high_nibbles);
-    let low_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), low_nibbles);
+    let low_mismatches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), value);
 
-    (high_nibbles, _mm256_and_si256(high_matches, low_matches))
+    (
+        high_nibbles,
+        _mm256_andnot_si256(low_mismatches, high_matches),
+    )
 }
 
 #[target_feature(enable = "avx2")]

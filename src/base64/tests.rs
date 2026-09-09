@@ -790,6 +790,42 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_classifier_matches_tables_for_every_adjacent_byte_word() {
+    if !backend::is_supported(Backend::Avx2) {
+        return;
+    }
+
+    for (alphabet, table) in [
+        (DecodeAlphabet::Standard, &STANDARD_DECODE),
+        (DecodeAlphabet::UrlSafe, &URLSAFE_DECODE),
+        (DecodeAlphabet::Mixed, &MIXED_DECODE),
+    ] {
+        for word in 0..=u16::MAX {
+            let bytes = word.to_ne_bytes();
+            let mut input = [0; 128];
+            for pair in input.as_chunks_mut::<2>().0 {
+                pair.copy_from_slice(&bytes);
+            }
+
+            let expected = if bytes
+                .into_iter()
+                .all(|byte| table[byte as usize] != INVALID_VALUE)
+            {
+                Ok(input.len())
+            } else {
+                Err(Base64Error::InvalidInput)
+            };
+            assert_eq!(
+                validate_with_backend(&input, Backend::Avx2, alphabet),
+                expected,
+                "alphabet={alphabet:?} word={word:#06x}"
+            );
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn avx2_streaming_encoder_matches_scalar() {

@@ -16,6 +16,8 @@ mod tables;
 pub(super) mod x86_contracts;
 
 use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
+#[cfg(any(feature = "python", test))]
+use super::runtime_dispatch::decode_standard_validated_with_runtime_backend;
 use super::runtime_dispatch::{
     ErrorWritePolicy, decode_valid_prefix_with_runtime_backend, decode_with_runtime_backend,
     validate_with_runtime_backend,
@@ -408,6 +410,64 @@ pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
     }
 }
 
+/// Pack validated, unpadded standard-alphabet symbols into exact output storage.
+///
+/// # Safety
+///
+/// Every input byte must belong to the standard Base64 alphabet, the input
+/// length modulo four must be zero, two, or three, and `output` must be valid
+/// for the exact decoded length without overlapping `input`.
+#[inline]
+#[cfg(any(feature = "python", test))]
+pub(crate) unsafe fn decode_standard_validated_to_ptr(input: &[u8], output: *mut u8) -> usize {
+    debug_assert_ne!(input.len() % 4, 1);
+
+    let prefix_len = input.len() / 4 * 4;
+    let (mut source, mut destination) = if prefix_len >= 16 {
+        unsafe { decode_standard_validated_with_runtime_backend(&input[..prefix_len], output) }
+    } else {
+        (0, 0)
+    };
+
+    while source + 8 <= prefix_len {
+        unsafe {
+            decode_eight_validated_ptr(
+                &input[source..source + 8],
+                output.add(destination),
+                &STANDARD_DECODE,
+            )
+        };
+        source += 8;
+        destination += 6;
+    }
+    while source < prefix_len {
+        unsafe {
+            decode_quad_validated_ptr(
+                &input[source..source + 4],
+                output.add(destination),
+                &STANDARD_DECODE,
+            )
+        };
+        source += 4;
+        destination += 3;
+    }
+
+    let tail = &input[prefix_len..];
+    if !tail.is_empty() {
+        unsafe {
+            decode_unpadded_tail_validated_ptr(tail, output.add(destination), &STANDARD_DECODE)
+        };
+        destination += tail.len() - tail.len() / 2;
+    }
+
+    debug_assert_eq!(source, prefix_len);
+    debug_assert_eq!(
+        destination,
+        prefix_len / 4 * 3 + tail.len() - tail.len() / 2
+    );
+    destination
+}
+
 #[inline]
 #[cfg_attr(not(feature = "python"), allow(dead_code))]
 pub(crate) fn decode_to_slice_with_layout_and_alphabet_validated_blocks(
@@ -609,6 +669,21 @@ pub(crate) unsafe fn decode_quad_ptr(
 }
 
 #[inline]
+#[cfg(any(feature = "python", test))]
+unsafe fn decode_quad_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
+    let first = table[input[0] as usize];
+    let second = table[input[1] as usize];
+    let third = table[input[2] as usize];
+    let fourth = table[input[3] as usize];
+
+    unsafe {
+        output.write((first << 2) | (second >> 4));
+        output.add(1).write((second << 4) | (third >> 2));
+        output.add(2).write((third << 6) | fourth);
+    }
+}
+
+#[inline]
 pub(crate) unsafe fn decode_unpadded_tail_ptr(
     input: &[u8],
     output: *mut u8,
@@ -628,6 +703,20 @@ pub(crate) unsafe fn decode_unpadded_tail_ptr(
         unsafe { output.add(1).write((second << 4) | (third >> 2)) };
     }
     Ok(())
+}
+
+#[inline]
+#[cfg(any(feature = "python", test))]
+unsafe fn decode_unpadded_tail_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
+    debug_assert!(matches!(input.len(), 2 | 3));
+    let first = table[input[0] as usize];
+    let second = table[input[1] as usize];
+
+    unsafe { output.write((first << 2) | (second >> 4)) };
+    if input.len() == 3 {
+        let third = table[input[2] as usize];
+        unsafe { output.add(1).write((second << 4) | (third >> 2)) };
+    }
 }
 
 #[inline]
@@ -657,6 +746,28 @@ pub(crate) unsafe fn decode_eight_ptr(
     ];
     unsafe { output.copy_from_nonoverlapping(decoded.as_ptr(), decoded.len()) };
     Ok(())
+}
+
+#[inline]
+#[cfg(any(feature = "python", test))]
+unsafe fn decode_eight_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
+    let first = table[input[0] as usize];
+    let second = table[input[1] as usize];
+    let third = table[input[2] as usize];
+    let fourth = table[input[3] as usize];
+    let fifth = table[input[4] as usize];
+    let sixth = table[input[5] as usize];
+    let seventh = table[input[6] as usize];
+    let eighth = table[input[7] as usize];
+    let decoded = [
+        (first << 2) | (second >> 4),
+        (second << 4) | (third >> 2),
+        (third << 6) | fourth,
+        (fifth << 2) | (sixth >> 4),
+        (sixth << 4) | (seventh >> 2),
+        (seventh << 6) | eighth,
+    ];
+    unsafe { output.copy_from_nonoverlapping(decoded.as_ptr(), decoded.len()) };
 }
 
 #[inline(always)]

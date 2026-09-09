@@ -6,7 +6,8 @@ use super::encode as encode_backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::runtime_dispatch::decode_valid_prefix_with_backend;
 use super::runtime_dispatch::{
-    decode_with_backend, decode_with_backend_ptr, encode_with_backend, validate_with_backend,
+    decode_standard_validated_with_backend, decode_with_backend, decode_with_backend_ptr,
+    encode_with_backend, validate_with_backend,
 };
 use super::*;
 use crate::backend::{Capabilities, CpuFeature};
@@ -124,6 +125,93 @@ fn validation_only_kernels_classify_without_output_storage() {
         validate_alphabet(&input, DecodeAlphabet::Standard),
         Err(Base64Error::InvalidInput)
     );
+}
+
+#[test]
+fn validated_standard_kernels_pack_into_exact_storage() {
+    let input: Vec<u8> = (0..204)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect();
+    let encoded = b64encode(&input);
+
+    for backend in [
+        Backend::Scalar,
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+
+        let mut output = vec![0xa5; input.len() + 16];
+        let (consumed, written) = unsafe {
+            decode_standard_validated_with_backend(encoded.as_bytes(), output.as_mut_ptr(), backend)
+        };
+        assert_eq!(written, consumed / 4 * 3, "{backend:?}");
+        assert_eq!(&output[..written], &input[..written], "{backend:?}");
+        assert!(output[written..].iter().all(|&byte| byte == 0xa5));
+    }
+
+    let unsupported = [
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ]
+    .into_iter()
+    .find(|&backend| !backend::is_supported(backend))
+    .expect("every host has an unsupported architecture-specific backend");
+    let mut output = [0xa5; 16];
+    assert_eq!(
+        unsafe {
+            decode_standard_validated_with_backend(
+                encoded.as_bytes(),
+                output.as_mut_ptr(),
+                unsupported,
+            )
+        },
+        (0, 0)
+    );
+    assert_eq!(output, [0xa5; 16]);
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    assert_eq!(
+        <x86_contracts::ValidatedStandardDecoder as x86_contracts::Decoder>::decode_table(),
+        &STANDARD_DECODE
+    );
+}
+
+#[test]
+fn validated_standard_decoder_handles_every_tail_at_exact_bounds() {
+    const GUARD: usize = 16;
+    for length in 0..=257 {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
+        let encoded = base64::engine::general_purpose::STANDARD_NO_PAD.encode(&input);
+        let mut guarded = vec![0xa5; GUARD + input.len() + GUARD];
+
+        let written = unsafe {
+            decode_standard_validated_to_ptr(encoded.as_bytes(), guarded.as_mut_ptr().add(GUARD))
+        };
+
+        assert_eq!(written, input.len());
+        assert_eq!(
+            &guarded[GUARD..GUARD + input.len()],
+            input,
+            "length={length}"
+        );
+        assert!(guarded[..GUARD].iter().all(|&byte| byte == 0xa5));
+        assert!(
+            guarded[GUARD + input.len()..]
+                .iter()
+                .all(|&byte| byte == 0xa5)
+        );
+    }
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

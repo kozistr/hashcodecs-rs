@@ -61,6 +61,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
         let (second, second_invalid) = unsafe {
@@ -69,6 +70,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
 
@@ -92,6 +94,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
 
@@ -160,6 +163,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
         let (second, second_invalid) = unsafe {
@@ -168,6 +172,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
         if first_invalid | second_invalid != 0 {
@@ -187,6 +192,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 lower_table,
                 upper_table,
                 decode_shuffle,
+                A::CHECK_INPUT,
             )
         };
         if invalid != 0 {
@@ -212,8 +218,15 @@ unsafe fn decode_64(
     lower_table: __m512i,
     upper_table: __m512i,
     decode_shuffle: __m512i,
+    check_input: bool,
 ) -> (__m512i, __mmask64) {
-    let (indices, invalid) = unsafe { classify_64(input, lower_table, upper_table) };
+    let ascii = unsafe { _mm512_loadu_si512(input.cast()) };
+    let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
+    let invalid = if check_input {
+        _mm512_movepi8_mask(_mm512_or_si512(indices, ascii))
+    } else {
+        0
+    };
     let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
     let packed = _mm512_madd_epi16(merged, _mm512_set1_epi32(0x0001_1000));
     (_mm512_permutexvar_epi8(decode_shuffle, packed), invalid)

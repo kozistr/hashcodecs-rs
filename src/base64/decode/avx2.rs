@@ -45,7 +45,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
         );
-        if _mm256_testz_si256(errors, errors) == 0 {
+        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -66,7 +66,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
-        if _mm256_testz_si256(errors, errors) == 0 {
+        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -80,7 +80,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     // This keeps the bulk SSSE3 entry point off the AVX2 hot path.
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
-        if !errors_are_zero_ssse3(errors) {
+        if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -208,15 +208,31 @@ pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, _
     let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+
+    (translate_standard(value, high_nibbles), errors)
+}
+
+#[target_feature(enable = "avx2")]
+#[inline]
+#[cfg(any(feature = "python", test))]
+pub(super) unsafe fn decode_indices_32_standard_validated(input: *const u8) -> (__m256i, __m256i) {
+    let value = unsafe { _mm256_loadu_si256(input.cast()) };
+    let high_nibbles = high_nibbles(value);
+
+    (
+        translate_standard(value, high_nibbles),
+        _mm256_setzero_si256(),
+    )
+}
+
+#[target_feature(enable = "avx2")]
+fn translate_standard(value: __m256i, high_nibbles: __m256i) -> __m256i {
     let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
     let offset_indices = _mm256_add_epi8(high_nibbles, slash);
     let offsets =
         _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) });
 
-    (
-        _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices)),
-        errors,
-    )
+    _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices))
 }
 
 #[target_feature(enable = "avx2")]
@@ -266,8 +282,7 @@ fn classify_ascii_avx2(
 ) -> (__m256i, __m256i) {
     // Invalid high/low nibble pairs share a class bit. High-bit bytes make the
     // raw low-byte shuffle return zero, leaving the invalid high-class guard.
-    let mask = _mm256_set1_epi8(0x0f);
-    let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(value, 4), mask);
+    let high_nibbles = high_nibbles(value);
     let high_matches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(high_classes), high_nibbles);
     let low_mismatches = _mm256_shuffle_epi8(_mm256_broadcastsi128_si256(low_classes), value);
 
@@ -275,6 +290,11 @@ fn classify_ascii_avx2(
         high_nibbles,
         _mm256_andnot_si256(low_mismatches, high_matches),
     )
+}
+
+#[target_feature(enable = "avx2")]
+fn high_nibbles(value: __m256i) -> __m256i {
+    _mm256_and_si256(_mm256_srli_epi16(value, 4), _mm256_set1_epi8(0x0f))
 }
 
 #[target_feature(enable = "avx2")]

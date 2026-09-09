@@ -103,6 +103,39 @@ pub(crate) unsafe fn validate<const URLSAFE: bool, const MIXED: bool>(
 }
 
 #[target_feature(enable = "neon")]
+#[cfg(any(feature = "python", test))]
+pub(crate) unsafe fn decode_standard_validated(input: &[u8], output: *mut u8) -> (usize, usize) {
+    let offsets = unsafe { vld1q_u8(STANDARD_OFFSETS.as_ptr()) };
+    let mut source = 0;
+    let mut destination = 0;
+
+    while source + 64 <= input.len() {
+        let input = unsafe { vld4q_u8(input.as_ptr().add(source)) };
+        let first = standard_indices(input.0, offsets);
+        let second = standard_indices(input.1, offsets);
+        let third = standard_indices(input.2, offsets);
+        let fourth = standard_indices(input.3, offsets);
+        unsafe {
+            store_decoded_64(
+                output.add(destination),
+                pack_indices(first, second, third, fourth),
+            )
+        };
+        source += 64;
+        destination += 48;
+    }
+
+    while source + 16 <= input.len() {
+        let input = unsafe { vld1q_u8(input.as_ptr().add(source)) };
+        unsafe { store_indices_16(standard_indices(input, offsets), output.add(destination)) };
+        source += 16;
+        destination += 12;
+    }
+
+    (source, destination)
+}
+
+#[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_tail<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
@@ -141,6 +174,14 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
         return Err(Base64Error::InvalidInput);
     }
 
+    unsafe { store_indices_16(indices, output) };
+
+    Ok(())
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn store_indices_16(indices: uint8x16_t, output: *mut u8) {
     let mut indices_array = [0_u8; 16];
     unsafe { vst1q_u8(indices_array.as_mut_ptr(), indices) };
 
@@ -161,8 +202,6 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
             output.add(destination + 2).write((third << 6) | fourth);
         }
     }
-
-    Ok(())
 }
 
 #[target_feature(enable = "neon")]
@@ -183,13 +222,22 @@ unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
         vorrq_u8(third_errors, fourth_errors),
     );
 
-    let decoded = uint8x16x3_t(
+    (pack_indices(first, second, third, fourth), errors)
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+fn pack_indices(
+    first: uint8x16_t,
+    second: uint8x16_t,
+    third: uint8x16_t,
+    fourth: uint8x16_t,
+) -> uint8x16x3_t {
+    uint8x16x3_t(
         vorrq_u8(vshlq_n_u8::<2>(first), vshrq_n_u8::<4>(second)),
         vorrq_u8(vshlq_n_u8::<4>(second), vshrq_n_u8::<2>(third)),
         vorrq_u8(vshlq_n_u8::<6>(third), fourth),
-    );
-
-    (decoded, errors)
+    )
 }
 
 #[target_feature(enable = "neon")]
@@ -237,6 +285,14 @@ unsafe fn translate_standard(
     let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
     let offset_indices = vaddq_u8(high_nibbles, slash);
     vaddq_u8(value, vqtbl1q_u8(offsets, offset_indices))
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+#[cfg(any(feature = "python", test))]
+fn standard_indices(value: uint8x16_t, offsets: uint8x16_t) -> uint8x16_t {
+    let high_nibbles = vshrq_n_u8::<4>(value);
+    unsafe { translate_standard(value, high_nibbles, offsets) }
 }
 
 #[target_feature(enable = "neon")]

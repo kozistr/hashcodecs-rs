@@ -29,6 +29,9 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 ) -> Result<(usize, usize), Base64Error> {
     let mut source = 0;
     let mut destination = 0;
+    // Half-cache-line output starts favor one packed 256-bit store, while
+    // cache-line-aligned buffers remain faster with the two narrow stores.
+    let use_wide_overlapping_stores = output.addr() & 63 == 32;
 
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
@@ -46,12 +49,15 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        // Overlap only within this validated group. Its final store must honor
-        // the caller's contract before validation of the next group can fail.
-        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
-        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
-        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
-
+        if use_wide_overlapping_stores {
+            unsafe { store_24_padded_wide(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded_wide(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded_wide(output.add(destination + 48), pack_32(third)) };
+        } else {
+            unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        }
         unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -135,6 +141,8 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 ) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
+    // Match `decode_avx2`'s store shape after this group validates.
+    let use_wide_overlapping_stores = output.addr() & 63 == 32;
 
     while source + 128 <= input.len() {
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
@@ -152,11 +160,17 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
             break;
         }
 
-        // All four blocks are valid. Each following store replaces the four
-        // overlap bytes; the final exact store bounds writes to this prefix.
-        unsafe { store_24_padded(output.add(destination), pack_32(first)) };
-        unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
-        unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        // All four blocks are valid. Each following store replaces the
+        // preceding overlap; the final exact store bounds writes to this prefix.
+        if use_wide_overlapping_stores {
+            unsafe { store_24_padded_wide(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded_wide(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded_wide(output.add(destination + 48), pack_32(third)) };
+        } else {
+            unsafe { store_24_padded(output.add(destination), pack_32(first)) };
+            unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
+            unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
+        }
         unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -292,4 +306,13 @@ pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
 pub(super) unsafe fn store_24_padded(output: *mut u8, value: __m256i) {
     unsafe { _mm_storeu_si128(output.cast(), _mm256_castsi256_si128(value)) };
     unsafe { _mm_storeu_si128(output.add(12).cast(), _mm256_extracti128_si256(value, 1)) };
+}
+
+#[inline(always)]
+unsafe fn store_24_padded_wide(output: *mut u8, value: __m256i) {
+    // Close the four-byte gap between 128-bit lanes, then let the following
+    // store replace the eight padding bytes at the end.
+    let packed =
+        unsafe { _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 1, 2, 4, 5, 6, 7, 7)) };
+    unsafe { _mm256_storeu_si256(output.cast(), packed) };
 }

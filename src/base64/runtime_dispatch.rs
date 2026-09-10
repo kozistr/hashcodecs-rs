@@ -142,7 +142,31 @@ pub(super) unsafe fn encode_wrapped_custom_with_runtime_backend(
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
     let backend = backend::selected_backend().backend;
+    unsafe { encode_wrapped_custom_with_backend_inner(input, output, backend, alphabet) }
+}
 
+#[cfg(all(test, feature = "python"))]
+#[inline]
+pub(super) unsafe fn encode_wrapped_custom_with_backend(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    backend: Backend,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
+    if !backend::is_supported(backend) {
+        return 0;
+    }
+    unsafe { encode_wrapped_custom_with_backend_inner(input, output, backend, alphabet) }
+}
+
+#[cfg(feature = "python")]
+#[inline]
+unsafe fn encode_wrapped_custom_with_backend_inner(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    backend: Backend,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return unsafe {
         match backend {

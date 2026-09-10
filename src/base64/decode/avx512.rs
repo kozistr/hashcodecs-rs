@@ -11,6 +11,12 @@ use super::x86_contracts::{Decoder, Store};
 
 const OUTPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 
+#[inline]
+const fn active_lane_mask(active_lanes: usize) -> __mmask64 {
+    debug_assert!(active_lanes != 0 && active_lanes <= 64);
+    u64::MAX >> (64 - active_lanes)
+}
+
 pub(in crate::base64) const DECODE_SHUFFLE: [u8; 64] = decode_shuffle();
 
 const fn decode_shuffle() -> [u8; 64] {
@@ -231,7 +237,10 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
         source += 64;
         destination += 48;
     }
-    let complete_input = (input.len() - source) / 4 * 4;
+    // The full-width loop stopped on this vector when it found an invalid
+    // lane. Decode that vector again with a mask so complete quartets before
+    // the invalid byte can still be returned as a valid prefix.
+    let complete_input = (input.len() - source).min(64) / 4 * 4;
     if complete_input != 0 {
         let (decoded, invalid) = unsafe {
             decode_tail::<A>(
@@ -290,7 +299,7 @@ unsafe fn decode_tail<A: Decoder>(
     upper_table: __m512i,
     decode_shuffle: __m512i,
 ) -> (__m512i, __mmask64) {
-    let input_mask = (1_u64 << input_len) - 1;
+    let input_mask = active_lane_mask(input_len);
     let (indices, invalid) =
         unsafe { classify_masked(input, input_mask, lower_table, upper_table) };
     let invalid = if A::CHECK_INPUT { invalid } else { 0 };
@@ -324,4 +333,23 @@ unsafe fn classify_masked(
     let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
     let invalid = _mm512_movepi8_mask(_mm512_or_si512(indices, ascii)) & input_mask;
     (indices, invalid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::active_lane_mask;
+
+    #[test]
+    fn active_lane_masks_include_one_through_sixty_four_bytes() {
+        for active_lanes in 1..=64 {
+            assert_eq!(
+                active_lane_mask(active_lanes).count_ones(),
+                active_lanes as u32
+            );
+            assert_eq!(
+                active_lane_mask(active_lanes).trailing_ones(),
+                active_lanes as u32
+            );
+        }
+    }
 }

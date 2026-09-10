@@ -24,6 +24,7 @@ use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 #[derive(Clone, Copy)]
 pub(crate) struct CustomEncodeAlphabet {
     table: [u8; 64],
+    has_standard_prefix: bool,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     offsets: [i8; 16],
 }
@@ -35,8 +36,13 @@ impl CustomEncodeAlphabet {
         table[62] = value62;
         table[63] = value63;
 
+        Self::from_table(table)
+    }
+
+    pub(crate) fn from_table(table: [u8; 64]) -> Self {
         Self {
             table,
+            has_standard_prefix: table[..62] == STANDARD_ALPHABET[..62],
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             offsets: [
                 b'A' as i8,
@@ -51,12 +57,17 @@ impl CustomEncodeAlphabet {
                 -4,
                 -4,
                 -4,
-                value62.wrapping_sub(62) as i8,
-                value63.wrapping_sub(63) as i8,
+                table[62].wrapping_sub(62) as i8,
+                table[63].wrapping_sub(63) as i8,
                 0,
                 0,
             ],
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn has_standard_prefix(&self) -> bool {
+        self.has_standard_prefix
     }
 
     #[inline(always)]

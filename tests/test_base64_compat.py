@@ -125,6 +125,81 @@ def test_python_315_encode_options_match_cpython() -> None:
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_constructed_alphabets_match_cpython() -> None:
+    class AlphabetBuffer:
+        def __buffer__(self, flags: int) -> memoryview:
+            return memoryview(b'Z' * 64)
+
+    class Altchars(bytes):
+        alphabet: object
+
+        def __radd__(self, other: object) -> object:
+            return self.alphabet
+
+    for alphabet in (b'Z' * 64, bytearray(b'Z' * 64), AlphabetBuffer()):
+        altchars = Altchars(b'-_')
+        altchars.alphabet = alphabet
+        expected = stdlib_base64.b64encode(b'abc', altchars)
+        assert expected == b'ZZZZ'
+        assert base64.b64encode(b'abc', altchars) == expected
+
+    payload = bytes(range(256))
+    altchars.alphabet = binascii.BASE64_ALPHABET[::-1]
+    assert base64.b64encode(payload, altchars) == stdlib_base64.b64encode(payload, altchars)
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_python_315_encode_argument_conversion_order_matches_cpython() -> None:
+    def run(function: Callable[..., bytes]) -> tuple[bytes, list[str]]:
+        events: list[str] = []
+
+        class Buffer:
+            def __init__(self, value: bytes, name: str) -> None:
+                self.value = value
+                self.name = name
+
+            def __buffer__(self, flags: int) -> memoryview:
+                events.append(f'{self.name}.__buffer__')
+                return memoryview(self.value)
+
+        class Altchars:
+            def __len__(self) -> int:
+                events.append('altchars.__len__')
+                return 2
+
+            def __radd__(self, other: object) -> Buffer:
+                events.append('altchars.__radd__')
+                return Buffer(b'Z' * 64, 'alphabet')
+
+        class Padded:
+            def __bool__(self) -> bool:
+                events.append('padded.__bool__')
+                return True
+
+        class Wrapcol:
+            def __index__(self) -> int:
+                events.append('wrapcol.__index__')
+                return 0
+
+        result = function(Buffer(b'abc', 'input'), Altchars(), padded=Padded(), wrapcol=Wrapcol())
+        return result, events
+
+    expected = run(stdlib_base64.b64encode)
+    assert expected == (
+        b'ZZZZ',
+        [
+            'altchars.__len__',
+            'altchars.__radd__',
+            'input.__buffer__',
+            'padded.__bool__',
+            'wrapcol.__index__',
+            'alphabet.__buffer__',
+        ],
+    )
+    assert run(base64.b64encode) == expected
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 def test_python_315_encode_option_errors_match_cpython() -> None:
     for kwargs in ({'wrapcol': -1}, {'wrapcol': 1.5}, {'wrapcol': None}, {'wrapcol': 2**1000}):
         expected = _keyword_outcome(stdlib_base64.b64encode, b'abc', kwargs)

@@ -70,6 +70,10 @@ unsafe fn encode_custom_with_backend_inner(
     alphabet: &CustomEncodeAlphabet,
     streaming_stores: bool,
 ) -> usize {
+    if !alphabet.has_standard_prefix() {
+        return 0;
+    }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return unsafe {
         match backend {
@@ -160,6 +164,10 @@ unsafe fn encode_wrapped_custom_with_backend_inner(
     backend: Backend,
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
+    if !alphabet.has_standard_prefix() {
+        return 0;
+    }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return unsafe {
         match backend {

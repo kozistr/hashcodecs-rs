@@ -127,7 +127,8 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"hashcodecs/_hashcodecs.pyi" = ["PIE790", "PYI021", "PYI048"]
+# The public stubs support Python 3.10 type checkers, which cannot parse PEP 695 syntax.
+"hashcodecs/_hashcodecs.pyi" = ["PIE790", "PYI021", "PYI048", "UP047"]
 "hashcodecs/base64.pyi" = ["PIE790", "PYI021", "PYI048"]
 
 [tool.ruff.lint.pydocstyle]

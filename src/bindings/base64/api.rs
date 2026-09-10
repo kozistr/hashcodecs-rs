@@ -82,15 +82,7 @@ callback! {
 
 callback! {
     b64encode, |py; s, altchars, padded, wrapcol| {
-        let result = (|| {
-            encode::b64encode(
-                py,
-                s.raw(py),
-                altchars.optional(py),
-                padded.truthy(py)?,
-                wrapcol.extract_i128(py)?,
-            )
-        })();
+        let result = encode::b64encode(py, s.raw(py), altchars.optional(py), padded, wrapcol);
         return_bound(py, result)
     }
 }

@@ -1,6 +1,9 @@
-from typing import final
+from typing import TypeVar, final
 
 from _typeshed import ReadableBuffer
+
+_ReadableBufferT = TypeVar('_ReadableBufferT', bound=ReadableBuffer)
+_Base64InputT = TypeVar('_Base64InputT', bound=str | ReadableBuffer)
 
 def b64encode(
     s: ReadableBuffer,
@@ -37,7 +40,7 @@ def b64encode(
     """
     ...
 
-def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None = None) -> list[bytes]:
+def b64encode_batch(items: list[_ReadableBufferT], altchars: ReadableBuffer | None = None) -> list[bytes]:
     """Encode a list of bytes-like objects as padded Base64.
 
     Every item uses the same alphabet. The result order matches the input
@@ -63,7 +66,7 @@ def b64encode_batch(items: list[ReadableBuffer], altchars: ReadableBuffer | None
     ...
 
 def b64encode_batch_into(
-    items: list[ReadableBuffer],
+    items: list[_ReadableBufferT],
     outputs: list[bytearray],
     altchars: ReadableBuffer | None = None,
 ) -> list[int]:
@@ -178,7 +181,7 @@ def b64decode(
     ...
 
 def b64decode_batch(
-    items: list[str | ReadableBuffer],
+    items: list[_Base64InputT],
     altchars: str | ReadableBuffer | None = None,
     validate: bool = False,
 ) -> list[bytes]:
@@ -209,7 +212,7 @@ def b64decode_batch(
     ...
 
 def b64decode_batch_into(
-    items: list[str | ReadableBuffer],
+    items: list[_Base64InputT],
     outputs: list[bytearray],
     altchars: str | ReadableBuffer | None = None,
     validate: bool = False,
@@ -337,19 +340,19 @@ def standard_b64encode_into(s: ReadableBuffer, output: bytearray) -> int:
     """
     ...
 
-def standard_b64encode_batch(items: list[ReadableBuffer]) -> list[bytes]:
+def standard_b64encode_batch(items: list[_ReadableBufferT]) -> list[bytes]:
     """Encode each item with the padded standard Base64 alphabet."""
     ...
 
-def standard_b64encode_batch_into(items: list[ReadableBuffer], outputs: list[bytearray]) -> list[int]:
+def standard_b64encode_batch_into(items: list[_ReadableBufferT], outputs: list[bytearray]) -> list[int]:
     """Encode each item into its matching reusable bytearray."""
     ...
 
-def standard_b64decode_batch(items: list[str | ReadableBuffer]) -> list[bytes]:
+def standard_b64decode_batch(items: list[_Base64InputT]) -> list[bytes]:
     """Decode each item with the padded standard Base64 alphabet."""
     ...
 
-def standard_b64decode_batch_into(items: list[str | ReadableBuffer], outputs: list[bytearray]) -> list[int]:
+def standard_b64decode_batch_into(items: list[_Base64InputT], outputs: list[bytearray]) -> list[int]:
     """Decode each item into its matching reusable bytearray."""
     ...
 
@@ -400,19 +403,19 @@ def standard_b64decode_into(s: str | ReadableBuffer, output: bytearray) -> int:
     """
     ...
 
-def urlsafe_b64encode_batch(items: list[ReadableBuffer]) -> list[bytes]:
+def urlsafe_b64encode_batch(items: list[_ReadableBufferT]) -> list[bytes]:
     """Encode each item with the padded URL-safe Base64 alphabet."""
     ...
 
-def urlsafe_b64encode_batch_into(items: list[ReadableBuffer], outputs: list[bytearray]) -> list[int]:
+def urlsafe_b64encode_batch_into(items: list[_ReadableBufferT], outputs: list[bytearray]) -> list[int]:
     """Encode each item with the URL-safe alphabet into its matching reusable bytearray."""
     ...
 
-def urlsafe_b64decode_batch(items: list[str | ReadableBuffer]) -> list[bytes]:
+def urlsafe_b64decode_batch(items: list[_Base64InputT]) -> list[bytes]:
     """Decode each item with the padded URL-safe Base64 alphabet."""
     ...
 
-def urlsafe_b64decode_batch_into(items: list[str | ReadableBuffer], outputs: list[bytearray]) -> list[int]:
+def urlsafe_b64decode_batch_into(items: list[_Base64InputT], outputs: list[bytearray]) -> list[int]:
     """Decode each URL-safe item into its matching reusable bytearray."""
     ...
 
@@ -632,7 +635,7 @@ def xxh3_128(s: ReadableBuffer, seed: int = 0) -> int:
     """
     ...
 
-def xxh3_64_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
+def xxh3_64_batch(items: list[_ReadableBufferT], seed: int = 0) -> list[int]:
     """Compute canonical XXH3 64-bit hashes for a list of inputs.
 
     Args:
@@ -653,7 +656,7 @@ def xxh3_64_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
     """
     ...
 
-def xxh3_64_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int = 0) -> int:
+def xxh3_64_batch_into(items: list[_ReadableBufferT], output: bytearray, seed: int = 0) -> int:
     """Write XXH3 64-bit hashes as packed little-endian bytes.
 
     The function checks all inputs and the output capacity before it changes
@@ -681,7 +684,7 @@ def xxh3_64_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int
     """
     ...
 
-def xxh3_128_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
+def xxh3_128_batch(items: list[_ReadableBufferT], seed: int = 0) -> list[int]:
     """Compute canonical XXH3 128-bit hashes for a list of inputs.
 
     Args:
@@ -702,7 +705,7 @@ def xxh3_128_batch(items: list[ReadableBuffer], seed: int = 0) -> list[int]:
     """
     ...
 
-def xxh3_128_batch_into(items: list[ReadableBuffer], output: bytearray, seed: int = 0) -> int:
+def xxh3_128_batch_into(items: list[_ReadableBufferT], output: bytearray, seed: int = 0) -> int:
     """Write XXH3 128-bit hashes as packed little-endian bytes.
 
     The function checks all inputs and the output capacity before it changes

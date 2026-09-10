@@ -40,9 +40,6 @@ impl CustomEncodeAlphabet {
     }
 
     pub(crate) fn from_table(table: [u8; 64]) -> Self {
-        let value62 = table[62];
-        let value63 = table[63];
-
         Self {
             table,
             has_standard_prefix: table[..62] == STANDARD_ALPHABET[..62],
@@ -60,8 +57,8 @@ impl CustomEncodeAlphabet {
                 -4,
                 -4,
                 -4,
-                value62.wrapping_sub(62) as i8,
-                value63.wrapping_sub(63) as i8,
+                table[62].wrapping_sub(62) as i8,
+                table[63].wrapping_sub(63) as i8,
                 0,
                 0,
             ],

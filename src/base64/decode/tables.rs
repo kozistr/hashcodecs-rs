@@ -8,7 +8,7 @@ pub(super) const URLSAFE_OFFSETS: [u8; 16] =
 // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
 // The same class maps work with every SIMD decoder; only their vector loads
 // differ by architecture.
-pub(super) const STANDARD_HIGH_CLASSES: [u8; 16] = [
+pub(crate) const STANDARD_HIGH_CLASSES: [u8; 16] = [
     0x20, 0x20, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
 ];
 pub(super) const STANDARD_LOW_CLASSES: [u8; 16] = [
@@ -43,7 +43,7 @@ const COMPLEMENTED_LOW_CLASSES: [[u8; 16]; 3] = {
 };
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub(super) const STANDARD_LOW_CLASSES_COMPLEMENT: [u8; 16] = COMPLEMENTED_LOW_CLASSES[0];
+pub(crate) const STANDARD_LOW_CLASSES_COMPLEMENT: [u8; 16] = COMPLEMENTED_LOW_CLASSES[0];
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) const URLSAFE_LOW_CLASSES_COMPLEMENT: [u8; 16] = COMPLEMENTED_LOW_CLASSES[1];
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

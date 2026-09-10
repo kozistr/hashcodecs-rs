@@ -4,6 +4,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::scalar::is_lenient_symbol;
+use crate::base64::{STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT};
 
 #[target_feature(enable = "avx2")]
 pub(in crate::bindings::base64) unsafe fn symbol_count_avx2(
@@ -13,11 +14,17 @@ pub(in crate::bindings::base64) unsafe fn symbol_count_avx2(
     let [extra0, extra1] = altchars.unwrap_or(*b"AA");
     let extra0 = _mm256_set1_epi8(extra0 as i8);
     let extra1 = _mm256_set1_epi8(extra1 as i8);
+    let high_classes = _mm256_broadcastsi128_si256(unsafe {
+        _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
+    });
+    let low_classes = _mm256_broadcastsi128_si256(unsafe {
+        _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
+    });
     let mut source = 0;
     let mut symbols = 0;
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
-        let valid = valid_avx2(bytes, extra0, extra1);
+        let valid = valid_avx2(bytes, high_classes, low_classes, extra0, extra1);
         symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
         source += 32;
     }
@@ -58,10 +65,18 @@ pub(in crate::bindings::base64) unsafe fn symbol_prefix_avx2(
     let [extra0, extra1] = altchars.unwrap_or(*b"AA");
     let extra0 = _mm256_set1_epi8(extra0 as i8);
     let extra1 = _mm256_set1_epi8(extra1 as i8);
+    let high_classes = _mm256_broadcastsi128_si256(unsafe {
+        _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
+    });
+    let low_classes = _mm256_broadcastsi128_si256(unsafe {
+        _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
+    });
     let mut source = 0;
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
-        let mask = _mm256_movemask_epi8(valid_avx2(bytes, extra0, extra1)) as u32;
+        let mask =
+            _mm256_movemask_epi8(valid_avx2(bytes, high_classes, low_classes, extra0, extra1))
+                as u32;
         if mask != u32::MAX {
             return source + (!mask).trailing_zeros() as usize;
         }
@@ -113,24 +128,24 @@ pub(in crate::bindings::base64) unsafe fn translate_avx2(
 
 #[target_feature(enable = "avx2")]
 #[inline]
-fn valid_avx2(bytes: __m256i, extra0: __m256i, extra1: __m256i) -> __m256i {
-    let upper = range_avx2(bytes, b'A', b'Z');
-    let lower = range_avx2(bytes, b'a', b'z');
-    let digits = range_avx2(bytes, b'0', b'9');
+fn valid_avx2(
+    bytes: __m256i,
+    high_classes: __m256i,
+    low_classes: __m256i,
+    extra0: __m256i,
+    extra1: __m256i,
+) -> __m256i {
+    let high_nibbles = _mm256_and_si256(_mm256_srli_epi16(bytes, 4), _mm256_set1_epi8(0x0f));
+    let high_matches = _mm256_shuffle_epi8(high_classes, high_nibbles);
+    let low_mismatches = _mm256_shuffle_epi8(low_classes, bytes);
+    let errors = _mm256_andnot_si256(low_mismatches, high_matches);
+    let standard = _mm256_cmpeq_epi8(errors, _mm256_setzero_si256());
+
     _mm256_or_si256(
-        _mm256_or_si256(upper, lower),
+        standard,
         _mm256_or_si256(
-            digits,
-            _mm256_or_si256(
-                _mm256_or_si256(
-                    _mm256_cmpeq_epi8(bytes, _mm256_set1_epi8(b'+' as i8)),
-                    _mm256_cmpeq_epi8(bytes, _mm256_set1_epi8(b'/' as i8)),
-                ),
-                _mm256_or_si256(
-                    _mm256_cmpeq_epi8(bytes, extra0),
-                    _mm256_cmpeq_epi8(bytes, extra1),
-                ),
-            ),
+            _mm256_cmpeq_epi8(bytes, extra0),
+            _mm256_cmpeq_epi8(bytes, extra1),
         ),
     )
 }

@@ -1,16 +1,14 @@
 //! Python encoding entry points and prepared encoding.
 
-use core::slice;
-
 use pyo3::exceptions::{PyAssertionError, PyOverflowError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 use pyo3::{PyTypeInfo, ffi};
 
-use super::scan::translate_bytes;
 use super::staging::{pybytes_with_len, with_output_ptr};
 use crate::base64::{
-    STANDARD_ALPHABET, encode_to_ptr, encode_to_ptr_cached, encode_wrapped_to_ptr_cached,
+    CustomEncodeAlphabet, STANDARD_ALPHABET, encode_to_ptr, encode_to_ptr_cached,
+    encode_to_ptr_with_custom_alphabet, encode_wrapped_to_ptr_cached, encode_wrapped_to_ptr_custom,
     encoded_len,
 };
 use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
@@ -26,7 +24,7 @@ const DIRECT_WRAPPED_INPUT_THRESHOLD: usize = 4 * 1024 * 1024;
 enum EncodeAlphabet {
     Standard,
     UrlSafe,
-    Custom([u8; 2]),
+    Custom(CustomEncodeAlphabet),
 }
 
 impl EncodeAlphabet {
@@ -34,7 +32,7 @@ impl EncodeAlphabet {
         match altchars {
             None => Self::Standard,
             Some(altchars) if altchars == *b"-_" => Self::UrlSafe,
-            Some(altchars) => Self::Custom(altchars),
+            Some(altchars) => Self::Custom(CustomEncodeAlphabet::new(altchars)),
         }
     }
 
@@ -111,59 +109,37 @@ impl PreparedEncoder {
 
     unsafe fn encode_to_ptr(self, input: &[u8], output: *mut u8) {
         match self.wrapping {
-            LineWrapping::None => {
-                if matches!(self.alphabet, EncodeAlphabet::Custom(_)) {
-                    // The substitution pass immediately rereads the encoded
-                    // bytes, so they must remain cache-resident.
-                    unsafe {
-                        encode_unwrapped_ptr::<true>(
-                            input,
-                            output,
-                            self.alphabet.is_urlsafe(),
-                            self.padding,
-                        )
-                    };
-                } else {
-                    unsafe {
-                        encode_unwrapped_ptr::<false>(
-                            input,
-                            output,
-                            self.alphabet.is_urlsafe(),
-                            self.padding,
-                        )
-                    };
-                }
-            }
+            LineWrapping::None => unsafe {
+                encode_unwrapped_ptr::<false>(input, output, self.alphabet, self.padding)
+            },
             LineWrapping::Columns(width) => unsafe {
-                encode_unwrapped_ptr::<true>(
-                    input,
-                    output,
-                    self.alphabet.is_urlsafe(),
-                    self.padding,
-                );
+                encode_unwrapped_ptr::<true>(input, output, self.alphabet, self.padding);
                 wrap_encoded_ptr(output, self.data_len(input.len()), width);
             },
-        }
-        if let EncodeAlphabet::Custom(altchars) = self.alphabet {
-            let output = unsafe { slice::from_raw_parts_mut(output, self.output_len(input.len())) };
-            substitute_altchars(output, altchars);
         }
     }
 
     #[cold]
     unsafe fn encode_direct_to_ptr(self, input: &[u8], output: *mut u8, width: usize) {
-        unsafe {
-            encode_wrapped_to_ptr_cached(
-                input,
-                output,
-                self.alphabet.is_urlsafe(),
-                matches!(self.padding, EncodePadding::Padded),
-                width,
-            )
-        };
-        if let EncodeAlphabet::Custom(altchars) = self.alphabet {
-            let output = unsafe { slice::from_raw_parts_mut(output, self.output_len(input.len())) };
-            substitute_altchars(output, altchars);
+        match self.alphabet {
+            EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => unsafe {
+                encode_wrapped_to_ptr_cached(
+                    input,
+                    output,
+                    self.alphabet.is_urlsafe(),
+                    matches!(self.padding, EncodePadding::Padded),
+                    width,
+                )
+            },
+            EncodeAlphabet::Custom(alphabet) => unsafe {
+                encode_wrapped_to_ptr_custom(
+                    input,
+                    output,
+                    &alphabet,
+                    matches!(self.padding, EncodePadding::Padded),
+                    width,
+                )
+            },
         }
     }
 }
@@ -294,29 +270,24 @@ fn encode_slice_to_ptr(
 }
 
 #[inline]
-fn substitute_altchars(output: &mut [u8], [plus, slash]: [u8; 2]) {
-    translate_bytes(output, b'+', plus, b'/', slash);
-}
-
-#[inline]
 unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
     input: &[u8],
     output: *mut u8,
-    urlsafe: bool,
+    alphabet: EncodeAlphabet,
     padding: EncodePadding,
 ) {
     if matches!(padding, EncodePadding::Padded) {
-        unsafe { encode_ptr::<CACHED>(input, output, urlsafe) };
+        unsafe { encode_ptr::<CACHED>(input, output, alphabet) };
         return;
     }
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
-    unsafe { encode_ptr::<CACHED>(&input[..complete_input_len], output, urlsafe) };
+    unsafe { encode_ptr::<CACHED>(&input[..complete_input_len], output, alphabet) };
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
-        unsafe { encode_ptr::<CACHED>(tail, encoded_tail.as_mut_ptr(), urlsafe) };
+        unsafe { encode_ptr::<CACHED>(tail, encoded_tail.as_mut_ptr(), alphabet) };
         let tail_len = unpadded_encoded_len(tail.len());
         unsafe {
             output
@@ -327,11 +298,18 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
 }
 
 #[inline]
-unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, urlsafe: bool) {
-    if CACHED {
-        unsafe { encode_to_ptr_cached(input, output, urlsafe) };
-    } else {
-        unsafe { encode_to_ptr(input, output, urlsafe) };
+unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet: EncodeAlphabet) {
+    match alphabet {
+        EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => {
+            if CACHED {
+                unsafe { encode_to_ptr_cached(input, output, alphabet.is_urlsafe()) };
+            } else {
+                unsafe { encode_to_ptr(input, output, alphabet.is_urlsafe()) };
+            }
+        }
+        EncodeAlphabet::Custom(alphabet) => unsafe {
+            encode_to_ptr_with_custom_alphabet(input, output, &alphabet, CACHED)
+        },
     }
 }
 
@@ -525,6 +503,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn custom_lookup_tables_cover_wrapping_byte_offsets_and_exact_boundaries() {
+        let input = (0..=256)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+
+        for altchars in [*b"@#", *b"==", [0, u8::MAX], [62, 63]] {
+            for length in 0..=256 {
+                for padded in [false, true] {
+                    let encoder = PreparedEncoder::new(Some(altchars), padded, None);
+                    let output_len = encoder.output_len(length);
+                    let mut actual = vec![0xa5; output_len + 1];
+                    unsafe { encoder.encode_to_ptr(&input[..length], actual.as_mut_ptr()) };
+
+                    let mut expected = crate::base64::b64encode(&input[..length]).into_bytes();
+                    if !padded {
+                        while expected.last() == Some(&b'=') {
+                            expected.pop();
+                        }
+                    }
+                    for byte in &mut expected {
+                        if *byte == b'+' {
+                            *byte = altchars[0];
+                        } else if *byte == b'/' {
+                            *byte = altchars[1];
+                        }
+                    }
+
+                    assert_eq!(&actual[..output_len], expected);
+                    assert_eq!(actual[output_len], 0xa5);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn large_wrapped_custom_unpadded_output_uses_final_layout() {
         let input = (0..DIRECT_WRAPPED_INPUT_THRESHOLD + 2)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
@@ -537,7 +550,13 @@ mod tests {
         while contiguous.last() == Some(&b'=') {
             contiguous.pop();
         }
-        substitute_altchars(&mut contiguous, *b"@#");
+        for byte in &mut contiguous {
+            if *byte == b'+' {
+                *byte = b'@';
+            } else if *byte == b'/' {
+                *byte = b'#';
+            }
+        }
 
         let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
         for (line, chunk) in contiguous.chunks(76).enumerate() {

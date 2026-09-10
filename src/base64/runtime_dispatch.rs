@@ -7,10 +7,10 @@ use super::decode::aarch64 as decode_aarch64;
 use super::decode::{self as decode_backend, x86_contracts};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::encode as encode_backend;
-#[cfg(feature = "python")]
-use super::encode::WrappedOutput;
 #[cfg(target_arch = "aarch64")]
 use super::encode::aarch64 as encode_aarch64;
+#[cfg(feature = "python")]
+use super::encode::{CustomEncodeAlphabet, WrappedOutput};
 use super::{Base64Error, DecodeAlphabet};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,6 +41,90 @@ pub(super) unsafe fn encode_with_runtime_backend(
 
 #[cfg(feature = "python")]
 #[inline]
+pub(super) unsafe fn encode_custom_with_runtime_backend(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: &CustomEncodeAlphabet,
+    allow_streaming_stores: bool,
+) -> usize {
+    let selection = backend::selected_backend();
+    let streaming_stores =
+        allow_streaming_stores && selection.use_streaming_stores(input.len(), output);
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return unsafe {
+        match selection.backend {
+            Backend::Avx512Vbmi => encode_backend::avx512::encode_custom(input, output, alphabet),
+            Backend::Avx2 => encode_backend::avx2::encode_custom(
+                input,
+                output,
+                alphabet.offsets(),
+                if streaming_stores {
+                    encode_backend::avx2::Avx2StoreMode::Streaming
+                } else {
+                    encode_backend::avx2::Avx2StoreMode::Cached
+                },
+            ),
+            Backend::Sse41 | Backend::Ssse3 => {
+                encode_backend::ssse3::encode_custom(input, output, alphabet.offsets())
+            }
+            Backend::Scalar | Backend::Neon => 0,
+        }
+    };
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if selection.backend == Backend::Neon {
+            return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
+        }
+        let _ = (input, output, alphabet, streaming_stores);
+        0
+    }
+}
+
+#[cfg(all(test, feature = "python"))]
+#[inline]
+pub(super) unsafe fn encode_custom_with_backend(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
+    if !backend::is_supported(backend) {
+        return 0;
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return unsafe {
+        match backend {
+            Backend::Avx512Vbmi => encode_backend::avx512::encode_custom(input, output, alphabet),
+            Backend::Avx2 => encode_backend::avx2::encode_custom(
+                input,
+                output,
+                alphabet.offsets(),
+                encode_backend::avx2::Avx2StoreMode::Cached,
+            ),
+            Backend::Sse41 | Backend::Ssse3 => {
+                encode_backend::ssse3::encode_custom(input, output, alphabet.offsets())
+            }
+            Backend::Scalar | Backend::Neon => 0,
+        }
+    };
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if backend == Backend::Neon {
+            return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
+        }
+        let _ = (input, output, backend, alphabet);
+        0
+    }
+}
+
+#[cfg(feature = "python")]
+#[inline]
 pub(super) unsafe fn encode_wrapped_with_runtime_backend(
     input: &[u8],
     output: &mut WrappedOutput,
@@ -48,6 +132,44 @@ pub(super) unsafe fn encode_wrapped_with_runtime_backend(
 ) -> usize {
     let backend = backend::selected_backend().backend;
     unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
+}
+
+#[cfg(feature = "python")]
+#[inline]
+pub(super) unsafe fn encode_wrapped_custom_with_runtime_backend(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
+    let backend = backend::selected_backend().backend;
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return unsafe {
+        match backend {
+            Backend::Avx512Vbmi => {
+                encode_backend::avx512::encode_wrapped_custom(input, output, alphabet)
+            }
+            Backend::Avx2 => {
+                encode_backend::avx2::encode_wrapped_custom(input, output, alphabet.offsets())
+            }
+            Backend::Sse41 | Backend::Ssse3 => {
+                encode_backend::ssse3::encode_wrapped_custom(input, output, alphabet.offsets())
+            }
+            Backend::Scalar | Backend::Neon => 0,
+        }
+    };
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if backend == Backend::Neon {
+            return unsafe {
+                encode_aarch64::encode_wrapped_custom(input, output, alphabet.table())
+            };
+        }
+        let _ = (input, output, alphabet, backend);
+        0
+    }
 }
 
 #[cfg(all(test, feature = "python"))]

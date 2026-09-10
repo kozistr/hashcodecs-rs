@@ -5,6 +5,8 @@ use super::decode::{self as decode_backend, x86_contracts};
 use super::encode as encode_backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::runtime_dispatch::decode_valid_prefix_with_backend;
+#[cfg(feature = "python")]
+use super::runtime_dispatch::encode_custom_with_backend;
 use super::runtime_dispatch::{
     decode_standard_validated_with_backend, decode_with_backend, decode_with_backend_ptr,
     encode_with_backend, validate_with_backend,
@@ -407,6 +409,54 @@ fn matches_the_standard_engine_for_all_short_lengths() {
     }
 }
 
+#[cfg(feature = "python")]
+#[test]
+fn custom_alphabet_encoder_matches_standard_with_every_available_backend() {
+    let input = (0..=1024)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect::<Vec<_>>();
+    let alphabet = encode_backend::CustomEncodeAlphabet::new(*b"@#");
+
+    for backend in [
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for length in [16, 31, 32, 47, 48, 63, 64, 95, 96, 212, 1024] {
+            let mut expected = b64encode(&input[..length]).into_bytes();
+            for byte in &mut expected {
+                if *byte == b'+' {
+                    *byte = b'@';
+                } else if *byte == b'/' {
+                    *byte = b'#';
+                }
+            }
+
+            let mut actual = vec![0xa5; expected.len() + 16];
+            let consumed = unsafe {
+                encode_custom_with_backend(
+                    &input[..length],
+                    actual.as_mut_ptr(),
+                    backend,
+                    &alphabet,
+                )
+            };
+            let written = consumed / 3 * 4;
+            assert_eq!(
+                &actual[..written],
+                &expected[..written],
+                "backend={backend:?}"
+            );
+            assert!(actual[written..].iter().all(|&byte| byte == 0xa5));
+        }
+    }
+}
+
 #[test]
 fn scalar_encoder_handles_every_short_length_and_input_alignment() {
     const GUARD: usize = 16;
@@ -711,14 +761,15 @@ fn backend_selection_and_kernels_match_scalar_output() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx512_decoder_tail_boundaries_match_scalar_output() {
+fn avx512_masked_tails_match_scalar_output_and_preserve_boundaries() {
     if !backend::is_supported(Backend::Avx512Vbmi) {
         return;
     }
 
     for length in [64, 68, 76, 80, 92, 96, 108, 112, 124, 128, 132, 140, 144] {
         let encoded = vec![b'A'; length];
-        let mut decoded = vec![0xa5; length / 4 * 3];
+        let expected_written = length / 4 * 3;
+        let mut decoded = vec![0xa5; expected_written + 16];
         let (consumed, written) = decode_with_backend(
             &encoded,
             &mut decoded,
@@ -726,14 +777,49 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
             DecodeAlphabet::Standard,
         )
         .unwrap();
-        let remainder = length % 64;
-        let expected_tail = remainder / 16 * 16;
-        let expected_consumed = length - remainder + expected_tail;
-        let expected_written = expected_consumed / 4 * 3;
 
-        assert_eq!((consumed, written), (expected_consumed, expected_written));
+        assert_eq!((consumed, written), (length, expected_written));
         assert!(decoded[..written].iter().all(|byte| *byte == 0));
         assert!(decoded[written..].iter().all(|byte| *byte == 0xa5));
+
+        for invalid_index in 64..length {
+            let mut invalid = encoded.clone();
+            invalid[invalid_index] = b'!';
+            assert_eq!(
+                decode_with_backend(
+                    &invalid,
+                    &mut decoded,
+                    Backend::Avx512Vbmi,
+                    DecodeAlphabet::Standard,
+                ),
+                Err(Base64Error::InvalidInput),
+                "length={length} invalid_index={invalid_index}",
+            );
+        }
+    }
+
+    for length in 48..96 {
+        let input = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        for urlsafe in [false, true] {
+            let expected = if urlsafe {
+                b64encode_urlsafe(&input)
+            } else {
+                b64encode(&input)
+            };
+            let consumed_expected = length / 3 * 3;
+            let written_expected = consumed_expected / 3 * 4;
+            let mut encoded = vec![0xa5; expected.len() + 16];
+            let consumed = encode_with_backend(&input, &mut encoded, Backend::Avx512Vbmi, urlsafe);
+
+            assert_eq!(consumed, consumed_expected);
+            assert_eq!(
+                &encoded[..written_expected],
+                &expected.as_bytes()[..written_expected]
+            );
+            assert!(encoded[written_expected..].iter().all(|&byte| byte == 0xa5));
+        }
     }
 }
 

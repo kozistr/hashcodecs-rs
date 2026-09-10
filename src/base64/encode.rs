@@ -14,8 +14,62 @@ pub(super) mod ssse3;
 use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
 use super::runtime_dispatch::encode_with_runtime_backend;
 #[cfg(feature = "python")]
-use super::runtime_dispatch::encode_wrapped_with_runtime_backend;
+use super::runtime_dispatch::{
+    encode_custom_with_runtime_backend, encode_wrapped_custom_with_runtime_backend,
+    encode_wrapped_with_runtime_backend,
+};
 use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
+
+#[cfg(feature = "python")]
+#[derive(Clone, Copy)]
+pub(crate) struct CustomEncodeAlphabet {
+    table: [u8; 64],
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    offsets: [i8; 16],
+}
+
+#[cfg(feature = "python")]
+impl CustomEncodeAlphabet {
+    pub(crate) fn new([value62, value63]: [u8; 2]) -> Self {
+        let mut table = *STANDARD_ALPHABET;
+        table[62] = value62;
+        table[63] = value63;
+
+        Self {
+            table,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            offsets: [
+                b'A' as i8,
+                (b'a' - 26) as i8,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                -4,
+                value62.wrapping_sub(62) as i8,
+                value63.wrapping_sub(63) as i8,
+                0,
+                0,
+            ],
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn table(&self) -> &[u8; 64] {
+        &self.table
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[inline(always)]
+    pub(crate) fn offsets(&self) -> &[i8; 16] {
+        &self.offsets
+    }
+}
 
 /// Encodes input with the padded RFC 4648 standard Base64 alphabet.
 ///
@@ -234,6 +288,30 @@ pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe
 }
 
 #[cfg(feature = "python")]
+#[inline]
+pub(crate) unsafe fn encode_to_ptr_with_custom_alphabet(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: &CustomEncodeAlphabet,
+    cached: bool,
+) {
+    if input.len() < 16 {
+        unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet.table()) };
+        return;
+    }
+
+    let input_offset =
+        unsafe { encode_custom_with_runtime_backend(input, output, alphabet, !cached) };
+    unsafe {
+        encode_scalar_ptr_with_alphabet(
+            &input[input_offset..],
+            output.add(input_offset / 3 * 4),
+            alphabet.table(),
+        )
+    };
+}
+
+#[cfg(feature = "python")]
 pub(crate) struct WrappedOutput {
     output: *mut u8,
     width: usize,
@@ -329,6 +407,33 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_cached(
     unsafe { encode_scalar_wrapped(&input[consumed..], &mut output, urlsafe, padded) };
 }
 
+#[cfg(feature = "python")]
+#[cold]
+#[inline(never)]
+pub(crate) unsafe fn encode_wrapped_to_ptr_custom(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: &CustomEncodeAlphabet,
+    padded: bool,
+    width: usize,
+) {
+    let mut output = WrappedOutput::new(output, width);
+    let consumed = if input.len() < 16 {
+        0
+    } else {
+        unsafe { encode_wrapped_custom_with_runtime_backend(input, &mut output, alphabet) }
+    };
+
+    unsafe {
+        encode_scalar_wrapped_with_alphabet(
+            &input[consumed..],
+            &mut output,
+            alphabet.table(),
+            padded,
+        )
+    };
+}
+
 #[cfg(all(test, feature = "python"))]
 pub(super) unsafe fn encode_wrapped_to_ptr_with_backend(
     input: &[u8],
@@ -353,10 +458,32 @@ unsafe fn encode_scalar_wrapped(
     urlsafe: bool,
     padded: bool,
 ) {
+    let alphabet = if urlsafe {
+        URLSAFE_ALPHABET
+    } else {
+        STANDARD_ALPHABET
+    };
+    unsafe { encode_scalar_wrapped_with_alphabet(input, output, alphabet, padded) };
+}
+
+#[cfg(feature = "python")]
+#[inline]
+unsafe fn encode_scalar_wrapped_with_alphabet(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    alphabet: &[u8; 64],
+    padded: bool,
+) {
     let mut source = 0;
     while source + 6 <= input.len() {
         let mut encoded = [0; 8];
-        unsafe { encode_scalar_ptr(&input[source..source + 6], encoded.as_mut_ptr(), urlsafe) };
+        unsafe {
+            encode_scalar_ptr_with_alphabet(
+                &input[source..source + 6],
+                encoded.as_mut_ptr(),
+                alphabet,
+            )
+        };
         unsafe { output.write_bytes(&encoded) };
         source += 6;
     }
@@ -364,7 +491,7 @@ unsafe fn encode_scalar_wrapped(
     if source != input.len() {
         let tail = &input[source..];
         let mut encoded = [0; 8];
-        unsafe { encode_scalar_ptr(tail, encoded.as_mut_ptr(), urlsafe) };
+        unsafe { encode_scalar_ptr_with_alphabet(tail, encoded.as_mut_ptr(), alphabet) };
         let padded_len = encoded_len(tail.len());
         let written = if padded {
             padded_len
@@ -389,6 +516,11 @@ pub(crate) unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: b
     } else {
         STANDARD_ALPHABET
     };
+    unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet) };
+}
+
+#[inline]
+unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabet: &[u8; 64]) {
     let input_len = input.len();
     let input_ptr = input.as_ptr();
     let mut source = 0;

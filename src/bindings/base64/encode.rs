@@ -1,9 +1,9 @@
 //! Python encoding entry points and prepared encoding.
 
 use pyo3::exceptions::{PyAssertionError, PyOverflowError, PyValueError};
+use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
-use pyo3::{PyTypeInfo, ffi};
 
 use super::staging::{pybytes_with_len, with_output_ptr};
 use crate::base64::{
@@ -14,6 +14,7 @@ use crate::base64::{
 use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
 use crate::bindings::compatibility::{parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
+use crate::bindings::schema::Argument;
 
 // The line-aware stores cross over the encode-then-move path above 4 MiB.
 // Keep their code cold so adding the large-input path does not perturb the
@@ -33,6 +34,16 @@ impl EncodeAlphabet {
             None => Self::Standard,
             Some(altchars) if altchars == *b"-_" => Self::UrlSafe,
             Some(altchars) => Self::Custom(CustomEncodeAlphabet::new(altchars)),
+        }
+    }
+
+    fn from_table(table: [u8; 64]) -> Self {
+        if table == *STANDARD_ALPHABET {
+            Self::Standard
+        } else if table[..62] == STANDARD_ALPHABET[..62] && table[62..] == *b"-_" {
+            Self::UrlSafe
+        } else {
+            Self::Custom(CustomEncodeAlphabet::from_table(table))
         }
     }
 
@@ -74,8 +85,12 @@ pub(super) struct PreparedEncoder {
 
 impl PreparedEncoder {
     pub(super) fn new(altchars: Option<[u8; 2]>, padded: bool, wrapcol: Option<usize>) -> Self {
+        Self::with_alphabet(EncodeAlphabet::new(altchars), padded, wrapcol)
+    }
+
+    fn with_alphabet(alphabet: EncodeAlphabet, padded: bool, wrapcol: Option<usize>) -> Self {
         Self {
-            alphabet: EncodeAlphabet::new(altchars),
+            alphabet,
             padding: EncodePadding::new(padded),
             wrapping: LineWrapping::new(wrapcol),
         }
@@ -173,12 +188,20 @@ pub(super) fn encode<'py>(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
+    encode_with_prepared(py, input, encoder)
+}
+
+fn encode_with_prepared<'py>(
+    py: Python<'py>,
+    input: &BytesLike<'_, '_>,
+    encoder: PreparedEncoder,
+) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
-        return encode(py, &BytesLike::OwnedVec(input), altchars, padded, wrapcol);
+        return encode_with_prepared(py, &BytesLike::OwnedVec(input), encoder);
     }
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
-    let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
     let output_len = encoder.output_len(input.len());
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {
@@ -339,61 +362,60 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
     debug_assert_eq!(destination, 0);
 }
 
-type PreparedAltchars = Result<Option<[u8; 2]>, PyErr>;
-
 // Python 3.15 constructs a custom alphabet before consuming the input, but
-// binascii validates its byte length afterward. The inner result preserves
-// that otherwise-observable error ordering without sending valid calls back
-// through Python's encoder.
-fn prepare_b64encode_altchars(
-    py: Python<'_>,
-    value: &Bound<'_, PyAny>,
-) -> PyResult<PreparedAltchars> {
+// binascii consumes the constructed alphabet after the other arguments.
+fn construct_b64encode_alphabet<'py>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let length = value.len()?;
     if length != 2 {
         let value = value.repr()?.to_string();
-        if python_at_least(py, (3, 15)) {
-            return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
-        }
-        return Err(PyAssertionError::new_err(value));
+        return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
     }
 
-    if python_at_least(py, (3, 15))
-        && !PyBytes::is_exact_type_of(value)
-        && !PyByteArray::is_exact_type_of(value)
-    {
-        let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
-        let alphabet = unsafe {
-            Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr()))?
-        };
-        let alphabet = match alphabet.cast_into::<PyBytes>() {
-            Ok(alphabet) => alphabet,
-            Err(error) => return Ok(Err(error.into())),
-        };
-        if alphabet.as_bytes().len() != STANDARD_ALPHABET.len() {
-            return Ok(Err(PyValueError::new_err("alphabet must have length 64")));
-        }
-        let alphabet = alphabet.as_bytes();
-        let altchars = [alphabet[62], alphabet[63]];
+    let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
+    unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr())) }
+}
 
-        return Ok(Ok((altchars != *b"+/").then_some(altchars)));
+fn parse_b64encode_alphabet<'a, 'py>(
+    value: &'a Bound<'py, PyAny>,
+) -> PyResult<(EncodeAlphabet, BytesLike<'a, 'py>)> {
+    let bytes = contiguous_bytes_like(value, "altchars")?;
+    #[cfg(Py_GIL_DISABLED)]
+    let bytes = bytes.into_stable()?;
+    if bytes.len() != STANDARD_ALPHABET.len() {
+        return Err(PyValueError::new_err("alphabet must have length 64"));
+    }
+
+    let table = unsafe {
+        bytes.with_bytes(|bytes| {
+            let mut table = [0; 64];
+            table.copy_from_slice(bytes);
+            table
+        })
+    };
+
+    Ok((EncodeAlphabet::from_table(table), bytes))
+}
+
+fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<[u8; 2]>> {
+    let length = value.len()?;
+    if length != 2 {
+        return Err(PyAssertionError::new_err(value.repr()?.to_string()));
     }
 
     let bytes = contiguous_bytes_like(value, "altchars")?;
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
     if bytes.len() != 2 {
-        let message = if python_at_least(py, (3, 15)) {
-            "alphabet must have length 64"
-        } else {
-            "maketrans arguments must have same length"
-        };
-        return Err(PyValueError::new_err(message));
+        return Err(PyValueError::new_err(
+            "maketrans arguments must have same length",
+        ));
     }
 
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
-
-    Ok(Ok((altchars != *b"+/").then_some(altchars)))
+    Ok((altchars != *b"+/").then_some(altchars))
 }
 
 pub(super) fn encode_parsed<'py>(
@@ -457,26 +479,39 @@ pub(super) fn b64encode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
     altchars: Option<&Bound<'py, PyAny>>,
-    padded: bool,
-    wrapcol: i128,
+    padded: Argument,
+    wrapcol: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let Some(altchars) = altchars else {
-        let input = contiguous_bytes_like(s, "s")?;
-        let wrapcol = normalize_wrapcol(wrapcol)?;
-        return encode(py, &input, None, padded, wrapcol);
-    };
-    let parse_altchars_first = python_at_least(py, (3, 15));
-    let parsed_altchars = parse_altchars_first
-        .then(|| prepare_b64encode_altchars(py, altchars))
-        .transpose()?;
-    let input = contiguous_bytes_like(s, "s")?;
-    let altchars = if let Some(parsed_altchars) = parsed_altchars {
-        parsed_altchars?
+    let python_315 = python_at_least(py, (3, 15));
+    let constructed_alphabet = if python_315 {
+        altchars
+            .map(|altchars| construct_b64encode_alphabet(py, altchars))
+            .transpose()?
     } else {
-        prepare_b64encode_altchars(py, altchars)??
+        None
     };
-    let wrapcol = normalize_wrapcol(wrapcol)?;
-    encode(py, &input, altchars, padded, wrapcol)
+
+    let input = contiguous_bytes_like(s, "s")?;
+    let legacy_altchars = if python_315 {
+        None
+    } else {
+        altchars
+            .map(parse_legacy_b64encode_altchars)
+            .transpose()?
+            .flatten()
+    };
+    let padded = padded.truthy(py)?;
+    let wrapcol = normalize_wrapcol(wrapcol.extract_i128(py)?)?;
+    let parsed_alphabet = constructed_alphabet
+        .as_ref()
+        .map(parse_b64encode_alphabet)
+        .transpose()?;
+    let alphabet = parsed_alphabet.as_ref().map_or_else(
+        || EncodeAlphabet::new(legacy_altchars),
+        |(alphabet, _)| *alphabet,
+    );
+    let encoder = PreparedEncoder::with_alphabet(alphabet, padded, wrapcol);
+    encode_with_prepared(py, &input, encoder)
 }
 
 pub(super) fn b64encode_into(
@@ -564,6 +599,29 @@ mod tests {
                 expected.push(b'\n');
             }
             expected.extend_from_slice(chunk);
+        }
+
+        assert_eq!(&actual[..expected.len()], expected);
+        assert_eq!(actual[expected.len()], 0xa5);
+    }
+
+    #[test]
+    fn wrapped_arbitrary_alphabet_uses_complete_table() {
+        let input = (0..=256)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        let alphabet = EncodeAlphabet::from_table([b'Z'; 64]);
+        let encoder = PreparedEncoder::with_alphabet(alphabet, false, Some(76));
+        let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
+        unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
+
+        let data_len = unpadded_encoded_len(input.len());
+        let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+        for (line, length) in (0..data_len).step_by(76).enumerate() {
+            if line != 0 {
+                expected.push(b'\n');
+            }
+            expected.extend(std::iter::repeat_n(b'Z', (data_len - length).min(76)));
         }
 
         assert_eq!(&actual[..expected.len()], expected);

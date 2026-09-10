@@ -31,15 +31,21 @@ fn little_endian_loads_stay_within_the_slice() {
 
 #[kani::proof]
 fn long_schedule_keeps_vector_loads_in_bounds() {
+    const MAX_LENGTH: usize = 3072;
+
     let length: usize = kani::any();
-    kani::assume(length > 240 && length <= 2048);
-    let bytes = [0_u8; 2048];
+    kani::assume(length > 240 && length <= MAX_LENGTH);
+    let bytes = [0_u8; MAX_LENGTH];
     let input = LongInput::new(&bytes[..length]).unwrap();
     let schedule = build_long_input_schedule(input);
 
     let block: usize = kani::any();
     let block_stripe: usize = kani::any();
     kani::assume(block_stripe < 16);
+    kani::cover!(
+        block < schedule.full_blocks() && block + 2 <= schedule.full_blocks(),
+        "two-block prefetch bound is reachable"
+    );
     if block < schedule.full_blocks() {
         let block_offset = block * 1024 + block_stripe * 64;
         assert!(block_offset <= length - 64);

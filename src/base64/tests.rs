@@ -109,6 +109,7 @@ fn custom_wrapped_encoders_cover_every_available_backend_and_boundary() {
     let alphabet = encode_backend::CustomEncodeAlphabet::new(*b"@#");
 
     for backend in [
+        Backend::Scalar,
         Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,
@@ -523,6 +524,7 @@ fn custom_alphabet_encoder_matches_standard_with_every_available_backend() {
     let alphabet = encode_backend::CustomEncodeAlphabet::new(*b"@#");
 
     for backend in [
+        Backend::Scalar,
         Backend::Neon,
         Backend::Ssse3,
         Backend::Sse41,

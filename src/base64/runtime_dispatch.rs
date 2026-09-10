@@ -50,10 +50,29 @@ pub(super) unsafe fn encode_custom_with_runtime_backend(
     let selection = backend::selected_backend();
     let streaming_stores =
         allow_streaming_stores && selection.use_streaming_stores(input.len(), output);
+    unsafe {
+        encode_custom_with_backend_inner(
+            input,
+            output,
+            selection.backend,
+            alphabet,
+            streaming_stores,
+        )
+    }
+}
 
+#[cfg(feature = "python")]
+#[inline]
+unsafe fn encode_custom_with_backend_inner(
+    input: &[u8],
+    output: *mut u8,
+    backend: Backend,
+    alphabet: &CustomEncodeAlphabet,
+    streaming_stores: bool,
+) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     return unsafe {
-        match selection.backend {
+        match backend {
             Backend::Avx512Vbmi => encode_backend::avx512::encode_custom(input, output, alphabet),
             Backend::Avx2 => encode_backend::avx2::encode_custom(
                 input,
@@ -75,10 +94,10 @@ pub(super) unsafe fn encode_custom_with_runtime_backend(
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
     {
         #[cfg(target_arch = "aarch64")]
-        if selection.backend == Backend::Neon {
+        if backend == Backend::Neon {
             return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
         }
-        let _ = (input, output, alphabet, streaming_stores);
+        let _ = (input, output, backend, alphabet, streaming_stores);
         0
     }
 }
@@ -94,33 +113,7 @@ pub(super) unsafe fn encode_custom_with_backend(
     if !backend::is_supported(backend) {
         return 0;
     }
-
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    return unsafe {
-        match backend {
-            Backend::Avx512Vbmi => encode_backend::avx512::encode_custom(input, output, alphabet),
-            Backend::Avx2 => encode_backend::avx2::encode_custom(
-                input,
-                output,
-                alphabet.offsets(),
-                encode_backend::avx2::Avx2StoreMode::Cached,
-            ),
-            Backend::Sse41 | Backend::Ssse3 => {
-                encode_backend::ssse3::encode_custom(input, output, alphabet.offsets())
-            }
-            Backend::Scalar | Backend::Neon => 0,
-        }
-    };
-
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    {
-        #[cfg(target_arch = "aarch64")]
-        if backend == Backend::Neon {
-            return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
-        }
-        let _ = (input, output, backend, alphabet);
-        0
-    }
+    unsafe { encode_custom_with_backend_inner(input, output, backend, alphabet, false) }
 }
 
 #[cfg(feature = "python")]
@@ -854,6 +847,8 @@ mod tests {
     fn avx2_cached_and_streaming_dispatch_match() {
         if backend::is_supported(Backend::Avx2) {
             check_avx2_cached_and_streaming_dispatch();
+            #[cfg(feature = "python")]
+            check_avx2_custom_cached_and_streaming_dispatch();
         }
     }
 
@@ -875,5 +870,41 @@ mod tests {
             unsafe { encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, true) };
         encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], false);
         assert_eq!(output, expected.as_bytes());
+    }
+
+    #[cfg(all(feature = "python", any(target_arch = "x86", target_arch = "x86_64")))]
+    fn check_avx2_custom_cached_and_streaming_dispatch() {
+        let input = (0..288)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        let alphabet = CustomEncodeAlphabet::new(*b"@#");
+        let mut expected = b64encode(&input).into_bytes();
+        for byte in &mut expected {
+            match *byte {
+                b'+' => *byte = b'@',
+                b'/' => *byte = b'#',
+                _ => {}
+            }
+        }
+
+        let mut storage = vec![0xa5_u8; expected.len() + 32];
+        let offset = storage.as_mut_ptr().align_offset(32);
+        let output = &mut storage[offset..offset + expected.len()];
+
+        for streaming_stores in [false, true] {
+            output.fill(0xa5);
+            let consumed = unsafe {
+                encode_custom_with_backend_inner(
+                    &input,
+                    output.as_mut_ptr(),
+                    Backend::Avx2,
+                    &alphabet,
+                    streaming_stores,
+                )
+            };
+            let written = consumed / 3 * 4;
+            assert_eq!(&output[..written], &expected[..written]);
+            assert!(output[written..].iter().all(|&byte| byte == 0xa5));
+        }
     }
 }

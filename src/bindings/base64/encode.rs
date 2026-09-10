@@ -569,4 +569,53 @@ mod tests {
         assert_eq!(&actual[..expected.len()], expected);
         assert_eq!(actual[expected.len()], 0xa5);
     }
+
+    #[test]
+    fn large_wrapped_standard_padded_output_uses_final_layout() {
+        let input = (0..DIRECT_WRAPPED_INPUT_THRESHOLD + 1)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        let encoder = PreparedEncoder::new(None, true, Some(76));
+        let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
+        unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
+
+        let contiguous = crate::base64::b64encode(&input).into_bytes();
+        let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+        for (line, chunk) in contiguous.chunks(76).enumerate() {
+            if line != 0 {
+                expected.push(b'\n');
+            }
+            expected.extend_from_slice(chunk);
+        }
+
+        assert_eq!(&actual[..expected.len()], expected);
+        assert_eq!(actual[expected.len()], 0xa5);
+    }
+
+    #[test]
+    fn short_wrapped_custom_output_uses_scalar_fallback_and_exact_store() {
+        let input = [0xfb; 15];
+        let alphabet = CustomEncodeAlphabet::new(*b"@#");
+        let mut actual = [0xa5; 25];
+        unsafe { encode_wrapped_to_ptr_custom(&input, actual.as_mut_ptr(), &alphabet, true, 4) };
+
+        let mut contiguous = crate::base64::b64encode(&input).into_bytes();
+        for byte in &mut contiguous {
+            match *byte {
+                b'+' => *byte = b'@',
+                b'/' => *byte = b'#',
+                _ => {}
+            }
+        }
+        let mut expected = Vec::new();
+        for (line, chunk) in contiguous.chunks(4).enumerate() {
+            if line != 0 {
+                expected.push(b'\n');
+            }
+            expected.extend_from_slice(chunk);
+        }
+
+        assert_eq!(&actual[..expected.len()], expected);
+        assert_eq!(actual[expected.len()], 0xa5);
+    }
 }

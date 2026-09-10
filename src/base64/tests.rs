@@ -259,6 +259,11 @@ fn validation_only_kernels_classify_without_output_storage() {
     ] {
         assert_eq!(validate_alphabet(input, alphabet), Ok(()));
     }
+    assert_eq!(
+        validate_alphabet(b"!", DecodeAlphabet::Standard),
+        Err(Base64Error::InvalidInput)
+    );
+
     let mut input = vec![b'A'; 273];
     assert_eq!(validate_alphabet(&input, DecodeAlphabet::Standard), Ok(()));
 

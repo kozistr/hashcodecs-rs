@@ -12,6 +12,8 @@ pub(super) mod sse41;
 pub(super) mod ssse3;
 #[cfg(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64"))]
 mod tables;
+#[cfg(all(feature = "python", any(target_arch = "x86", target_arch = "x86_64")))]
+pub(crate) use tables::{STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) mod x86_contracts;
 

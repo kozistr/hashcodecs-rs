@@ -180,14 +180,3 @@ mod tests {
         }
     }
 }
-
-pub(super) fn translate_bytes(
-    input: &mut [u8],
-    source0: u8,
-    target0: u8,
-    source1: u8,
-    target1: u8,
-) {
-    let kernels = decode_byte_kernels();
-    unsafe { (kernels.translate)(input, source0, target0, source1, target1) };
-}

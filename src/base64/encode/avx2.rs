@@ -5,6 +5,7 @@ use std::arch::asm;
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
+#[cfg(target_arch = "x86_64")]
 use std::hint::black_box;
 
 #[cfg(feature = "python")]
@@ -16,6 +17,9 @@ pub(in crate::base64) enum Avx2StoreMode {
     Cached,
     Streaming,
 }
+
+#[cfg(target_arch = "x86_64")]
+type Encode96Kernel = unsafe fn(*const u8, *mut u8, usize, __m256i);
 
 #[cfg(target_arch = "x86_64")]
 struct EncodeAvx2Constants {
@@ -38,7 +42,66 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
         return unsafe { ssse3::encode::<URLSAFE>(input, output) };
     }
 
-    let first = unsafe { encode_24_first::<URLSAFE>(input.as_ptr()) };
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        encode_avx2_with_offsets(
+            input,
+            output,
+            store_mode,
+            standard_offsets_256::<URLSAFE>(),
+            encode_96_shifted_asm::<URLSAFE>,
+        )
+    }
+
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        encode_avx2_with_offsets(input, output, store_mode, standard_offsets_256::<URLSAFE>())
+    }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx2")]
+pub(in crate::base64) unsafe fn encode_custom(
+    input: &[u8],
+    output: *mut u8,
+    offsets: &[i8; 16],
+    store_mode: Avx2StoreMode,
+) -> usize {
+    if input.len() < 32 {
+        return unsafe { ssse3::encode_custom(input, output, offsets) };
+    }
+
+    let offsets = _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(offsets.as_ptr().cast()) });
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        encode_avx2_with_offsets(
+            input,
+            output,
+            store_mode,
+            offsets,
+            encode_96_shifted_asm_custom,
+        )
+    }
+
+    #[cfg(target_arch = "x86")]
+    unsafe {
+        encode_avx2_with_offsets(input, output, store_mode, offsets)
+    }
+}
+
+#[target_feature(enable = "avx2")]
+#[inline]
+unsafe fn encode_avx2_with_offsets(
+    input: &[u8],
+    output: *mut u8,
+    store_mode: Avx2StoreMode,
+    offsets: __m256i,
+    #[cfg(target_arch = "x86_64")] encode_96: Encode96Kernel,
+) -> usize {
+    #[cfg(target_arch = "x86")]
+    let _ = store_mode;
+
+    let first = unsafe { encode_24_first(input.as_ptr(), offsets) };
     unsafe { _mm256_storeu_si256(output.cast(), first) };
 
     // Later loads start four bytes before the block they encode. Keeping the
@@ -61,25 +124,28 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
                 used_streaming_stores = true;
                 unsafe {
                     if output.align_offset(32) == 0 {
-                        encode_96_shifted::<URLSAFE, StreamingStore256>(
+                        encode_96_shifted::<StreamingStore256>(
                             input.as_ptr().add(load_offset),
                             output.add(destination),
                             groups,
+                            offsets,
                         )
                     } else {
-                        encode_96_shifted::<URLSAFE, StreamingStore128>(
+                        encode_96_shifted::<StreamingStore128>(
                             input.as_ptr().add(load_offset),
                             output.add(destination),
                             groups,
+                            offsets,
                         )
                     }
                 };
             } else {
                 unsafe {
-                    encode_96_shifted_asm::<URLSAFE>(
+                    encode_96(
                         input.as_ptr().add(load_offset),
                         output.add(destination),
                         groups,
+                        offsets,
                     )
                 };
             }
@@ -92,10 +158,10 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     // The assembly helper is unavailable on 32-bit x86.
     #[cfg(target_arch = "x86")]
     while load_offset + 104 <= input.len() {
-        let first = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
-        let second = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 24)) };
-        let third = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 48)) };
-        let fourth = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + 72)) };
+        let first = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
+        let second = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 24), offsets) };
+        let third = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 48), offsets) };
+        let fourth = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 72), offsets) };
 
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), first) };
         unsafe { _mm256_storeu_si256(output.add(destination + 32).cast(), second) };
@@ -107,7 +173,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     }
 
     while load_offset + 32 <= input.len() {
-        let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
+        let encoded = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), encoded) };
 
         load_offset += 24;
@@ -120,7 +186,8 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     // Keep the final SIMD block VEX-encoded. Entering the legacy-encoded
     // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
     let consumed = if source + 16 <= input.len() {
-        let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
+        let encoded =
+            unsafe { encode_12_avx2(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
 
         source + 12
@@ -148,28 +215,55 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
         return unsafe { ssse3::encode_wrapped::<URLSAFE>(input, output) };
     }
 
-    let first = unsafe { encode_24_first::<URLSAFE>(input.as_ptr()) };
+    unsafe { encode_wrapped_with_offsets(input, output, standard_offsets_256::<URLSAFE>()) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx2")]
+pub(in crate::base64) unsafe fn encode_wrapped_custom(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    offsets: &[i8; 16],
+) -> usize {
+    if input.len() < 32 {
+        return unsafe { ssse3::encode_wrapped_custom(input, output, offsets) };
+    }
+
+    let offsets = _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(offsets.as_ptr().cast()) });
+    unsafe { encode_wrapped_with_offsets(input, output, offsets) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx2")]
+#[inline]
+unsafe fn encode_wrapped_with_offsets(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    offsets: __m256i,
+) -> usize {
+    let first = unsafe { encode_24_first(input.as_ptr(), offsets) };
     unsafe { write_wrapped_32(output, first) };
 
     let mut load_offset = 20;
     while load_offset + 104 <= input.len() {
         for offset in [0, 24, 48, 72] {
             let encoded =
-                unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + offset)) };
+                unsafe { encode_24_shifted(input.as_ptr().add(load_offset + offset), offsets) };
             unsafe { write_wrapped_32(output, encoded) };
         }
         load_offset += 96;
     }
 
     while load_offset + 32 <= input.len() {
-        let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
+        let encoded = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
         unsafe { write_wrapped_32(output, encoded) };
         load_offset += 24;
     }
 
     let source = load_offset + 4;
     if source + 16 <= input.len() {
-        let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
+        let encoded =
+            unsafe { encode_12_avx2(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
         unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
         source + 12
     } else {
@@ -195,12 +289,13 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 #[allow(unused_unsafe)]
-unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
+unsafe fn encode_96_shifted<Store: StreamingStore>(
     mut input: *const u8,
     mut output: *mut u8,
     mut groups: usize,
+    offsets: __m256i,
 ) {
-    let constants = encode_avx2_constants(URLSAFE);
+    let constants = encode_avx2_constants(offsets);
     while groups >= 2 {
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =
@@ -260,19 +355,7 @@ unsafe fn encode_96_shifted<const URLSAFE: bool, Store: StreamingStore>(
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-fn encode_avx2_constants(urlsafe: bool) -> EncodeAvx2Constants {
-    let translate = if urlsafe {
-        _mm256_setr_epi8(
-            65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -17, 32, 0, 0, 65, 71, -4, -4, -4, -4,
-            -4, -4, -4, -4, -4, -4, -17, 32, 0, 0,
-        )
-    } else {
-        _mm256_setr_epi8(
-            65, 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 0, 0, 65, 71, -4, -4, -4, -4,
-            -4, -4, -4, -4, -4, -4, -19, -16, 0, 0,
-        )
-    };
-
+fn encode_avx2_constants(translate: __m256i) -> EncodeAvx2Constants {
     EncodeAvx2Constants {
         reshuffle: _mm256_set_epi8(
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
@@ -346,6 +429,33 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
     input: *const u8,
     output: *mut u8,
     groups: usize,
+    _offsets: __m256i,
+) {
+    let offsets = standard_offsets_256::<URLSAFE>();
+
+    unsafe { encode_96_shifted_asm_inner(input, output, groups, offsets) };
+}
+
+#[cfg(all(feature = "python", target_arch = "x86_64"))]
+#[inline(never)]
+#[target_feature(enable = "avx2")]
+unsafe fn encode_96_shifted_asm_custom(
+    input: *const u8,
+    output: *mut u8,
+    groups: usize,
+    offsets: __m256i,
+) {
+    unsafe { encode_96_shifted_asm_inner(input, output, groups, offsets) };
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn encode_96_shifted_asm_inner(
+    input: *const u8,
+    output: *mut u8,
+    groups: usize,
+    offsets: __m256i,
 ) {
     let shuffle = _mm256_setr_epi8(
         5, 4, 6, 5, 8, 7, 9, 8, 11, 10, 12, 11, 14, 13, 15, 14, 1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7,
@@ -357,24 +467,6 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
     let lower_multiplier = _mm256_set1_epi32(0x0100_0010);
     let reduction_base = _mm256_set1_epi8(51);
     let lower_bound = _mm256_set1_epi8(25);
-    let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
-        b'A' as i8,
-        (b'a' - 26) as i8,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        if URLSAFE { -17 } else { -19 },
-        if URLSAFE { 32 } else { -16 },
-        0,
-        0,
-    ));
 
     // Keep the actual branch target aligned, rather than placing an alignment
     // directive in a Rust loop where LLVM's backedge label precedes the NOPs.
@@ -466,7 +558,7 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
+unsafe fn encode_12_avx2(input: *const u8, offsets: __m128i) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
 
     let mut value = unsafe { _mm_loadu_si128(input.cast()) };
@@ -477,7 +569,7 @@ unsafe fn encode_12_avx2<const URLSAFE: bool>(input: *const u8) -> __m128i {
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
     let lower = unsafe { mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010)) };
 
-    ascii_from_indices_avx2_128::<URLSAFE>(_mm_or_si128(higher, lower))
+    ascii_from_indices_avx2_128(_mm_or_si128(higher, lower), offsets)
 }
 
 #[inline]
@@ -511,22 +603,22 @@ unsafe fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) ->
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn encode_24_first<const URLSAFE: bool>(input: *const u8) -> __m256i {
+unsafe fn encode_24_first(input: *const u8, offsets: __m256i) -> __m256i {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let shifted = _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 0, 1, 2, 3, 4, 5, 6));
 
-    encode_24_shifted_value::<URLSAFE>(shifted)
+    encode_24_shifted_value(shifted, offsets)
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn encode_24_shifted<const URLSAFE: bool>(input: *const u8) -> __m256i {
+unsafe fn encode_24_shifted(input: *const u8, offsets: __m256i) -> __m256i {
     let shifted = unsafe { _mm256_loadu_si256(input.cast()) };
 
-    encode_24_shifted_value::<URLSAFE>(shifted)
+    encode_24_shifted_value(shifted, offsets)
 }
 
 #[target_feature(enable = "avx2")]
-fn encode_24_shifted_value<const URLSAFE: bool>(shifted: __m256i) -> __m256i {
+fn encode_24_shifted_value(shifted: __m256i, offsets: __m256i) -> __m256i {
     // The low lane's payload starts four bytes into the vector.
     // The high lane's payload starts at byte zero. This arrangement lets every block
     // after the first avoid a cross-lane VPERMD.
@@ -541,7 +633,7 @@ fn encode_24_shifted_value<const URLSAFE: bool>(shifted: __m256i) -> __m256i {
     let lower = _mm256_and_si256(value, _mm256_set1_epi32(0x003f_03f0));
     let lower = unsafe { mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010)) };
 
-    ascii_from_indices_avx2::<URLSAFE>(_mm256_or_si256(higher, lower))
+    ascii_from_indices_avx2(_mm256_or_si256(higher, lower), offsets)
 }
 
 // LLVM can strength-reduce these alternating word multipliers into a much
@@ -579,38 +671,16 @@ unsafe fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i 
 }
 
 #[target_feature(enable = "avx2")]
-fn ascii_from_indices_avx2_128<const URLSAFE: bool>(indices: __m128i) -> __m128i {
+fn ascii_from_indices_avx2_128(indices: __m128i, offsets: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
     let lower = _mm_cmpgt_epi8(indices, _mm_set1_epi8(25));
     let reduced = _mm_sub_epi8(reduced, lower);
-    let offsets = _mm_setr_epi8(
-        b'A' as i8,
-        (b'a' - 26) as i8,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        -4,
-        if URLSAFE { -17 } else { -19 },
-        if URLSAFE { 32 } else { -16 },
-        0,
-        0,
-    );
-
     _mm_add_epi8(_mm_shuffle_epi8(offsets, reduced), indices)
 }
 
 #[target_feature(enable = "avx2")]
-fn ascii_from_indices_avx2<const URLSAFE: bool>(indices: __m256i) -> __m256i {
-    let reduced = _mm256_subs_epu8(indices, _mm256_set1_epi8(51));
-    let lower = _mm256_cmpgt_epi8(indices, _mm256_set1_epi8(25));
-    let reduced = _mm256_sub_epi8(reduced, lower);
-    let offsets = _mm256_broadcastsi128_si256(_mm_setr_epi8(
+fn standard_offsets_128<const URLSAFE: bool>() -> __m128i {
+    _mm_setr_epi8(
         b'A' as i8,
         (b'a' - 26) as i8,
         -4,
@@ -627,7 +697,19 @@ fn ascii_from_indices_avx2<const URLSAFE: bool>(indices: __m256i) -> __m256i {
         if URLSAFE { 32 } else { -16 },
         0,
         0,
-    ));
+    )
+}
+
+#[target_feature(enable = "avx2")]
+fn standard_offsets_256<const URLSAFE: bool>() -> __m256i {
+    _mm256_broadcastsi128_si256(standard_offsets_128::<URLSAFE>())
+}
+
+#[target_feature(enable = "avx2")]
+fn ascii_from_indices_avx2(indices: __m256i, offsets: __m256i) -> __m256i {
+    let reduced = _mm256_subs_epu8(indices, _mm256_set1_epi8(51));
+    let lower = _mm256_cmpgt_epi8(indices, _mm256_set1_epi8(25));
+    let reduced = _mm256_sub_epi8(reduced, lower);
 
     _mm256_add_epi8(_mm256_shuffle_epi8(offsets, reduced), indices)
 }

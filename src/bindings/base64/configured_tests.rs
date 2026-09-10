@@ -145,6 +145,23 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
     assert_eq!(translated, expected);
 
     if std::is_x86_feature_detected!("avx2") {
+        for altchars in [None, Some(*b"-_"), Some(*b"@#"), Some(*b"=_")] {
+            for byte in 0..=u8::MAX {
+                let input = [byte; 32];
+                let expected = usize::from(is_lenient_symbol(byte, altchars)) * input.len();
+                assert_eq!(
+                    unsafe { super::super::scan::x86::symbol_count_avx2(&input, altchars) },
+                    expected,
+                    "byte={byte:#04x} altchars={altchars:?}",
+                );
+                assert_eq!(
+                    unsafe { super::super::scan::x86::symbol_prefix_avx2(&input, altchars) },
+                    expected,
+                    "byte={byte:#04x} altchars={altchars:?}",
+                );
+            }
+        }
+
         assert_eq!(
             unsafe { super::super::scan::x86::alphanumeric_prefix_avx2(&interrupted) },
             47

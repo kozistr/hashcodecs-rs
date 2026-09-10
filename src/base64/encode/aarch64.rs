@@ -22,7 +22,24 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
+    unsafe { encode_with_table(input, output, table) }
+}
 
+#[cfg(feature = "python")]
+#[target_feature(enable = "neon")]
+pub(crate) unsafe fn encode_custom(input: &[u8], output: *mut u8, alphabet: &[u8; 64]) -> usize {
+    let table = uint8x16x4_t(
+        unsafe { vld1q_u8(alphabet.as_ptr()) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
+    );
+    unsafe { encode_with_table(input, output, table) }
+}
+
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) -> usize {
     let mut source = 0;
     let mut destination = 0;
 
@@ -148,6 +165,33 @@ pub(crate) unsafe fn encode_wrapped<const URLSAFE: bool>(
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
+    unsafe { encode_wrapped_with_table(input, output, table) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "neon")]
+pub(crate) unsafe fn encode_wrapped_custom(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    alphabet: &[u8; 64],
+) -> usize {
+    let table = uint8x16x4_t(
+        unsafe { vld1q_u8(alphabet.as_ptr()) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
+        unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
+    );
+    unsafe { encode_wrapped_with_table(input, output, table) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "neon")]
+#[inline]
+unsafe fn encode_wrapped_with_table(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    table: uint8x16x4_t,
+) -> usize {
     let mut source = 0;
 
     while source + 192 <= input.len() {

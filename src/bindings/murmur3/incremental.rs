@@ -1,6 +1,6 @@
 use pyo3::marker::Ungil;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyString};
 
 use super::digest::{hex_digest, x64_128_digest, x86_128_digest};
 use crate::bindings::buffer::{BytesLike, bytes_like};
@@ -90,8 +90,8 @@ macro_rules! define_python_hasher {
             }
 
             /// Return the current digest as lowercase hexadecimal text.
-            fn hexdigest(&self) -> String {
-                hex_digest(&($digest)(&self.state))
+            fn hexdigest<'py>(&self, py: Python<'py>) -> Bound<'py, PyString> {
+                hex_digest(py, &($digest)(&self.state))
             }
 
             /// Return an independent copy of the current hash state.

@@ -9,6 +9,8 @@ use super::runtime_dispatch::{
     decode_standard_validated_with_backend, decode_with_backend, decode_with_backend_ptr,
     encode_with_backend, validate_with_backend,
 };
+#[cfg(feature = "python")]
+use super::runtime_dispatch::{encode_custom_with_backend, encode_wrapped_custom_with_backend};
 use super::*;
 use crate::backend::{Capabilities, CpuFeature};
 
@@ -98,6 +100,86 @@ fn wrapped_encoders_write_final_layout_with_every_available_backend() {
     }
 }
 
+#[cfg(feature = "python")]
+#[test]
+fn custom_wrapped_encoders_cover_every_available_backend_and_boundary() {
+    let input = (0..=1024)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect::<Vec<_>>();
+    let alphabet = encode_backend::CustomEncodeAlphabet::new(*b"@#");
+
+    for backend in [
+        Backend::Scalar,
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for length in [16, 31, 32, 47, 48, 63, 64, 241, 1024] {
+            for width in [4, 20, 76] {
+                let data_len = encoded_len(length);
+                let mut actual = vec![0xa5; data_len + data_len / width + 16];
+                let mut output = encode_backend::WrappedOutput::new(actual.as_mut_ptr(), width);
+                let consumed = unsafe {
+                    encode_wrapped_custom_with_backend(
+                        &input[..length],
+                        &mut output,
+                        backend,
+                        &alphabet,
+                    )
+                };
+
+                let mut contiguous = b64encode(&input[..consumed]).into_bytes();
+                for byte in &mut contiguous {
+                    if *byte == b'+' {
+                        *byte = b'@';
+                    } else if *byte == b'/' {
+                        *byte = b'#';
+                    }
+                }
+                let mut expected = Vec::new();
+                for (line, chunk) in contiguous.chunks(width).enumerate() {
+                    if line != 0 {
+                        expected.push(b'\n');
+                    }
+                    expected.extend_from_slice(chunk);
+                }
+
+                assert_eq!(
+                    &actual[..expected.len()],
+                    expected,
+                    "backend={backend:?} length={length} width={width}",
+                );
+                assert!(actual[expected.len()..].iter().all(|&byte| byte == 0xa5));
+            }
+        }
+    }
+
+    let unavailable = [Backend::Neon, Backend::Avx2]
+        .into_iter()
+        .find(|&backend| !backend::is_supported(backend))
+        .unwrap();
+    let mut actual = [0xa5; 32];
+    let mut output = encode_backend::WrappedOutput::new(actual.as_mut_ptr(), 4);
+    assert_eq!(
+        unsafe {
+            encode_wrapped_custom_with_backend(&input[..16], &mut output, unavailable, &alphabet)
+        },
+        0,
+    );
+    assert_eq!(
+        unsafe {
+            encode_custom_with_backend(&input[..16], actual.as_mut_ptr(), unavailable, &alphabet)
+        },
+        0,
+    );
+    assert_eq!(actual, [0xa5; 32]);
+}
+
 #[test]
 fn validation_only_kernels_classify_without_output_storage() {
     for backend in [
@@ -178,6 +260,11 @@ fn validation_only_kernels_classify_without_output_storage() {
     ] {
         assert_eq!(validate_alphabet(input, alphabet), Ok(()));
     }
+    assert_eq!(
+        validate_alphabet(b"!", DecodeAlphabet::Standard),
+        Err(Base64Error::InvalidInput)
+    );
+
     let mut input = vec![b'A'; 273];
     assert_eq!(validate_alphabet(&input, DecodeAlphabet::Standard), Ok(()));
 
@@ -296,26 +383,47 @@ fn valid_prefix_kernels_stop_before_the_first_invalid_block() {
         if !backend::is_supported(backend) {
             continue;
         }
-        for (alphabet, symbol) in [
-            (DecodeAlphabet::Standard, b'A'),
-            (DecodeAlphabet::UrlSafe, b'_'),
-            (DecodeAlphabet::Mixed, b'-'),
-        ] {
-            let input = vec![symbol; 160];
-            let mut output = vec![0xa5; 120];
-            assert_eq!(
-                unsafe {
-                    decode_valid_prefix_with_backend(&input, output.as_mut_ptr(), backend, alphabet)
-                },
-                (160, 120)
-            );
+        for length in [64, 65, 67, 68, 95, 127, 128, 129, 160, 191, 192, 193] {
+            for (alphabet, symbol) in [
+                (DecodeAlphabet::Standard, b'A'),
+                (DecodeAlphabet::UrlSafe, b'_'),
+                (DecodeAlphabet::Mixed, b'-'),
+            ] {
+                let input = vec![symbol; length];
+                let mut output = vec![0xa5; length / 4 * 3 + 16];
+                let block = if backend == Backend::Avx512Vbmi {
+                    4
+                } else {
+                    16
+                };
+                let expected_input = length / block * block;
+                let expected_output = expected_input / 4 * 3;
+                assert_eq!(
+                    unsafe {
+                        decode_valid_prefix_with_backend(
+                            &input,
+                            output.as_mut_ptr(),
+                            backend,
+                            alphabet,
+                        )
+                    },
+                    (expected_input, expected_output),
+                    "backend={backend:?} length={length} alphabet={alphabet:?}",
+                );
+                assert!(output[expected_output..].iter().all(|&byte| byte == 0xa5));
+            }
         }
 
-        for invalid_at in [0, 15, 16, 31, 32, 63, 64, 127, 128, 159] {
+        for invalid_at in 0..160 {
             let mut input = vec![b'A'; 160];
             input[invalid_at] = b'!';
             let mut output = vec![0xa5; 120];
-            let expected_input = invalid_at / 16 * 16;
+            let block = if backend == Backend::Avx512Vbmi {
+                4
+            } else {
+                16
+            };
+            let expected_input = invalid_at / block * block;
             assert_eq!(
                 unsafe {
                     decode_valid_prefix_with_backend(
@@ -404,6 +512,55 @@ fn matches_the_standard_engine_for_all_short_lengths() {
             input,
             "url-safe length={length}"
         );
+    }
+}
+
+#[cfg(feature = "python")]
+#[test]
+fn custom_alphabet_encoder_matches_standard_with_every_available_backend() {
+    let input = (0..=1024)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect::<Vec<_>>();
+    let alphabet = encode_backend::CustomEncodeAlphabet::new(*b"@#");
+
+    for backend in [
+        Backend::Scalar,
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for length in [16, 31, 32, 47, 48, 63, 64, 95, 96, 212, 1024] {
+            let mut expected = b64encode(&input[..length]).into_bytes();
+            for byte in &mut expected {
+                if *byte == b'+' {
+                    *byte = b'@';
+                } else if *byte == b'/' {
+                    *byte = b'#';
+                }
+            }
+
+            let mut actual = vec![0xa5; expected.len() + 16];
+            let consumed = unsafe {
+                encode_custom_with_backend(
+                    &input[..length],
+                    actual.as_mut_ptr(),
+                    backend,
+                    &alphabet,
+                )
+            };
+            let written = consumed / 3 * 4;
+            assert_eq!(
+                &actual[..written],
+                &expected[..written],
+                "backend={backend:?}"
+            );
+            assert!(actual[written..].iter().all(|&byte| byte == 0xa5));
+        }
     }
 }
 
@@ -711,14 +868,15 @@ fn backend_selection_and_kernels_match_scalar_output() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx512_decoder_tail_boundaries_match_scalar_output() {
+fn avx512_masked_tails_match_scalar_output_and_preserve_boundaries() {
     if !backend::is_supported(Backend::Avx512Vbmi) {
         return;
     }
 
     for length in [64, 68, 76, 80, 92, 96, 108, 112, 124, 128, 132, 140, 144] {
         let encoded = vec![b'A'; length];
-        let mut decoded = vec![0xa5; length / 4 * 3];
+        let expected_written = length / 4 * 3;
+        let mut decoded = vec![0xa5; expected_written + 16];
         let (consumed, written) = decode_with_backend(
             &encoded,
             &mut decoded,
@@ -726,14 +884,49 @@ fn avx512_decoder_tail_boundaries_match_scalar_output() {
             DecodeAlphabet::Standard,
         )
         .unwrap();
-        let remainder = length % 64;
-        let expected_tail = remainder / 16 * 16;
-        let expected_consumed = length - remainder + expected_tail;
-        let expected_written = expected_consumed / 4 * 3;
 
-        assert_eq!((consumed, written), (expected_consumed, expected_written));
+        assert_eq!((consumed, written), (length, expected_written));
         assert!(decoded[..written].iter().all(|byte| *byte == 0));
         assert!(decoded[written..].iter().all(|byte| *byte == 0xa5));
+
+        for invalid_index in 64..length {
+            let mut invalid = encoded.clone();
+            invalid[invalid_index] = b'!';
+            assert_eq!(
+                decode_with_backend(
+                    &invalid,
+                    &mut decoded,
+                    Backend::Avx512Vbmi,
+                    DecodeAlphabet::Standard,
+                ),
+                Err(Base64Error::InvalidInput),
+                "length={length} invalid_index={invalid_index}",
+            );
+        }
+    }
+
+    for length in 48..96 {
+        let input = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        for urlsafe in [false, true] {
+            let expected = if urlsafe {
+                b64encode_urlsafe(&input)
+            } else {
+                b64encode(&input)
+            };
+            let consumed_expected = length / 3 * 3;
+            let written_expected = consumed_expected / 3 * 4;
+            let mut encoded = vec![0xa5; expected.len() + 16];
+            let consumed = encode_with_backend(&input, &mut encoded, Backend::Avx512Vbmi, urlsafe);
+
+            assert_eq!(consumed, consumed_expected);
+            assert_eq!(
+                &encoded[..written_expected],
+                &expected.as_bytes()[..written_expected]
+            );
+            assert!(encoded[written_expected..].iter().all(|&byte| byte == 0xa5));
+        }
     }
 }
 

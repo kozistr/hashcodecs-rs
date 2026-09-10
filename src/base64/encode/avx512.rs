@@ -6,11 +6,14 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
-#[cfg(feature = "python")]
-use super::WrappedOutput;
-#[cfg(feature = "python")]
-use super::avx2::encode_wrapped as encode_wrapped_avx2;
 use super::avx2::{Avx2StoreMode, encode_avx2_with_store};
+#[cfg(feature = "python")]
+use super::avx2::{
+    encode_custom as encode_custom_avx2, encode_wrapped as encode_wrapped_avx2,
+    encode_wrapped_custom as encode_wrapped_custom_avx2,
+};
+#[cfg(feature = "python")]
+use super::{CustomEncodeAlphabet, WrappedOutput};
 
 const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
 
@@ -50,6 +53,29 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     };
 
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
+    unsafe { encode_with_table(input, output, table) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+pub(in crate::base64) unsafe fn encode_custom(
+    input: &[u8],
+    output: *mut u8,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
+    if input.len() < 48 {
+        return unsafe {
+            encode_custom_avx2(input, output, alphabet.offsets(), Avx2StoreMode::Cached)
+        };
+    }
+
+    let table = unsafe { _mm512_loadu_si512(alphabet.table().as_ptr().cast()) };
+    unsafe { encode_with_table(input, output, table) }
+}
+
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+#[inline]
+unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> usize {
     let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
     let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
 
@@ -113,18 +139,23 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
         destination += 64;
     }
 
-    if input.len() - source >= 32 {
-        source
-            + unsafe {
-                encode_avx2_with_store::<URLSAFE>(
-                    &input[source..],
-                    output.add(destination),
-                    Avx2StoreMode::Cached,
-                )
-            }
-    } else {
-        source
+    let remaining = input.len() - source;
+    let complete_input = remaining / 3 * 3;
+    if complete_input != 0 {
+        let encoded = unsafe {
+            encode_tail_value(
+                input.as_ptr().add(source),
+                complete_input,
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        let complete_output = complete_input / 3 * 4;
+        let output_mask = (1_u64 << complete_output) - 1;
+        unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), output_mask, encoded) };
     }
+    source + complete_input
 }
 
 #[target_feature(enable = "avx512vbmi,avx512bw")]
@@ -156,6 +187,23 @@ unsafe fn encode_48_value(
     _mm512_permutexvar_epi8(indices, table)
 }
 
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+#[inline]
+unsafe fn encode_tail_value(
+    input: *const u8,
+    input_len: usize,
+    shuffle: __m512i,
+    shifts: __m512i,
+    table: __m512i,
+) -> __m512i {
+    let input_mask = (1_u64 << input_len) - 1;
+    let input = unsafe { _mm512_maskz_loadu_epi8(input_mask, input.cast()) };
+    let shuffled = _mm512_permutexvar_epi8(shuffle, input);
+    let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
+
+    _mm512_permutexvar_epi8(indices, table)
+}
+
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
@@ -172,6 +220,32 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
         STANDARD_ALPHABET
     };
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
+    unsafe { encode_wrapped_with_table(input, output, table) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+pub(in crate::base64) unsafe fn encode_wrapped_custom(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    alphabet: &CustomEncodeAlphabet,
+) -> usize {
+    if input.len() < 48 {
+        return unsafe { encode_wrapped_custom_avx2(input, output, alphabet.offsets()) };
+    }
+
+    let table = unsafe { _mm512_loadu_si512(alphabet.table().as_ptr().cast()) };
+    unsafe { encode_wrapped_with_table(input, output, table) }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+#[inline]
+unsafe fn encode_wrapped_with_table(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    table: __m512i,
+) -> usize {
     let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
     let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
     let mut source = 0;
@@ -193,11 +267,25 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
         source += 48;
     }
 
-    if input.len() - source >= 32 {
-        source + unsafe { encode_wrapped_avx2::<URLSAFE>(&input[source..], output) }
-    } else {
-        source
+    let remaining = input.len() - source;
+    let complete_input = remaining / 3 * 3;
+    if complete_input != 0 {
+        let encoded = unsafe {
+            encode_tail_value(
+                input.as_ptr().add(source),
+                complete_input,
+                shuffle,
+                shifts,
+                table,
+            )
+        };
+        let complete_output = complete_input / 3 * 4;
+        let mut bytes = [0_u8; 64];
+        let output_mask = (1_u64 << complete_output) - 1;
+        unsafe { _mm512_mask_storeu_epi8(bytes.as_mut_ptr().cast(), output_mask, encoded) };
+        unsafe { output.write_bytes(&bytes[..complete_output]) };
     }
+    source + complete_input
 }
 
 #[cfg(feature = "python")]

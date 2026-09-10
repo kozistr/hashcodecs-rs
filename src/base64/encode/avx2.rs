@@ -7,6 +7,8 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 use std::hint::black_box;
 
+#[cfg(feature = "python")]
+use super::WrappedOutput;
 use super::ssse3;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,6 +136,59 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
     }
 
     consumed
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx2")]
+pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
+    input: &[u8],
+    output: &mut WrappedOutput,
+) -> usize {
+    if input.len() < 32 {
+        return unsafe { ssse3::encode_wrapped::<URLSAFE>(input, output) };
+    }
+
+    let first = unsafe { encode_24_first::<URLSAFE>(input.as_ptr()) };
+    unsafe { write_wrapped_32(output, first) };
+
+    let mut load_offset = 20;
+    while load_offset + 104 <= input.len() {
+        for offset in [0, 24, 48, 72] {
+            let encoded =
+                unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset + offset)) };
+            unsafe { write_wrapped_32(output, encoded) };
+        }
+        load_offset += 96;
+    }
+
+    while load_offset + 32 <= input.len() {
+        let encoded = unsafe { encode_24_shifted::<URLSAFE>(input.as_ptr().add(load_offset)) };
+        unsafe { write_wrapped_32(output, encoded) };
+        load_offset += 24;
+    }
+
+    let source = load_offset + 4;
+    if source + 16 <= input.len() {
+        let encoded = unsafe { encode_12_avx2::<URLSAFE>(input.as_ptr().add(source)) };
+        unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
+        source + 12
+    } else {
+        source
+    }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx2")]
+#[inline]
+unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
+    unsafe {
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm256_castsi256_si128(value),
+        ));
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm256_extracti128_si256::<1>(value),
+        ));
+    }
 }
 
 #[cfg(target_arch = "x86_64")]

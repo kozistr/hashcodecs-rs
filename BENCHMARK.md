@@ -91,6 +91,11 @@ noisy cases insert `!` at the same boundaries. Both cases measure returned bytes
 
 [![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
 
+## Wrapped Python Base64
+
+Run `python benchmarks/python_base64.py --wrapped` with CPython 3.15 or newer. The benchmark inserts newlines after
+76 output characters and measures returned bytes and a reusable `bytearray`.
+
 ## Python Memoryview Inputs
 
 Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length contiguous views

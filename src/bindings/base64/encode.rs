@@ -9,10 +9,18 @@ use pyo3::{PyTypeInfo, ffi};
 
 use super::scan::translate_bytes;
 use super::staging::{pybytes_with_len, with_output_ptr};
-use crate::base64::{STANDARD_ALPHABET, encode_to_ptr, encode_to_ptr_cached, encoded_len};
+use crate::base64::{
+    STANDARD_ALPHABET, encode_to_ptr, encode_to_ptr_cached, encode_wrapped_to_ptr_cached,
+    encoded_len,
+};
 use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
 use crate::bindings::compatibility::{parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
+
+// The line-aware stores cross over the encode-then-move path above 4 MiB.
+// Keep their code cold so adding the large-input path does not perturb the
+// existing encoder's layout and throughput.
+const DIRECT_WRAPPED_INPUT_THRESHOLD: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
 enum EncodeAlphabet {
@@ -90,6 +98,17 @@ impl PreparedEncoder {
         }
     }
 
+    fn direct_wrap_width(self, input_len: usize) -> Option<usize> {
+        if input_len <= DIRECT_WRAPPED_INPUT_THRESHOLD {
+            return None;
+        }
+        match self.wrapping {
+            LineWrapping::None => None,
+            LineWrapping::Columns(width) if self.data_len(input_len) > width => Some(width),
+            LineWrapping::Columns(_) => None,
+        }
+    }
+
     unsafe fn encode_to_ptr(self, input: &[u8], output: *mut u8) {
         match self.wrapping {
             LineWrapping::None => {
@@ -130,6 +149,23 @@ impl PreparedEncoder {
             substitute_altchars(output, altchars);
         }
     }
+
+    #[cold]
+    unsafe fn encode_direct_to_ptr(self, input: &[u8], output: *mut u8, width: usize) {
+        unsafe {
+            encode_wrapped_to_ptr_cached(
+                input,
+                output,
+                self.alphabet.is_urlsafe(),
+                matches!(self.padding, EncodePadding::Padded),
+                width,
+            )
+        };
+        if let EncodeAlphabet::Custom(altchars) = self.alphabet {
+            let output = unsafe { slice::from_raw_parts_mut(output, self.output_len(input.len())) };
+            substitute_altchars(output, altchars);
+        }
+    }
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
@@ -144,7 +180,11 @@ pub(super) fn encode_exact<'py>(
     let output_len = encoder.output_len(input.len());
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {
-            encoder.encode_to_ptr(input, output);
+            if let Some(width) = encoder.direct_wrap_width(input.len()) {
+                encoder.encode_direct_to_ptr(input, output, width);
+            } else {
+                encoder.encode_to_ptr(input, output);
+            }
         })
     }?;
     Ok(output)
@@ -170,7 +210,11 @@ pub(super) fn encode<'py>(
                 let output_address = output as usize;
                 let encode = move || {
                     let output = output_address as *mut u8;
-                    encoder.encode_to_ptr(input, output);
+                    if let Some(width) = encoder.direct_wrap_width(input.len()) {
+                        encoder.encode_direct_to_ptr(input, output, width);
+                    } else {
+                        encoder.encode_to_ptr(input, output);
+                    }
                 };
                 if detach { py.detach(encode) } else { encode() }
             })
@@ -222,7 +266,11 @@ fn encode_slice_into(
 ) -> PyResult<usize> {
     let required = encoder.output_len(input.len());
     with_output_ptr(output, required, |output| {
-        unsafe { encoder.encode_to_ptr(input, output) };
+        if let Some(width) = encoder.direct_wrap_width(input.len()) {
+            unsafe { encoder.encode_direct_to_ptr(input, output, width) };
+        } else {
+            unsafe { encoder.encode_to_ptr(input, output) };
+        }
     })?;
     Ok(required)
 }
@@ -237,7 +285,11 @@ fn encode_slice_to_ptr(
     if provided < required {
         return Err(super::staging::output_too_small(required, provided));
     }
-    unsafe { encoder.encode_to_ptr(input, output) };
+    if let Some(width) = encoder.direct_wrap_width(input.len()) {
+        unsafe { encoder.encode_direct_to_ptr(input, output, width) };
+    } else {
+        unsafe { encoder.encode_to_ptr(input, output) };
+    }
     Ok(required)
 }
 
@@ -466,4 +518,36 @@ pub(super) fn b64encode_into(
         padded,
         normalize_wrapcol(wrapcol)?,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn large_wrapped_custom_unpadded_output_uses_final_layout() {
+        let input = (0..DIRECT_WRAPPED_INPUT_THRESHOLD + 2)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect::<Vec<_>>();
+        let encoder = PreparedEncoder::new(Some(*b"@#"), false, Some(76));
+        let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
+        unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
+
+        let mut contiguous = crate::base64::b64encode(&input).into_bytes();
+        while contiguous.last() == Some(&b'=') {
+            contiguous.pop();
+        }
+        substitute_altchars(&mut contiguous, *b"@#");
+
+        let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+        for (line, chunk) in contiguous.chunks(76).enumerate() {
+            if line != 0 {
+                expected.push(b'\n');
+            }
+            expected.extend_from_slice(chunk);
+        }
+
+        assert_eq!(&actual[..expected.len()], expected);
+        assert_eq!(actual[expected.len()], 0xa5);
+    }
 }

@@ -88,10 +88,17 @@ def main() -> None:
         action='store_true',
         help='time Python 3.15 ignorechars, canonical, and custom-alphabet decoding',
     )
+    mode.add_argument(
+        '--wrapped',
+        action='store_true',
+        help='time Python 3.15 wrapped encoding into returned and reusable outputs',
+    )
     add_timing_arguments(parser)
     args = parser.parse_args()
     if args.configured and sys.version_info < (3, 15):
         parser.error('--configured requires Python 3.15 or newer')
+    if args.wrapped and sys.version_info < (3, 15):
+        parser.error('--wrapped requires Python 3.15 or newer')
     configure_timing(args.samples, args.minimum_sample_seconds)
 
     pin_to_one_cpu()
@@ -101,6 +108,26 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.wrapped:
+                wrapped = stdlib_base64.b64encode(payload, wrapcol=76)
+                encoded_output = bytearray(len(wrapped))
+                benchmark(
+                    'wrapped encode',
+                    size,
+                    lambda payload=payload: hashcodecs_base64.b64encode(payload, wrapcol=76),
+                    (('stdlib', lambda payload=payload: stdlib_base64.b64encode(payload, wrapcol=76)),),
+                )
+                benchmark_into(
+                    'wrapped encode into',
+                    size,
+                    lambda payload=payload, output=encoded_output: hashcodecs_base64.b64encode_into(
+                        payload, output, wrapcol=76
+                    ),
+                    encoded_output,
+                    wrapped,
+                )
+                continue
 
             if args.configured:
                 noisy = b'!'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))

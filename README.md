@@ -124,6 +124,10 @@ assert_eq!(
 );
 
 let inputs: &[&[u8]] = &[b"hello", b"world"];
+assert_eq!(
+    prepared.hash_64_batch(inputs),
+    hashcodecs::xxhash::xxh3_64_batch(inputs, 42)
+);
 let mut hashes = [0_u64; 2];
 let mut index = 0;
 hashcodecs::xxhash::xxh3_64_batch_for_each(inputs, 0, |hash| {

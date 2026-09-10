@@ -41,7 +41,7 @@ pub(crate) use decode::{
 #[cfg(any(feature = "python", all(test, target_arch = "aarch64"), kani))]
 pub(crate) use encode::encoded_len;
 #[cfg(feature = "python")]
-pub(crate) use encode::{encode_to_ptr, encode_to_ptr_cached};
+pub(crate) use encode::{encode_to_ptr, encode_to_ptr_cached, encode_wrapped_to_ptr_cached};
 
 #[cfg(test)]
 pub(crate) use encode::encode_scalar;

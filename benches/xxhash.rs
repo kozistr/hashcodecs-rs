@@ -142,7 +142,7 @@ fn benchmark_batch(c: &mut Criterion, group_name: &str, owned: &[Vec<u8>]) {
 
 fn batch(c: &mut Criterion) {
     for items in [2, 3, 32] {
-        for size in [64, 1024, 4 * 1024, 1024 * 1024] {
+        for size in [64, 241, 1024, 4 * 1024, 1024 * 1024] {
             let owned = (0..items)
                 .map(|index| data(size, index as u8))
                 .collect::<Vec<_>>();
@@ -191,11 +191,48 @@ fn prepared_seed(c: &mut Criterion) {
     }
 }
 
+fn prepared_batch(c: &mut Criterion) {
+    for items in [2, 4] {
+        for size in [241, 1024] {
+            let owned = (0..items)
+                .map(|index| data(size, index as u8))
+                .collect::<Vec<_>>();
+            let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let prepared = hashcodecs::xxhash::PreparedXxh3::new(42);
+            assert_eq!(
+                prepared.hash_64_batch(&inputs),
+                hashcodecs::xxhash::xxh3_64_batch(&inputs, 42)
+            );
+            assert_eq!(
+                prepared.hash_128_batch(&inputs),
+                hashcodecs::xxhash::xxh3_128_batch(&inputs, 42)
+            );
+
+            let mut group = c.benchmark_group(format!("xxh3_prepared_batch/{items}_items/{size}"));
+            group.throughput(Throughput::Bytes((items * size) as u64));
+            group.bench_function("batch_64", |bench| {
+                bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(&inputs), 42))
+            });
+            group.bench_function("prepared_64", |bench| {
+                bench.iter(|| prepared.hash_64_batch(black_box(&inputs)))
+            });
+            group.bench_function("batch_128", |bench| {
+                bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(&inputs), 42))
+            });
+            group.bench_function("prepared_128", |bench| {
+                bench.iter(|| prepared.hash_128_batch(black_box(&inputs)))
+            });
+            group.finish();
+        }
+    }
+}
+
 fn xxhash(c: &mut Criterion) {
     support::pin_to_one_cpu();
     one_shot(c);
     batch(c);
     prepared_seed(c);
+    prepared_batch(c);
 }
 
 criterion_group! {

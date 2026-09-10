@@ -37,6 +37,67 @@ fn standard_and_url_safe_round_trip() {
     assert_eq!(b64decode(b"YWI=").unwrap(), b"ab");
 }
 
+#[cfg(feature = "python")]
+#[test]
+fn wrapped_encoders_write_final_layout_with_every_available_backend() {
+    let input = (0..=1024)
+        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+        .collect::<Vec<_>>();
+
+    for backend in [
+        Backend::Scalar,
+        Backend::Neon,
+        Backend::Ssse3,
+        Backend::Sse41,
+        Backend::Avx2,
+        Backend::Avx512Vbmi,
+    ] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for length in [0, 1, 2, 15, 16, 31, 32, 47, 48, 63, 64, 241, 1024] {
+            for urlsafe in [false, true] {
+                for padded in [false, true] {
+                    let mut contiguous = if urlsafe {
+                        b64encode_urlsafe(&input[..length]).into_bytes()
+                    } else {
+                        b64encode(&input[..length]).into_bytes()
+                    };
+                    if !padded {
+                        while contiguous.last() == Some(&b'=') {
+                            contiguous.pop();
+                        }
+                    }
+
+                    for width in [4, 8, 12, 20, 76, 80, 256] {
+                        let mut expected = Vec::new();
+                        for (line, chunk) in contiguous.chunks(width).enumerate() {
+                            if line != 0 {
+                                expected.push(b'\n');
+                            }
+                            expected.extend_from_slice(chunk);
+                        }
+
+                        let mut actual = vec![0xa5; expected.len() + 16];
+                        unsafe {
+                            encode_backend::encode_wrapped_to_ptr_with_backend(
+                                &input[..length],
+                                actual.as_mut_ptr(),
+                                urlsafe,
+                                padded,
+                                width,
+                                backend,
+                            )
+                        };
+                        assert_eq!(&actual[..expected.len()], expected);
+                        assert!(actual[expected.len()..].iter().all(|&byte| byte == 0xa5));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn validation_only_kernels_classify_without_output_storage() {
     for backend in [

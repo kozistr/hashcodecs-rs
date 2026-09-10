@@ -7,6 +7,8 @@ use super::decode::aarch64 as decode_aarch64;
 use super::decode::{self as decode_backend, x86_contracts};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use super::encode as encode_backend;
+#[cfg(feature = "python")]
+use super::encode::WrappedOutput;
 #[cfg(target_arch = "aarch64")]
 use super::encode::aarch64 as encode_aarch64;
 use super::{Base64Error, DecodeAlphabet};
@@ -34,6 +36,77 @@ pub(super) unsafe fn encode_with_runtime_backend(
             urlsafe,
             allow_streaming_stores && selection.use_streaming_stores(input.len(), output),
         )
+    }
+}
+
+#[cfg(feature = "python")]
+#[inline]
+pub(super) unsafe fn encode_wrapped_with_runtime_backend(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    urlsafe: bool,
+) -> usize {
+    let backend = backend::selected_backend().backend;
+    unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
+}
+
+#[cfg(all(test, feature = "python"))]
+#[inline]
+pub(super) unsafe fn encode_wrapped_with_backend(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    backend: Backend,
+    urlsafe: bool,
+) -> usize {
+    if !backend::is_supported(backend) {
+        return 0;
+    }
+    unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
+}
+
+#[cfg(feature = "python")]
+#[inline]
+unsafe fn encode_wrapped_with_backend_inner(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    backend: Backend,
+    urlsafe: bool,
+) -> usize {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    return unsafe {
+        match (backend, urlsafe) {
+            (Backend::Avx512Vbmi, false) => {
+                encode_backend::avx512::encode_wrapped::<false>(input, output)
+            }
+            (Backend::Avx512Vbmi, true) => {
+                encode_backend::avx512::encode_wrapped::<true>(input, output)
+            }
+            (Backend::Avx2, false) => encode_backend::avx2::encode_wrapped::<false>(input, output),
+            (Backend::Avx2, true) => encode_backend::avx2::encode_wrapped::<true>(input, output),
+            (Backend::Sse41 | Backend::Ssse3, false) => {
+                encode_backend::ssse3::encode_wrapped::<false>(input, output)
+            }
+            (Backend::Sse41 | Backend::Ssse3, true) => {
+                encode_backend::ssse3::encode_wrapped::<true>(input, output)
+            }
+            (Backend::Scalar | Backend::Neon, _) => 0,
+        }
+    };
+
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        #[cfg(target_arch = "aarch64")]
+        if backend == Backend::Neon {
+            return unsafe {
+                if urlsafe {
+                    encode_aarch64::encode_wrapped::<true>(input, output)
+                } else {
+                    encode_aarch64::encode_wrapped::<false>(input, output)
+                }
+            };
+        }
+        let _ = (input, output, urlsafe, backend);
+        0
     }
 }
 

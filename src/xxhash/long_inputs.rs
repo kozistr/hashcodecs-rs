@@ -114,6 +114,7 @@ impl<'batch, 'input> LongRun<'batch, 'input> {
         let stripes = first.regular_stripes();
         let run_length = inputs
             .iter()
+            .take(4)
             .take_while(|input| {
                 LongInput::new(input).is_some_and(|input| input.regular_stripes() == stripes)
             })

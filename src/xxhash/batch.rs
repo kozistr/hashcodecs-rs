@@ -53,23 +53,27 @@ where
         return;
     }
 
-    hash_each_input_with_engine(
+    let engine = LongEngine::cached();
+    let derived_secret = engine.derive_secret(seed);
+    hash_each_input_with_secret(
         &inputs[index..],
         seed,
         short,
         finalize,
-        LongEngine::cached(),
+        engine,
+        engine.secret(&derived_secret),
         &mut output,
     );
 }
 
 #[inline(always)]
-fn hash_each_input_with_engine<T, S, F, O>(
+pub(super) fn hash_each_input_with_secret<T, S, F, O>(
     inputs: &[&[u8]],
     seed: u64,
     short: S,
     finalize: F,
     engine: &LongEngine,
+    secret: &Secret,
     mut output: O,
 ) where
     S: Copy + Fn(&[u8], u64) -> T,
@@ -86,9 +90,6 @@ fn hash_each_input_with_engine<T, S, F, O>(
     if index == inputs.len() {
         return;
     }
-
-    let derived_secret = engine.derive_secret(seed);
-    let secret = engine.secret(&derived_secret);
 
     // Only x86 has an accelerated batch kernel. Keep its scheduling path out
     // of production builds on architectures that process inputs individually.
@@ -139,30 +140,21 @@ fn hash_input_runs<T, S, F, O>(
             continue;
         };
 
-        let mut run_index = 0;
-        while run_index + 4 <= run.len() {
-            let group = run.batch4(run_index);
+        if run.len() == 4 {
+            let group = run.batch4(0);
             let accumulators = engine.accumulate_batch4(group, secret);
             emit_long_group4(secret, group, accumulators, finalize, &mut output);
-            run_index += 4;
-        }
-
-        match run.len() - run_index {
-            3 => {
-                let group = run.batch3(run_index);
-                let accumulators = engine.accumulate_batch3(group, secret);
-                emit_long_group3(secret, group, accumulators, finalize, &mut output);
-            }
-            2 => {
-                let group = run.batch2(run_index);
-                let accumulators = engine.accumulate_batch2(group, secret);
-                emit_long_group2(secret, group, accumulators, finalize, &mut output);
-            }
-            1 => {
-                let input = run.input(run_index);
-                output(engine.hash(input, secret, finalize));
-            }
-            _ => {}
+        } else if run.len() == 3 {
+            let group = run.batch3(0);
+            let accumulators = engine.accumulate_batch3(group, secret);
+            emit_long_group3(secret, group, accumulators, finalize, &mut output);
+        } else if run.len() == 2 {
+            let group = run.batch2(0);
+            let accumulators = engine.accumulate_batch2(group, secret);
+            emit_long_group2(secret, group, accumulators, finalize, &mut output);
+        } else {
+            let input = run.input(0);
+            output(engine.hash(input, secret, finalize));
         }
 
         index += run.len();
@@ -294,9 +286,16 @@ mod tests {
     fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
         let mut hashes = Vec::new();
 
-        hash_each_input_with_engine(inputs, 17, xxh3_64, finalize_long_64, engine, &mut |hash| {
-            hashes.push(hash)
-        });
+        let derived = engine.derive_secret(17);
+        hash_each_input_with_secret(
+            inputs,
+            17,
+            xxh3_64,
+            finalize_long_64,
+            engine,
+            engine.secret(&derived),
+            &mut |hash| hashes.push(hash),
+        );
 
         hashes
     }
@@ -304,12 +303,14 @@ mod tests {
     fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]> {
         let mut hashes = Vec::new();
 
-        hash_each_input_with_engine(
+        let derived = engine.derive_secret(17);
+        hash_each_input_with_secret(
             inputs,
             17,
             xxh3_128,
             finalize_long_128,
             engine,
+            engine.secret(&derived),
             &mut |hash| hashes.push(hash),
         );
 
@@ -416,6 +417,10 @@ mod tests {
         assert!(LongRun::new(&refs[3..]).is_none());
         assert_eq!(LongRun::new(&refs[4..]).unwrap().len(), 2);
         assert_eq!(LongRun::new(&refs[6..]).unwrap().len(), 1);
+
+        let compatible = [300; 8].map(|length| vec![0; length]);
+        let compatible_refs = compatible.each_ref().map(Vec::as_slice);
+        assert_eq!(LongRun::new(&compatible_refs).unwrap().len(), 4);
     }
 
     #[test]

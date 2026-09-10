@@ -6,6 +6,9 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+#[cfg(feature = "python")]
+use super::WrappedOutput;
+
 #[target_feature(enable = "ssse3")]
 pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let mut source = 0;
@@ -33,6 +36,31 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
 
         source += 12;
         destination += 16;
+    }
+
+    source
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "ssse3")]
+pub(crate) unsafe fn encode_wrapped<const URLSAFE: bool>(
+    input: &[u8],
+    output: &mut WrappedOutput,
+) -> usize {
+    let mut source = 0;
+
+    while source + 52 <= input.len() {
+        for offset in [0, 12, 24, 36] {
+            let encoded = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source + offset)) };
+            unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
+        }
+        source += 48;
+    }
+
+    while source + 16 <= input.len() {
+        let encoded = unsafe { encode_12::<URLSAFE>(input.as_ptr().add(source)) };
+        unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
+        source += 12;
     }
 
     source

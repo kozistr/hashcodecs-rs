@@ -118,6 +118,8 @@ handles padding between runs to preserve the stop at the first complete padding 
 
 Large aligned x86 encoding may use non-temporal stores after the input exceeds the detected private-cache working
 set. Smaller work stays on ordinary cached stores.
+Wrapped inputs above the 4 MiB crossover send SIMD blocks to a line-aware output cursor. Blocks that fit remain
+vector stores; the cursor splits a block into quartets only when it crosses a newline boundary.
 
 ### MurmurHash3
 
@@ -129,7 +131,7 @@ little-endian loads and finalizers. One-shot calls choose scalar, SSE4.1, or AVX
 
 `one_shot.rs` selects the input-length class. `short_inputs.rs` contains the formulas for 0 to 240 bytes.
 `long_inputs.rs` owns secret initialization, scheduling, accumulation, and merging. `prepared.rs` retains one derived
-secret for repeated calls with the same seed. XXH3-64 and XXH3-128 share these modules.
+secret for repeated single and batch calls with the same seed. XXH3-64 and XXH3-128 share these modules.
 `long_inputs/aarch64.rs` and the kernels under `long_inputs/x86/` contain the ISA-specific implementations.
 The scalar long-input flow and backend selection use the same module. These kernels handle inputs longer than 240 bytes.
 
@@ -137,9 +139,9 @@ The AVX2 one-shot kernel splits each full 1,024-byte block across four accumulat
 that contain at least four stripes, including the final overlapping stripe. The kernel reduces the chains before
 each block scramble and before the final merge.
 
-Native batches reuse the initialized secret and process inputs in groups of up to four. Two to four equal-size
-inputs longer than 240 bytes use an AVX2 batch accumulator when available; single items and mixed sizes use the
-regular paths.
+Native batches reuse the initialized secret and inspect at most four inputs before hashing the group. Two to four
+equal-stripe-count inputs longer than 240 bytes use an AVX2 batch accumulator when available; single items and mixed
+sizes use the regular paths.
 Python exposes two result models:
 
 - `xxh3_*_batch` returns `list[int]` results;

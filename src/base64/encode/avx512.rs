@@ -6,6 +6,10 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
+#[cfg(feature = "python")]
+use super::WrappedOutput;
+#[cfg(feature = "python")]
+use super::avx2::encode_wrapped as encode_wrapped_avx2;
 use super::avx2::{Avx2StoreMode, encode_avx2_with_store};
 
 const INPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
@@ -132,9 +136,86 @@ unsafe fn encode_48(
     shifts: __m512i,
     table: __m512i,
 ) {
+    let encoded = unsafe { encode_48_value(input, shuffle, shifts, table) };
+
+    unsafe { _mm512_storeu_si512(output.cast(), encoded) };
+}
+
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+#[inline]
+unsafe fn encode_48_value(
+    input: *const u8,
+    shuffle: __m512i,
+    shifts: __m512i,
+    table: __m512i,
+) -> __m512i {
     let input = unsafe { _mm512_maskz_loadu_epi8(INPUT_MASK_48, input.cast()) };
     let shuffled = _mm512_permutexvar_epi8(shuffle, input);
     let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
 
-    unsafe { _mm512_storeu_si512(output.cast(), _mm512_permutexvar_epi8(indices, table)) };
+    _mm512_permutexvar_epi8(indices, table)
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx512vbmi,avx512bw")]
+pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
+    input: &[u8],
+    output: &mut WrappedOutput,
+) -> usize {
+    if input.len() < 48 {
+        return unsafe { encode_wrapped_avx2::<URLSAFE>(input, output) };
+    }
+
+    let alphabet = if URLSAFE {
+        URLSAFE_ALPHABET
+    } else {
+        STANDARD_ALPHABET
+    };
+    let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
+    let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
+    let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
+    let mut source = 0;
+
+    while source + 192 <= input.len() {
+        for offset in [0, 48, 96, 144] {
+            let encoded = unsafe {
+                encode_48_value(input.as_ptr().add(source + offset), shuffle, shifts, table)
+            };
+            unsafe { write_wrapped_64(output, encoded) };
+        }
+        source += 192;
+    }
+
+    while source + 48 <= input.len() {
+        let encoded =
+            unsafe { encode_48_value(input.as_ptr().add(source), shuffle, shifts, table) };
+        unsafe { write_wrapped_64(output, encoded) };
+        source += 48;
+    }
+
+    if input.len() - source >= 32 {
+        source + unsafe { encode_wrapped_avx2::<URLSAFE>(&input[source..], output) }
+    } else {
+        source
+    }
+}
+
+#[cfg(feature = "python")]
+#[target_feature(enable = "avx512f")]
+#[inline]
+unsafe fn write_wrapped_64(output: &mut WrappedOutput, value: __m512i) {
+    unsafe {
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm512_castsi512_si128(value),
+        ));
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm512_extracti32x4_epi32::<1>(value),
+        ));
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm512_extracti32x4_epi32::<2>(value),
+        ));
+        output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
+            _mm512_extracti32x4_epi32::<3>(value),
+        ));
+    }
 }

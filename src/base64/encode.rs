@@ -13,6 +13,8 @@ pub(super) mod ssse3;
 
 use super::output_buffer::{allocate_uninitialized_output, assume_output_initialized};
 use super::runtime_dispatch::encode_with_runtime_backend;
+#[cfg(feature = "python")]
+use super::runtime_dispatch::encode_wrapped_with_runtime_backend;
 use super::{Base64Error, STANDARD_ALPHABET, URLSAFE_ALPHABET};
 
 /// Encodes input with the padded RFC 4648 standard Base64 alphabet.
@@ -229,6 +231,148 @@ pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe
             urlsafe,
         )
     };
+}
+
+#[cfg(feature = "python")]
+pub(crate) struct WrappedOutput {
+    output: *mut u8,
+    width: usize,
+    column: usize,
+}
+
+#[cfg(feature = "python")]
+impl WrappedOutput {
+    #[inline]
+    pub(super) fn new(output: *mut u8, width: usize) -> Self {
+        debug_assert!(width >= 4 && width.is_multiple_of(4));
+        Self {
+            output,
+            width,
+            column: 0,
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn start_line(&mut self) {
+        if self.column == self.width {
+            unsafe { self.output.write(b'\n') };
+            self.output = unsafe { self.output.add(1) };
+            self.column = 0;
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn write_quad_ptr(&mut self, input: *const u8) {
+        unsafe { self.start_line() };
+        let value = unsafe { input.cast::<u32>().read_unaligned() };
+        unsafe { self.output.cast::<u32>().write_unaligned(value) };
+        self.output = unsafe { self.output.add(4) };
+        self.column += 4;
+    }
+
+    #[inline(always)]
+    pub(super) unsafe fn write_16(&mut self, block: [u8; 16]) {
+        unsafe { self.start_line() };
+        if self.width - self.column >= block.len() {
+            unsafe {
+                self.output
+                    .copy_from_nonoverlapping(block.as_ptr(), block.len())
+            };
+            self.output = unsafe { self.output.add(block.len()) };
+            self.column += block.len();
+            return;
+        }
+
+        for offset in (0..block.len()).step_by(4) {
+            unsafe { self.write_quad_ptr(block.as_ptr().add(offset)) };
+        }
+    }
+
+    #[inline]
+    unsafe fn write_bytes(&mut self, input: &[u8]) {
+        let complete = input.len() / 4 * 4;
+        for offset in (0..complete).step_by(4) {
+            unsafe { self.write_quad_ptr(input.as_ptr().add(offset)) };
+        }
+
+        if complete != input.len() {
+            unsafe { self.start_line() };
+            let tail = &input[complete..];
+            debug_assert!(tail.len() <= self.width - self.column);
+            unsafe {
+                self.output
+                    .copy_from_nonoverlapping(tail.as_ptr(), tail.len())
+            };
+            self.output = unsafe { self.output.add(tail.len()) };
+            self.column += tail.len();
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[cold]
+#[inline(never)]
+pub(crate) unsafe fn encode_wrapped_to_ptr_cached(
+    input: &[u8],
+    output: *mut u8,
+    urlsafe: bool,
+    padded: bool,
+    width: usize,
+) {
+    let mut output = WrappedOutput::new(output, width);
+    let consumed = if input.len() < 16 {
+        0
+    } else {
+        unsafe { encode_wrapped_with_runtime_backend(input, &mut output, urlsafe) }
+    };
+
+    unsafe { encode_scalar_wrapped(&input[consumed..], &mut output, urlsafe, padded) };
+}
+
+#[cfg(all(test, feature = "python"))]
+pub(super) unsafe fn encode_wrapped_to_ptr_with_backend(
+    input: &[u8],
+    output: *mut u8,
+    urlsafe: bool,
+    padded: bool,
+    width: usize,
+    backend: super::backend::Backend,
+) {
+    let mut output = WrappedOutput::new(output, width);
+    let consumed = unsafe {
+        super::runtime_dispatch::encode_wrapped_with_backend(input, &mut output, backend, urlsafe)
+    };
+    unsafe { encode_scalar_wrapped(&input[consumed..], &mut output, urlsafe, padded) };
+}
+
+#[cfg(feature = "python")]
+#[inline]
+unsafe fn encode_scalar_wrapped(
+    input: &[u8],
+    output: &mut WrappedOutput,
+    urlsafe: bool,
+    padded: bool,
+) {
+    let mut source = 0;
+    while source + 6 <= input.len() {
+        let mut encoded = [0; 8];
+        unsafe { encode_scalar_ptr(&input[source..source + 6], encoded.as_mut_ptr(), urlsafe) };
+        unsafe { output.write_bytes(&encoded) };
+        source += 6;
+    }
+
+    if source != input.len() {
+        let tail = &input[source..];
+        let mut encoded = [0; 8];
+        unsafe { encode_scalar_ptr(tail, encoded.as_mut_ptr(), urlsafe) };
+        let padded_len = encoded_len(tail.len());
+        let written = if padded {
+            padded_len
+        } else {
+            padded_len - usize::from(!tail.len().is_multiple_of(3)) * (3 - tail.len() % 3)
+        };
+        unsafe { output.write_bytes(&encoded[..written]) };
+    }
 }
 
 #[inline]

@@ -67,6 +67,32 @@ fn prepared_seeds_match_one_shot_across_length_classes() {
 }
 
 #[test]
+fn prepared_batches_match_one_shot_across_mixed_runs() {
+    let owned = [17, 241, 257, 258, 259, 260, 1024, 1025].map(|length| vec![length as u8; length]);
+    let inputs = owned.each_ref().map(Vec::as_slice);
+
+    for seed in [0, 0x0123_4567_89ab_cdef] {
+        let prepared = PreparedXxh3::new(seed);
+        assert_eq!(
+            prepared.hash_64_batch(&inputs),
+            inputs.map(|input| xxh3_64(input, seed))
+        );
+        assert_eq!(
+            prepared.hash_128_batch(&inputs),
+            inputs.map(|input| xxh3_128(input, seed))
+        );
+
+        let mut hashes_64 = Vec::new();
+        prepared.hash_64_batch_for_each(&inputs, |hash| hashes_64.push(hash));
+        assert_eq!(hashes_64, inputs.map(|input| xxh3_64(input, seed)));
+
+        let mut hashes_128 = Vec::new();
+        prepared.hash_128_batch_for_each(&inputs, |hash| hashes_128.push(hash));
+        assert_eq!(hashes_128, inputs.map(|input| xxh3_128(input, seed)));
+    }
+}
+
+#[test]
 fn batches_match_one_shot() {
     let values: [&[u8]; 3] = [b"", b"hello", b"xxhash"];
     assert_eq!(xxh3_64_batch(&values, 42), values.map(|v| xxh3_64(v, 42)));

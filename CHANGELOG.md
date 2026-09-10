@@ -4,6 +4,35 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-10
+
+### What's Changed
+* refactor: flatten internal module layout by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/91
+* refactor: prepare Base64 decoder policies once by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/92
+* refactor: consolidate binding and dispatch cleanup by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/93
+* refactor: simplify project module layout by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/94
+* refactor: prepare codec policies and unify bindings by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/95
+* refactor: accelerate Base64 codec hot paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/96
+* fix: protect XXH3 batches from GC reentrancy by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/97
+* refactor: unify Base64 decode execution by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/98
+* refactor: flatten Base64 binding ownership by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/99
+* refactor: improve XXH3 loads and internal naming by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/100
+* refactor: reduce Base64 decoder setup and retry costs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/101
+* fix: preserve Base64 decode boundaries and restore ARM coverage by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/102
+* refactor: keep XXH3 AVX2 tail chains in registers by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/103
+* refactor: store AVX2 Base64 vectors in smaller groups by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/104
+* fix: reduce Python overhead and align canonical decoding by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/106
+* refactor: reduce cached AVX2 encoder setup by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/107
+* feat: optimize XXH3 seeded and batch hashing by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/108
+* Optimize AVX2 Base64 decoding by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/109
+* refactor: optimize Python batch orchestration by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/110
+* feat: optimize XXH3 batches and wrapped Base64 by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/111
+* Fuse Base64 SIMD lookup paths and Murmur3 hex output by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/112
+* fix: preserve custom alphabets and batch typing by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/113
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...v1.4.0
+
 ## [1.3.0] - 2026-09-04
 
 ### What's Changed
@@ -164,7 +193,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.1.0...v1.2.0

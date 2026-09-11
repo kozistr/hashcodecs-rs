@@ -125,6 +125,20 @@ pub(super) enum BytesLike<'a, 'py> {
     OwnedVec(Vec<u8>),
 }
 
+pub(super) enum DecodeDataObject<'a, 'py> {
+    Borrowed(&'a Bound<'py, PyAny>),
+    Owned(Bound<'py, PyAny>),
+}
+
+impl<'py> DecodeDataObject<'_, 'py> {
+    pub(super) fn as_bound(&self) -> &Bound<'py, PyAny> {
+        match self {
+            Self::Borrowed(value) => value,
+            Self::Owned(value) => value,
+        }
+    }
+}
+
 impl<'py> BytesLike<'_, 'py> {
     pub(super) fn len(&self) -> usize {
         match self {
@@ -492,27 +506,31 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
 
 /// Match `base64._bytes_from_decode_data` while retaining bytes and bytearray
 /// subclasses for their Python method dispatch.
-pub(super) fn decode_data_object<'py>(
+pub(super) fn decode_data_object<'a, 'py>(
     py: Python<'py>,
-    value: &Bound<'py, PyAny>,
+    value: &'a Bound<'py, PyAny>,
     argument: &str,
-) -> PyResult<Bound<'py, PyAny>> {
+) -> PyResult<DecodeDataObject<'a, 'py>> {
+    if PyBytes::is_exact_type_of(value) || PyByteArray::is_exact_type_of(value) {
+        return Ok(DecodeDataObject::Borrowed(value));
+    }
+
     if value.is_instance_of::<PyString>() {
-        return encode_ascii(value);
+        return encode_ascii(value).map(DecodeDataObject::Owned);
     }
 
     if value.is_instance_of::<PyBytes>() || value.is_instance_of::<PyByteArray>() {
-        return Ok(value.clone());
+        return Ok(DecodeDataObject::Borrowed(value));
     }
 
     let input = bytes_like(value, argument)?;
     if let Some(bytes) = input.python_bytes(py)? {
         drop(input);
-        return Ok(bytes.into_any());
+        return Ok(DecodeDataObject::Owned(bytes.into_any()));
     }
     let bytes = unsafe { input.with_bytes(|input| PyBytes::new(py, input).into_any()) };
     drop(input);
-    Ok(bytes)
+    Ok(DecodeDataObject::Owned(bytes))
 }
 
 pub(super) fn ascii_or_bytes_owned<'py>(

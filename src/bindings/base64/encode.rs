@@ -1,5 +1,6 @@
 //! Python encoding entry points and prepared encoding.
 
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyAssertionError, PyOverflowError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
@@ -462,6 +463,12 @@ pub(super) fn urlsafe_b64encode<'py>(
     s: &Bound<'py, PyAny>,
     padded: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    if PyBytes::is_exact_type_of(s) {
+        let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
+        let padded = padded.truthy(py)?;
+        return encode(py, &input, Some(*b"-_"), padded, None);
+    }
+
     let input = contiguous_bytes_like_exported(s, "s")?;
     let padded = padded.truthy(py)?;
     encode(py, &input, Some(*b"-_"), padded, None)
@@ -486,6 +493,17 @@ pub(super) fn b64encode<'py>(
     padded: Argument,
     wrapcol: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    if altchars.is_none() && PyBytes::is_exact_type_of(s) {
+        let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
+        let padded = padded.truthy(py)?;
+        let wrapcol = normalize_wrapcol(wrapcol.extract_i128(py)?)?;
+        return encode_with_prepared(
+            py,
+            &input,
+            PreparedEncoder::with_alphabet(EncodeAlphabet::Standard, padded, wrapcol),
+        );
+    }
+
     let python_315 = python_at_least(py, (3, 15));
     let constructed_alphabet = if python_315 {
         altchars

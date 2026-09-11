@@ -24,8 +24,8 @@ use super::strict::{
 };
 use crate::base64::{Base64Error, DecodeAlphabet, STANDARD_ALPHABET};
 use crate::bindings::buffer::{
-    BytesLike, ascii_or_bytes, contiguous_bytes_like, contiguous_bytes_like_exported,
-    decode_data_object,
+    BytesLike, DecodeDataObject, ascii_or_bytes, contiguous_bytes_like,
+    contiguous_bytes_like_exported, decode_data_object,
 };
 use crate::bindings::compatibility::{PythonSemantics, parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
@@ -452,13 +452,13 @@ fn invalid_altchars(py: Python<'_>, altchars: &Bound<'_, PyAny>) -> PyErr {
     }
 }
 
-fn normalized_altchars<'py>(
+fn normalized_altchars<'a, 'py>(
     py: Python<'py>,
-    altchars: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
+    altchars: &'a Bound<'py, PyAny>,
+) -> PyResult<DecodeDataObject<'a, 'py>> {
     let altchars = decode_data_object(py, altchars, "altchars")?;
-    if altchars.len()? != 2 {
-        return Err(invalid_altchars(py, &altchars));
+    if altchars.as_bound().len()? != 2 {
+        return Err(invalid_altchars(py, altchars.as_bound()));
     }
     Ok(altchars)
 }
@@ -507,23 +507,25 @@ fn translation_table<'py>(py: Python<'py>, [plus, slash]: [u8; 2]) -> Bound<'py,
     PyBytes::new(py, &table)
 }
 
-fn prepare_translated_input<'py>(
+fn prepare_translated_input<'a, 'py>(
     py: Python<'py>,
-    input: Bound<'py, PyAny>,
+    input: DecodeDataObject<'a, 'py>,
     altchars: [u8; 2],
-) -> PyResult<(Bound<'py, PyAny>, Option<[u8; 2]>)> {
-    if PyBytes::is_exact_type_of(&input) {
+) -> PyResult<(DecodeDataObject<'a, 'py>, Option<[u8; 2]>)> {
+    if PyBytes::is_exact_type_of(input.as_bound()) {
         return Ok((input, Some(altchars)));
     }
-    if PyByteArray::is_exact_type_of(&input) {
-        let bytes = contiguous_bytes_like(&input, "s")?;
+    if PyByteArray::is_exact_type_of(input.as_bound()) {
+        let bytes = contiguous_bytes_like(input.as_bound(), "s")?;
         let input = unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).into_any()) };
-        return Ok((input, Some(altchars)));
+        return Ok((DecodeDataObject::Owned(input), Some(altchars)));
     }
 
     let table = translation_table(py, altchars);
-    let input = input.call_method1(intern!(py, "translate"), (table,))?;
-    Ok((input, None))
+    let input = input
+        .as_bound()
+        .call_method1(intern!(py, "translate"), (table,))?;
+    Ok((DecodeDataObject::Owned(input), None))
 }
 
 struct DecodeArguments<'a, 'py> {
@@ -540,6 +542,21 @@ fn b64decode_with<'py, T>(
     arguments: DecodeArguments<'_, 'py>,
     decode: impl FnOnce(&PreparedDecoder, &BytesLike<'_, 'py>) -> PyResult<T>,
 ) -> PyResult<T> {
+    if PyBytes::is_exact_type_of(s)
+        && arguments.altchars.is_none_or(PyBytes::is_exact_type_of)
+        && arguments.ignorechars.is_none_or(PyBytes::is_exact_type_of)
+    {
+        let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
+        let altchars = parse_altchars(py, arguments.altchars, true)?;
+        let validate = arguments.validate.optional_truthy(py)?;
+        let padded = arguments.padded.truthy(py)?;
+        let canonical = arguments.canonical.truthy(py)?;
+        let policy =
+            DecodePolicy::new(altchars, validate, padded, arguments.ignorechars, canonical);
+        let decoder = PreparedDecoder::new(py, policy)?;
+        return decode(&decoder, &input);
+    }
+
     let mut input = decode_data_object(py, s, "s")?;
     let mut parsed_altchars = None;
     let mut constructed_alphabet = None;
@@ -547,9 +564,13 @@ fn b64decode_with<'py, T>(
     if let Some(altchars) = arguments.altchars {
         let altchars = normalized_altchars(py, altchars)?;
         if python_at_least(py, (3, 15)) && arguments.ignorechars.is_some() {
-            constructed_alphabet = Some(construct_decode_alphabet(py, &altchars)?);
+            if PyBytes::is_exact_type_of(altchars.as_bound()) {
+                parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
+            } else {
+                constructed_alphabet = Some(construct_decode_alphabet(py, altchars.as_bound())?);
+            }
         } else {
-            parsed_altchars = parse_altchars(py, Some(&altchars), true)?;
+            parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
             if arguments.ignorechars.is_none() {
                 (input, parsed_altchars) =
                     prepare_translated_input(py, input, parsed_altchars.unwrap_or(*b"+/"))?;
@@ -557,7 +578,7 @@ fn b64decode_with<'py, T>(
         }
     }
 
-    let input = contiguous_bytes_like_exported(&input, "s")?;
+    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
     let validate = arguments.validate.optional_truthy(py)?;
     let alphabet = constructed_alphabet
         .as_ref()
@@ -571,15 +592,24 @@ fn b64decode_with<'py, T>(
         .ignorechars
         .map(|ignorechars| contiguous_bytes_like_exported(ignorechars, "ignorechars"))
         .transpose()?;
-    let copied_ignorechars = ignorechars.as_ref().map(|ignorechars| unsafe {
-        ignorechars.with_bytes(|ignorechars| PyBytes::new(py, ignorechars))
-    });
+    let copied_ignorechars = match (arguments.ignorechars, &ignorechars) {
+        (Some(ignorechars), Some(_)) if PyBytes::is_exact_type_of(ignorechars) => None,
+        (_, Some(ignorechars)) => {
+            Some(unsafe { ignorechars.with_bytes(|ignorechars| PyBytes::new(py, ignorechars)) })
+        }
+        (None, None) => None,
+        _ => unreachable!("provided ignorechars has an acquired buffer"),
+    };
     let canonical = arguments.canonical.truthy(py)?;
+    let prepared_ignorechars = copied_ignorechars
+        .as_ref()
+        .map(Bound::as_any)
+        .or(arguments.ignorechars);
     let policy = DecodePolicy::new(
         parsed_altchars,
         validate,
         padded,
-        copied_ignorechars.as_ref().map(Bound::as_any),
+        prepared_ignorechars,
         canonical,
     )
     .with_alphabet(alphabet.and_then(|alphabet| alphabet.full));
@@ -635,9 +665,19 @@ fn urlsafe_b64decode_with<'py, T>(
     padded: Argument,
     decode: impl FnOnce(&PreparedDecoder, &BytesLike<'_, 'py>) -> PyResult<T>,
 ) -> PyResult<T> {
+    if PyBytes::is_exact_type_of(s) {
+        let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
+        let padded = padded.truthy(py)?;
+        let decoder = PreparedDecoder::new(
+            py,
+            DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false),
+        )?;
+        return decode(&decoder, &input);
+    }
+
     let input = decode_data_object(py, s, "s")?;
     let (input, altchars) = prepare_translated_input(py, input, *b"-_")?;
-    let input = contiguous_bytes_like_exported(&input, "s")?;
+    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
     let padded = padded.truthy(py)?;
     let decoder = PreparedDecoder::new(
         py,

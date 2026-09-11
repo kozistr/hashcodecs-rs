@@ -83,6 +83,7 @@ fn is_ignored_value(value: u8) -> bool {
     value == IGNORED_CONFIGURED_VALUE
 }
 
+#[derive(Clone)]
 pub(super) struct ConfiguredDecoder {
     pub(super) table: [u8; 256],
     preserves_alphanumeric: bool,
@@ -158,7 +159,11 @@ impl ConfiguredDecoder {
         } else {
             None
         };
-        let preserves_alphanumeric = preserves_alphanumeric(&table);
+        let preserves_alphanumeric = if policy.alphabet.is_none() {
+            altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()))
+        } else {
+            preserves_alphanumeric(&table)
+        };
 
         Self {
             table,
@@ -556,6 +561,14 @@ impl ConfiguredDecoder {
         sink: S,
         continue_after_padding: bool,
     ) -> Option<usize> {
+        if CHECKED
+            && self.validation == Validation::Strict
+            && self.padding.is_padded()
+            && self.table[usize::from(b'=')] == IGNORED_CONFIGURED_VALUE
+        {
+            return self.scan_strict_ignored_padding(input, sink);
+        }
+
         if self.validation == Validation::Strict
             && !matches!(self.strict_specials, StrictSpecials::Many)
             && !matches!(self.strict_forbidden, StrictSpecials::Many)
@@ -588,7 +601,6 @@ impl ConfiguredDecoder {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
                     if CHECKED {
                         symbols += run;
-                        padding = 0;
                         last_value = self.table[usize::from(input[source + run - 1])];
                     }
                     source += run;
@@ -608,23 +620,16 @@ impl ConfiguredDecoder {
                 sink.push_value::<CHECKED>(value)?;
                 if CHECKED {
                     symbols += 1;
-                    padding = 0;
                     last_value = value;
                 }
-            } else if byte == b'=' {
-                if is_ignored_value(value) {
-                    if CHECKED {
-                        padding += 1;
-                    }
-                } else {
-                    if CHECKED && !self.padding.is_padded() {
-                        return None;
-                    }
+            } else if byte == b'=' && !is_ignored_value(value) {
+                if CHECKED && !self.padding.is_padded() {
+                    return None;
+                }
 
-                    saw_padding = true;
-                    if CHECKED {
-                        padding += 1;
-                    }
+                saw_padding = true;
+                if CHECKED {
+                    padding += 1;
                 }
             } else if CHECKED && !is_ignored_value(value) {
                 return None;
@@ -734,7 +739,6 @@ impl ConfiguredDecoder {
 
         let mut source = 0;
         let mut symbols = 0;
-        let mut padding = 0;
         let mut last_value = 0;
 
         while source < data_end {
@@ -746,7 +750,6 @@ impl ConfiguredDecoder {
             if source != run_end {
                 sink.push_symbols::<CHECKED>(&input[source..run_end], true)?;
                 symbols += run_end - source;
-                padding = 0;
                 last_value = self.table[usize::from(input[run_end - 1])];
             }
 
@@ -757,14 +760,12 @@ impl ConfiguredDecoder {
                     is_ignored_value(self.table[usize::from(byte)]),
                     "strict special-byte search only returns discarded bytes"
                 );
-                if byte == b'=' {
-                    padding += 1;
-                }
 
                 source += 1;
             }
         }
 
+        let mut padding = 0;
         if CHECKED {
             for &byte in &input[data_end..] {
                 if byte == b'=' {
@@ -779,6 +780,35 @@ impl ConfiguredDecoder {
         }
 
         self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn scan_strict_ignored_padding<S: ScanSink>(&self, input: &[u8], sink: S) -> Option<usize> {
+        let mut symbols = 0;
+        let mut padding = 0;
+        for &byte in input {
+            if self.table[usize::from(byte)] < 64 {
+                symbols += 1;
+                padding = 0;
+            } else if byte == b'=' {
+                padding += 1;
+            }
+        }
+
+        let expected_padding = match symbols & 3 {
+            0 => 0,
+            2 => 2,
+            3 => 1,
+            _ => return None,
+        };
+        if padding < expected_padding {
+            return None;
+        }
+
+        let mut decoder = self.clone();
+        decoder.padding = Padding::Unpadded;
+        decoder.scan::<S, true>(input, sink, false)
     }
 
     fn finish_strict<S: ScanSink, const CHECKED: bool>(

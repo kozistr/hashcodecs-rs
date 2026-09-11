@@ -180,6 +180,63 @@ def test_base64_bytearray_resize_races_are_serialized() -> None:
     )
 
 
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+@pytest.mark.parametrize('urlsafe', [False, True])
+def test_free_threaded_encode_snapshot_respects_legacy_callback_order(urlsafe: bool) -> None:
+    source = bytearray(b'abc')
+
+    class Padded:
+        def __bool__(self) -> bool:
+            source[:] = b'def'
+            return True
+
+    function = base64.urlsafe_b64encode if urlsafe else base64.b64encode
+    expected = b'ZGVm' if PYTHON_315 or urlsafe else b'YWJj'
+    assert function(source, padded=Padded()) == expected
+
+
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+@pytest.mark.parametrize('reusable', [False, True])
+def test_free_threaded_decode_snapshots_ignorechars_after_canonical_callback(reusable: bool) -> None:
+    ignorechars = bytearray(b'!')
+
+    class Canonical:
+        def __bool__(self) -> bool:
+            ignorechars[:] = b'?'
+            return False
+
+    output = bytearray(3)
+    if reusable:
+        assert base64.b64decode_into(b'Y?WJj', output, ignorechars=ignorechars, canonical=Canonical()) == 3
+        assert output == b'abc'
+    else:
+        assert base64.b64decode(b'Y?WJj', ignorechars=ignorechars, canonical=Canonical()) == b'abc'
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
+def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes() -> None:
+    class Buffer:
+        def __init__(self, value: bytes, output: bytearray) -> None:
+            self.value = value
+            self.output = output
+
+        def __buffer__(self, flags: int) -> memoryview:
+            return memoryview(self.value)
+
+        def __release_buffer__(self, view: memoryview) -> None:
+            self.output.clear()
+
+    decoded = bytearray(3)
+    with pytest.raises(ValueError, match='requires 3 bytes but the destination has 0'):
+        base64.b64decode_into(b'YWJj', decoded, ignorechars=Buffer(b'', decoded))
+    assert decoded == b''
+
+    encoded = bytearray(4)
+    with pytest.raises(ValueError, match='requires 4 bytes but the destination has 0'):
+        base64.urlsafe_b64encode_into(Buffer(b'abc', encoded), encoded)
+    assert encoded == b''
+
+
 def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
     class BytesSubclass(bytes):
         pass

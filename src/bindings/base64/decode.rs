@@ -393,7 +393,7 @@ impl PreparedDecoder {
             py,
             self.semantics,
             input,
-            self.policy.altchars,
+            self.policy.warning_altchars,
             self.policy.ignorechars_specified,
             self.policy.validation,
         )?;
@@ -522,10 +522,15 @@ fn prepare_translated_input<'a, 'py>(
     }
 
     let table = translation_table(py, altchars);
-    let input = input
+    let translated = input
         .as_bound()
         .call_method1(intern!(py, "translate"), (table,))?;
-    Ok((DecodeDataObject::Owned(input), None))
+    let normalized = decode_data_object(py, &translated, "s")?;
+    let input = match normalized {
+        DecodeDataObject::Borrowed(_) => DecodeDataObject::Owned(translated),
+        DecodeDataObject::Owned(input) => DecodeDataObject::Owned(input),
+    };
+    Ok((input, None))
 }
 
 struct DecodeArguments<'a, 'py> {
@@ -534,6 +539,7 @@ struct DecodeArguments<'a, 'py> {
     padded: Argument,
     ignorechars: Option<&'a Bound<'py, PyAny>>,
     canonical: Argument,
+    before_output_write: bool,
 }
 
 fn b64decode_with<'py, T>(
@@ -559,6 +565,7 @@ fn b64decode_with<'py, T>(
 
     let mut input = decode_data_object(py, s, "s")?;
     let mut parsed_altchars = None;
+    let mut warning_altchars = None;
     let mut constructed_alphabet = None;
 
     if let Some(altchars) = arguments.altchars {
@@ -571,12 +578,14 @@ fn b64decode_with<'py, T>(
             }
         } else {
             parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
+            warning_altchars = parsed_altchars;
             if arguments.ignorechars.is_none() {
                 (input, parsed_altchars) =
                     prepare_translated_input(py, input, parsed_altchars.unwrap_or(*b"+/"))?;
             }
         }
     }
+    warning_altchars = warning_altchars.or(parsed_altchars);
 
     let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
     let validate = arguments.validate.optional_truthy(py)?;
@@ -586,21 +595,35 @@ fn b64decode_with<'py, T>(
         .transpose()?;
     if let Some(alphabet) = &alphabet {
         parsed_altchars = alphabet.altchars;
+        warning_altchars = parsed_altchars;
     }
     let padded = arguments.padded.truthy(py)?;
     let ignorechars = arguments
         .ignorechars
         .map(|ignorechars| contiguous_bytes_like_exported(ignorechars, "ignorechars"))
         .transpose()?;
+    let canonical = arguments.canonical.truthy(py)?;
+
+    // Capture every callback-observable value before releasing any export.
+    // Release hooks may resize the reusable destination, so they must run
+    // before the decoder performs its final capacity check and write.
     let copied_ignorechars = match (arguments.ignorechars, &ignorechars) {
         (Some(ignorechars), Some(_)) if PyBytes::is_exact_type_of(ignorechars) => None,
-        (_, Some(ignorechars)) => {
-            Some(unsafe { ignorechars.with_bytes(|ignorechars| PyBytes::new(py, ignorechars)) })
-        }
+        (_, Some(ignorechars)) => Some(
+            ignorechars
+                .snapshot_if(true)?
+                .expect("requested ignorechars snapshot is present"),
+        ),
         (None, None) => None,
         _ => unreachable!("provided ignorechars has an acquired buffer"),
     };
-    let canonical = arguments.canonical.truthy(py)?;
+    let input = input.into_stable_after_callbacks(arguments.before_output_write)?;
+    if arguments.before_output_write {
+        drop(ignorechars);
+    }
+    let copied_ignorechars = copied_ignorechars
+        .as_deref()
+        .map(|ignorechars| PyBytes::new(py, ignorechars));
     let prepared_ignorechars = copied_ignorechars
         .as_ref()
         .map(Bound::as_any)
@@ -612,6 +635,7 @@ fn b64decode_with<'py, T>(
         prepared_ignorechars,
         canonical,
     )
+    .with_warning_altchars(warning_altchars)
     .with_alphabet(alphabet.and_then(|alphabet| alphabet.full));
     let decoder = PreparedDecoder::new(py, policy)?;
     decode(&decoder, &input)
@@ -635,6 +659,7 @@ pub(super) fn b64decode<'py>(
             padded,
             ignorechars,
             canonical,
+            before_output_write: false,
         },
         |decoder, input| decoder.decode_allocating(py, input),
     )
@@ -663,6 +688,7 @@ fn urlsafe_b64decode_with<'py, T>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
     padded: Argument,
+    before_output_write: bool,
     decode: impl FnOnce(&PreparedDecoder, &BytesLike<'_, 'py>) -> PyResult<T>,
 ) -> PyResult<T> {
     if PyBytes::is_exact_type_of(s) {
@@ -679,9 +705,11 @@ fn urlsafe_b64decode_with<'py, T>(
     let (input, altchars) = prepare_translated_input(py, input, *b"-_")?;
     let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
     let padded = padded.truthy(py)?;
+    let input = input.into_stable_after_callbacks(before_output_write)?;
     let decoder = PreparedDecoder::new(
         py,
-        DecodePolicy::new(altchars, Some(false), padded, None, false),
+        DecodePolicy::new(altchars, Some(false), padded, None, false)
+            .with_warning_altchars(Some(*b"-_")),
     )?;
     decode(&decoder, &input)
 }
@@ -691,7 +719,7 @@ pub(super) fn urlsafe_b64decode<'py>(
     s: &Bound<'py, PyAny>,
     padded: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    urlsafe_b64decode_with(py, s, padded, |decoder, input| {
+    urlsafe_b64decode_with(py, s, padded, false, |decoder, input| {
         decoder.decode_allocating(py, input)
     })
 }
@@ -702,7 +730,7 @@ pub(super) fn urlsafe_b64decode_into(
     output: &Bound<'_, PyByteArray>,
     padded: Argument,
 ) -> PyResult<usize> {
-    urlsafe_b64decode_with(py, s, padded, |decoder, input| {
+    urlsafe_b64decode_with(py, s, padded, true, |decoder, input| {
         decoder.decode_into(py, input, output)
     })
 }
@@ -727,6 +755,7 @@ pub(super) fn b64decode_into(
             padded,
             ignorechars,
             canonical,
+            before_output_write: true,
         },
         |decoder, input| decoder.decode_into(py, input, output),
     )

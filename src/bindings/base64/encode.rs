@@ -471,6 +471,7 @@ pub(super) fn urlsafe_b64encode<'py>(
 
     let input = contiguous_bytes_like_exported(s, "s")?;
     let padded = padded.truthy(py)?;
+    let input = input.into_stable_after_callbacks(false)?;
     encode(py, &input, Some(*b"-_"), padded, None)
 }
 
@@ -483,6 +484,7 @@ pub(super) fn urlsafe_b64encode_into(
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like_exported(s, "s")?;
     let padded = padded.truthy(py)?;
+    let input = input.into_stable_after_callbacks(true)?;
     encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
 }
 
@@ -514,12 +516,14 @@ pub(super) fn b64encode<'py>(
     };
 
     let input = contiguous_bytes_like_exported(s, "s")?;
-    let input = if !python_315 && input.has_borrowed_buffer() {
-        BytesLike::OwnedVec(
-            input
-                .snapshot_if(true)?
-                .expect("requested input snapshot is present"),
-        )
+    let legacy_callbacks_follow_input = !python_315
+        && (altchars.is_some() || !padded.as_ptr().is_null() || !wrapcol.as_ptr().is_null());
+    let input = if legacy_callbacks_follow_input && input.has_borrowed_buffer() {
+        let snapshot = input
+            .snapshot_if(true)?
+            .expect("requested input snapshot is present");
+        drop(input);
+        BytesLike::OwnedVec(snapshot)
     } else {
         input
     };
@@ -542,6 +546,7 @@ pub(super) fn b64encode<'py>(
         |(alphabet, _)| *alphabet,
     );
     let encoder = PreparedEncoder::with_alphabet(alphabet, padded, wrapcol);
+    let input = input.into_stable_after_callbacks(false)?;
     encode_with_prepared(py, &input, encoder)
 }
 

@@ -83,6 +83,7 @@ impl DecodeAttempt {
 #[derive(Clone, Copy)]
 pub(super) struct DecodePolicy<'a, 'py> {
     pub(super) altchars: Option<[u8; 2]>,
+    warning_altchars: Option<[u8; 2]>,
     pub(super) alphabet: Option<[u8; 64]>,
     validate: Option<bool>,
     pub(super) padding: Padding,
@@ -100,6 +101,7 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
     ) -> Self {
         Self {
             altchars,
+            warning_altchars: altchars,
             alphabet: None,
             validate,
             padding: Padding::new(padded),
@@ -110,6 +112,11 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
 
     pub(super) fn with_alphabet(mut self, alphabet: Option<[u8; 64]>) -> Self {
         self.alphabet = alphabet;
+        self
+    }
+
+    pub(super) fn with_warning_altchars(mut self, altchars: Option<[u8; 2]>) -> Self {
+        self.warning_altchars = altchars;
         self
     }
 
@@ -174,6 +181,7 @@ impl IgnoredBytes {
 
 pub(super) struct PreparedPolicy {
     pub(super) altchars: Option<[u8; 2]>,
+    pub(super) warning_altchars: Option<[u8; 2]>,
     pub(super) alphabet: Option<[u8; 64]>,
     pub(super) validation: Validation,
     pub(super) padding: Padding,
@@ -207,6 +215,7 @@ impl PreparedPolicy {
         Ok((
             Self {
                 altchars: policy.altchars,
+                warning_altchars: policy.warning_altchars,
                 alphabet: policy.alphabet,
                 validation: policy.validation(),
                 padding: policy.padding,
@@ -225,6 +234,7 @@ impl PreparedPolicy {
     pub(super) fn strict_custom(&self) -> Self {
         Self {
             altchars: self.altchars,
+            warning_altchars: self.warning_altchars,
             alphabet: self.alphabet,
             validation: Validation::Strict,
             padding: self.padding,
@@ -354,6 +364,7 @@ mod tests {
     ) -> PreparedPolicy {
         PreparedPolicy {
             altchars,
+            warning_altchars: altchars,
             alphabet: None,
             validation,
             padding,

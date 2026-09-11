@@ -117,6 +117,9 @@ impl ConfiguredDecoder {
                 table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
             }
         }
+        if policy.alphabet.is_some() {
+            table[usize::from(b'=')] = INVALID_CONFIGURED_VALUE;
+        }
         let custom_alphabet =
             (altchars.is_some() || policy.alphabet.is_some()) && policy.ignorechars_specified;
         if custom_alphabet && policy.alphabet.is_none() {

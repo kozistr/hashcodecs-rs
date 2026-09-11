@@ -155,13 +155,24 @@ def test_python_315_constructed_alphabets_match_cpython() -> None:
     assert base64.b64decode_into(encoded, output, altchars, ignorechars=b'') == len(expected)
     assert output == expected
 
+    altchars.alphabet = b'=' + binascii.BASE64_ALPHABET[1:]
+    expected = stdlib_base64.b64decode(b'BB==', altchars, ignorechars=b'')
+    assert expected == b'\x04'
+    assert base64.b64decode(b'BB==', altchars, ignorechars=b'') == expected
+    output = bytearray(len(expected))
+    assert base64.b64decode_into(b'BB==', output, altchars, ignorechars=b'') == len(expected)
+    assert output == expected
+
 
 @pytest.mark.parametrize('urlsafe', [False, True])
 @pytest.mark.parametrize('reusable', [False, True])
-def test_decode_dispatches_translate_for_bytes_subclasses(urlsafe: bool, reusable: bool) -> None:
+@pytest.mark.parametrize('translated', [b'ZGVm', 'ZGVm'])
+def test_decode_dispatches_translate_for_bytes_subclasses(
+    urlsafe: bool, reusable: bool, translated: bytes | str
+) -> None:
     class Source(bytes):
-        def translate(self, table: bytes) -> bytes:
-            return b'ZGVm'
+        def translate(self, table: bytes) -> bytes | str:
+            return translated
 
     source = Source(b'YWJj')
     expected = stdlib_base64.urlsafe_b64decode(source) if urlsafe else stdlib_base64.b64decode(source, b'-_')
@@ -263,13 +274,13 @@ def test_python_315_encode_keeps_input_exported_while_converting_padded(urlsafe:
 
 
 @pytest.mark.skipif(PYTHON_315, reason='CPython 3.15 constructs altchars before acquiring the input')
-def test_legacy_encode_snapshots_input_before_altchars_callbacks() -> None:
+def test_legacy_encode_releases_input_export_before_altchars_callbacks() -> None:
     def run(function: Callable[..., bytes]) -> tuple[bytes, bytes]:
         source = bytearray(b'abc')
 
         class Altchars(bytes):
             def __len__(self) -> int:
-                source[:] = b'def'
+                source.extend(b'def')
                 return 2
 
         return function(source, Altchars(b'-_')), bytes(source)
@@ -446,6 +457,34 @@ def test_python_315_ignorechars_and_altchar_warnings() -> None:
     with pytest.warns(DeprecationWarning, match="invalid character '/'"):
         assert base64.b64decode_into(b'//8=', output, b'-_', validate=True) == 2
     assert output == b'\xff\xff'
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires Python 3.15 compatibility warnings')
+@pytest.mark.parametrize('urlsafe', [False, True])
+@pytest.mark.parametrize('reusable', [False, True])
+def test_python_315_translated_subclasses_retain_altchar_warnings(urlsafe: bool, reusable: bool) -> None:
+    class Source(bytes):
+        pass
+
+    source = Source(b'++8=')
+    output = bytearray(2)
+    if urlsafe:
+        function = base64.urlsafe_b64decode_into if reusable else base64.urlsafe_b64decode
+        args = (source, output) if reusable else (source,)
+        kwargs = {'padded': True}
+    else:
+        function = base64.b64decode_into if reusable else base64.b64decode
+        args = (source, output, b'-_') if reusable else (source, b'-_')
+        kwargs = {}
+
+    with pytest.warns(FutureWarning, match="invalid character '\\+'"):
+        result = function(*args, **kwargs)
+
+    if reusable:
+        assert result == 2
+        assert output == b'\xfb\xef'
+    else:
+        assert result == b'\xfb\xef'
 
 
 def test_urlsafe_padding_options_follow_the_running_cpython() -> None:

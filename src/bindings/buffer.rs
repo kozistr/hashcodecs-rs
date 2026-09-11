@@ -33,6 +33,7 @@ struct MemoryViewInfo<'py> {
 pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
     memoryview_source: *mut ffi::PyObject,
+    release_may_reenter: bool,
     _python: std::marker::PhantomData<Python<'py>>,
 }
 
@@ -50,6 +51,14 @@ impl BorrowedBuffer<'_> {
             self.view.buf.cast()
         };
         unsafe { std::slice::from_raw_parts(data, self.len()) }
+    }
+
+    #[cfg(Py_GIL_DISABLED)]
+    fn try_snapshot(&self) -> PyResult<Vec<u8>> {
+        debug_assert!(!self.view.obj.is_null());
+        let py = unsafe { Python::assume_attached() };
+        let exporter = unsafe { Bound::from_borrowed_ptr(py, self.view.obj) };
+        with_critical_section(&exporter, || unsafe { try_copy_bytes(self.bytes()) })
     }
 }
 
@@ -116,7 +125,7 @@ pub(super) enum BytesLike<'a, 'py> {
     OwnedByteArray(Bound<'py, PyByteArray>),
     #[cfg_attr(not(Py_GIL_DISABLED), allow(dead_code))]
     GuardedBytes {
-        bytes: Bound<'py, PyBytes>,
+        bytes: Vec<u8>,
         buffer: BorrowedBuffer<'py>,
     },
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
@@ -151,7 +160,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
-            Self::GuardedBytes { bytes, .. } => unsafe { bytes_size(bytes.as_ptr()) },
+            Self::GuardedBytes { bytes, .. } => bytes.len(),
             Self::Buffer(buffer) => buffer.len(),
             Self::Text(text) => text.len(),
             Self::OwnedVec(bytes) => bytes.len(),
@@ -170,7 +179,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
             Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
             Self::OwnedBytesSlice { .. } => Ok(None),
-            Self::GuardedBytes { bytes, .. } => Ok(Some(bytes.clone())),
+            Self::GuardedBytes { .. } => Ok(None),
             Self::Buffer(buffer)
                 if !buffer.memoryview_source.is_null()
                     && buffer.view.obj == buffer.memoryview_source =>
@@ -216,17 +225,8 @@ impl<'py> BytesLike<'_, 'py> {
     }
 
     pub(super) fn buffer_release_may_reenter(&self) -> bool {
-        matches!(
-            self,
-            Self::Buffer(buffer)
-                if buffer.memoryview_source.is_null()
-                    || buffer.view.obj != buffer.memoryview_source
-        ) || matches!(
-            self,
-            Self::GuardedBytes { buffer, .. }
-                if buffer.memoryview_source.is_null()
-                    || buffer.view.obj != buffer.memoryview_source
-        )
+        matches!(self, Self::Buffer(buffer) if buffer.release_may_reenter)
+            || matches!(self, Self::GuardedBytes { buffer, .. } if buffer.release_may_reenter)
     }
 
     #[cfg(Py_GIL_DISABLED)]
@@ -277,6 +277,37 @@ impl<'py> BytesLike<'_, 'py> {
         needed.then(|| self.try_snapshot()).transpose()
     }
 
+    /// Snapshot exported inputs after callback-capable argument conversion.
+    /// Free-threaded builds must stabilize every export before reading it.
+    /// Reentrant release hooks must run before a reusable destination is written.
+    pub(super) fn snapshot_after_callbacks(
+        &self,
+        before_output_write: bool,
+    ) -> PyResult<Option<Vec<u8>>> {
+        let needed = (cfg!(Py_GIL_DISABLED) && matches!(self, Self::Buffer(_)))
+            || (before_output_write && self.buffer_release_may_reenter());
+        self.snapshot_if(needed)
+    }
+
+    pub(super) fn into_stable_after_callbacks(self, before_output_write: bool) -> PyResult<Self> {
+        let Some(snapshot) = self.snapshot_after_callbacks(before_output_write)? else {
+            return Ok(self);
+        };
+
+        #[cfg(Py_GIL_DISABLED)]
+        if !before_output_write {
+            let Self::Buffer(buffer) = self else {
+                unreachable!("delayed exported inputs retain their buffer guard")
+            };
+            return Ok(Self::GuardedBytes {
+                bytes: snapshot,
+                buffer,
+            });
+        }
+
+        Ok(Self::OwnedVec(snapshot))
+    }
+
     #[cfg(Py_GIL_DISABLED)]
     fn into_snapshot_if(self, needed: bool) -> PyResult<Self> {
         match self.snapshot_if(needed)? {
@@ -286,6 +317,11 @@ impl<'py> BytesLike<'_, 'py> {
     }
 
     fn try_snapshot(&self) -> PyResult<Vec<u8>> {
+        #[cfg(Py_GIL_DISABLED)]
+        if let Self::Buffer(buffer) = self {
+            return buffer.try_snapshot();
+        }
+
         unsafe { self.with_bytes(try_copy_bytes) }
     }
 
@@ -304,7 +340,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
-            Self::GuardedBytes { bytes, .. } => callback(bytes.as_bytes()),
+            Self::GuardedBytes { bytes, .. } => callback(bytes),
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::OwnedVec(bytes) => callback(bytes),
@@ -364,7 +400,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedBytesSlice { owner, offset, len } => {
                 &owner.as_bytes()[*offset..*offset + *len]
             }
-            Self::GuardedBytes { bytes, .. } => bytes.as_bytes(),
+            Self::GuardedBytes { bytes, .. } => bytes,
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
             Self::OwnedVec(bytes) => bytes,
@@ -451,14 +487,7 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
             ));
         }
 
-        #[cfg(not(Py_GIL_DISABLED))]
-        return Ok(BytesLike::Buffer(buffer));
-
-        #[cfg(Py_GIL_DISABLED)]
-        {
-            let bytes = copy_buffer(value.py(), &buffer)?;
-            Ok(BytesLike::GuardedBytes { bytes, buffer })
-        }
+        Ok(BytesLike::Buffer(buffer))
     })
 }
 
@@ -739,9 +768,12 @@ fn acquire_buffer<'py>(
         return Err(PyErr::fetch(py));
     }
 
+    let release_may_reenter = !PyByteArray::is_exact_type_of(value)
+        && (memoryview_source.is_null() || view.obj != memoryview_source);
     Ok(BorrowedBuffer {
         view,
         memoryview_source,
+        release_may_reenter,
         _python: std::marker::PhantomData,
     })
 }

@@ -254,6 +254,18 @@ pub(super) fn normalize_wrapcol(wrapcol: i128) -> PyResult<Option<usize>> {
     }
 }
 
+fn parse_wrapcol(py: Python<'_>, wrapcol: Argument) -> PyResult<Option<usize>> {
+    if wrapcol.as_ptr().is_null() {
+        return Ok(None);
+    }
+    let indexed =
+        unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Index(wrapcol.raw(py).as_ptr())) }?;
+    let value = indexed
+        .extract::<i128>()
+        .map_err(|_| PyOverflowError::new_err("Python int too large for C size_t"))?;
+    normalize_wrapcol(value)
+}
+
 #[inline]
 fn unpadded_encoded_len(input_len: usize) -> usize {
     encoded_len(input_len) - usize::from(!input_len.is_multiple_of(3)) * (3 - input_len % 3)
@@ -382,7 +394,7 @@ fn construct_b64encode_alphabet<'py>(
 fn parse_b64encode_alphabet<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
 ) -> PyResult<(EncodeAlphabet, BytesLike<'a, 'py>)> {
-    let bytes = contiguous_bytes_like(value, "altchars")?;
+    let bytes = crate::bindings::buffer::binascii_contiguous_bytes_like(value)?;
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
     if bytes.len() != STANDARD_ALPHABET.len() {
@@ -498,7 +510,7 @@ pub(super) fn b64encode<'py>(
     if altchars.is_none() && PyBytes::is_exact_type_of(s) {
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
-        let wrapcol = normalize_wrapcol(wrapcol.extract_i128(py)?)?;
+        let wrapcol = parse_wrapcol(py, wrapcol)?;
         return encode_with_prepared(
             py,
             &input,
@@ -536,7 +548,7 @@ pub(super) fn b64encode<'py>(
             .flatten()
     };
     let padded = padded.truthy(py)?;
-    let wrapcol = normalize_wrapcol(wrapcol.extract_i128(py)?)?;
+    let wrapcol = parse_wrapcol(py, wrapcol)?;
     let parsed_alphabet = constructed_alphabet
         .as_ref()
         .map(parse_b64encode_alphabet)

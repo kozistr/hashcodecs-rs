@@ -593,7 +593,7 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert output == b'\x00'
 
 
-def test_configured_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_decode_bypasses_binascii_on_success_and_capacity_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
         raise AssertionError((args, kwargs))
 
@@ -617,6 +617,7 @@ def test_configured_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) ->
     view = memoryview(encoded)
     assert base64.b64decode(view, ignorechars=b'!') == b'abc'
 
+    monkeypatch.undo()
     with pytest.raises(binascii.Error):
         base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
     unchanged = bytearray([0xA5] * 4)

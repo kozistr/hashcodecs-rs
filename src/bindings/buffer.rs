@@ -456,6 +456,24 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     buffer_bytes_like(value, argument, true)
 }
 
+/// Acquire a contiguous buffer with the error text used by binascii's
+/// bytes-like argument converter.
+pub(super) fn binascii_contiguous_bytes_like<'a, 'py>(
+    value: &'a Bound<'py, PyAny>,
+) -> PyResult<BytesLike<'a, 'py>> {
+    if let Some(bytes) = exact_bytes_like(value) {
+        return Ok(bytes);
+    }
+    if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
+        let name = value.get_type().name()?;
+        return Err(PyTypeError::new_err(format!(
+            "a bytes-like object is required, not '{name}'"
+        )));
+    }
+
+    buffer_bytes_like(value, "alphabet", true)
+}
+
 /// Acquire the contiguous buffer that a CPython C API would hold while it
 /// converts later arguments. Immutable exact bytes need no export guard.
 pub(super) fn contiguous_bytes_like_exported<'a, 'py>(

@@ -147,6 +147,135 @@ def test_python_315_constructed_alphabets_match_cpython() -> None:
     altchars.alphabet = binascii.BASE64_ALPHABET[::-1]
     assert base64.b64encode(payload, altchars) == stdlib_base64.b64encode(payload, altchars)
 
+    encoded = b'YWJj'
+    expected = stdlib_base64.b64decode(encoded, altchars, ignorechars=b'')
+    assert expected == b'\x9e\x9d\x9c'
+    assert base64.b64decode(encoded, altchars, ignorechars=b'') == expected
+    output = bytearray(len(expected))
+    assert base64.b64decode_into(encoded, output, altchars, ignorechars=b'') == len(expected)
+    assert output == expected
+
+
+@pytest.mark.parametrize('urlsafe', [False, True])
+@pytest.mark.parametrize('reusable', [False, True])
+def test_decode_dispatches_translate_for_bytes_subclasses(urlsafe: bool, reusable: bool) -> None:
+    class Source(bytes):
+        def translate(self, table: bytes) -> bytes:
+            return b'ZGVm'
+
+    source = Source(b'YWJj')
+    expected = stdlib_base64.urlsafe_b64decode(source) if urlsafe else stdlib_base64.b64decode(source, b'-_')
+    if not reusable:
+        function = base64.urlsafe_b64decode if urlsafe else base64.b64decode
+        args = (source,) if urlsafe else (source, b'-_')
+        assert function(*args) == expected
+        return
+
+    output = bytearray(len(expected))
+    if urlsafe:
+        written = base64.urlsafe_b64decode_into(source, output, padded=True)
+    else:
+        written = base64.b64decode_into(source, output, b'-_')
+    assert written == len(expected)
+    assert output == expected
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+@pytest.mark.parametrize('reusable', [False, True])
+@pytest.mark.parametrize('configured', [False, True])
+def test_python_315_decode_argument_conversion_order_matches_cpython(reusable: bool, configured: bool) -> None:
+    def run(function: Callable[..., bytes], into: bool) -> tuple[bytes, list[str]]:
+        events: list[str] = []
+
+        class Buffer:
+            def __init__(self, value: bytes, name: str) -> None:
+                self.value = value
+                self.name = name
+
+            def __buffer__(self, flags: int) -> memoryview:
+                events.append(f'{self.name}.__buffer__')
+                return memoryview(self.value)
+
+            def __release_buffer__(self, view: memoryview) -> None:
+                events.append(f'{self.name}.__release_buffer__')
+
+        class Altchars(bytes):
+            def __len__(self) -> int:
+                events.append('altchars.__len__')
+                return 2
+
+            def __radd__(self, other: object) -> bytes:
+                events.append('altchars.__radd__')
+                return binascii.BASE64_ALPHABET
+
+        class Option:
+            def __init__(self, name: str, value: bool) -> None:
+                self.name = name
+                self.value = value
+
+            def __bool__(self) -> bool:
+                events.append(f'{self.name}.__bool__')
+                return self.value
+
+        kwargs: dict[str, object] = {
+            'validate': Option('validate', True),
+            'padded': Option('padded', True),
+            'canonical': Option('canonical', False),
+        }
+        if configured:
+            kwargs['ignorechars'] = Buffer(b'', 'ignorechars')
+        args: tuple[object, ...] = (Buffer(b'YWJj', 'input'), Altchars(b'-_'))
+        output = bytearray(3)
+        if into:
+            written = function(args[0], output, args[1], **kwargs)
+            result = bytes(output[:written])
+        else:
+            result = function(*args, **kwargs)
+        return result, events
+
+    expected = run(stdlib_base64.b64decode, False)
+    if reusable:
+        assert run(base64.b64decode_into, True) == expected
+    else:
+        assert run(base64.b64decode, False) == expected
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+@pytest.mark.parametrize('urlsafe', [False, True])
+def test_python_315_encode_keeps_input_exported_while_converting_padded(urlsafe: bool) -> None:
+    def run(function: Callable[..., bytes]) -> tuple[type[Exception] | bytes, bytes]:
+        source = bytearray(b'abc')
+
+        class Padded:
+            def __bool__(self) -> bool:
+                source.extend(b'def')
+                return True
+
+        try:
+            result: type[Exception] | bytes = function(source, padded=Padded())
+        except Exception as error:
+            result = type(error)
+        return result, bytes(source)
+
+    expected_function = stdlib_base64.urlsafe_b64encode if urlsafe else stdlib_base64.b64encode
+    actual_function = base64.urlsafe_b64encode if urlsafe else base64.b64encode
+    assert run(actual_function) == run(expected_function)
+
+
+@pytest.mark.skipif(PYTHON_315, reason='CPython 3.15 constructs altchars before acquiring the input')
+def test_legacy_encode_snapshots_input_before_altchars_callbacks() -> None:
+    def run(function: Callable[..., bytes]) -> tuple[bytes, bytes]:
+        source = bytearray(b'abc')
+
+        class Altchars(bytes):
+            def __len__(self) -> int:
+                source[:] = b'def'
+                return 2
+
+        return function(source, Altchars(b'-_')), bytes(source)
+
+    assert run(base64.b64encode) == run(stdlib_base64.b64encode)
+
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 def test_python_315_encode_argument_conversion_order_matches_cpython() -> None:
@@ -249,6 +378,11 @@ def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[
         (b'AA=', None, {'ignorechars': b'!'}),
         (b'AB==', None, {'ignorechars': b'!', 'canonical': True}),
         (b'AA==', None, {'padded': False, 'ignorechars': b'!'}),
+        (b'=', None, {'ignorechars': b'='}),
+        (b'AA===', None, {'ignorechars': b'='}),
+        (b'AAAA=', None, {'ignorechars': b'='}),
+        (b'=AA==', None, {'ignorechars': b'='}),
+        (b'A=A=', None, {'ignorechars': b'='}),
         (b'A', None, {'validate': False, 'ignorechars': b'!$%&'}),
         (b'AA', None, {'validate': False, 'ignorechars': b'!$%&'}),
         (b'AB==', None, {'validate': False, 'ignorechars': b'!$%&', 'canonical': True}),

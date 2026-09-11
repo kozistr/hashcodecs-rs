@@ -83,6 +83,7 @@ fn is_ignored_value(value: u8) -> bool {
     value == IGNORED_CONFIGURED_VALUE
 }
 
+#[derive(Clone)]
 pub(super) struct ConfiguredDecoder {
     pub(super) table: [u8; 256],
     preserves_alphanumeric: bool,
@@ -99,18 +100,26 @@ impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
         let kernels = decode_byte_kernels();
         let altchars = policy.altchars;
-        let preserves_alphanumeric =
-            altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()));
         let ignored = policy.ignored.unwrap_or_default();
 
-        let mut table = lenient_decode_table(None);
+        let mut table = if policy.alphabet.is_some() {
+            [INVALID_CONFIGURED_VALUE; 256]
+        } else {
+            lenient_decode_table(None)
+        };
+        if let Some(alphabet) = policy.alphabet {
+            for (value, byte) in alphabet.into_iter().enumerate() {
+                table[usize::from(byte)] = value as u8;
+            }
+        }
         for byte in ignored.iter() {
             if table[usize::from(byte)] >= 64 {
                 table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
             }
         }
-        let custom_alphabet = altchars.is_some() && policy.ignorechars_specified;
-        if custom_alphabet {
+        let custom_alphabet =
+            (altchars.is_some() || policy.alphabet.is_some()) && policy.ignorechars_specified;
+        if custom_alphabet && policy.alphabet.is_none() {
             for byte in b"+/" {
                 table[usize::from(*byte)] = if ignored.contains(*byte) {
                     IGNORED_CONFIGURED_VALUE
@@ -120,7 +129,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        if let Some([plus, slash]) = altchars {
+        if policy.alphabet.is_none()
+            && let Some([plus, slash]) = altchars
+        {
             if !custom_alphabet || plus != b'=' {
                 table[usize::from(plus)] = 62;
             }
@@ -129,7 +140,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        let strict_specials = if policy.ignored.is_some() {
+        let strict_specials = if policy.alphabet.is_some() {
+            StrictSpecials::Many
+        } else if policy.ignored.is_some() {
             StrictSpecials::new(&table)
         } else {
             StrictSpecials::None
@@ -141,7 +154,16 @@ impl ConfiguredDecoder {
             StrictSpecials::None
         };
 
-        let translation = Translation::new(&table, altchars, kernels.translate);
+        let translation = if policy.alphabet.is_none() {
+            Translation::new(&table, altchars, kernels.translate)
+        } else {
+            None
+        };
+        let preserves_alphanumeric = if policy.alphabet.is_none() {
+            altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()))
+        } else {
+            preserves_alphanumeric(&table)
+        };
 
         Self {
             table,
@@ -157,7 +179,6 @@ impl ConfiguredDecoder {
     }
 }
 
-#[cfg(test)]
 fn preserves_alphanumeric(table: &[u8; 256]) -> bool {
     STANDARD_ALPHABET[..62]
         .iter()
@@ -540,6 +561,14 @@ impl ConfiguredDecoder {
         sink: S,
         continue_after_padding: bool,
     ) -> Option<usize> {
+        if CHECKED
+            && self.validation == Validation::Strict
+            && self.padding.is_padded()
+            && self.table[usize::from(b'=')] == IGNORED_CONFIGURED_VALUE
+        {
+            return self.scan_strict_ignored_padding(input, sink);
+        }
+
         if self.validation == Validation::Strict
             && !matches!(self.strict_specials, StrictSpecials::Many)
             && !matches!(self.strict_forbidden, StrictSpecials::Many)
@@ -751,6 +780,35 @@ impl ConfiguredDecoder {
         }
 
         self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn scan_strict_ignored_padding<S: ScanSink>(&self, input: &[u8], sink: S) -> Option<usize> {
+        let mut symbols = 0;
+        let mut padding = 0;
+        for &byte in input {
+            if self.table[usize::from(byte)] < 64 {
+                symbols += 1;
+                padding = 0;
+            } else if byte == b'=' {
+                padding += 1;
+            }
+        }
+
+        let expected_padding = match symbols & 3 {
+            0 => 0,
+            2 => 2,
+            3 => 1,
+            _ => return None,
+        };
+        if padding < expected_padding {
+            return None;
+        }
+
+        let mut decoder = self.clone();
+        decoder.padding = Padding::Unpadded;
+        decoder.scan::<S, true>(input, sink, false)
     }
 
     fn finish_strict<S: ScanSink, const CHECKED: bool>(

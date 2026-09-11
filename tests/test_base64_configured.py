@@ -498,7 +498,19 @@ def test_configured_decode_native_rejects_invalid_staging(encoded: bytes) -> Non
 @pytest.mark.parametrize('ignorechars', [b'=', b'=!', b'=!@', b'=!@#'])
 @pytest.mark.parametrize(
     ('encoded', 'padded', 'expected'),
-    [(b'AA=', False, b'\x00'), (b'A=AAA', False, bytes(3)), (b'A=AAA', True, bytes(3))],
+    [
+        (b'=', True, b''),
+        (b'==', True, b''),
+        (b'AA=', False, b'\x00'),
+        (b'AA==', True, b'\x00'),
+        (b'AA===', True, b'\x00'),
+        (b'AAA=', True, b'\x00\x00'),
+        (b'AAA==', True, b'\x00\x00'),
+        (b'AAAA=', True, bytes(3)),
+        (b'=AA==', True, b'\x00'),
+        (b'A=AAA', False, bytes(3)),
+        (b'A=AAA', True, bytes(3)),
+    ],
 )
 @pytest.mark.parametrize('validate', [None, True])
 def test_strict_explicitly_ignored_equals(

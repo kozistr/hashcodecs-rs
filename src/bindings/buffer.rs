@@ -114,10 +114,29 @@ pub(super) enum BytesLike<'a, 'py> {
         len: usize,
     },
     OwnedByteArray(Bound<'py, PyByteArray>),
+    #[cfg_attr(not(Py_GIL_DISABLED), allow(dead_code))]
+    GuardedBytes {
+        bytes: Bound<'py, PyBytes>,
+        buffer: BorrowedBuffer<'py>,
+    },
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
     Buffer(BorrowedBuffer<'py>),
     Text(&'a str),
     OwnedVec(Vec<u8>),
+}
+
+pub(super) enum DecodeDataObject<'a, 'py> {
+    Borrowed(&'a Bound<'py, PyAny>),
+    Owned(Bound<'py, PyAny>),
+}
+
+impl<'py> DecodeDataObject<'_, 'py> {
+    pub(super) fn as_bound(&self) -> &Bound<'py, PyAny> {
+        match self {
+            Self::Borrowed(value) => value,
+            Self::Owned(value) => value,
+        }
+    }
 }
 
 impl<'py> BytesLike<'_, 'py> {
@@ -132,6 +151,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
+            Self::GuardedBytes { bytes, .. } => unsafe { bytes_size(bytes.as_ptr()) },
             Self::Buffer(buffer) => buffer.len(),
             Self::Text(text) => text.len(),
             Self::OwnedVec(bytes) => bytes.len(),
@@ -150,6 +170,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
             Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
             Self::OwnedBytesSlice { .. } => Ok(None),
+            Self::GuardedBytes { bytes, .. } => Ok(Some(bytes.clone())),
             Self::Buffer(buffer)
                 if !buffer.memoryview_source.is_null()
                     && buffer.view.obj == buffer.memoryview_source =>
@@ -191,13 +212,18 @@ impl<'py> BytesLike<'_, 'py> {
     }
 
     pub(super) fn has_borrowed_buffer(&self) -> bool {
-        matches!(self, Self::Buffer(_))
+        matches!(self, Self::Buffer(_) | Self::GuardedBytes { .. })
     }
 
     pub(super) fn buffer_release_may_reenter(&self) -> bool {
         matches!(
             self,
             Self::Buffer(buffer)
+                if buffer.memoryview_source.is_null()
+                    || buffer.view.obj != buffer.memoryview_source
+        ) || matches!(
+            self,
+            Self::GuardedBytes { buffer, .. }
                 if buffer.memoryview_source.is_null()
                     || buffer.view.obj != buffer.memoryview_source
         )
@@ -229,6 +255,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::Bytes(_)
             | Self::OwnedBytes(_)
             | Self::OwnedBytesSlice { .. }
+            | Self::GuardedBytes { .. }
             | Self::Text(_)
             | Self::OwnedVec(_) => false,
         }
@@ -277,6 +304,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
+            Self::GuardedBytes { bytes, .. } => callback(bytes.as_bytes()),
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
             Self::OwnedVec(bytes) => callback(bytes),
@@ -336,6 +364,7 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedBytesSlice { owner, offset, len } => {
                 &owner.as_bytes()[*offset..*offset + *len]
             }
+            Self::GuardedBytes { bytes, .. } => bytes.as_bytes(),
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
             Self::OwnedVec(bytes) => bytes,
@@ -391,6 +420,48 @@ pub(super) fn contiguous_bytes_like<'a, 'py>(
     buffer_bytes_like(value, argument, true)
 }
 
+/// Acquire the contiguous buffer that a CPython C API would hold while it
+/// converts later arguments. Immutable exact bytes need no export guard.
+pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
+    value: &'a Bound<'py, PyAny>,
+    argument: &str,
+) -> PyResult<BytesLike<'a, 'py>> {
+    if PyBytes::is_exact_type_of(value) {
+        let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+        return Ok(BytesLike::Bytes(bytes));
+    }
+
+    if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
+        return Err(type_error(argument));
+    }
+
+    with_critical_section(value, || {
+        let memoryview_source = if PyMemoryView::is_exact_type_of(value) {
+            value.as_ptr()
+        } else {
+            std::ptr::null_mut()
+        };
+        let buffer = acquire_buffer(value, memoryview_source)?;
+        let c_contiguous = unsafe {
+            ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
+        };
+        if !c_contiguous {
+            return Err(PyBufferError::new_err(
+                "memoryview: underlying buffer is not C-contiguous",
+            ));
+        }
+
+        #[cfg(not(Py_GIL_DISABLED))]
+        return Ok(BytesLike::Buffer(buffer));
+
+        #[cfg(Py_GIL_DISABLED)]
+        {
+            let bytes = copy_buffer(value.py(), &buffer)?;
+            Ok(BytesLike::GuardedBytes { bytes, buffer })
+        }
+    })
+}
+
 pub(super) fn contiguous_bytes_like_owned<'py>(
     value: &Bound<'py, PyAny>,
     argument: &str,
@@ -431,6 +502,35 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
     }
 
     bytes_like(value, argument)
+}
+
+/// Match `base64._bytes_from_decode_data` while retaining bytes and bytearray
+/// subclasses for their Python method dispatch.
+pub(super) fn decode_data_object<'a, 'py>(
+    py: Python<'py>,
+    value: &'a Bound<'py, PyAny>,
+    argument: &str,
+) -> PyResult<DecodeDataObject<'a, 'py>> {
+    if PyBytes::is_exact_type_of(value) || PyByteArray::is_exact_type_of(value) {
+        return Ok(DecodeDataObject::Borrowed(value));
+    }
+
+    if value.is_instance_of::<PyString>() {
+        return encode_ascii(value).map(DecodeDataObject::Owned);
+    }
+
+    if value.is_instance_of::<PyBytes>() || value.is_instance_of::<PyByteArray>() {
+        return Ok(DecodeDataObject::Borrowed(value));
+    }
+
+    let input = bytes_like(value, argument)?;
+    if let Some(bytes) = input.python_bytes(py)? {
+        drop(input);
+        return Ok(DecodeDataObject::Owned(bytes.into_any()));
+    }
+    let bytes = unsafe { input.with_bytes(|input| PyBytes::new(py, input).into_any()) };
+    drop(input);
+    Ok(DecodeDataObject::Owned(bytes))
 }
 
 pub(super) fn ascii_or_bytes_owned<'py>(

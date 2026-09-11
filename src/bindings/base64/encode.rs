@@ -11,7 +11,7 @@ use crate::base64::{
     encode_to_ptr_with_custom_alphabet, encode_wrapped_to_ptr_cached, encode_wrapped_to_ptr_custom,
     encoded_len,
 };
-use crate::bindings::buffer::{BytesLike, contiguous_bytes_like};
+use crate::bindings::buffer::{BytesLike, contiguous_bytes_like, contiguous_bytes_like_exported};
 use crate::bindings::compatibility::{parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 use crate::bindings::schema::Argument;
@@ -460,18 +460,22 @@ pub(super) fn standard_b64encode_into(
 pub(super) fn urlsafe_b64encode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
-    padded: bool,
+    padded: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    encode_parsed(py, s, Some(*b"-_"), padded, None)
+    let input = contiguous_bytes_like_exported(s, "s")?;
+    let padded = padded.truthy(py)?;
+    encode(py, &input, Some(*b"-_"), padded, None)
 }
 
 /// Encode with the URL-safe Base64 alphabet into a reusable output.
 pub(super) fn urlsafe_b64encode_into(
+    py: Python<'_>,
     s: &Bound<'_, PyAny>,
     output: &Bound<'_, PyByteArray>,
-    padded: bool,
+    padded: Argument,
 ) -> PyResult<usize> {
-    let input = contiguous_bytes_like(s, "s")?;
+    let input = contiguous_bytes_like_exported(s, "s")?;
+    let padded = padded.truthy(py)?;
     encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
 }
 
@@ -491,7 +495,16 @@ pub(super) fn b64encode<'py>(
         None
     };
 
-    let input = contiguous_bytes_like(s, "s")?;
+    let input = contiguous_bytes_like_exported(s, "s")?;
+    let input = if !python_315 && input.has_borrowed_buffer() {
+        BytesLike::OwnedVec(
+            input
+                .snapshot_if(true)?
+                .expect("requested input snapshot is present"),
+        )
+    } else {
+        input
+    };
     let legacy_altchars = if python_315 {
         None
     } else {

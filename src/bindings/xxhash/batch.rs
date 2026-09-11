@@ -114,7 +114,10 @@ fn direct_output_safe(
     output: &Bound<'_, PyByteArray>,
     detach: bool,
 ) -> bool {
-    !detach && inputs.iter().all(|input| !input.overlaps(output))
+    !detach
+        && inputs
+            .iter()
+            .all(|input| !input.overlaps(output) && !input.buffer_release_may_reenter())
 }
 
 fn borrow_batch<'a>(inputs: &'a [BytesLike<'_, '_>]) -> PyResult<Vec<&'a [u8]>> {
@@ -415,6 +418,8 @@ fn packed_batch_into<D: PackedDigest>(
     } else {
         D::collect(&inputs, seed)?
     };
+    drop(inputs);
+    drop(parsed);
     D::write_results(output, &hashes)
 }
 

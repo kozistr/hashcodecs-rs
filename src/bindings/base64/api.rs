@@ -63,9 +63,7 @@ callback! {
 
 callback! {
     urlsafe_b64encode, |py; s, padded| {
-        let result = padded
-            .truthy(py)
-            .and_then(|padded| encode::urlsafe_b64encode(py, s.raw(py), padded));
+        let result = encode::urlsafe_b64encode(py, s.raw(py), padded);
         return_bound(py, result)
     }
 }
@@ -74,7 +72,7 @@ callback! {
     urlsafe_b64encode_into, |py; s, output, padded| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            encode::urlsafe_b64encode_into(s.raw(py), output, padded.truthy(py)?)
+            encode::urlsafe_b64encode_into(py, s.raw(py), output, padded)
         })();
         return_usize(py, result)
     }
@@ -169,17 +167,15 @@ callback! {
 
 callback! {
     b64decode, |py; s, altchars, validate, padded, ignorechars, canonical| {
-        let result = (|| {
-            decode::b64decode(
-                py,
-                s.raw(py),
-                altchars.optional(py),
-                validate.optional_truthy(py)?,
-                padded.truthy(py)?,
-                ignorechars.provided(py),
-                canonical.truthy(py)?,
-            )
-        })();
+        let result = decode::b64decode(
+            py,
+            s.raw(py),
+            altchars.optional(py),
+            validate,
+            padded,
+            ignorechars.provided(py),
+            canonical,
+        );
         return_bound(py, result)
     }
 }
@@ -278,10 +274,10 @@ callback! {
                 s.raw(py),
                 output,
                 altchars.optional(py),
-                validate.optional_truthy(py)?,
-                padded.truthy(py)?,
+                validate,
+                padded,
                 ignorechars.provided(py),
-                canonical.truthy(py)?,
+                canonical,
             )
         })();
         return_usize(py, result)
@@ -290,9 +286,7 @@ callback! {
 
 callback! {
     urlsafe_b64decode, |py; s, padded| {
-        let result = padded
-            .truthy(py)
-            .and_then(|padded| decode::urlsafe_b64decode(py, s.raw(py), padded));
+        let result = decode::urlsafe_b64decode(py, s.raw(py), padded);
         return_bound(py, result)
     }
 }
@@ -301,7 +295,7 @@ callback! {
     urlsafe_b64decode_into, |py; s, output, padded| {
         let result = (|| {
             let output = output.raw(py).cast::<PyByteArray>()?;
-            decode::urlsafe_b64decode_into(py, s.raw(py), output, padded.truthy(py)?)
+            decode::urlsafe_b64decode_into(py, s.raw(py), output, padded)
         })();
         return_usize(py, result)
     }

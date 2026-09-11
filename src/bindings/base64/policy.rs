@@ -83,6 +83,7 @@ impl DecodeAttempt {
 #[derive(Clone, Copy)]
 pub(super) struct DecodePolicy<'a, 'py> {
     pub(super) altchars: Option<[u8; 2]>,
+    pub(super) alphabet: Option<[u8; 64]>,
     validate: Option<bool>,
     pub(super) padding: Padding,
     ignorechars: Option<&'a Bound<'py, PyAny>>,
@@ -99,6 +100,7 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
     ) -> Self {
         Self {
             altchars,
+            alphabet: None,
             validate,
             padding: Padding::new(padded),
             ignorechars,
@@ -106,12 +108,13 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
         }
     }
 
-    pub(super) fn standard() -> Self {
-        Self::new(None, Some(false), true, None, false)
+    pub(super) fn with_alphabet(mut self, alphabet: Option<[u8; 64]>) -> Self {
+        self.alphabet = alphabet;
+        self
     }
 
-    pub(super) fn urlsafe(padded: bool) -> Self {
-        Self::new(Some(*b"-_"), Some(false), padded, None, false)
+    pub(super) fn standard() -> Self {
+        Self::new(None, Some(false), true, None, false)
     }
 
     fn validation(self) -> Validation {
@@ -171,6 +174,7 @@ impl IgnoredBytes {
 
 pub(super) struct PreparedPolicy {
     pub(super) altchars: Option<[u8; 2]>,
+    pub(super) alphabet: Option<[u8; 64]>,
     pub(super) validation: Validation,
     pub(super) padding: Padding,
     pub(super) ignorechars_specified: bool,
@@ -203,6 +207,7 @@ impl PreparedPolicy {
         Ok((
             Self {
                 altchars: policy.altchars,
+                alphabet: policy.alphabet,
                 validation: policy.validation(),
                 padding: policy.padding,
                 ignorechars_specified,
@@ -220,6 +225,7 @@ impl PreparedPolicy {
     pub(super) fn strict_custom(&self) -> Self {
         Self {
             altchars: self.altchars,
+            alphabet: self.alphabet,
             validation: Validation::Strict,
             padding: self.padding,
             ignorechars_specified: false,
@@ -309,6 +315,7 @@ fn select_route(
     semantics: PythonSemantics,
 ) -> DecodeRoute {
     let standard_strict = policy.altchars.is_none()
+        && policy.alphabet.is_none()
         && policy.padding.is_padded()
         && (!policy.ignorechars_specified || empty_exact_ignorechars)
         && (policy.canonical || empty_exact_ignorechars);
@@ -347,6 +354,7 @@ mod tests {
     ) -> PreparedPolicy {
         PreparedPolicy {
             altchars,
+            alphabet: None,
             validation,
             padding,
             ignorechars_specified,

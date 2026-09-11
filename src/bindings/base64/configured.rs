@@ -99,18 +99,26 @@ impl ConfiguredDecoder {
     pub(super) fn new(policy: &PreparedPolicy) -> Self {
         let kernels = decode_byte_kernels();
         let altchars = policy.altchars;
-        let preserves_alphanumeric =
-            altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()));
         let ignored = policy.ignored.unwrap_or_default();
 
-        let mut table = lenient_decode_table(None);
+        let mut table = if policy.alphabet.is_some() {
+            [INVALID_CONFIGURED_VALUE; 256]
+        } else {
+            lenient_decode_table(None)
+        };
+        if let Some(alphabet) = policy.alphabet {
+            for (value, byte) in alphabet.into_iter().enumerate() {
+                table[usize::from(byte)] = value as u8;
+            }
+        }
         for byte in ignored.iter() {
             if table[usize::from(byte)] >= 64 {
                 table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
             }
         }
-        let custom_alphabet = altchars.is_some() && policy.ignorechars_specified;
-        if custom_alphabet {
+        let custom_alphabet =
+            (altchars.is_some() || policy.alphabet.is_some()) && policy.ignorechars_specified;
+        if custom_alphabet && policy.alphabet.is_none() {
             for byte in b"+/" {
                 table[usize::from(*byte)] = if ignored.contains(*byte) {
                     IGNORED_CONFIGURED_VALUE
@@ -120,7 +128,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        if let Some([plus, slash]) = altchars {
+        if policy.alphabet.is_none()
+            && let Some([plus, slash]) = altchars
+        {
             if !custom_alphabet || plus != b'=' {
                 table[usize::from(plus)] = 62;
             }
@@ -129,7 +139,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        let strict_specials = if policy.ignored.is_some() {
+        let strict_specials = if policy.alphabet.is_some() {
+            StrictSpecials::Many
+        } else if policy.ignored.is_some() {
             StrictSpecials::new(&table)
         } else {
             StrictSpecials::None
@@ -141,7 +153,12 @@ impl ConfiguredDecoder {
             StrictSpecials::None
         };
 
-        let translation = Translation::new(&table, altchars, kernels.translate);
+        let translation = if policy.alphabet.is_none() {
+            Translation::new(&table, altchars, kernels.translate)
+        } else {
+            None
+        };
+        let preserves_alphanumeric = preserves_alphanumeric(&table);
 
         Self {
             table,
@@ -157,7 +174,6 @@ impl ConfiguredDecoder {
     }
 }
 
-#[cfg(test)]
 fn preserves_alphanumeric(table: &[u8; 256]) -> bool {
     STANDARD_ALPHABET[..62]
         .iter()
@@ -572,6 +588,7 @@ impl ConfiguredDecoder {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
                     if CHECKED {
                         symbols += run;
+                        padding = 0;
                         last_value = self.table[usize::from(input[source + run - 1])];
                     }
                     source += run;
@@ -591,16 +608,23 @@ impl ConfiguredDecoder {
                 sink.push_value::<CHECKED>(value)?;
                 if CHECKED {
                     symbols += 1;
+                    padding = 0;
                     last_value = value;
                 }
-            } else if byte == b'=' && !is_ignored_value(value) {
-                if CHECKED && !self.padding.is_padded() {
-                    return None;
-                }
+            } else if byte == b'=' {
+                if is_ignored_value(value) {
+                    if CHECKED {
+                        padding += 1;
+                    }
+                } else {
+                    if CHECKED && !self.padding.is_padded() {
+                        return None;
+                    }
 
-                saw_padding = true;
-                if CHECKED {
-                    padding += 1;
+                    saw_padding = true;
+                    if CHECKED {
+                        padding += 1;
+                    }
                 }
             } else if CHECKED && !is_ignored_value(value) {
                 return None;
@@ -710,6 +734,7 @@ impl ConfiguredDecoder {
 
         let mut source = 0;
         let mut symbols = 0;
+        let mut padding = 0;
         let mut last_value = 0;
 
         while source < data_end {
@@ -721,6 +746,7 @@ impl ConfiguredDecoder {
             if source != run_end {
                 sink.push_symbols::<CHECKED>(&input[source..run_end], true)?;
                 symbols += run_end - source;
+                padding = 0;
                 last_value = self.table[usize::from(input[run_end - 1])];
             }
 
@@ -731,12 +757,14 @@ impl ConfiguredDecoder {
                     is_ignored_value(self.table[usize::from(byte)]),
                     "strict special-byte search only returns discarded bytes"
                 );
+                if byte == b'=' {
+                    padding += 1;
+                }
 
                 source += 1;
             }
         }
 
-        let mut padding = 0;
         if CHECKED {
             for &byte in &input[data_end..] {
                 if byte == b'=' {

@@ -356,6 +356,37 @@ def test_xxh3_batch_into_snapshots_overlapping_memoryviews(
     assert output[len(expected) :] == original[len(expected) :]
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
+@pytest.mark.parametrize(
+    ('one_shot', 'batch_into', 'digest_size'),
+    [
+        (hashcodecs.xxh3_64, hashcodecs.xxh3_64_batch_into, 8),
+        (hashcodecs.xxh3_128, hashcodecs.xxh3_128_batch_into, 16),
+    ],
+)
+def test_xxh3_batch_into_releases_custom_buffers_before_writing(
+    one_shot: Callable[..., int],
+    batch_into: Callable[..., int],
+    digest_size: int,
+) -> None:
+    output = bytearray(b'.' * digest_size)
+    events: list[str] = []
+
+    class ReleaseBuffer:
+        def __buffer__(self, flags: int) -> memoryview:
+            events.append('acquire')
+            return memoryview(b'payload')
+
+        def __release_buffer__(self, view: memoryview) -> None:
+            events.append('release')
+            output[:] = b'X' * digest_size
+
+    expected = one_shot(b'payload').to_bytes(digest_size, 'little')
+    assert batch_into([ReleaseBuffer()], output) == digest_size
+    assert events == ['acquire', 'release']
+    assert output == expected
+
+
 def test_xxh3_batch_into_exports() -> None:
     assert hashcodecs.xxh3_64_batch_into is xxhash.xxh3_64_batch_into
     assert hashcodecs.xxh3_128_batch_into is xxhash.xxh3_128_batch_into

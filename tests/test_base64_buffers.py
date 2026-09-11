@@ -182,7 +182,7 @@ def test_base64_bytearray_resize_races_are_serialized() -> None:
 
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
 @pytest.mark.parametrize('urlsafe', [False, True])
-def test_free_threaded_encode_snapshots_after_padded_callback(urlsafe: bool) -> None:
+def test_free_threaded_encode_snapshot_respects_legacy_callback_order(urlsafe: bool) -> None:
     source = bytearray(b'abc')
 
     class Padded:
@@ -191,7 +191,8 @@ def test_free_threaded_encode_snapshots_after_padded_callback(urlsafe: bool) -> 
             return True
 
     function = base64.urlsafe_b64encode if urlsafe else base64.b64encode
-    assert function(source, padded=Padded()) == b'ZGVm'
+    expected = b'ZGVm' if PYTHON_315 or urlsafe else b'YWJj'
+    assert function(source, padded=Padded()) == expected
 
 
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')

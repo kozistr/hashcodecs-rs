@@ -11,7 +11,7 @@ use pyo3::types::{PyAny, PyByteArray, PyBytes, PyInt, PyList, PyMemoryView, PySt
 
 #[cfg(not(Py_GIL_DISABLED))]
 use super::encode::encode_exact;
-use super::encode::{encode_parsed, encode_parsed_into};
+use super::encode::{encode_into, encode_parsed};
 use super::policy::{DecodePolicy, PreparedDecoder};
 use crate::bindings::buffer::{
     BufferRange, BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
@@ -232,10 +232,7 @@ fn prepare_batch_inputs<'py>(
     stage_snapshots(&mut prepared, |input, policy| {
         // ReleaseBeforeWrite also covers a temporary exact memoryview returned by
         // a string subclass. The items list does not retain that memoryview.
-        let needed = input.buffer_release_may_reenter()
-            || (policy == SnapshotPolicy::ReleaseBeforeWrite && input.has_borrowed_buffer());
-
-        input.snapshot_if(needed)
+        input.snapshot_before_output_write(policy == SnapshotPolicy::ReleaseBeforeWrite)
     })?;
 
     // Capture destination ranges after every reentrant release, then stage all
@@ -342,14 +339,14 @@ pub(super) fn b64encode_batch_into_parsed<'py>(
         {
             Some(Ok(input)) => Ok(PyInt::new(
                 py,
-                encode_parsed_into(&input, output, altchars, true, None)?,
+                encode_into(&input, output, altchars, true, None)?,
             )),
             Some(Err(error)) => Err(error),
             None => {
                 let input = contiguous_bytes_like(&items[index], "s")?;
                 Ok(PyInt::new(
                     py,
-                    encode_parsed_into(&input, output, altchars, true, None)?,
+                    encode_into(&input, output, altchars, true, None)?,
                 ))
             }
         }

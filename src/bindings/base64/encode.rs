@@ -448,16 +448,6 @@ pub(super) fn encode_parsed<'py>(
     encode(py, &input, altchars, padded, wrapcol)
 }
 
-pub(super) fn encode_parsed_into(
-    input: &BytesLike<'_, '_>,
-    output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    padded: bool,
-    wrapcol: Option<usize>,
-) -> PyResult<usize> {
-    encode_into(input, output, altchars, padded, wrapcol)
-}
-
 /// Encode with the standard Base64 alphabet.
 pub(super) fn standard_b64encode<'py>(
     py: Python<'py>,
@@ -473,7 +463,7 @@ pub(super) fn standard_b64encode_into(
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like(s, "s")?;
     let input = input.into_stable_after_callbacks(true)?;
-    encode_parsed_into(&input, output, None, true, None)
+    encode_into(&input, output, None, true, None)
 }
 
 /// Encode with the URL-safe Base64 alphabet.
@@ -504,7 +494,7 @@ pub(super) fn urlsafe_b64encode_into(
     let input = contiguous_bytes_like_exported(s, "s")?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(true)?;
-    encode_parsed_into(&input, output, Some(*b"-_"), padded, None)
+    encode_into(&input, output, Some(*b"-_"), padded, None)
 }
 
 pub(super) fn b64encode<'py>(
@@ -537,15 +527,7 @@ pub(super) fn b64encode<'py>(
     let input = binascii_contiguous_bytes_like_exported(s)?;
     let legacy_callbacks_follow_input = !python_315
         && (altchars.is_some() || !padded.as_ptr().is_null() || !wrapcol.as_ptr().is_null());
-    let input = if legacy_callbacks_follow_input && input.has_borrowed_buffer() {
-        let snapshot = input
-            .snapshot_if(true)?
-            .expect("requested input snapshot is present");
-        drop(input);
-        BytesLike::OwnedVec(snapshot)
-    } else {
-        input
-    };
+    let input = input.into_stable_before_callbacks(legacy_callbacks_follow_input)?;
     let legacy_altchars = if python_315 {
         None
     } else {
@@ -588,7 +570,7 @@ pub(super) fn b64encode_into(
     let input = contiguous_bytes_like(s, "s")?;
     let altchars = parse_altchars(py, altchars, false)?;
     let input = input.into_stable_after_callbacks(true)?;
-    encode_parsed_into(
+    encode_into(
         &input,
         output,
         altchars,

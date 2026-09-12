@@ -222,6 +222,43 @@ def test_base64_batch_into_releases_custom_buffers_before_writing() -> None:
     assert output == b'YWJj'
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python-level buffer protocol support')
+@pytest.mark.parametrize('decode', [False, True])
+def test_base64_batch_into_preserves_acquired_inputs_across_reentrant_release(decode: bool) -> None:
+    values = [b'YWJj', b'ZGVm'] if decode else [b'abc', b'def']
+    expected = [b'abc', b'def'] if decode else [b'YWJj', b'ZGVm']
+    sources = [bytearray(value) for value in values]
+    outputs = [bytearray(len(value) + 1) for value in expected]
+    events: list[tuple[str, int]] = []
+
+    class Buffer:
+        def __init__(self, index: int) -> None:
+            self.index = index
+
+        def __buffer__(self, flags: int) -> memoryview:
+            events.append(('acquire', self.index))
+            return memoryview(sources[self.index])
+
+        def __release_buffer__(self, view: memoryview) -> None:
+            events.append(('release', self.index))
+            if ('acquire', 1 - self.index) in events:
+                other = sources[1 - self.index]
+                other[:] = b'x' * len(other)
+            outputs[self.index][:] = b'.' * len(outputs[self.index])
+
+    operation = base64.b64decode_batch_into if decode else base64.b64encode_batch_into
+    assert operation([Buffer(0), Buffer(1)], outputs) == [len(value) for value in expected]
+    if FREE_THREADED:
+        # Free-threaded acquisition copies each custom export and releases it immediately.
+        assert events == [('acquire', 0), ('release', 0), ('acquire', 1), ('release', 1)]
+        assert sources == [b'x' * len(values[0]), values[1]]
+    else:
+        # Retained exports must all be snapshotted before either release hook runs.
+        assert events == [('acquire', 0), ('acquire', 1), ('release', 0), ('release', 1)]
+        assert sources == [b'x' * len(value) for value in values]
+    assert outputs == [value + b'.' for value in expected]
+
+
 def test_base64_batch_into_snapshots_overlapping_memoryviews() -> None:
     empty_input = memoryview(bytearray(b'x'))[:0]
     empty_output = bytearray(b'!')

@@ -9,9 +9,10 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
-The standard and URL-safe Python decode panels report CPython 3.12.10 measurements from 2026-09-09; the lenient
-decode chart retains its 2026-09-05 measurements. Each value is the median of 15 samples lasting at least 0.2
-seconds each, with one logical CPU pinned.
+The standard and URL-safe Python decode panels report CPython 3.12.10 measurements from 2026-09-09. In the lenient
+decode chart, the custom `@#` panels report measurements from 2026-09-12; the standard MIME and noisy panels retain
+their 2026-09-05 measurements. Each value is the median of 15 samples lasting at least 0.2 seconds each, with one
+logical CPU pinned.
 
 ## Timing Controls
 
@@ -88,6 +89,11 @@ Pass one reusable `bytearray` to each `*_into` call.
 
 Run `python benchmarks/python_base64.py --lenient`. The MIME cases insert CRLF after each 76-character line. The
 noisy cases insert `!` at the same boundaries. Both cases measure returned bytes and reusable output buffers.
+
+Run `uv run --no-project --python 3.12 python benchmarks/python_base64.py --custom-lenient` to measure clean and noisy
+inputs with `@#` altchars. For a 1 MiB decoded payload, the custom clean case reaches 3.44 GiB/s with returned bytes
+and 13.05 GiB/s with a reusable output buffer. The decoder translates complete symbol runs in a 4 KiB staging buffer
+for SIMD decoding and handles padding and ignored characters through the lenient state machine.
 
 [![Lenient Python Base64 throughput](docs/benchmarks/base64-python-lenient.svg)](docs/benchmarks/base64-python-lenient.svg)
 

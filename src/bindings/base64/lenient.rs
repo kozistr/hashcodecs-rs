@@ -3,9 +3,10 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
+use super::configured::Translation;
 use super::policy::Padding;
 use super::scan::{decode_byte_kernels, is_lenient_symbol, lenient_symbol_count};
-use super::staging::BytesWriter;
+use super::staging::{BytesWriter, StagingWriter};
 use crate::base64::{
     Base64Error, DecodeAlphabet, STANDARD_ALPHABET, decode_to_ptr_with_unpadded_layout,
     decode_unpadded_layout, decode_valid_prefix,
@@ -354,10 +355,7 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
             }
         }
 
-        if !prefix_kernel_available
-            && quad_pos == 0
-            && let Some(alphabet) = fast_alphabet
-        {
+        if !prefix_kernel_available && quad_pos == 0 {
             let run = unsafe { symbol_prefix(&input[source..], altchars) };
             let run = run / 4 * 4;
             if run >= 16 {
@@ -367,17 +365,33 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 }
 
                 if WRITE {
-                    let layout = decode_unpadded_layout(&input[source..source + run])
-                        .expect("a quartet-aligned run has a valid layout");
-                    unsafe {
-                        decode_to_ptr_with_unpadded_layout(
-                            &input[source..source + run],
-                            output.add(written),
-                            layout,
-                            alphabet,
-                        )
+                    let symbols = &input[source..source + run];
+                    if let Some(alphabet) = fast_alphabet {
+                        let layout = decode_unpadded_layout(symbols)
+                            .expect("a quartet-aligned run has a valid layout");
+                        unsafe {
+                            decode_to_ptr_with_unpadded_layout(
+                                symbols,
+                                output.add(written),
+                                layout,
+                                alphabet,
+                            )
+                        }
+                        .expect("the SIMD scanner accepted every symbol in the run");
+                    } else {
+                        // Translate only complete symbol quartets. Padding and
+                        // discarded bytes stay with the lenient state machine;
+                        // the table preserves duplicate and '=' alias precedence.
+                        let translation =
+                            Translation::new(table, altchars, decode_byte_kernels().translate);
+                        let mut writer =
+                            StagingWriter::new(unsafe { output.add(written) }, translation);
+                        writer
+                            .push_symbols::<false>(symbols)
+                            .expect("the scanner accepted every symbol before translation");
+                        let staged = writer.finish::<false>().expect("validated symbol quartets");
+                        debug_assert_eq!(staged, decoded);
                     }
-                    .expect("the SIMD scanner accepted every symbol in the run");
                 }
 
                 source += run;
@@ -545,5 +559,64 @@ mod tests {
             lenient_decoded_len(b"AA", None, true, false),
             Err(LenientDecodeError::InvalidInput)
         );
+    }
+
+    #[test]
+    fn custom_runs_preserve_padding_modes_and_output_bounds() {
+        let altchars = Some(*b"@#");
+        let table = lenient_decode_table(altchars);
+        for quartets in [4, 8, 16, 1023, 1024, 1025, 2048] {
+            let mut input = b"@#AA".repeat(quartets);
+            input.extend_from_slice(b"AA==AAAA==");
+            for padded in [false, true] {
+                for continue_after_padding in [false, true] {
+                    let tail = if padded && !continue_after_padding {
+                        1
+                    } else {
+                        4
+                    };
+                    let mut expected = [0xfb, 0xf0, 0].repeat(quartets);
+                    expected.resize(expected.len() + tail, 0);
+                    let required = expected.len();
+                    assert_eq!(
+                        unsafe {
+                            decode_lenient_to_ptr::<false>(
+                                &input,
+                                std::ptr::null_mut(),
+                                required,
+                                &table,
+                                altchars,
+                                padded,
+                                continue_after_padding,
+                            )
+                        },
+                        Ok(required)
+                    );
+                    for provided in [0, required - 1, required, required + 7] {
+                        let mut output = vec![0xa5; provided + 2];
+                        let result = unsafe {
+                            decode_lenient_to_ptr::<true>(
+                                &input,
+                                output.as_mut_ptr().add(1),
+                                provided,
+                                &table,
+                                altchars,
+                                padded,
+                                continue_after_padding,
+                            )
+                        };
+                        assert_eq!(output[0], 0xa5);
+                        assert_eq!(output[provided + 1], 0xa5);
+                        if provided < required {
+                            assert_eq!(result, Err(LenientDecodeError::OutputTooSmall));
+                        } else {
+                            assert_eq!(result, Ok(required));
+                            assert_eq!(&output[1..required + 1], expected);
+                            assert!(output[required + 1..].iter().all(|&byte| byte == 0xa5));
+                        }
+                    }
+                }
+            }
+        }
     }
 }

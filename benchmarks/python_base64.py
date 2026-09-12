@@ -87,6 +87,11 @@ def main() -> None:
         help='time MIME-wrapped and noisy lenient decoding',
     )
     mode.add_argument(
+        '--custom-lenient',
+        action='store_true',
+        help='time clean and noisy lenient decoding with @# altchars',
+    )
+    mode.add_argument(
         '--configured',
         action='store_true',
         help='time Python 3.15 ignorechars, canonical, and custom-alphabet decoding',
@@ -176,25 +181,42 @@ def main() -> None:
                 )
                 continue
 
-            if args.lenient:
+            if args.lenient or args.custom_lenient:
                 mime = b'\r\n'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
                 noisy = b'!'.join(standard[offset : offset + 76] for offset in range(0, len(standard), 76))
-                for label, encoded in (('MIME', mime), ('noisy', noisy)):
+                altchars = b'@#' if args.custom_lenient else None
+                cases = (
+                    (('custom clean', standard), ('custom noisy', noisy))
+                    if args.custom_lenient
+                    else (
+                        ('MIME', mime),
+                        ('noisy', noisy),
+                    )
+                )
+                for label, encoded in cases:
+                    if altchars is not None:
+                        encoded = encoded.translate(bytes.maketrans(b'+/', altchars))
                     decoded_output = bytearray(size)
                     benchmark(
                         f'{label} decode',
                         size,
-                        lambda encoded=encoded: hashcodecs_base64.b64decode(encoded),
+                        lambda encoded=encoded, altchars=altchars: hashcodecs_base64.b64decode(encoded, altchars),
                         (
-                            ('stdlib', lambda encoded=encoded: stdlib_base64.b64decode(encoded)),
-                            ('pybase64', lambda encoded=encoded: pybase64.b64decode(encoded)),
+                            (
+                                'stdlib',
+                                lambda encoded=encoded, altchars=altchars: stdlib_base64.b64decode(encoded, altchars),
+                            ),
+                            (
+                                'pybase64',
+                                lambda encoded=encoded, altchars=altchars: pybase64.b64decode(encoded, altchars),
+                            ),
                         ),
                     )
                     benchmark_into(
                         f'{label} decode into',
                         size,
-                        lambda encoded=encoded, output=decoded_output: hashcodecs_base64.b64decode_into(
-                            encoded, output
+                        lambda encoded=encoded, output=decoded_output, altchars=altchars: (
+                            hashcodecs_base64.b64decode_into(encoded, output, altchars)
                         ),
                         decoded_output,
                         payload,

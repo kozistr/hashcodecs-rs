@@ -260,6 +260,22 @@ CHARTS = (
                 CPython=[0.85, 0.94, 0.83, 0.84],
                 pybase64=[2.55, 3.96, 2.62, 2.74],
             ),
+            panel(
+                'Custom @# clean input',
+                SIZES,
+                returned_bytes=[4.66, 9.29, 3.44, 3.89],
+                reusable_bytearray=[5.42, 10.17, 13.05, 9.37],
+                CPython=[0.56, 0.81, 0.60, 0.61],
+                pybase64=[1.08, 1.38, 1.05, 1.07],
+            ),
+            panel(
+                'Custom @# ignored bytes',
+                SIZES,
+                returned_bytes=[1.76, 2.09, 1.68, 1.76],
+                reusable_bytearray=[1.60, 1.73, 1.65, 1.61],
+                CPython=[0.57, 0.67, 0.52, 0.53],
+                pybase64=[1.04, 1.34, 1.00, 1.04],
+            ),
         ),
     ),
     Chart(

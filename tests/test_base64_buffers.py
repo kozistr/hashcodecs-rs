@@ -4,7 +4,8 @@ import builtins
 import sys
 import threading
 from array import array
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import cast
 
 import pytest
 
@@ -16,6 +17,10 @@ FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+dynamic_b64encode: Callable[..., bytes] = base64.b64encode
+dynamic_b64decode: Callable[..., bytes] = base64.b64decode
+dynamic_b64encode_into: Callable[..., int] = base64.b64encode_into
+dynamic_b64decode_into: Callable[..., int] = base64.b64decode_into
 
 
 def test_native_decode_into_handles_aliases_and_urlsafe_errors() -> None:
@@ -72,7 +77,7 @@ def test_buffer_conversion_uses_the_real_memoryview_type(monkeypatch: pytest.Mon
     assert base64.b64encode(payload) == b'YWJj'
     assert base64.b64decode(encoded, validate=True) == b'abc'
     with pytest.raises(TypeError):
-        base64.b64encode(object())
+        dynamic_b64encode(object())
 
 
 def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
@@ -107,7 +112,7 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
 def _assert_mutable_input_race_is_serialized(
     operation: Callable[[], bytes],
     value: bytearray,
-    states: tuple[bytes, bytes],
+    states: Sequence[bytes],
     expected: set[bytes],
 ) -> None:
     start = threading.Barrier(2)
@@ -190,7 +195,7 @@ def test_free_threaded_encode_snapshot_respects_legacy_callback_order(urlsafe: b
             source[:] = b'def'
             return True
 
-    function = base64.urlsafe_b64encode if urlsafe else base64.b64encode
+    function = cast(Callable[..., bytes], base64.urlsafe_b64encode if urlsafe else base64.b64encode)
     expected = b'ZGVm' if PYTHON_315 or urlsafe else b'YWJj'
     assert function(source, padded=Padded()) == expected
 
@@ -207,10 +212,10 @@ def test_free_threaded_decode_snapshots_ignorechars_after_canonical_callback(reu
 
     output = bytearray(3)
     if reusable:
-        assert base64.b64decode_into(b'Y?WJj', output, ignorechars=ignorechars, canonical=Canonical()) == 3
+        assert dynamic_b64decode_into(b'Y?WJj', output, ignorechars=ignorechars, canonical=Canonical()) == 3
         assert output == b'abc'
     else:
-        assert base64.b64decode(b'Y?WJj', ignorechars=ignorechars, canonical=Canonical()) == b'abc'
+        assert dynamic_b64decode(b'Y?WJj', ignorechars=ignorechars, canonical=Canonical()) == b'abc'
 
 
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
@@ -255,6 +260,8 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         pass
 
     class StringSubclass(str):
+        encode_calls: int
+
         def __new__(cls, value: str):
             instance = super().__new__(cls, value)
             instance.encode_calls = 0
@@ -426,9 +433,9 @@ def test_base64_into_variants_and_errors() -> None:
     with pytest.raises(binascii.Error):
         base64.b64decode_into(b'YWJj!', bytearray(8), validate=True)
     with pytest.raises(TypeError):
-        base64.b64encode_into(b'abc', b'....')  # type: ignore[arg-type]
+        dynamic_b64encode_into(b'abc', b'....')
     with pytest.raises(TypeError):
-        base64.b64decode_into(b'YWJj', memoryview(bytearray(3)))  # type: ignore[arg-type]
+        dynamic_b64decode_into(b'YWJj', memoryview(bytearray(3)))
 
 
 def test_base64_into_handles_aliases_and_every_short_length() -> None:

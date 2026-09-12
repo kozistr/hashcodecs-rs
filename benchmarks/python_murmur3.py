@@ -5,11 +5,18 @@ from __future__ import annotations
 import argparse
 import gc
 from collections.abc import Callable
+from typing import Protocol
 
 import mmh3
 from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
 
 import hashcodecs.murmur3 as hashcodecs_murmur3
+
+
+class _IncrementalHasher(Protocol):
+    def update(self, value: bytes | bytearray, /) -> None: ...
+
+    def digest(self) -> bytes: ...
 
 
 def benchmark(
@@ -39,7 +46,7 @@ def benchmark_ours(
     print(f'{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
 
 
-def incremental(constructor: Callable[[], object], payload: bytes | bytearray) -> bytes:
+def incremental(constructor: Callable[[], _IncrementalHasher], payload: bytes | bytearray) -> bytes:
     hasher = constructor()
     hasher.update(payload)
     return hasher.digest()

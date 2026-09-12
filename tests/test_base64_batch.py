@@ -3,20 +3,26 @@ import binascii
 import inspect
 import sys
 from collections.abc import Callable
+from typing import Any, TypeVar
 
 import pytest
 
 import hashcodecs
 import hashcodecs.base64 as base64
 
+dynamic_b64encode_batch: Callable[..., list[bytes]] = base64.b64encode_batch
+dynamic_b64decode_batch: Callable[..., list[bytes]] = base64.b64decode_batch
+dynamic_b64encode_batch_into: Callable[..., list[int]] = base64.b64encode_batch_into
+
 PYTHON_315 = sys.version_info >= (3, 15)
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+_T = TypeVar('_T')
 
 
-class _BatchList(list[object]):
+class _BatchList(list[_T]):
     pass
 
 
@@ -148,7 +154,7 @@ def test_base64_batch_into_snapshots_cross_pair_aliases() -> None:
     observed: list[bytes] = []
 
     class AliasedString(str):
-        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytearray:
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> Any:
             observed.append(bytes(shared))
             return shared
 
@@ -166,7 +172,7 @@ def test_base64_batch_into_acquires_reentrant_strings_before_snapshotting_aliase
     decoded = bytearray(3)
 
     class RelocatingString(str):
-        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> memoryview:
+        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> Any:
             shared[:] = b'ZGVm' + b'A' * (1 << 20)
             return memoryview(shared)[:4]
 
@@ -307,7 +313,7 @@ def test_base64_batch_into_preflights_destinations_without_mutation() -> None:
     assert untouched == bytearray([0xA5] * 4)
 
     with pytest.raises(TypeError, match=r'outputs\[1\] must be a bytearray'):
-        base64.b64encode_batch_into([b'abc', b'def'], [untouched, b'....'])  # type: ignore[list-item]
+        dynamic_b64encode_batch_into([b'abc', b'def'], [untouched, b'....'])
     assert untouched == bytearray([0xA5] * 4)
 
     with pytest.raises(ValueError, match='distinct bytearrays'):
@@ -316,7 +322,7 @@ def test_base64_batch_into_preflights_destinations_without_mutation() -> None:
 
     for items, outputs in (([b'abc'], (bytearray(4),)), ((b'abc',), [bytearray(4)])):
         with pytest.raises(TypeError):
-            base64.b64encode_batch_into(items, outputs)  # type: ignore[arg-type]
+            dynamic_b64encode_batch_into(items, outputs)
 
 
 def test_base64_batch_into_is_fail_fast_and_non_transactional() -> None:
@@ -333,7 +339,7 @@ def test_base64_batch_into_is_fail_fast_and_non_transactional() -> None:
 
     encoded_outputs = [bytearray([0xA5] * 4), bytearray([0xA5] * 4)]
     with pytest.raises(TypeError, match='bytes-like object'):
-        base64.b64encode_batch_into([b'abc', object()], encoded_outputs)
+        dynamic_b64encode_batch_into([b'abc', object()], encoded_outputs)
     assert encoded_outputs[0] == b'YWJj'
     assert encoded_outputs[1] == bytearray([0xA5] * 4)
 
@@ -381,14 +387,14 @@ def test_base64_batch_lenient_mode_and_noncontiguous_decode() -> None:
 def test_base64_batch_rejects_invalid_inputs() -> None:
     for outer in ((b'abc',), iter([b'abc']), b'abc'):
         with pytest.raises(TypeError):
-            base64.b64encode_batch(outer)  # type: ignore[arg-type]
+            dynamic_b64encode_batch(outer)
         with pytest.raises(TypeError):
-            base64.b64decode_batch(outer)  # type: ignore[arg-type]
+            dynamic_b64decode_batch(outer)
 
     with pytest.raises(TypeError):
-        base64.b64encode_batch([object()])  # type: ignore[list-item]
+        dynamic_b64encode_batch([object()])
     with pytest.raises(TypeError):
-        base64.b64decode_batch([[65, 66]])  # type: ignore[list-item]
+        dynamic_b64decode_batch([[65, 66]])
     with pytest.raises(ValueError, match='only ASCII'):
         base64.b64decode_batch(['\u2603'])
     with pytest.raises(BufferError):

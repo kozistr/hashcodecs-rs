@@ -4,9 +4,10 @@ import base64 as stdlib_base64
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 WarningFilter = Literal['always', 'error']
+ActionKind = Literal['normal', 'invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter']
 
 
 @dataclass(frozen=True)
@@ -120,7 +121,8 @@ def raised(error: BaseException, sentinel: BaseException) -> Raised:
 
 def _mutable_state(name: str, value: object, sentinel: BaseException) -> MutableState:
     try:
-        return MutableState(name, bytes(value), len(value), None)  # type: ignore[arg-type]
+        dynamic_value: Any = value
+        return MutableState(name, bytes(dynamic_value), len(dynamic_value), None)
     except BaseException as error:
         return MutableState(name, None, None, raised(error, sentinel))
 
@@ -146,7 +148,7 @@ def _output_state(
 
 @dataclass(frozen=True)
 class Action:
-    kind: Literal['normal', 'invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter']
+    kind: ActionKind
     value: object | None = None
 
     def run(
@@ -158,7 +160,7 @@ class Action:
         invalid: object,
         target: bytearray | None,
         reentrant: Callable[[], object] | None,
-    ) -> object:
+    ) -> Any:
         events.append(name)
         if self.kind == 'raise':
             raise sentinel
@@ -227,7 +229,7 @@ class BoolHook:
             1,
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
 
 class IndexHook:
@@ -259,10 +261,19 @@ class IndexHook:
             'invalid index',
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
 
 class AltcharsHook(bytes):
+    events: list[str]
+    sentinel: BaseException
+    length_action: Action
+    radd_action: Action
+    repr_action: Action
+    alphabet: object | None
+    target: bytearray | None
+    reentrant: Callable[[], object] | None
+
     def __new__(  # noqa: PYI034
         cls,
         value: bytes,
@@ -296,10 +307,11 @@ class AltcharsHook(bytes):
             'invalid length',
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
     def __radd__(self, other: object) -> object:
-        normal = self.alphabet if self.alphabet is not None else bytes(other) + bytes(self)
+        dynamic_other: Any = other
+        normal = self.alphabet if self.alphabet is not None else bytes(dynamic_other) + bytes(self)
         return self.radd_action.run(
             'altchars.__radd__',
             self.events,
@@ -319,10 +331,17 @@ class AltcharsHook(bytes):
             1,
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
 
 class EncodeHook(str):
+    action: Action
+    events: list[str]
+    sentinel: BaseException
+    encoded: object
+    target: bytearray | None
+    reentrant: Callable[[], object] | None
+
     def __new__(  # noqa: PYI034
         cls,
         value: str,
@@ -352,10 +371,17 @@ class EncodeHook(str):
             'invalid encoding',
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
 
 class TranslateHook(bytes):
+    action: Action
+    events: list[str]
+    sentinel: BaseException
+    translated: object
+    target: bytearray | None
+    reentrant: Callable[[], object] | None
+
     def __new__(  # noqa: PYI034
         cls,
         value: bytes,
@@ -376,7 +402,7 @@ class TranslateHook(bytes):
         instance.reentrant = reentrant
         return instance
 
-    def translate(self, table: bytes) -> bytes:
+    def translate(self, table: Any, delete: Any = b'') -> Any:
         return self.action.run(
             'input.translate',
             self.events,
@@ -385,7 +411,7 @@ class TranslateHook(bytes):
             1,
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
 
 class BufferHook:
@@ -419,7 +445,7 @@ class BufferHook:
             self.owner,
             self.target,
             self.reentrant,
-        )  # type: ignore[return-value]
+        )
 
     def __release_buffer__(self, view: memoryview) -> None:
         self.release_action.run(

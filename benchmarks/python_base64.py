@@ -13,6 +13,9 @@ from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to
 
 import hashcodecs.base64 as hashcodecs_base64
 
+stdlib_b64encode: Callable[..., bytes] = stdlib_base64.b64encode
+stdlib_b64decode: Callable[..., bytes] = stdlib_base64.b64decode
+
 
 def benchmark(
     name: str,
@@ -110,13 +113,13 @@ def main() -> None:
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
 
             if args.wrapped:
-                wrapped = stdlib_base64.b64encode(payload, wrapcol=76)
+                wrapped = stdlib_b64encode(payload, wrapcol=76)
                 encoded_output = bytearray(len(wrapped))
                 benchmark(
                     'wrapped encode',
                     size,
                     lambda payload=payload: hashcodecs_base64.b64encode(payload, wrapcol=76),
-                    (('stdlib', lambda payload=payload: stdlib_base64.b64encode(payload, wrapcol=76)),),
+                    (('stdlib', lambda payload=payload: stdlib_b64encode(payload, wrapcol=76)),),
                 )
                 benchmark_into(
                     'wrapped encode into',
@@ -138,7 +141,7 @@ def main() -> None:
                     'ignorechars decode',
                     size,
                     lambda noisy=noisy: hashcodecs_base64.b64decode(noisy, ignorechars=b'!'),
-                    (('stdlib', lambda noisy=noisy: stdlib_base64.b64decode(noisy, ignorechars=b'!')),),
+                    (('stdlib', lambda noisy=noisy: stdlib_b64decode(noisy, ignorechars=b'!')),),
                 )
                 benchmark(
                     'canonical decode',
@@ -147,7 +150,7 @@ def main() -> None:
                     (
                         (
                             'stdlib',
-                            lambda unpadded=unpadded: stdlib_base64.b64decode(unpadded, padded=False, canonical=True),
+                            lambda unpadded=unpadded: stdlib_b64decode(unpadded, padded=False, canonical=True),
                         ),
                     ),
                 )
@@ -158,7 +161,7 @@ def main() -> None:
                     (
                         (
                             'stdlib',
-                            lambda custom=custom: stdlib_base64.b64decode(custom, b'@#', ignorechars=b'!'),
+                            lambda custom=custom: stdlib_b64decode(custom, b'@#', ignorechars=b'!'),
                         ),
                     ),
                 )

@@ -472,6 +472,7 @@ pub(super) fn standard_b64encode_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like(s, "s")?;
+    let input = input.into_stable_after_callbacks(true)?;
     encode_parsed_into(&input, output, None, true, None)
 }
 
@@ -586,6 +587,7 @@ pub(super) fn b64encode_into(
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like(s, "s")?;
     let altchars = parse_altchars(py, altchars, false)?;
+    let input = input.into_stable_after_callbacks(true)?;
     encode_parsed_into(
         &input,
         output,

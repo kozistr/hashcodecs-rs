@@ -771,6 +771,7 @@ pub(super) fn standard_b64decode_into(
     output: &Bound<'_, PyByteArray>,
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
+    let input = input.into_stable_after_callbacks(true)?;
     PreparedDecoder::new(py, DecodePolicy::standard())?.decode_into(py, &input, output)
 }
 

@@ -32,6 +32,43 @@ GIL-detachment cutoffs. The `--thread-scaling` mode measures aggregate throughpu
 it does not pin the process to one logical CPU. Use `--buffer-inputs` to compare 64-byte and 4 KiB XXH3-64 calls
 across bytes, full and sliced memoryviews, writable and non-contiguous views, and `array('B')`.
 
+## Rust MurmurHash3 x64 Dispatch
+
+Use scalar below 512 bytes of full blocks, then AVX2 when available. The SSE4.1 fallback starts at 512 bytes
+and retains its 8 MiB upper limit. Incremental updates apply these thresholds to each batch of full blocks.
+
+Forced-backend measurements with complete finalization on the Core Ultra 7 265K put scalar and AVX2 near parity
+at 384 bytes (39.99 and 40.20 ns/hash), with AVX2 ahead at 512 bytes (53.98 and 52.76 ns/hash). Use 512 bytes as
+a crossover candidate for this host. The shared minimum also avoids the measured SSE4.1 overhead on small inputs;
+it does not establish an SSE4.1 crossover or an optimum across Intel and AMD CPUs.
+
+The following public Rust API measurements include runtime dispatch and finalization. On 2026-09-13, we collected
+50 Criterion samples per case with one logical CPU pinned, a 300 ms warmup, and a 1 s measurement target. These
+values report Criterion's mean estimate with seed 42; they are separate from the forced-backend measurements.
+
+| Input | ns/hash |
+| --- | ---: |
+| 15 B | 5.32 |
+| 16 B | 5.47 |
+| 31 B | 5.89 |
+| 32 B | 6.03 |
+| 64 B | 7.80 |
+| 255 B | 24.42 |
+| 256 B | 25.04 |
+| 384 B | 37.93 |
+| 511 B | 50.35 |
+| 512 B | 49.79 |
+| 513 B | 50.43 |
+| 1 KiB | 96.89 |
+
+We refreshed the x64 hashcodecs series in the Rust MurmurHash3 throughput chart on the same date, retaining the
+x86 and competitor measurements from the previous comparison run.
+
+```sh
+cargo bench --manifest-path benches/Cargo.toml --bench crossover -- murmur_x64_128_crossover
+cargo bench --manifest-path benches/Cargo.toml --bench murmur3 -- x64_128/hashcodecs
+```
+
 ## XXH3
 
 For the Rust comparison, link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2.

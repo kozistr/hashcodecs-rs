@@ -8,6 +8,7 @@ mod support;
 const BASE64_ENCODE_SIZES: [usize; 10] = [15, 16, 31, 32, 47, 48, 51, 52, 103, 104];
 const BASE64_DECODE_SIZES: [usize; 8] = [12, 16, 28, 32, 60, 64, 124, 128];
 const MURMUR_SIZES: [usize; 6] = [15, 16, 31, 32, 255, 256];
+const MURMUR_X64_SIZES: [usize; 12] = [15, 16, 31, 32, 64, 255, 256, 384, 511, 512, 513, 1024];
 
 fn data(size: usize) -> Vec<u8> {
     (0..size)
@@ -41,9 +42,9 @@ fn base64_decode(c: &mut Criterion) {
 }
 
 macro_rules! murmur_group {
-    ($criterion:expr, $name:literal, $function:path) => {{
+    ($criterion:expr, $name:literal, $function:path, $sizes:expr) => {{
         let mut group = $criterion.benchmark_group($name);
-        for size in MURMUR_SIZES {
+        for size in $sizes {
             let input = data(size);
             group.throughput(Throughput::Bytes(size as u64));
             group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
@@ -58,17 +59,20 @@ fn murmur3(c: &mut Criterion) {
     murmur_group!(
         c,
         "murmur_x86_32_crossover",
-        hashcodecs::murmur3::murmur3_x86_32
+        hashcodecs::murmur3::murmur3_x86_32,
+        MURMUR_SIZES
     );
     murmur_group!(
         c,
         "murmur_x86_128_crossover",
-        hashcodecs::murmur3::murmur3_x86_128
+        hashcodecs::murmur3::murmur3_x86_128,
+        MURMUR_SIZES
     );
     murmur_group!(
         c,
         "murmur_x64_128_crossover",
-        hashcodecs::murmur3::murmur3_x64_128
+        hashcodecs::murmur3::murmur3_x64_128,
+        MURMUR_X64_SIZES
     );
 }
 

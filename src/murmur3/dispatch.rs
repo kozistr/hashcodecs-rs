@@ -13,9 +13,11 @@ pub(super) const X86_32_SSE41_MIN: usize = 16;
 const X86_32_AVX2_MIN: usize = 32;
 pub(super) const X86_128_AVX2_MIN: usize = 256;
 const X86_128_SSE41_MIN: usize = 16 * 1024 * 1024;
-const X64_128_SSE41_MIN: usize = 16;
+// Core Ultra 7 265K measurements put the AVX2 crossover near 512 bytes.
+// Keep both SIMD paths above the small-input scalar range; SSE4.1 is a fallback.
+const X64_128_SSE41_MIN: usize = 512;
 const X64_128_SSE41_MAX: usize = 8 * 1024 * 1024;
-const X64_128_AVX2_MIN: usize = 32;
+const X64_128_AVX2_MIN: usize = 512;
 
 #[inline(always)]
 pub(super) fn select_x86_32_backend(length: usize, capabilities: Capabilities) -> Backend {

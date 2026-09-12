@@ -229,7 +229,46 @@ def test_free_threaded_standard_into_snapshot() -> None:
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
-def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes() -> None:
+@pytest.mark.parametrize(
+    ('operation', 'value', 'expected'),
+    [
+        (base64.standard_b64encode_into, b'abc', b'YWJj'),
+        (base64.b64encode_into, b'abc', b'YWJj'),
+        (base64.urlsafe_b64encode_into, b'abc', b'YWJj'),
+        (base64.standard_b64decode_into, b'YWJj', b'abc'),
+        (base64.b64decode_into, b'YWJj', b'abc'),
+        (base64.urlsafe_b64decode_into, b'YWJj', b'abc'),
+    ],
+)
+@pytest.mark.parametrize('remaining_capacity', [0, 3, 4, 16])
+def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes(
+    operation: Callable[..., int], value: bytes, expected: bytes, remaining_capacity: int
+) -> None:
+    output = bytearray(16)
+    releases = []
+
+    class Buffer:
+        def __buffer__(self, flags: int) -> memoryview:
+            return memoryview(value)
+
+        def __release_buffer__(self, view: memoryview) -> None:
+            releases.append(True)
+            output[:] = b'.' * remaining_capacity
+
+    if remaining_capacity < len(expected):
+        with pytest.raises(
+            ValueError, match=f'requires {len(expected)} bytes but the destination has {remaining_capacity}'
+        ):
+            operation(Buffer(), output)
+        assert output == b'.' * remaining_capacity
+    else:
+        assert operation(Buffer(), output) == len(expected)
+        assert output == expected + b'.' * (remaining_capacity - len(expected))
+    assert releases == [True]
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
+def test_reentrant_ignorechars_release_hook_runs_before_reusable_output_write() -> None:
     class Buffer:
         def __init__(self, value: bytes, output: bytearray) -> None:
             self.value = value
@@ -245,11 +284,6 @@ def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes() -> N
     with pytest.raises(ValueError, match='requires 3 bytes but the destination has 0'):
         base64.b64decode_into(b'YWJj', decoded, ignorechars=Buffer(b'', decoded))
     assert decoded == b''
-
-    encoded = bytearray(4)
-    with pytest.raises(ValueError, match='requires 4 bytes but the destination has 0'):
-        base64.urlsafe_b64encode_into(Buffer(b'abc', encoded), encoded)
-    assert encoded == b''
 
 
 def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:

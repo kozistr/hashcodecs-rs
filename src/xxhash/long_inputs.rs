@@ -255,7 +255,7 @@ pub(super) fn merge(acc: &[u64; 8], secret: &Secret, offset: usize, start: u64) 
         ));
     }
 
-    avalanche(result)
+    xxh3_avalanche(result)
 }
 
 #[inline(always)]

@@ -14,14 +14,9 @@ use super::tables::{
 };
 use super::x86_contracts::{Decoder, Store};
 
-/// TODO
-/// So my optimization priority would be:
-/// 1. Split bulk and terminal blocks, eliminating the per-iteration padded-store branches.
-/// 2. Cache input_ptr / input_len.
-/// 3. Inspect assembly for spills caused by the 4× unroll.
-/// 4. Benchmark 2× versus 4× unrolling.
-/// 5. Leave the combined error reduction alone unless profiling says otherwise.
-///    I'd inspect cargo asm/Compiler Explorer output for spills and benchmark 2× vs 4×.
+// Optimization candidate: compare two-block and four-block unrolling after
+// checking generated assembly for register spills. Preserve the combined error
+// reduction and the Store policy's exact output boundary for the final block.
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     input: &[u8],

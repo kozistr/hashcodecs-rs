@@ -220,7 +220,7 @@ impl<'py> BytesLike<'_, 'py> {
         }
     }
 
-    pub(super) fn has_borrowed_buffer(&self) -> bool {
+    fn has_borrowed_buffer(&self) -> bool {
         matches!(self, Self::Buffer(_) | Self::GuardedBytes { .. })
     }
 
@@ -277,16 +277,42 @@ impl<'py> BytesLike<'_, 'py> {
         needed.then(|| self.try_snapshot()).transpose()
     }
 
+    /// Copy and release exports before callbacks when the caller's conversion
+    /// order consumes the input first. Exact immutable inputs need no copy.
+    pub(super) fn into_stable_before_callbacks(self, callbacks_follow: bool) -> PyResult<Self> {
+        if callbacks_follow && self.has_borrowed_buffer() {
+            Ok(Self::OwnedVec(self.try_snapshot()?))
+        } else {
+            Ok(self)
+        }
+    }
+
+    /// Stage a copy before releasing an export that may reenter Python.
+    /// Include borrowed views when their owner does not retain them through
+    /// the write. Callers with multiple inputs must stage all copies before
+    /// dropping any guards, since release hooks can mutate other inputs.
+    pub(super) fn snapshot_before_output_write(
+        &self,
+        release_borrowed_views: bool,
+    ) -> PyResult<Option<Vec<u8>>> {
+        self.snapshot_if(
+            self.buffer_release_may_reenter()
+                || (release_borrowed_views && self.has_borrowed_buffer()),
+        )
+    }
+
     /// Snapshot exported inputs after callback-capable argument conversion.
     /// Free-threaded builds must stabilize every export before reading it.
     /// Reentrant release hooks must run before a reusable destination is written.
-    pub(super) fn snapshot_after_callbacks(
-        &self,
-        before_output_write: bool,
-    ) -> PyResult<Option<Vec<u8>>> {
-        let needed = (cfg!(Py_GIL_DISABLED) && matches!(self, Self::Buffer(_)))
-            || (before_output_write && self.buffer_release_may_reenter());
-        self.snapshot_if(needed)
+    fn snapshot_after_callbacks(&self, before_output_write: bool) -> PyResult<Option<Vec<u8>>> {
+        if cfg!(Py_GIL_DISABLED) && matches!(self, Self::Buffer(_)) {
+            return self.snapshot_if(true);
+        }
+        if before_output_write {
+            self.snapshot_before_output_write(false)
+        } else {
+            Ok(None)
+        }
     }
 
     pub(super) fn into_stable_after_callbacks(self, before_output_write: bool) -> PyResult<Self> {

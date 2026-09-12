@@ -52,14 +52,14 @@ pub(super) fn mul_fold(a: u64, b: u64) -> u64 {
 }
 
 #[inline(always)]
-pub(super) fn avalanche(mut h: u64) -> u64 {
+pub(super) fn xxh3_avalanche(mut h: u64) -> u64 {
     h ^= h >> 37;
     h = h.wrapping_mul(MX1);
     h ^ (h >> 32)
 }
 
 #[inline(always)]
-pub(super) fn avalanche64(mut h: u64) -> u64 {
+pub(super) fn xxh64_avalanche(mut h: u64) -> u64 {
     h ^= h >> 33;
     h = h.wrapping_mul(P64_2);
     h ^= h >> 29;

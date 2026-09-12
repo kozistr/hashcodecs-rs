@@ -52,13 +52,60 @@ bytearrays, and writable memoryviews. Use `--batch-counts 2 9 32 33 --sizes 64` 
 
 The [32-item parent comparison](docs/benchmarks/xxh3-batch-parent-comparison.csv) records CPython 3.12.10 results
 against parent commit `f17ab86`, measured on 2026-09-05. These paired measurements also cover the 256 KiB
-GIL-detachment threshold and 1 MiB items. The Python XXH3 chart uses the candidate's allocating-batch measurements;
-packed-output and upstream values retain their prior measurements.
+GIL-detachment threshold and 1 MiB items. The Python XXH3 batch panels report CPython 3.12.10 measurements
+from 2026-09-13, using 15 samples of at least 0.2 seconds; one-shot and upstream values retain their prior measurements.
 
 Across the 30 paired 32-item cases, branch throughput ranges from 2.59% lower to 2.70% higher than the parent.
 The [stack-boundary comparison](docs/benchmarks/xxh3-batch-boundary-comparison.csv) covers counts 2 and 33 with
 64-byte items: two-item bytearray batches lose 5.40–6.05%, and 33-item bytes batches lose 6.06–7.05%. These
 measurements show residual overhead for some small-input batches; they do not establish zero regression.
+
+### Packed-batch detachment
+
+XXH3 batches release the GIL at 1 MiB of total input or 16,384 items, provided the input buffers permit detachment.
+The item limit accounts for per-item hashing and output work, including empty inputs. One-shot XXH3 keeps its
+256 KiB threshold. Mutable inputs retain their existing synchronization rules.
+
+The detached packed path retains input owners, borrows 64 inputs at a time on the stack, and stages results until
+it reacquires the GIL and rechecks the output size. This removes one allocation and 16 bytes of temporary input
+descriptors per item on 64-bit hosts. Little-endian hosts copy staged results in one operation.
+
+The [candidate measurements](docs/benchmarks/xxh3-packed-candidates.csv) compare 256 KiB, 512 KiB, and 1 MiB
+byte thresholds with the same allocation reduction and 16,384-item limit. Each exploratory value uses five
+samples of at least 0.03 seconds. The 1 MiB policy keeps both 4,096- and 8,192-item batches of 64-byte inputs on
+the direct-output path. This trades longer GIL holds for lower latency; it does not establish an optimal threshold
+for other processors or contended workloads.
+
+The [selected-policy measurements](docs/benchmarks/xxh3-packed-thresholds.csv) use CPython 3.15.0b4 on the
+Intel Core Ultra 7 265K, with one logical CPU pinned, independent input allocations, and 15 samples of at least
+0.2 seconds each, measured on 2026-09-13. They cover both digest widths and item sizes of 64 bytes, 1 KiB, and 64 KiB.
+For 64-byte inputs:
+
+| Items | XXH3-64 packed latency | XXH3-128 packed latency |
+| ---: | ---: | ---: |
+| 4,095 | 13.92 µs | 27.29 µs |
+| 4,096 | 14.48 µs | 27.33 µs |
+| 4,097 | 13.95 µs | 27.44 µs |
+| 8,191 | 28.95 µs | 54.72 µs |
+| 8,192 | 29.14 µs | 54.61 µs |
+| 8,193 | 29.46 µs | 54.57 µs |
+| 16,383 | 58.49 µs | 109.12 µs |
+| 16,384 | 92.78 µs | 144.04 µs |
+| 16,385 | 94.52 µs | 145.62 µs |
+
+A discontinuity remains at the new detachment boundary because retaining owners and staging output still cost work.
+The longest measured attached call near these boundaries takes about 109 microseconds. This is a latency
+measurement on this host, not a bound on thread waiting time; the tests also verify GIL progress for large inputs
+and for 16,384-item batches of empty, one-byte, and 64-byte inputs.
+
+```sh
+uv run --frozen --no-sync python benchmarks/python_xxhash_thresholds.py --output docs/benchmarks/xxh3-packed-thresholds.csv
+uv run --frozen --no-sync python benchmarks/python_xxhash.py --batches-only --hashcodecs-only
+```
+
+`--thresholds-kib` selects benchmark input sizes around each candidate; it does not change the extension's
+compiled policy. To compare candidates, rebuild the wheel after changing `BATCH_DETACH_BYTES` in
+`src/bindings/xxhash/batch.rs`.
 
 The Rust mixed benchmarks use `[1024, 1024, 4096, 4096]`, `[257, 258, 259, 260]`, `[240, 240, 241, 241]`, and the
 reverse boundary order. The 1024/4096 case measures adjacent two-item long runs. The 257–260 case measures a

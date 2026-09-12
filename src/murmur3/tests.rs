@@ -75,27 +75,80 @@ fn dispatch_thresholds_are_explicit_and_feature_gated() {
         dispatch::select_x86_128_backend(usize::MAX, Capabilities::from_features(&[])),
         Scalar
     );
+}
 
-    assert_eq!(
-        dispatch::select_x64_128_backend(15, caps(Feature::Avx2)),
-        Scalar
-    );
-    assert_eq!(
-        dispatch::select_x64_128_backend(16, caps(Feature::Sse41)),
-        Sse41
-    );
-    assert_eq!(
-        dispatch::select_x64_128_backend(32, caps(Feature::Avx2)),
-        Avx2
-    );
-    assert_eq!(
-        dispatch::select_x64_128_backend(8 * 1024 * 1024, caps(Feature::Sse41)),
-        Sse41
-    );
-    assert_eq!(
-        dispatch::select_x64_128_backend(8 * 1024 * 1024 + 1, caps(Feature::Sse41)),
-        Scalar
-    );
+#[test]
+fn x64_dispatch_keeps_small_inputs_scalar_with_any_features() {
+    use crate::backend::{Capabilities, CpuFeature as Feature};
+    use dispatch::Backend::{Avx2, Scalar, Sse41};
+
+    for (features, large_backend) in [
+        (&[][..], Scalar),
+        (&[Feature::Sse41][..], Sse41),
+        (&[Feature::Avx2][..], Avx2),
+        (&[Feature::Sse41, Feature::Avx2][..], Avx2),
+    ] {
+        let capabilities = Capabilities::from_features(features);
+        for length in 0..512 {
+            assert_eq!(
+                dispatch::select_x64_128_backend(length, capabilities),
+                Scalar,
+                "length={length} features={features:?}"
+            );
+        }
+        for length in [512, 513, 1024, 8 * 1024 * 1024] {
+            assert_eq!(
+                dispatch::select_x64_128_backend(length, capabilities),
+                large_backend,
+                "length={length} features={features:?}"
+            );
+        }
+    }
+
+    for length in [8 * 1024 * 1024 + 1, usize::MAX] {
+        assert_eq!(
+            dispatch::select_x64_128_backend(
+                length,
+                Capabilities::from_features(&[Feature::Sse41])
+            ),
+            Scalar
+        );
+        assert_eq!(
+            dispatch::select_x64_128_backend(
+                length,
+                Capabilities::from_features(&[Feature::Sse41, Feature::Avx2])
+            ),
+            Avx2
+        );
+        assert_eq!(
+            dispatch::select_x64_128_backend(length, Capabilities::from_features(&[])),
+            Scalar
+        );
+    }
+}
+
+#[test]
+fn x64_incremental_updates_match_reference_across_simd_threshold() {
+    let input: Vec<u8> = (0..2048)
+        .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
+        .collect();
+    for seed in [0, 1, 0xfeed_beef, u32::MAX] {
+        let expected = murmur3::murmur3_x64_128(&mut Cursor::new(&input), seed).unwrap();
+        for chunk_size in [496, 511, 512, 513, 528, 1024] {
+            for prefix_length in 0..16 {
+                let mut hasher = Murmur3X64Hasher128::new(seed);
+                hasher.update(&input[..prefix_length]);
+                for chunk in input[prefix_length..].chunks(chunk_size) {
+                    hasher.update(chunk);
+                }
+                assert_eq!(
+                    x64_words_as_u128(hasher.digest()),
+                    expected,
+                    "seed={seed} chunk_size={chunk_size} prefix_length={prefix_length}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -274,7 +327,7 @@ fn scalar_dispatch_fallbacks_process_full_blocks() {
 #[test]
 fn matches_the_reference_implementation_for_every_tail_length() {
     let seeds = [0, 1, 0xfeed_beef, u32::MAX];
-    for length in 0..=512 {
+    for length in 0..=543 {
         let input: Vec<u8> = (0..length)
             .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
             .collect();

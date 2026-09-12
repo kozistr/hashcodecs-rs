@@ -24,8 +24,9 @@ use super::strict::{
 };
 use crate::base64::{Base64Error, DecodeAlphabet, STANDARD_ALPHABET};
 use crate::bindings::buffer::{
-    BytesLike, DecodeDataObject, ascii_or_bytes, contiguous_bytes_like,
-    contiguous_bytes_like_exported, decode_data_object,
+    BytesLike, DecodeDataObject, ascii_or_bytes, binascii_ascii_or_bytes_exported,
+    binascii_decode_type_error, contiguous_bytes_like, contiguous_bytes_like_exported,
+    decode_data_object,
 };
 use crate::bindings::compatibility::{PythonSemantics, parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
@@ -454,6 +455,9 @@ impl PreparedDecoder {
         if self.policy.ignorechars_specified || !self.semantics.warns_legacy_altchars {
             return None;
         }
+        if let Some(badchar) = self.policy.known_warning_byte {
+            return badchar;
+        }
         self.policy
             .warning_altchars
             .and_then(|altchars| legacy_altchar_badchar(input, altchars))
@@ -465,6 +469,7 @@ impl PreparedDecoder {
             warning,
             self.policy.warning_altchars,
             self.policy.validation,
+            self.policy.urlsafe_warning,
         )?;
         Ok(value)
     }
@@ -594,7 +599,13 @@ fn prepare_translated_input<'a, 'py>(
     let translated = input
         .as_bound()
         .call_method1(intern!(py, "translate"), (table,))?;
-    let normalized = decode_data_object(py, &translated, "s")?;
+    let normalized = match decode_data_object(py, &translated, "s") {
+        Ok(normalized) => normalized,
+        Err(error) if error.is_instance_of::<pyo3::exceptions::PyTypeError>(py) => {
+            return Err(binascii_decode_type_error(&translated)?);
+        }
+        Err(error) => return Err(error),
+    };
     let input = match normalized {
         DecodeDataObject::Borrowed(_) => DecodeDataObject::Owned(translated),
         DecodeDataObject::Owned(input) => DecodeDataObject::Owned(input),
@@ -635,6 +646,7 @@ fn b64decode_with<'py, T>(
     let mut input = decode_data_object(py, s, "s")?;
     let mut parsed_altchars = None;
     let mut warning_altchars = None;
+    let mut known_warning_byte = None;
     let mut constructed_alphabet = None;
 
     if let Some(altchars) = arguments.altchars {
@@ -649,6 +661,12 @@ fn b64decode_with<'py, T>(
             parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
             warning_altchars = parsed_altchars;
             if arguments.ignorechars.is_none() {
+                if python_at_least(py, (3, 15)) {
+                    known_warning_byte = Some(python_legacy_altchar_badchar(
+                        input.as_bound(),
+                        parsed_altchars.unwrap_or(*b"+/"),
+                    )?);
+                }
                 (input, parsed_altchars) =
                     prepare_translated_input(py, input, parsed_altchars.unwrap_or(*b"+/"))?;
             }
@@ -656,7 +674,7 @@ fn b64decode_with<'py, T>(
     }
     warning_altchars = warning_altchars.or(parsed_altchars);
 
-    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
+    let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let validate = arguments.validate.optional_truthy(py)?;
     let alphabet = constructed_alphabet
         .as_ref()
@@ -697,7 +715,7 @@ fn b64decode_with<'py, T>(
         .as_ref()
         .map(Bound::as_any)
         .or(arguments.ignorechars);
-    let policy = DecodePolicy::new(
+    let mut policy = DecodePolicy::new(
         parsed_altchars,
         validate,
         padded,
@@ -706,6 +724,9 @@ fn b64decode_with<'py, T>(
     )
     .with_warning_altchars(warning_altchars)
     .with_alphabet(alphabet.and_then(|alphabet| alphabet.full));
+    if let Some(badchar) = known_warning_byte {
+        policy = policy.with_known_warning_byte(badchar);
+    }
     let decoder = PreparedDecoder::new(py, policy)?;
     decode(&decoder, &input)
 }
@@ -771,14 +792,21 @@ fn urlsafe_b64decode_with<'py, T>(
     }
 
     let input = decode_data_object(py, s, "s")?;
+    let known_warning_byte = if python_at_least(py, (3, 15)) {
+        python_legacy_altchar_badchar(input.as_bound(), *b"-_")?
+    } else {
+        None
+    };
     let (input, altchars) = prepare_translated_input(py, input, *b"-_")?;
-    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
+    let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(before_output_write)?;
     let decoder = PreparedDecoder::new(
         py,
         DecodePolicy::new(altchars, Some(false), padded, None, false)
-            .with_warning_altchars(Some(*b"-_")),
+            .with_warning_altchars(Some(*b"-_"))
+            .with_known_warning_byte(known_warning_byte)
+            .with_urlsafe_warning(),
     )?;
     decode(&decoder, &input)
 }
@@ -847,6 +875,7 @@ fn warn_legacy_altchars(
     badchar: Option<u8>,
     altchars: Option<[u8; 2]>,
     validation: Validation,
+    urlsafe: bool,
 ) -> PyResult<()> {
     let Some(altchars) = altchars else {
         return Ok(());
@@ -854,6 +883,16 @@ fn warn_legacy_altchars(
     let Some(badchar) = badchar else {
         return Ok(());
     };
+    if urlsafe {
+        let message = format!(
+            "invalid character '{}' in URL-safe Base64 data will be discarded in future Python versions",
+            char::from(badchar),
+        );
+        py.import("warnings")?
+            .call_method1("warn", (message, py.get_type::<PyFutureWarning>(), 1))?;
+        return Ok(());
+    }
+
     let strict_mode = validation.is_strict();
     let mode = if strict_mode { "True" } else { "False" };
     let outcome = if strict_mode {
@@ -874,6 +913,18 @@ fn warn_legacy_altchars(
     py.import("warnings")?
         .call_method1("warn", (message, category, 1))?;
     Ok(())
+}
+
+fn python_legacy_altchar_badchar(
+    input: &Bound<'_, PyAny>,
+    altchars: [u8; 2],
+) -> PyResult<Option<u8>> {
+    for byte in b"+/" {
+        if !altchars.contains(byte) && input.contains(u32::from(*byte))? {
+            return Ok(Some(*byte));
+        }
+    }
+    Ok(None)
 }
 
 fn legacy_altchar_badchar(input: &BytesLike<'_, '_>, altchars: [u8; 2]) -> Option<u8> {

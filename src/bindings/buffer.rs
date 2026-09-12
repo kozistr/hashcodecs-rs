@@ -474,6 +474,24 @@ pub(super) fn binascii_contiguous_bytes_like<'a, 'py>(
     buffer_bytes_like(value, "alphabet", true)
 }
 
+/// Hold a contiguous input export while using binascii's type-error wording.
+pub(super) fn binascii_contiguous_bytes_like_exported<'a, 'py>(
+    value: &'a Bound<'py, PyAny>,
+) -> PyResult<BytesLike<'a, 'py>> {
+    if PyBytes::is_exact_type_of(value) {
+        let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+        return Ok(BytesLike::Bytes(bytes));
+    }
+    if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
+        let name = value.get_type().name()?;
+        return Err(PyTypeError::new_err(format!(
+            "a bytes-like object is required, not '{name}'"
+        )));
+    }
+
+    contiguous_bytes_like_exported(value, "s")
+}
+
 /// Acquire the contiguous buffer that a CPython C API would hold while it
 /// converts later arguments. Immutable exact bytes need no export guard.
 pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
@@ -507,6 +525,39 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
 
         Ok(BytesLike::Buffer(buffer))
     })
+}
+
+/// Accept the ASCII-string result of an overridden ``str.encode`` before
+/// applying the ordinary contiguous buffer conversion.
+pub(super) fn binascii_ascii_or_bytes_exported<'a, 'py>(
+    value: &'a Bound<'py, PyAny>,
+) -> PyResult<BytesLike<'a, 'py>> {
+    if value.is_instance_of::<PyString>() {
+        let text = value.cast::<PyString>()?.to_str().map_err(|_| {
+            PyValueError::new_err("string argument should contain only ASCII characters")
+        })?;
+        if !text.is_ascii() {
+            return Err(PyValueError::new_err(
+                "string argument should contain only ASCII characters",
+            ));
+        }
+        return Ok(BytesLike::Text(text));
+    }
+
+    match contiguous_bytes_like_exported(value, "s") {
+        Ok(input) => Ok(input),
+        Err(error) if error.is_instance_of::<PyTypeError>(value.py()) => {
+            Err(binascii_decode_type_error(value)?)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub(super) fn binascii_decode_type_error(value: &Bound<'_, PyAny>) -> PyResult<PyErr> {
+    let name = value.get_type().name()?;
+    Ok(PyTypeError::new_err(format!(
+        "argument should be bytes, buffer or ASCII string, not '{name}'"
+    )))
 }
 
 pub(super) fn contiguous_bytes_like_owned<'py>(
@@ -570,7 +621,16 @@ pub(super) fn decode_data_object<'a, 'py>(
         return Ok(DecodeDataObject::Borrowed(value));
     }
 
-    let input = bytes_like(value, argument)?;
+    let input = match bytes_like(value, argument) {
+        Ok(input) => input,
+        Err(error) if error.is_instance_of::<PyTypeError>(py) => {
+            let name = value.get_type().name()?;
+            return Err(PyTypeError::new_err(format!(
+                "argument should be a bytes-like object or ASCII string, not '{name}'"
+            )));
+        }
+        Err(error) => return Err(error),
+    };
     if let Some(bytes) = input.python_bytes(py)? {
         drop(input);
         return Ok(DecodeDataObject::Owned(bytes.into_any()));

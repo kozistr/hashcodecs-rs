@@ -84,6 +84,8 @@ impl DecodeAttempt {
 pub(super) struct DecodePolicy<'a, 'py> {
     pub(super) altchars: Option<[u8; 2]>,
     warning_altchars: Option<[u8; 2]>,
+    known_warning_byte: Option<Option<u8>>,
+    urlsafe_warning: bool,
     pub(super) alphabet: Option<[u8; 64]>,
     validate: Option<bool>,
     pub(super) padding: Padding,
@@ -102,6 +104,8 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
         Self {
             altchars,
             warning_altchars: altchars,
+            known_warning_byte: None,
+            urlsafe_warning: false,
             alphabet: None,
             validate,
             padding: Padding::new(padded),
@@ -117,6 +121,16 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
 
     pub(super) fn with_warning_altchars(mut self, altchars: Option<[u8; 2]>) -> Self {
         self.warning_altchars = altchars;
+        self
+    }
+
+    pub(super) fn with_known_warning_byte(mut self, badchar: Option<u8>) -> Self {
+        self.known_warning_byte = Some(badchar);
+        self
+    }
+
+    pub(super) fn with_urlsafe_warning(mut self) -> Self {
+        self.urlsafe_warning = true;
         self
     }
 
@@ -182,6 +196,8 @@ impl IgnoredBytes {
 pub(super) struct PreparedPolicy {
     pub(super) altchars: Option<[u8; 2]>,
     pub(super) warning_altchars: Option<[u8; 2]>,
+    pub(super) known_warning_byte: Option<Option<u8>>,
+    pub(super) urlsafe_warning: bool,
     pub(super) alphabet: Option<[u8; 64]>,
     pub(super) validation: Validation,
     pub(super) padding: Padding,
@@ -216,6 +232,8 @@ impl PreparedPolicy {
             Self {
                 altchars: policy.altchars,
                 warning_altchars: policy.warning_altchars,
+                known_warning_byte: policy.known_warning_byte,
+                urlsafe_warning: policy.urlsafe_warning,
                 alphabet: policy.alphabet,
                 validation: policy.validation(),
                 padding: policy.padding,
@@ -235,6 +253,8 @@ impl PreparedPolicy {
         Self {
             altchars: self.altchars,
             warning_altchars: self.warning_altchars,
+            known_warning_byte: self.known_warning_byte,
+            urlsafe_warning: self.urlsafe_warning,
             alphabet: self.alphabet,
             validation: Validation::Strict,
             padding: self.padding,
@@ -365,6 +385,8 @@ mod tests {
         PreparedPolicy {
             altchars,
             warning_altchars: altchars,
+            known_warning_byte: None,
+            urlsafe_warning: false,
             alphabet: None,
             validation,
             padding,

@@ -12,7 +12,10 @@ use crate::base64::{
     encode_to_ptr_with_custom_alphabet, encode_wrapped_to_ptr_cached, encode_wrapped_to_ptr_custom,
     encoded_len,
 };
-use crate::bindings::buffer::{BytesLike, contiguous_bytes_like, contiguous_bytes_like_exported};
+use crate::bindings::buffer::{
+    BytesLike, binascii_contiguous_bytes_like_exported, contiguous_bytes_like,
+    contiguous_bytes_like_exported,
+};
 use crate::bindings::compatibility::{parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 use crate::bindings::schema::Argument;
@@ -394,9 +397,12 @@ fn construct_b64encode_alphabet<'py>(
 fn parse_b64encode_alphabet<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
 ) -> PyResult<(EncodeAlphabet, BytesLike<'a, 'py>)> {
+    #[cfg(Py_GIL_DISABLED)]
+    let bytes = crate::bindings::buffer::binascii_contiguous_bytes_like_exported(value)?;
+    #[cfg(not(Py_GIL_DISABLED))]
     let bytes = crate::bindings::buffer::binascii_contiguous_bytes_like(value)?;
     #[cfg(Py_GIL_DISABLED)]
-    let bytes = bytes.into_stable()?;
+    let bytes = bytes.into_stable_after_callbacks(false)?;
     if bytes.len() != STANDARD_ALPHABET.len() {
         return Err(PyValueError::new_err("alphabet must have length 64"));
     }
@@ -438,7 +444,7 @@ pub(super) fn encode_parsed<'py>(
     padded: bool,
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let input = contiguous_bytes_like(input, "s")?;
+    let input = crate::bindings::buffer::binascii_contiguous_bytes_like(input)?;
     encode(py, &input, altchars, padded, wrapcol)
 }
 
@@ -481,7 +487,7 @@ pub(super) fn urlsafe_b64encode<'py>(
         return encode(py, &input, Some(*b"-_"), padded, None);
     }
 
-    let input = contiguous_bytes_like_exported(s, "s")?;
+    let input = binascii_contiguous_bytes_like_exported(s)?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(false)?;
     encode(py, &input, Some(*b"-_"), padded, None)
@@ -527,7 +533,7 @@ pub(super) fn b64encode<'py>(
         None
     };
 
-    let input = contiguous_bytes_like_exported(s, "s")?;
+    let input = binascii_contiguous_bytes_like_exported(s)?;
     let legacy_callbacks_follow_input = !python_315
         && (altchars.is_some() || !padded.as_ptr().is_null() || !wrapcol.as_ptr().is_null());
     let input = if legacy_callbacks_follow_input && input.has_borrowed_buffer() {
@@ -559,7 +565,15 @@ pub(super) fn b64encode<'py>(
     );
     let encoder = PreparedEncoder::with_alphabet(alphabet, padded, wrapcol);
     let input = input.into_stable_after_callbacks(false)?;
-    encode_with_prepared(py, &input, encoder)
+    let result = encode_with_prepared(py, &input, encoder);
+    #[cfg(Py_GIL_DISABLED)]
+    {
+        // CPython's free-threaded converter releases the input export before
+        // the custom alphabet export after both have been consumed.
+        drop(input);
+        drop(parsed_alphabet);
+    }
+    result
 }
 
 pub(super) fn b64encode_into(

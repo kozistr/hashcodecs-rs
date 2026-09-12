@@ -4,11 +4,10 @@ import random
 import re
 import sys
 import tracemalloc
-import warnings
 from collections.abc import Callable
-from typing import Any
 
 import pytest
+from base64_compat_harness import Observation, observe_call
 
 import hashcodecs.base64 as base64
 
@@ -58,13 +57,8 @@ def _decode_keyword_outcome(
     value: bytes,
     altchars: bytes | None,
     kwargs: dict[str, object],
-) -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return function(value, altchars, **kwargs)
-    except Exception as error:
-        return type(error)
+) -> Observation:
+    return observe_call(lambda: function(value, altchars, **kwargs))
 
 
 def test_common_lenient_decoding_does_not_call_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,24 +144,20 @@ def test_encode_altchars_conversion_and_error_precedence_match_cpython() -> None
         assert outcome(base64.b64encode, value, altchars) == outcome(stdlib_base64.b64encode, value, altchars)
 
 
-def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return function(value, altchars, validate=validate)
-    except Exception as error:
-        return type(error)
+def _outcome(
+    function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool
+) -> Observation:
+    return observe_call(lambda: function(value, altchars, validate=validate))
 
 
-def _into_outcome(value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
+def _into_outcome(value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Observation:
     output = bytearray(len(value))
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            written = base64.b64decode_into(value, output, altchars, validate=validate)
+
+    def decode_into() -> bytes:
+        written = base64.b64decode_into(value, output, altchars, validate=validate)
         return bytes(output[:written])
-    except Exception as error:
-        return type(error)
+
+    return observe_call(decode_into)
 
 
 @pytest.mark.parametrize(
@@ -567,12 +557,38 @@ def test_configured_lenient_padding_matches_the_running_cpython() -> None:
     assert _decode_keyword_outcome(base64.b64decode, encoded, None, kwargs) == expected
 
     output = bytearray(len(encoded))
-    try:
+
+    def decode_into() -> bytes:
         written = base64.b64decode_into(encoded, output, **kwargs)
-        actual: bytes | type[Exception] = bytes(output[:written])
-    except Exception as error:
-        actual = type(error)
-    assert actual == expected
+        return bytes(output[:written])
+
+    assert observe_call(decode_into) == expected
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 binascii API')
+def test_configured_fallback_accepts_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def fallback(data: object, **kwargs: object) -> bytes:
+        calls.append((data, kwargs))
+        return b'abc'
+
+    monkeypatch.setattr(binascii, 'a2b_base64', fallback)
+    encoded = b'AA==AAAA'
+    options = {'validate': False, 'ignorechars': b'!'}
+
+    assert base64.b64decode(encoded, **options) == b'abc'
+
+    output = bytearray(b'.....')
+    assert base64.b64decode_into(encoded, output, **options) == 3
+    assert output == b'abc..'
+    expected = {
+        'strict_mode': False,
+        'padded': True,
+        'canonical': False,
+        'ignorechars': b'!',
+    }
+    assert calls == [(encoded, expected)] * 2
 
 
 def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -603,7 +619,7 @@ def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pyt
     assert output == b'\x00'
 
 
-def test_configured_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_decode_bypasses_binascii_on_success_and_capacity_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
         raise AssertionError((args, kwargs))
 
@@ -627,6 +643,7 @@ def test_configured_decode_bypasses_binascii(monkeypatch: pytest.MonkeyPatch) ->
     view = memoryview(encoded)
     assert base64.b64decode(view, ignorechars=b'!') == b'abc'
 
+    monkeypatch.undo()
     with pytest.raises(binascii.Error):
         base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
     unchanged = bytearray([0xA5] * 4)

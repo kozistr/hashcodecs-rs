@@ -24,8 +24,9 @@ use super::strict::{
 };
 use crate::base64::{Base64Error, DecodeAlphabet, STANDARD_ALPHABET};
 use crate::bindings::buffer::{
-    BytesLike, DecodeDataObject, ascii_or_bytes, contiguous_bytes_like,
-    contiguous_bytes_like_exported, decode_data_object,
+    BytesLike, DecodeDataObject, ascii_or_bytes, binascii_ascii_or_bytes_exported,
+    binascii_decode_type_error, contiguous_bytes_like, contiguous_bytes_like_exported,
+    decode_data_object,
 };
 use crate::bindings::compatibility::{PythonSemantics, parse_altchars, python_at_least};
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
@@ -170,9 +171,10 @@ impl PreparedDecoder {
         // All attempts and the warning scan must observe one stable input.
         #[cfg(Py_GIL_DISABLED)]
         if let Some(input) = input.snapshot_mutable()? {
-            return self.execute(py, &BytesLike::OwnedVec(input), &Allocating);
+            return self.decode_allocating(py, &BytesLike::OwnedVec(input));
         }
-        self.execute(py, input, &Allocating)
+        let warning = self.legacy_warning_byte(input);
+        self.execute(py, input, &Allocating, warning)
     }
 
     pub(super) fn decode_into<'py>(
@@ -183,12 +185,17 @@ impl PreparedDecoder {
     ) -> PyResult<usize> {
         #[cfg(Py_GIL_DISABLED)]
         if let Some(input) = input.snapshot_mutable()? {
-            return self.execute(py, &BytesLike::OwnedVec(input), output);
+            return self.decode_into(py, &BytesLike::OwnedVec(input), output);
         }
         if let Some(input) = input.snapshot_for_output(output)? {
-            return self.execute(py, &BytesLike::OwnedVec(input), output);
+            return self.decode_into(py, &BytesLike::OwnedVec(input), output);
         }
-        self.execute(py, input, output)
+        let warning = self.legacy_warning_byte(input);
+        if warning.is_some() {
+            let decoded = self.execute(py, input, &Allocating, warning)?;
+            return copy_decoded_into(&decoded, output);
+        }
+        self.execute(py, input, output, None)
     }
 
     fn execute<'py, O: DecodeOutput<'py>>(
@@ -196,11 +203,12 @@ impl PreparedDecoder {
         py: Python<'py>,
         input: &BytesLike<'_, 'py>,
         output: &O,
+        warning: Option<u8>,
     ) -> PyResult<O::Value> {
         let (urlsafe_315, direct, strict) = match self.route {
             DecodeRoute::Configured(shortcut) => {
                 let value = self.configured_output(py, input, output, shortcut)?;
-                return self.finish(py, input, value);
+                return self.finish(py, warning, value);
             }
             DecodeRoute::Strict { urlsafe_315 } => (urlsafe_315, false, true),
             DecodeRoute::LenientDirect { urlsafe_315 } => (urlsafe_315, true, false),
@@ -217,7 +225,7 @@ impl PreparedDecoder {
                     self.attempt,
                 )?
             {
-                return Ok(value);
+                return self.finish(py, warning, value);
             }
             if !self.policy.padding.is_padded()
                 && let Some(value) = self.try_native(
@@ -228,7 +236,7 @@ impl PreparedDecoder {
                     self.attempt,
                 )?
             {
-                return Ok(value);
+                return self.finish(py, warning, value);
             }
         }
 
@@ -290,7 +298,7 @@ impl PreparedDecoder {
                 self.policy.padding,
             )?)?,
         };
-        self.finish(py, input, value)
+        self.finish(py, warning, value)
     }
 
     fn strict_decoder(&self, padding: Padding) -> NativeDecoder<'_> {
@@ -377,25 +385,91 @@ impl PreparedDecoder {
         {
             return Ok(value);
         }
-        output
-            .native(
-                py,
-                input,
-                NativeDecoder::Configured(self.configured()),
-                self,
-                ErrorWrites::ValidatedPrefix,
-            )?
-            .map_err(|error| native_error(py, error))
+        match output.native(
+            py,
+            input,
+            NativeDecoder::Configured(self.configured()),
+            self,
+            ErrorWrites::ValidatedPrefix,
+        )? {
+            Ok(value) => Ok(value),
+            Err(Base64Error::InvalidInput) if self.semantics.binascii_accepts_padding() => {
+                output.store_fallback(self.decode_configured_with_binascii(py, input)?)
+            }
+            Err(error) => Err(native_error(py, error)),
+        }
     }
 
-    fn finish<T>(&self, py: Python<'_>, input: &BytesLike<'_, '_>, value: T) -> PyResult<T> {
+    fn decode_configured_with_binascii<'py>(
+        &self,
+        py: Python<'py>,
+        input: &BytesLike<'_, '_>,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let translated = if self.policy.ignorechars_specified {
+            None
+        } else if let Some(altchars) = self.policy.altchars {
+            unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
+        } else {
+            None
+        };
+        let data = if let Some(translated) = &translated {
+            PyBytes::new(py, translated)
+        } else {
+            unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
+        };
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("strict_mode", self.policy.validation.is_strict())?;
+        kwargs.set_item("padded", self.policy.padding.is_padded())?;
+        kwargs.set_item("canonical", self.policy.canonical)?;
+
+        let mut constructed_alphabet = None;
+        if self.policy.alphabet.is_none()
+            && self.policy.ignorechars_specified
+            && let Some(altchars) = self.policy.altchars
+        {
+            let mut alphabet = *STANDARD_ALPHABET;
+            alphabet[62..].copy_from_slice(&altchars);
+            constructed_alphabet = Some(alphabet);
+        }
+        if let Some(alphabet) = self.policy.alphabet.or(constructed_alphabet) {
+            kwargs.set_item("alphabet", PyBytes::new(py, &alphabet))?;
+        }
+        if self.policy.ignorechars_specified {
+            let ignorechars = self
+                .policy
+                .ignored
+                .expect("specified ignorechars has a prepared byte set")
+                .iter()
+                .collect::<Vec<_>>();
+            kwargs.set_item("ignorechars", PyBytes::new(py, &ignorechars))?;
+        }
+
+        py.import(intern!(py, "binascii"))?
+            .getattr(intern!(py, "a2b_base64"))?
+            .call((data,), Some(&kwargs))?
+            .cast_into::<PyBytes>()
+            .map_err(Into::into)
+    }
+
+    fn legacy_warning_byte(&self, input: &BytesLike<'_, '_>) -> Option<u8> {
+        if self.policy.ignorechars_specified || !self.semantics.warns_legacy_altchars {
+            return None;
+        }
+        if let Some(badchar) = self.policy.known_warning_byte {
+            return badchar;
+        }
+        self.policy
+            .warning_altchars
+            .and_then(|altchars| legacy_altchar_badchar(input, altchars))
+    }
+
+    fn finish<T>(&self, py: Python<'_>, warning: Option<u8>, value: T) -> PyResult<T> {
         warn_legacy_altchars(
             py,
-            self.semantics,
-            input,
+            warning,
             self.policy.warning_altchars,
-            self.policy.ignorechars_specified,
             self.policy.validation,
+            self.policy.urlsafe_warning,
         )?;
         Ok(value)
     }
@@ -525,7 +599,13 @@ fn prepare_translated_input<'a, 'py>(
     let translated = input
         .as_bound()
         .call_method1(intern!(py, "translate"), (table,))?;
-    let normalized = decode_data_object(py, &translated, "s")?;
+    let normalized = match decode_data_object(py, &translated, "s") {
+        Ok(normalized) => normalized,
+        Err(error) if error.is_instance_of::<pyo3::exceptions::PyTypeError>(py) => {
+            return Err(binascii_decode_type_error(&translated)?);
+        }
+        Err(error) => return Err(error),
+    };
     let input = match normalized {
         DecodeDataObject::Borrowed(_) => DecodeDataObject::Owned(translated),
         DecodeDataObject::Owned(input) => DecodeDataObject::Owned(input),
@@ -566,6 +646,7 @@ fn b64decode_with<'py, T>(
     let mut input = decode_data_object(py, s, "s")?;
     let mut parsed_altchars = None;
     let mut warning_altchars = None;
+    let mut known_warning_byte = None;
     let mut constructed_alphabet = None;
 
     if let Some(altchars) = arguments.altchars {
@@ -580,6 +661,12 @@ fn b64decode_with<'py, T>(
             parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
             warning_altchars = parsed_altchars;
             if arguments.ignorechars.is_none() {
+                if python_at_least(py, (3, 15)) {
+                    known_warning_byte = Some(python_legacy_altchar_badchar(
+                        input.as_bound(),
+                        parsed_altchars.unwrap_or(*b"+/"),
+                    )?);
+                }
                 (input, parsed_altchars) =
                     prepare_translated_input(py, input, parsed_altchars.unwrap_or(*b"+/"))?;
             }
@@ -587,7 +674,7 @@ fn b64decode_with<'py, T>(
     }
     warning_altchars = warning_altchars.or(parsed_altchars);
 
-    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
+    let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let validate = arguments.validate.optional_truthy(py)?;
     let alphabet = constructed_alphabet
         .as_ref()
@@ -628,7 +715,7 @@ fn b64decode_with<'py, T>(
         .as_ref()
         .map(Bound::as_any)
         .or(arguments.ignorechars);
-    let policy = DecodePolicy::new(
+    let mut policy = DecodePolicy::new(
         parsed_altchars,
         validate,
         padded,
@@ -637,6 +724,9 @@ fn b64decode_with<'py, T>(
     )
     .with_warning_altchars(warning_altchars)
     .with_alphabet(alphabet.and_then(|alphabet| alphabet.full));
+    if let Some(badchar) = known_warning_byte {
+        policy = policy.with_known_warning_byte(badchar);
+    }
     let decoder = PreparedDecoder::new(py, policy)?;
     decode(&decoder, &input)
 }
@@ -696,20 +786,28 @@ fn urlsafe_b64decode_with<'py, T>(
         let padded = padded.truthy(py)?;
         let decoder = PreparedDecoder::new(
             py,
-            DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false),
+            DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false)
+                .with_urlsafe_warning(),
         )?;
         return decode(&decoder, &input);
     }
 
     let input = decode_data_object(py, s, "s")?;
+    let known_warning_byte = if python_at_least(py, (3, 15)) {
+        python_legacy_altchar_badchar(input.as_bound(), *b"-_")?
+    } else {
+        None
+    };
     let (input, altchars) = prepare_translated_input(py, input, *b"-_")?;
-    let input = contiguous_bytes_like_exported(input.as_bound(), "s")?;
+    let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(before_output_write)?;
     let decoder = PreparedDecoder::new(
         py,
         DecodePolicy::new(altchars, Some(false), padded, None, false)
-            .with_warning_altchars(Some(*b"-_")),
+            .with_warning_altchars(Some(*b"-_"))
+            .with_known_warning_byte(known_warning_byte)
+            .with_urlsafe_warning(),
     )?;
     decode(&decoder, &input)
 }
@@ -775,32 +873,27 @@ fn decoding_error(py: Python<'_>, message: &'static str) -> PyErr {
 #[inline]
 fn warn_legacy_altchars(
     py: Python<'_>,
-    semantics: PythonSemantics,
-    input: &BytesLike<'_, '_>,
+    badchar: Option<u8>,
     altchars: Option<[u8; 2]>,
-    ignorechars_specified: bool,
     validation: Validation,
+    urlsafe: bool,
 ) -> PyResult<()> {
-    if ignorechars_specified {
-        return Ok(());
-    }
     let Some(altchars) = altchars else {
         return Ok(());
-    };
-    if !semantics.warns_legacy_altchars {
-        return Ok(());
-    }
-    let badchar = unsafe {
-        input.with_bytes(|input| {
-            b"+/"
-                .iter()
-                .copied()
-                .find(|byte| !altchars.contains(byte) && input.contains(byte))
-        })
     };
     let Some(badchar) = badchar else {
         return Ok(());
     };
+    if urlsafe {
+        let message = format!(
+            "invalid character '{}' in URL-safe Base64 data will be discarded in future Python versions",
+            char::from(badchar),
+        );
+        py.import("warnings")?
+            .call_method1("warn", (message, py.get_type::<PyFutureWarning>(), 1))?;
+        return Ok(());
+    }
+
     let strict_mode = validation.is_strict();
     let mode = if strict_mode { "True" } else { "False" };
     let outcome = if strict_mode {
@@ -821,6 +914,29 @@ fn warn_legacy_altchars(
     py.import("warnings")?
         .call_method1("warn", (message, category, 1))?;
     Ok(())
+}
+
+fn python_legacy_altchar_badchar(
+    input: &Bound<'_, PyAny>,
+    altchars: [u8; 2],
+) -> PyResult<Option<u8>> {
+    for byte in b"+/" {
+        if !altchars.contains(byte) && input.contains(u32::from(*byte))? {
+            return Ok(Some(*byte));
+        }
+    }
+    Ok(None)
+}
+
+fn legacy_altchar_badchar(input: &BytesLike<'_, '_>, altchars: [u8; 2]) -> Option<u8> {
+    unsafe {
+        input.with_bytes(|input| {
+            b"+/"
+                .iter()
+                .copied()
+                .find(|byte| !altchars.contains(byte) && input.contains(byte))
+        })
+    }
 }
 
 fn decode_with_binascii<'py>(

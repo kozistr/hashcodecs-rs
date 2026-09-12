@@ -372,6 +372,8 @@ fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
         let decoder = ConfiguredDecoder::new(&PreparedPolicy {
             altchars,
             warning_altchars: altchars,
+            known_warning_byte: None,
+            urlsafe_warning: false,
             alphabet: None,
             validation: Validation::Lenient,
             padding: Padding::Padded,

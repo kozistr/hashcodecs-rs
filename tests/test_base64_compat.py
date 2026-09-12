@@ -6,9 +6,9 @@ import sys
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
+from base64_compat_harness import Observation, observe_call
 
 import hashcodecs
 import hashcodecs.base64 as base64
@@ -89,13 +89,10 @@ def test_unpadded_decode_into_rejects_invalid_tails_without_writing_them() -> No
         assert output == bytes([0xA5] * 8)
 
 
-def _outcome(function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return function(value, altchars, validate=validate)
-    except Exception as error:
-        return type(error)
+def _outcome(
+    function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool
+) -> Observation:
+    return observe_call(lambda: function(value, altchars, validate=validate))
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
@@ -347,13 +344,8 @@ def test_python_315_encode_option_errors_match_cpython() -> None:
     assert base64.b64encode(b'a', padded=[]) == stdlib_base64.b64encode(b'a', padded=[])
 
 
-def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[str, object]) -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return function(value, **kwargs)
-    except Exception as error:
-        return type(error)
+def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[str, object]) -> Observation:
+    return observe_call(lambda: function(value, **kwargs))
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
@@ -410,12 +402,12 @@ def test_python_315_decode_options_match_cpython(
     assert actual == expected
 
     output = bytearray(len(value) + 1)
-    try:
+
+    def decode_into() -> bytes:
         written = base64.b64decode_into(value, output, altchars, **kwargs)
-        into = bytes(output[:written])
-    except Exception as error:
-        into = type(error)
-    assert into == expected
+        return bytes(output[:written])
+
+    assert observe_call(decode_into) == expected
 
 
 def _decode_keyword_outcome(
@@ -423,13 +415,8 @@ def _decode_keyword_outcome(
     value: bytes,
     altchars: bytes | None,
     kwargs: dict[str, object],
-) -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            return function(value, altchars, **kwargs)
-    except Exception as error:
-        return type(error)
+) -> Observation:
+    return observe_call(lambda: function(value, altchars, **kwargs))
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

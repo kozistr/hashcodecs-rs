@@ -7,6 +7,7 @@ import base64 as stdlib_base64
 import gc
 from array import array
 from collections.abc import Callable
+from typing import Any
 
 import mmh3
 from _support import (
@@ -97,7 +98,7 @@ def report(name: str, size: int, operation: Callable[[], object], expected: obje
     print(f'{name:15} {call_shape:10} {size_label:>8} {nanoseconds:10.1f} ns/call {rate:7.2f} GB/s')
 
 
-def report_buffer(name: str, payload: bytes, value: object, expected: int) -> None:
+def report_buffer(name: str, payload: bytes, value: Any, expected: int) -> None:
     def operation() -> int:
         return hashcodecs_xxhash.xxh3_64(value)
 
@@ -105,7 +106,7 @@ def report_buffer(name: str, payload: bytes, value: object, expected: int) -> No
     print(f'{len(payload):>8} B  {name:20} {latency(operation):9.2f} ns/call')
 
 
-def buffer_inputs(payload: bytes) -> tuple[tuple[str, object], ...]:
+def buffer_inputs(payload: bytes) -> tuple[tuple[str, Any], ...]:
     padded = b'\xa5' + payload + b'\x5a'
     interleaved = bytearray(len(payload) * 2)
     interleaved[::2] = payload

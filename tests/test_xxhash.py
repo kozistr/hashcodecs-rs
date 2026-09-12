@@ -15,6 +15,8 @@ import hashcodecs.xxhash as xxhash
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 XXH3_DETACH_THRESHOLD = 256 * 1024
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+dynamic_xxh3_64_batch: Callable[..., list[int]] = hashcodecs.xxh3_64_batch
+dynamic_xxh3_128_batch: Callable[..., list[int]] = hashcodecs.xxh3_128_batch
 
 
 def test_xxh3_functions_keep_public_module_metadata() -> None:
@@ -241,16 +243,16 @@ def test_xxh3_batch_mutable_input_race_is_serialized() -> None:
 
 
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
-def test_xxh3_rejects_non_buffers(function: object) -> None:
+def test_xxh3_rejects_non_buffers(function: Callable[..., object]) -> None:
     with pytest.raises(TypeError):
-        function([1, 2, 3])  # type: ignore[operator]
+        function([1, 2, 3])
 
 
 def test_xxh3_rejects_invalid_batch_and_seed_inputs() -> None:
     with pytest.raises(TypeError):
-        hashcodecs.xxh3_64_batch((b'a', b'b'))  # type: ignore[arg-type]
+        dynamic_xxh3_64_batch((b'a', b'b'))
     with pytest.raises(TypeError, match='items element must be a bytes-like object'):
-        hashcodecs.xxh3_128_batch([b'valid', object()])
+        dynamic_xxh3_128_batch([b'valid', object()])
     with pytest.raises(OverflowError):
         hashcodecs.xxh3_64(b'value', -1)
     with pytest.raises(OverflowError):

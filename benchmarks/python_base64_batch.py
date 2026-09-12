@@ -276,6 +276,7 @@ def allocation_profile(direction: str, item_size: int, batch_size: int) -> None:
             result = operations[name]()
             current, peak = tracemalloc.get_traced_memory()
             check_result(name, result, expected, outputs)
+            assert isinstance(result, list)
             retained = sys.getsizeof(result) + sum(sys.getsizeof(item) for item in result)
             print(
                 f'alloc direction={direction} operation={name:10} item={item_size} B batch={batch_size} '

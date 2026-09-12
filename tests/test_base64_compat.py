@@ -4,8 +4,9 @@ import binascii
 import inspect
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from base64_compat_harness import Observation, observe_call
@@ -13,10 +14,22 @@ from base64_compat_harness import Observation, observe_call
 import hashcodecs
 import hashcodecs.base64 as base64
 
+stdlib_b64encode: Callable[..., bytes] = stdlib_base64.b64encode
+stdlib_b64decode: Callable[..., bytes] = stdlib_base64.b64decode
+dynamic_b64encode: Callable[..., bytes] = base64.b64encode
+dynamic_b64decode: Callable[..., bytes] = base64.b64decode
+dynamic_b64decode_into: Callable[..., int] = base64.b64decode_into
+dynamic_standard_b64encode: Callable[..., bytes] = base64.standard_b64encode
+dynamic_urlsafe_b64encode: Callable[..., bytes] = base64.urlsafe_b64encode
+dynamic_standard_b64decode: Callable[..., bytes] = base64.standard_b64decode
+
 PYTHON_315 = sys.version_info >= (3, 15)
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
 BASE64_DETACH_THRESHOLD = 256 * 1024
+BASE64_ALPHABET = getattr(
+    binascii, 'BASE64_ALPHABET', b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+)
 GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
@@ -102,7 +115,7 @@ def test_python_315_encode_options_match_cpython() -> None:
         for altchars in (None, b'-_', b'@#'):
             for padded in (False, True):
                 for wrapcol in (0, 1, 3, 4, 5, 7, 8, 11, 12, 76, 80, 1000):
-                    expected = stdlib_base64.b64encode(
+                    expected = stdlib_b64encode(
                         payload,
                         altchars,
                         padded=padded,
@@ -141,19 +154,19 @@ def test_python_315_constructed_alphabets_match_cpython() -> None:
         assert base64.b64encode(b'abc', altchars) == expected
 
     payload = bytes(range(256))
-    altchars.alphabet = binascii.BASE64_ALPHABET[::-1]
+    altchars.alphabet = BASE64_ALPHABET[::-1]
     assert base64.b64encode(payload, altchars) == stdlib_base64.b64encode(payload, altchars)
 
     encoded = b'YWJj'
-    expected = stdlib_base64.b64decode(encoded, altchars, ignorechars=b'')
+    expected = stdlib_b64decode(encoded, altchars, ignorechars=b'')
     assert expected == b'\x9e\x9d\x9c'
     assert base64.b64decode(encoded, altchars, ignorechars=b'') == expected
     output = bytearray(len(expected))
     assert base64.b64decode_into(encoded, output, altchars, ignorechars=b'') == len(expected)
     assert output == expected
 
-    altchars.alphabet = b'=' + binascii.BASE64_ALPHABET[1:]
-    expected = stdlib_base64.b64decode(b'BB==', altchars, ignorechars=b'')
+    altchars.alphabet = b'=' + BASE64_ALPHABET[1:]
+    expected = stdlib_b64decode(b'BB==', altchars, ignorechars=b'')
     assert expected == b'\x04'
     assert base64.b64decode(b'BB==', altchars, ignorechars=b'') == expected
     output = bytearray(len(expected))
@@ -168,13 +181,13 @@ def test_decode_dispatches_translate_for_bytes_subclasses(
     urlsafe: bool, reusable: bool, translated: bytes | str
 ) -> None:
     class Source(bytes):
-        def translate(self, table: bytes) -> bytes | str:
+        def translate(self, table: Any, delete: Any = b'') -> Any:
             return translated
 
     source = Source(b'YWJj')
     expected = stdlib_base64.urlsafe_b64decode(source) if urlsafe else stdlib_base64.b64decode(source, b'-_')
     if not reusable:
-        function = base64.urlsafe_b64decode if urlsafe else base64.b64decode
+        function = cast(Callable[..., bytes], base64.urlsafe_b64decode if urlsafe else base64.b64decode)
         args = (source,) if urlsafe else (source, b'-_')
         assert function(*args) == expected
         return
@@ -192,7 +205,7 @@ def test_decode_dispatches_translate_for_bytes_subclasses(
 @pytest.mark.parametrize('reusable', [False, True])
 @pytest.mark.parametrize('configured', [False, True])
 def test_python_315_decode_argument_conversion_order_matches_cpython(reusable: bool, configured: bool) -> None:
-    def run(function: Callable[..., bytes], into: bool) -> tuple[bytes, list[str]]:
+    def run(function: Callable[..., bytes | int], into: bool) -> tuple[bytes, list[str]]:
         events: list[str] = []
 
         class Buffer:
@@ -214,7 +227,7 @@ def test_python_315_decode_argument_conversion_order_matches_cpython(reusable: b
 
             def __radd__(self, other: object) -> bytes:
                 events.append('altchars.__radd__')
-                return binascii.BASE64_ALPHABET
+                return BASE64_ALPHABET
 
         class Option:
             def __init__(self, name: str, value: bool) -> None:
@@ -236,9 +249,11 @@ def test_python_315_decode_argument_conversion_order_matches_cpython(reusable: b
         output = bytearray(3)
         if into:
             written = function(args[0], output, args[1], **kwargs)
+            assert isinstance(written, int)
             result = bytes(output[:written])
         else:
             result = function(*args, **kwargs)
+            assert isinstance(result, bytes)
         return result, events
 
     expected = run(stdlib_base64.b64decode, False)
@@ -341,10 +356,10 @@ def test_python_315_encode_option_errors_match_cpython() -> None:
     for kwargs in ({'wrapcol': -1}, {'wrapcol': 1.5}, {'wrapcol': None}, {'wrapcol': 2**1000}):
         expected = _keyword_outcome(stdlib_base64.b64encode, b'abc', kwargs)
         assert _keyword_outcome(base64.b64encode, b'abc', kwargs) == expected
-    assert base64.b64encode(b'a', padded=[]) == stdlib_base64.b64encode(b'a', padded=[])
+    assert dynamic_b64encode(b'a', padded=[]) == stdlib_b64encode(b'a', padded=[])
 
 
-def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: dict[str, object]) -> Observation:
+def _keyword_outcome(function: Callable[..., bytes], value: bytes, kwargs: Mapping[str, object]) -> Observation:
     return observe_call(lambda: function(value, **kwargs))
 
 
@@ -404,7 +419,7 @@ def test_python_315_decode_options_match_cpython(
     output = bytearray(len(value) + 1)
 
     def decode_into() -> bytes:
-        written = base64.b64decode_into(value, output, altchars, **kwargs)
+        written = dynamic_b64decode_into(value, output, altchars, **kwargs)
         return bytes(output[:written])
 
     assert observe_call(decode_into) == expected
@@ -423,7 +438,7 @@ def _decode_keyword_outcome(
 def test_python_315_ignorechars_and_altchar_warnings() -> None:
     assert base64.b64decode(b'Y WJj', ignorechars=memoryview(b' ')) == b'abc'
     with pytest.raises(TypeError):
-        base64.b64decode(b'YWJj', ignorechars=None)
+        dynamic_b64decode(b'YWJj', ignorechars=None)
     output = bytearray(2)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
@@ -456,11 +471,11 @@ def test_python_315_translated_subclasses_retain_altchar_warnings(urlsafe: bool,
     source = Source(b'++8=')
     output = bytearray(2)
     if urlsafe:
-        function = base64.urlsafe_b64decode_into if reusable else base64.urlsafe_b64decode
+        function = cast(Callable[..., object], base64.urlsafe_b64decode_into if reusable else base64.urlsafe_b64decode)
         args = (source, output) if reusable else (source,)
         kwargs = {'padded': True}
     else:
-        function = base64.b64decode_into if reusable else base64.b64decode
+        function = cast(Callable[..., object], base64.b64decode_into if reusable else base64.b64decode)
         args = (source, output, b'-_') if reusable else (source, b'-_')
         kwargs = {}
 
@@ -572,13 +587,13 @@ def test_base64_binding_schema_exports_complete_typed_documentation() -> None:
 
 def test_base64_binding_schema_drives_argument_errors() -> None:
     with pytest.raises(TypeError, match=r"standard_b64encode\(\) missing required argument 's'"):
-        base64.standard_b64encode()
+        dynamic_standard_b64encode()
     with pytest.raises(TypeError, match=r'urlsafe_b64encode\(\) takes at most 1 positional arguments'):
-        base64.urlsafe_b64encode(b'', True)
+        dynamic_urlsafe_b64encode(b'', True)
     with pytest.raises(TypeError, match=r"standard_b64decode\(\) got an unexpected keyword argument 'unknown'"):
-        base64.standard_b64decode(b'', unknown=True)
+        dynamic_standard_b64decode(b'', unknown=True)
     with pytest.raises(TypeError, match=r"b64encode\(\) got multiple values for argument 's'"):
-        base64.b64encode(b'', s=b'')
+        dynamic_b64encode(b'', s=b'')
 
 
 def test_b64decode_into_signature_does_not_advertise_sentinel_defaults_as_none() -> None:
@@ -586,13 +601,13 @@ def test_b64decode_into_signature_does_not_advertise_sentinel_defaults_as_none()
     assert parameters['validate'].default is not None
     assert parameters['ignorechars'].default is not None
     with pytest.raises(TypeError):
-        base64.b64decode_into(b'YWJj', bytearray(3), ignorechars=None)
+        dynamic_b64decode_into(b'YWJj', bytearray(3), ignorechars=None)
 
     omitted = bytearray(3)
     with pytest.raises(binascii.Error):
         base64.b64decode_into(b'YWJj!', omitted, ignorechars=b'')
     explicit_none = bytearray(3)
-    assert base64.b64decode_into(b'YWJj!', explicit_none, validate=None, ignorechars=b'') == 3
+    assert dynamic_b64decode_into(b'YWJj!', explicit_none, validate=None, ignorechars=b'') == 3
     assert explicit_none == b'abc'
 
 

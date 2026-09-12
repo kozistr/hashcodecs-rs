@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import html
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,7 +70,7 @@ class Chart:
     panels: tuple[Panel, ...]
 
 
-def panel(title: str, categories: list[str], **series: list[float | None]) -> Panel:
+def panel(title: str, categories: Sequence[str], **series: Sequence[float | None]) -> Panel:
     return Panel(
         title,
         tuple(categories),

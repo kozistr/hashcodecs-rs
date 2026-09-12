@@ -4,10 +4,12 @@ import random
 import sys
 from collections.abc import Callable
 from functools import partial
+from typing import Any
 
 import pytest
 from base64_compat_harness import (
     Action,
+    ActionKind,
     AltcharsHook,
     BoolHook,
     BufferHook,
@@ -24,6 +26,9 @@ from base64_compat_harness import (
 
 import hashcodecs.base64 as base64
 
+stdlib_b64encode: Callable[..., bytes] = stdlib_base64.b64encode
+stdlib_b64decode: Callable[..., bytes] = stdlib_base64.b64decode
+
 PYTHON_315 = sys.version_info >= (3, 15)
 BASE64_ALPHABET = getattr(
     binascii, 'BASE64_ALPHABET', b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -35,7 +40,7 @@ class SentinelError(Exception):
 
 
 def _decode_into_case(
-    function: Callable[..., bytes] | Callable[..., int],
+    function: Callable[..., Any],
     native_into: bool,
     urlsafe: bool,
 ) -> Callable[[], Invocation]:
@@ -280,7 +285,9 @@ ENCODE_ACTION_CASES = (
 )
 
 
-def _encode_action_case(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
+def _encode_action_case(
+    function: Callable[..., bytes], hook: str, action_name: ActionKind
+) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -359,7 +366,7 @@ def _encode_action_case(function: Callable[..., bytes], hook: str, action_name: 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize(('hook', 'action_name'), ENCODE_ACTION_CASES)
-def test_encode_callback_actions(hook: str, action_name: str) -> None:
+def test_encode_callback_actions(hook: str, action_name: ActionKind) -> None:
     expected = observe(_encode_action_case(stdlib_base64.b64encode, hook, action_name))
     actual = observe(_encode_action_case(base64.b64encode, hook, action_name))
     assert actual == expected
@@ -384,7 +391,9 @@ DECODE_ACTION_CASES = (
 )
 
 
-def _decode_action_case(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
+def _decode_action_case(
+    function: Callable[..., bytes], hook: str, action_name: ActionKind
+) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -463,7 +472,7 @@ def _decode_action_case(function: Callable[..., bytes], hook: str, action_name: 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize(('hook', 'action_name'), DECODE_ACTION_CASES)
-def test_decode_callback_actions(hook: str, action_name: str) -> None:
+def test_decode_callback_actions(hook: str, action_name: ActionKind) -> None:
     expected = observe(_decode_action_case(stdlib_base64.b64decode, hook, action_name))
     actual = observe(_decode_action_case(base64.b64decode, hook, action_name))
     assert actual == expected
@@ -484,10 +493,10 @@ def test_decode_encode_result(encoded: str) -> None:
 
 
 def _decode_into_action_case(
-    function: Callable[..., bytes] | Callable[..., int],
+    function: Callable[..., Any],
     native_into: bool,
     hook: str,
-    action_name: str,
+    action_name: ActionKind,
 ) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
@@ -544,7 +553,7 @@ def _decode_into_action_case(
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize('hook', ['canonical', 'input.release'])
 @pytest.mark.parametrize('action_name', ['invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter'])
-def test_decode_destination_actions(hook: str, action_name: str) -> None:
+def test_decode_destination_actions(hook: str, action_name: ActionKind) -> None:
     expected = observe(_decode_into_action_case(stdlib_base64.b64decode, False, hook, action_name))
     actual = observe(_decode_into_action_case(base64.b64decode_into, True, hook, action_name))
     assert actual == expected
@@ -611,12 +620,12 @@ def test_invalid_argument_precedence(
 def _configured_result(
     function: Callable[..., bytes],
     encoded: object,
-    altchars: bytes | None = None,
+    *args: object,
     **kwargs: object,
 ) -> Observation:
     return observe(
         lambda: Invocation(
-            lambda: function(encoded, altchars, **kwargs),
+            lambda: function(encoded, *args, **kwargs),
             [],
             SentinelError('sentinel'),
         )
@@ -877,7 +886,7 @@ def test_decode_fuzz() -> None:
 
 
 def _encode_fuzz_case(
-    function: Callable[..., bytes] | Callable[..., int],
+    function: Callable[..., Any],
     native_into: bool,
     payload: bytes,
     altchars: bytes | None,
@@ -918,7 +927,7 @@ def test_encode_fuzz() -> None:
         wrapcol = randomizer.choice(wrapcol_choices)
         expected = observe(
             lambda payload=payload, altchars=altchars, padded=padded, wrapcol=wrapcol: Invocation(
-                lambda: stdlib_base64.b64encode(payload, altchars, padded=padded, wrapcol=wrapcol),
+                lambda: stdlib_b64encode(payload, altchars, padded=padded, wrapcol=wrapcol),
                 [],
                 SentinelError('sentinel'),
             )
@@ -975,11 +984,11 @@ def _capacity_case(direction: str, native_into: bool, output_size: int) -> Calla
             if direction == 'encode':
                 if native_into:
                     return base64.b64encode_into(b'\xfb\xff', output, b'-_', padded=False)
-                result = stdlib_base64.b64encode(b'\xfb\xff', b'-_', padded=False)
+                result = stdlib_b64encode(b'\xfb\xff', b'-_', padded=False)
             else:
                 if native_into:
                     return base64.b64decode_into(b'-_8', output, b'-_', validate=True, padded=False)
-                result = stdlib_base64.b64decode(b'-_8', b'-_', validate=True, padded=False)
+                result = stdlib_b64decode(b'-_8', b'-_', validate=True, padded=False)
             if len(output) < len(result):
                 raise ValueError(f'Base64 output requires {len(result)} bytes but the destination has {len(output)}')
             output[: len(result)] = result
@@ -1012,10 +1021,10 @@ def test_into_capacity(
 
 
 def _encode_into_action_case(
-    function: Callable[..., bytes] | Callable[..., int],
+    function: Callable[..., Any],
     native_into: bool,
     hook: str,
-    action_name: str,
+    action_name: ActionKind,
 ) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
@@ -1078,7 +1087,7 @@ ENCODE_INTO_ACTION_CASES = tuple(
 @pytest.mark.parametrize(('hook', 'action_name'), ENCODE_INTO_ACTION_CASES)
 def test_encode_destination_actions(
     hook: str,
-    action_name: str,
+    action_name: ActionKind,
 ) -> None:
     expected = observe(_encode_into_action_case(stdlib_base64.urlsafe_b64encode, False, hook, action_name))
     actual = observe(_encode_into_action_case(base64.urlsafe_b64encode_into, True, hook, action_name))

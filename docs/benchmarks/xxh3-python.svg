@@ -102,24 +102,24 @@
 <text x="272.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 KiB</text>
 <text x="436.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
-<polyline points="108.0,700.1 272.0,621.3 436.0,557.6 600.0,632.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="700.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 64 B, 4.72 GiB/s</title></circle>
-<text x="126.2" y="690.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.72</text>
-<circle cx="272.0" cy="621.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 1 KiB, 42.22 GiB/s</title></circle>
-<text x="272.0" y="611.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">42.22</text>
-<circle cx="436.0" cy="557.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 4 KiB, 72.57 GiB/s</title></circle>
-<text x="436.0" y="547.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">72.57</text>
-<circle cx="600.0" cy="632.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 1 MiB, 36.93 GiB/s</title></circle>
-<text x="578.5" y="622.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.93</text>
-<polyline points="108.0,683.4 272.0,575.8 436.0,533.5 600.0,632.6" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="683.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 64 B, 12.69 GiB/s</title></circle>
-<text x="129.5" y="673.4" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">12.69</text>
-<circle cx="272.0" cy="575.8" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 1 KiB, 63.91 GiB/s</title></circle>
-<text x="272.0" y="592.8" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">63.91</text>
-<circle cx="436.0" cy="533.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 4 KiB, 84.05 GiB/s</title></circle>
-<text x="436.0" y="523.5" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">84.05</text>
-<circle cx="600.0" cy="632.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 1 MiB, 36.87 GiB/s</title></circle>
-<text x="578.5" y="649.6" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.87</text>
+<polyline points="108.0,698.5 272.0,616.2 436.0,554.9 600.0,636.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="698.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 64 B, 5.50 GiB/s</title></circle>
+<text x="126.2" y="688.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.50</text>
+<circle cx="272.0" cy="616.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 1 KiB, 44.67 GiB/s</title></circle>
+<text x="272.0" y="606.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">44.67</text>
+<circle cx="436.0" cy="554.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 4 KiB, 73.87 GiB/s</title></circle>
+<text x="436.0" y="544.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">73.87</text>
+<circle cx="600.0" cy="636.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs list, 1 MiB, 35.05 GiB/s</title></circle>
+<text x="578.5" y="626.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">35.05</text>
+<polyline points="108.0,681.7 272.0,578.5 436.0,535.3 600.0,632.9" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="681.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 64 B, 13.48 GiB/s</title></circle>
+<text x="129.5" y="671.7" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">13.48</text>
+<circle cx="272.0" cy="578.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 1 KiB, 62.64 GiB/s</title></circle>
+<text x="272.0" y="568.5" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">62.64</text>
+<circle cx="436.0" cy="535.3" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 4 KiB, 83.19 GiB/s</title></circle>
+<text x="436.0" y="525.3" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">83.19</text>
+<circle cx="600.0" cy="632.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): hashcodecs packed, 1 MiB, 36.71 GiB/s</title></circle>
+<text x="578.5" y="649.9" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.71</text>
 <polyline points="108.0,705.4 272.0,678.8 436.0,645.9 600.0,672.8" fill="none" stroke="#d55e00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="705.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>XXH3-64 batch (32 items): xxhash, 64 B, 2.20 GiB/s</title></circle>
 <text x="126.2" y="647.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.20</text>
@@ -151,24 +151,24 @@
 <text x="882.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 KiB</text>
 <text x="1046.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
-<polyline points="718.0,702.4 882.0,633.7 1046.0,571.8 1210.0,631.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="702.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 64 B, 3.62 GiB/s</title></circle>
-<text x="736.2" y="692.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.62</text>
-<circle cx="882.0" cy="633.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 1 KiB, 36.34 GiB/s</title></circle>
-<text x="882.0" y="623.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.34</text>
-<circle cx="1046.0" cy="571.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 4 KiB, 65.83 GiB/s</title></circle>
-<text x="1046.0" y="561.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">65.83</text>
-<circle cx="1210.0" cy="631.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 1 MiB, 37.17 GiB/s</title></circle>
-<text x="1188.5" y="621.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">37.17</text>
-<polyline points="718.0,694.1 882.0,590.7 1046.0,541.0 1210.0,632.3" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="694.1" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 64 B, 7.57 GiB/s</title></circle>
-<text x="736.2" y="668.1" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.57</text>
-<circle cx="882.0" cy="590.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 1 KiB, 56.80 GiB/s</title></circle>
-<text x="882.0" y="607.7" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">56.80</text>
-<circle cx="1046.0" cy="541.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 4 KiB, 80.49 GiB/s</title></circle>
-<text x="1046.0" y="531.0" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">80.49</text>
-<circle cx="1210.0" cy="632.3" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 1 MiB, 36.98 GiB/s</title></circle>
-<text x="1188.5" y="649.3" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.98</text>
+<polyline points="718.0,703.9 882.0,642.5 1046.0,576.9 1210.0,633.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="703.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 64 B, 2.90 GiB/s</title></circle>
+<text x="736.2" y="693.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.90</text>
+<circle cx="882.0" cy="642.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 1 KiB, 32.13 GiB/s</title></circle>
+<text x="882.0" y="632.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">32.13</text>
+<circle cx="1046.0" cy="576.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 4 KiB, 63.38 GiB/s</title></circle>
+<text x="1046.0" y="566.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">63.38</text>
+<circle cx="1210.0" cy="633.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs list, 1 MiB, 36.49 GiB/s</title></circle>
+<text x="1188.5" y="623.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.49</text>
+<polyline points="718.0,694.2 882.0,593.0 1046.0,541.8 1210.0,633.2" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="694.2" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 64 B, 7.53 GiB/s</title></circle>
+<text x="736.2" y="668.2" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.53</text>
+<circle cx="882.0" cy="593.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 1 KiB, 55.71 GiB/s</title></circle>
+<text x="882.0" y="610.0" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">55.71</text>
+<circle cx="1046.0" cy="541.8" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 4 KiB, 80.11 GiB/s</title></circle>
+<text x="1046.0" y="531.8" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">80.11</text>
+<circle cx="1210.0" cy="633.2" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): hashcodecs packed, 1 MiB, 36.59 GiB/s</title></circle>
+<text x="1188.5" y="650.2" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">36.59</text>
 <polyline points="718.0,707.8 882.0,689.1 1046.0,659.3 1210.0,673.4" fill="none" stroke="#d55e00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="707.8" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): xxhash, 64 B, 1.05 GiB/s</title></circle>
 <text x="736.2" y="649.8" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.05</text>
@@ -177,5 +177,5 @@
 <circle cx="1046.0" cy="659.3" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): xxhash, 4 KiB, 24.14 GiB/s</title></circle>
 <text x="1046.0" y="649.3" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">24.14</text>
 <circle cx="1210.0" cy="673.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 batch (32 items): xxhash, 1 MiB, 17.45 GiB/s</title></circle>
-<text x="1188.5" y="663.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.45</text>
+<text x="1188.5" y="690.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.45</text>
 </svg>

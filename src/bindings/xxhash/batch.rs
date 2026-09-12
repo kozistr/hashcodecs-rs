@@ -14,11 +14,19 @@ use crate::bindings::objects::{
     batch_results, bytearray_data, bytearray_size, list_from_fn, list_items,
 };
 #[cfg(not(Py_GIL_DISABLED))]
-use crate::bindings::objects::{exact_bytes_at, exact_bytes_total};
-use crate::bindings::runtime::XXH3_DETACH_THRESHOLD;
+use crate::bindings::objects::{bytes_data, bytes_size, exact_bytes_at, exact_bytes_total};
 use crate::xxhash::{xxh3_64_batch_for_each, xxh3_128_batch_for_each};
 
 const BATCH_TOO_LARGE: &str = "XXH3 batch is too large";
+// Batch setup and output costs differ from one-shot hashing. Bound both input
+// traffic and per-item work, including arbitrarily large batches of empty bytes.
+const BATCH_DETACH_BYTES: usize = 1024 * 1024;
+const BATCH_DETACH_ITEMS: usize = 16 * 1024;
+
+fn should_detach(items: usize, total: usize) -> bool {
+    total >= BATCH_DETACH_BYTES || items >= BATCH_DETACH_ITEMS
+}
+
 // At most 512 bytes for XXH3-128 results; larger batches use a fallible Vec.
 const STACK_BATCH_RESULTS: usize = 32;
 // Packed output needs only borrowed slice pairs, so keep up to 1 KiB on stack.
@@ -51,7 +59,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         &self,
         operation: impl FnOnce(&[&'a [u8]]) -> T,
     ) -> Option<T> {
-        if self.len() > CAPACITY || self.total >= XXH3_DETACH_THRESHOLD {
+        if self.len() > CAPACITY || should_detach(self.len(), self.total) {
             return None;
         }
 
@@ -69,14 +77,15 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         Ok(inputs)
     }
 
-    fn retain(&self) -> PyResult<Vec<Bound<'py, PyBytes>>> {
+    fn retain(&self) -> PyResult<Vec<Py<PyBytes>>> {
         let mut retained = batch_results(self.len(), BATCH_TOO_LARGE)?;
         for index in 0..self.len() {
             unsafe {
                 let item = ffi::PyList_GET_ITEM(self.items.as_ptr(), index as ffi::Py_ssize_t);
                 retained.push(
                     Bound::from_borrowed_ptr(self.items.py(), item)
-                        .cast_into_unchecked::<PyBytes>(),
+                        .cast_into_unchecked::<PyBytes>()
+                        .unbind(),
                 );
             }
         }
@@ -85,9 +94,9 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-fn borrow_retained<'a, 'py>(retained: &'a [Bound<'py, PyBytes>]) -> PyResult<Vec<&'a [u8]>> {
+fn borrow_retained<'a>(py: Python<'a>, retained: &'a [Py<PyBytes>]) -> PyResult<Vec<&'a [u8]>> {
     let mut inputs = batch_results(retained.len(), BATCH_TOO_LARGE)?;
-    inputs.extend(retained.iter().map(|item| item.as_bytes()));
+    inputs.extend(retained.iter().map(|item| item.bind(py).as_bytes()));
     Ok(inputs)
 }
 
@@ -106,7 +115,7 @@ fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
     let total = inputs
         .iter()
         .fold(0_usize, |total, input| total.saturating_add(input.len()));
-    inputs.iter().all(BytesLike::detach_safe) && total >= XXH3_DETACH_THRESHOLD
+    should_detach(inputs.len(), total) && inputs.iter().all(BytesLike::detach_safe)
 }
 
 fn direct_output_safe(
@@ -169,7 +178,7 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
     // The hash callback must only fill native output, without calling Python.
     #[cfg(not(Py_GIL_DISABLED))]
     if let Some(exact) = ExactBytesList::checked(items) {
-        if exact.len() <= scratch.len() && exact.total < XXH3_DETACH_THRESHOLD {
+        if exact.len() <= scratch.len() && !should_detach(exact.len(), exact.total) {
             let mut inputs = [&[][..]; STACK_BATCH_RESULTS];
             let inputs = &mut inputs[..exact.len()];
             for (index, input) in inputs.iter_mut().enumerate() {
@@ -177,14 +186,19 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
             }
             return unsafe { hash_into_scratch(inputs, seed, scratch, hash) };
         }
-        if exact.total < XXH3_DETACH_THRESHOLD {
+        if !should_detach(exact.len(), exact.total) {
             let inputs = exact.borrow()?;
             return unsafe { hash_into_scratch(&inputs, seed, scratch, hash) };
         }
 
         let retained = exact.retain()?;
-        let inputs = borrow_retained(&retained)?;
-        return py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) });
+        let inputs = borrow_retained(py, &retained)?;
+        let hashes = py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) });
+        drop(inputs);
+        for item in retained {
+            drop(item.into_bound(py));
+        }
+        return hashes;
     }
 
     let items = list_items(items)?;
@@ -230,7 +244,11 @@ fn write_packed_128_at(output: *mut u8, index: usize, [low, high]: [u64; 2]) {
     }
 }
 
-trait PackedDigest: Copy + Send + Sync {
+/// # Safety
+///
+/// Implementations must have exactly SIZE initialized bytes without padding,
+/// and their native representation must match packed output on little-endian hosts.
+unsafe trait PackedDigest: Copy + Send + Sync {
     const SIZE: usize;
 
     fn for_each(inputs: &[&[u8]], seed: u64, callback: impl FnMut(Self));
@@ -241,6 +259,26 @@ trait PackedDigest: Copy + Send + Sync {
     fn collect(inputs: &[&[u8]], seed: u64) -> PyResult<Vec<Self>> {
         let mut hashes = batch_results(inputs.len(), BATCH_TOO_LARGE)?;
         Self::for_each(inputs, seed, |hash| hashes.push(hash));
+        Ok(hashes)
+    }
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    fn collect_retained(retained: &[Py<PyBytes>], seed: u64) -> PyResult<Vec<Self>> {
+        let mut hashes = batch_results(retained.len(), BATCH_TOO_LARGE)?;
+        // Borrow a bounded block while detached instead of allocating another
+        // full-batch vector of slice pairs. The block size preserves SIMD groups.
+        let mut inputs = [&[][..]; PACKED_STACK_INPUTS];
+        for chunk in retained.chunks(PACKED_STACK_INPUTS) {
+            let inputs = &mut inputs[..chunk.len()];
+            for (input, item) in inputs.iter_mut().zip(chunk) {
+                // Exact bytes are immutable; each owned reference outlives the
+                // detached call even if another thread clears the source list.
+                *input = unsafe {
+                    std::slice::from_raw_parts(bytes_data(item.as_ptr()), bytes_size(item.as_ptr()))
+                };
+            }
+            Self::for_each(inputs, seed, |hash| hashes.push(hash));
+        }
         Ok(hashes)
     }
 
@@ -268,6 +306,16 @@ trait PackedDigest: Copy + Send + Sync {
         with_bytearray(output, || {
             let written = packed_output_len(output, hashes.len(), Self::SIZE)?;
             let output = unsafe { bytearray_data(output.as_ptr()) };
+            // Both implementations are padding-free u64 words in packed order.
+            // On little-endian hosts the staged results already have the wire
+            // representation, so publish them with one copy after reacquiring
+            // the GIL (or bytearray critical section) and rechecking its size.
+            #[cfg(target_endian = "little")]
+            unsafe {
+                debug_assert_eq!(std::mem::size_of::<Self>(), Self::SIZE);
+                std::ptr::copy_nonoverlapping(hashes.as_ptr().cast::<u8>(), output, written);
+            }
+            #[cfg(target_endian = "big")]
             for (index, hash) in hashes.iter().copied().enumerate() {
                 Self::write_at(output, index, hash);
             }
@@ -276,7 +324,8 @@ trait PackedDigest: Copy + Send + Sync {
     }
 }
 
-impl PackedDigest for u64 {
+// SAFETY: u64 is an eight-byte word without padding.
+unsafe impl PackedDigest for u64 {
     const SIZE: usize = 8;
 
     #[inline(always)]
@@ -290,7 +339,8 @@ impl PackedDigest for u64 {
     }
 }
 
-impl PackedDigest for [u64; 2] {
+// SAFETY: the array is two contiguous words in low/high packed order.
+unsafe impl PackedDigest for [u64; 2] {
     const SIZE: usize = 16;
 
     #[inline(always)]
@@ -383,14 +433,14 @@ fn packed_batch_into<D: PackedDigest>(
 ) -> PyResult<usize> {
     #[cfg(not(Py_GIL_DISABLED))]
     if let Some(exact) = ExactBytesList::checked(items) {
-        if exact.len() <= PACKED_STACK_INPUTS && exact.total < XXH3_DETACH_THRESHOLD {
+        if exact.len() <= PACKED_STACK_INPUTS && !should_detach(exact.len(), exact.total) {
             return exact
                 .with_stack::<PACKED_STACK_INPUTS, _>(|inputs| {
                     D::write_direct(output, inputs, seed)
                 })
                 .expect("stack exact-byte conditions were checked");
         }
-        if exact.total < XXH3_DETACH_THRESHOLD {
+        if !should_detach(exact.len(), exact.total) {
             let inputs = exact.borrow()?;
             return D::write_direct(output, &inputs, seed);
         }
@@ -399,9 +449,13 @@ fn packed_batch_into<D: PackedDigest>(
         with_bytearray(output, || {
             packed_output_len(output, retained.len(), D::SIZE)
         })?;
-        let inputs = borrow_retained(&retained)?;
-        let hashes = py.detach(|| D::collect(&inputs, seed))?;
-        return D::write_results(output, &hashes);
+        let hashes = py.detach(|| D::collect_retained(&retained, seed));
+        // We are attached again: use Bound's direct decref instead of asking
+        // Py's destructor to check interpreter attachment for every item.
+        for item in retained {
+            drop(item.into_bound(py));
+        }
+        return D::write_results(output, &hashes?);
     }
 
     let items = list_items(items)?;
@@ -444,6 +498,53 @@ pub(super) fn xxh3_128_batch_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    #[test]
+    fn retained_packed_inputs_survive_source_mutation() {
+        Python::initialize();
+        Python::attach(|py| {
+            let payloads: Vec<_> = (0..65).map(|index| vec![index; 16385]).collect();
+            let items =
+                PyList::new(py, payloads.iter().map(|input| PyBytes::new(py, input))).unwrap();
+            let retained = ExactBytesList::checked(&items).unwrap().retain().unwrap();
+            let output = PyByteArray::new(py, &[0; 65 * 16]);
+            let shared_items = items.clone().unbind();
+            let shared_output = output.clone().unbind();
+            let (hashes64, hashes128) = py.detach(|| {
+                std::thread::spawn(move || {
+                    Python::attach(|py| {
+                        shared_items.bind(py).call_method0("clear").unwrap();
+                        shared_output.bind(py).resize(1).unwrap();
+                    });
+                })
+                .join()
+                .unwrap();
+                (
+                    u64::collect_retained(&retained, 42).unwrap(),
+                    <[u64; 2]>::collect_retained(&retained, 42).unwrap(),
+                )
+            });
+            assert!(items.is_empty());
+            assert_eq!(
+                hashes64,
+                payloads
+                    .iter()
+                    .map(|input| crate::xxhash::xxh3_64(input, 42))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                hashes128,
+                payloads
+                    .iter()
+                    .map(|input| crate::xxhash::xxh3_128(input, 42))
+                    .collect::<Vec<_>>()
+            );
+            assert!(u64::write_results(&output, &hashes64).is_err());
+            assert!(<[u64; 2]>::write_results(&output, &hashes128).is_err());
+            assert_eq!(unsafe { output.as_bytes() }, &[0]);
+        });
+    }
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]

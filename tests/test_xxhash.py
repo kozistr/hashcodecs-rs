@@ -186,6 +186,54 @@ def test_xxh3_long_batch_remainders_match_one_shot(item_count: int) -> None:
         assert output == b''.join(value.to_bytes(digest_size, 'little') for value in expected)
 
 
+@pytest.mark.parametrize('bits', [64, 128])
+@pytest.mark.parametrize('kind', ['bytes', 'memoryview', 'bytearray'])
+@pytest.mark.parametrize(
+    ('item_size', 'item_count'),
+    [(64, count + delta) for count in (4096, 8192, 16384) for delta in (-1, 0, 1)]
+    + [(16385, count) for count in (63, 64, 65, 127, 128, 129)]
+    + [(0, count) for count in (16383, 16384, 16385)],
+)
+def test_xxh3_batch_detachment_boundaries(bits: int, kind: str, item_size: int, item_count: int) -> None:
+    one_shot = getattr(hashcodecs, f'xxh3_{bits}')
+    batch = getattr(hashcodecs, f'xxh3_{bits}_batch')
+    batch_into = getattr(hashcodecs, f'xxh3_{bits}_batch_into')
+    payloads = [bytes([index % 251]) * item_size for index in range(item_count)]
+    items = (
+        payloads
+        if kind == 'bytes'
+        else [memoryview(item) if kind == 'memoryview' else bytearray(item) for item in payloads]
+    )
+    expected = [one_shot(item, 42) for item in payloads]
+    assert batch(items, 42) == expected
+    packed = b''.join(value.to_bytes(bits // 8, 'little') for value in expected)
+    output = bytearray(len(packed)) + b'untouched'
+    assert batch_into(items, output, 42) == len(packed)
+    assert output == packed + b'untouched'
+
+    too_small = bytearray(b'?' * (len(packed) - 1))
+    with pytest.raises(ValueError, match='destination has'):
+        batch_into(items, too_small, 42)
+    assert too_small == b'?' * (len(packed) - 1)
+
+
+@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
+@pytest.mark.parametrize('bits', [64, 128])
+@pytest.mark.parametrize('item_size', [0, 1, 64])
+def test_high_cardinality_xxh3_batches_release_the_gil(
+    bits: int, item_size: int, assert_releases_gil: GILProgressAssertion
+) -> None:
+    payload = b'x' * item_size
+    items = [payload] * 16384
+    batch = getattr(hashcodecs, f'xxh3_{bits}_batch')
+    batch_into = getattr(hashcodecs, f'xxh3_{bits}_batch_into')
+    expected_hash = getattr(hashcodecs, f'xxh3_{bits}')(payload, 42)
+    output = bytearray(bits // 8 * len(items))
+    assert_releases_gil(lambda: batch(items, 42), [expected_hash] * len(items), 4)
+    assert_releases_gil(lambda: batch_into(items, output, 42), len(output), 4)
+    assert output == expected_hash.to_bytes(bits // 8, 'little') * len(items)
+
+
 @pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
 @pytest.mark.parametrize('use_memoryview', [False, True], ids=['bytearray', 'memoryview'])
 def test_xxh3_mutable_input_race_is_serialized(use_memoryview: bool) -> None:

@@ -27,6 +27,14 @@ batches use a fallible vector. Large immutable inputs keep their owners across
 GIL detachment. Subprocess tests on CPython 3.10/3.11 trigger finalizers during
 allocation and reuse freed storage, covering both sides of the stack boundary.
 
+Packed XXH3 batches retain immutable input owners before detaching, then borrow
+64 inputs at a time into stack storage. They stage hashes in native memory;
+after reattaching, they recheck the destination length before copying results.
+The little-endian bulk copy relies on the padding-free layout contract of the
+private `PackedDigest` trait. Big-endian hosts serialize each word. Tests clear
+the source list and shrink the output from another Python thread before hashing
+the retained inputs and checking the output size again.
+
 Run the same checks locally on Linux:
 
 ```sh

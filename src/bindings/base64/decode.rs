@@ -786,7 +786,8 @@ fn urlsafe_b64decode_with<'py, T>(
         let padded = padded.truthy(py)?;
         let decoder = PreparedDecoder::new(
             py,
-            DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false),
+            DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false)
+                .with_urlsafe_warning(),
         )?;
         return decode(&decoder, &input);
     }

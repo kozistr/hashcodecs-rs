@@ -34,9 +34,10 @@ class SentinelError(Exception):
     pass
 
 
-def _decode_into_invocation(
+def _decode_into_case(
     function: Callable[..., bytes] | Callable[..., int],
     native_into: bool,
+    urlsafe: bool,
 ) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
@@ -46,11 +47,13 @@ def _decode_into_invocation(
         if native_into:
 
             def call() -> object:
+                if urlsafe:
+                    return function(b'++8=', output)
                 return function(b'++8=', output, b'-_')
         else:
 
             def call() -> int:
-                decoded = function(b'++8=', b'-_')
+                decoded = function(b'++8=') if urlsafe else function(b'++8=', b'-_')
                 if len(output) < len(decoded):
                     raise ValueError('destination is too small')
                 output[: len(decoded)] = decoded
@@ -70,13 +73,16 @@ def _decode_into_invocation(
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires Python 3.15 compatibility warnings')
 @pytest.mark.parametrize('warning_filter', ['always', 'error'])
-def test_decode_into_warning_cleanup_matches_a_cpython_call_then_copy(warning_filter: WarningFilter) -> None:
-    expected = observe(_decode_into_invocation(stdlib_base64.b64decode, False), warning_filter)
-    actual = observe(_decode_into_invocation(base64.b64decode_into, True), warning_filter)
+@pytest.mark.parametrize('urlsafe', [False, True])
+def test_decode_into_warning_cleanup(warning_filter: WarningFilter, urlsafe: bool) -> None:
+    reference = stdlib_base64.urlsafe_b64decode if urlsafe else stdlib_base64.b64decode
+    candidate = base64.urlsafe_b64decode_into if urlsafe else base64.b64decode_into
+    expected = observe(_decode_into_case(reference, False, urlsafe), warning_filter)
+    actual = observe(_decode_into_case(candidate, True, urlsafe), warning_filter)
     assert actual == expected
 
 
-def _encode_callback_invocation(function: Callable[..., bytes]) -> Callable[[], Invocation]:
+def _encode_callback_case(function: Callable[..., bytes]) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -97,13 +103,13 @@ def _encode_callback_invocation(function: Callable[..., bytes]) -> Callable[[], 
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
-def test_encode_callback_and_buffer_lifetime_order_matches_cpython() -> None:
-    expected = observe(_encode_callback_invocation(stdlib_base64.b64encode))
-    actual = observe(_encode_callback_invocation(base64.b64encode))
+def test_encode_callback_order() -> None:
+    expected = observe(_encode_callback_case(stdlib_base64.b64encode))
+    actual = observe(_encode_callback_case(base64.b64encode))
     assert actual == expected
 
 
-def test_harness_distinguishes_exception_details_and_sentinel_identity() -> None:
+def test_harness_exception_details() -> None:
     def factory(error: BaseException) -> Callable[[], Invocation]:
         def make() -> Invocation:
             sentinel = SentinelError('sentinel')
@@ -120,7 +126,7 @@ def test_harness_distinguishes_exception_details_and_sentinel_identity() -> None
     assert not first.outcome.is_sentinel
 
 
-def test_harness_preserves_exact_return_type() -> None:
+def test_harness_return_type() -> None:
     def observed(value: object) -> Observation:
         return observe(lambda: Invocation(lambda: value, [], SentinelError('sentinel')))
 
@@ -130,17 +136,17 @@ def test_harness_preserves_exact_return_type() -> None:
 
 
 @pytest.mark.parametrize('validate', [False, True])
-def test_all_byte_values_at_decode_positions_match_cpython(validate: bool) -> None:
+def test_decode_all_bytes(validate: bool) -> None:
     templates = (b'{}AAA', b'A{}AA', b'AA{}A', b'AAA{}', b'AA=={}')
     for template in templates:
         for value in range(256):
             encoded = template.replace(b'{}', bytes([value]))
-            assert _decode_observation(base64.b64decode, encoded, validate) == _decode_observation(
+            assert _decode_result(base64.b64decode, encoded, validate) == _decode_result(
                 stdlib_base64.b64decode, encoded, validate
             )
 
 
-def _decode_observation(function: Callable[..., bytes], encoded: bytes, validate: bool) -> Observation:
+def _decode_result(function: Callable[..., bytes], encoded: bytes, validate: bool) -> Observation:
     return observe(
         lambda: Invocation(
             lambda: function(encoded, validate=validate),
@@ -151,7 +157,7 @@ def _decode_observation(function: Callable[..., bytes], encoded: bytes, validate
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
-def test_generated_altchar_pairs_match_cpython_on_short_inputs() -> None:
+def test_all_altchar_pairs() -> None:
     inputs = (b'', b'AA==', b'+/8=', b'++8=', b'//8=', b'=w==')
     payloads = (b'', b'\x00', b'\xfb', b'\xff', b'\xfb\xff')
     for first in range(256):
@@ -177,7 +183,7 @@ def test_generated_altchar_pairs_match_cpython_on_short_inputs() -> None:
                 assert actual == expected
 
 
-def _full_alphabet_decode_invocation(function: Callable[..., bytes], alphabet: bytes, encoded: bytes) -> Invocation:
+def _alphabet_decode_case(function: Callable[..., bytes], alphabet: bytes, encoded: bytes) -> Invocation:
     sentinel = SentinelError('sentinel')
     events: list[str] = []
     altchars = AltcharsHook(b'-_', events, sentinel, alphabet=alphabet)
@@ -200,7 +206,7 @@ def _full_alphabet_decode_invocation(function: Callable[..., bytes], alphabet: b
         BASE64_ALPHABET[:-1] + b'=',
     ],
 )
-def test_generated_full_alphabets_match_cpython(alphabet: bytes) -> None:
+def test_constructed_alphabets(alphabet: bytes) -> None:
     def factory(function: Callable[..., bytes]) -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -218,8 +224,8 @@ def test_generated_full_alphabets_match_cpython(alphabet: bytes) -> None:
         alphabet[:3] + b'!',
     )
     for encoded in encoded_inputs:
-        assert observe(partial(_full_alphabet_decode_invocation, base64.b64decode, alphabet, encoded)) == observe(
-            partial(_full_alphabet_decode_invocation, stdlib_base64.b64decode, alphabet, encoded)
+        assert observe(partial(_alphabet_decode_case, base64.b64decode, alphabet, encoded)) == observe(
+            partial(_alphabet_decode_case, stdlib_base64.b64decode, alphabet, encoded)
         )
 
 
@@ -274,7 +280,7 @@ ENCODE_ACTION_CASES = (
 )
 
 
-def _encode_action_invocation(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
+def _encode_action_case(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -353,9 +359,9 @@ def _encode_action_invocation(function: Callable[..., bytes], hook: str, action_
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize(('hook', 'action_name'), ENCODE_ACTION_CASES)
-def test_generated_encode_callback_actions_match_cpython(hook: str, action_name: str) -> None:
-    expected = observe(_encode_action_invocation(stdlib_base64.b64encode, hook, action_name))
-    actual = observe(_encode_action_invocation(base64.b64encode, hook, action_name))
+def test_encode_callback_actions(hook: str, action_name: str) -> None:
+    expected = observe(_encode_action_case(stdlib_base64.b64encode, hook, action_name))
+    actual = observe(_encode_action_case(base64.b64encode, hook, action_name))
     assert actual == expected
 
 
@@ -378,7 +384,7 @@ DECODE_ACTION_CASES = (
 )
 
 
-def _decode_action_invocation(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
+def _decode_action_case(function: Callable[..., bytes], hook: str, action_name: str) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -457,13 +463,13 @@ def _decode_action_invocation(function: Callable[..., bytes], hook: str, action_
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize(('hook', 'action_name'), DECODE_ACTION_CASES)
-def test_generated_decode_callback_actions_match_cpython(hook: str, action_name: str) -> None:
-    expected = observe(_decode_action_invocation(stdlib_base64.b64decode, hook, action_name))
-    actual = observe(_decode_action_invocation(base64.b64decode, hook, action_name))
+def test_decode_callback_actions(hook: str, action_name: str) -> None:
+    expected = observe(_decode_action_case(stdlib_base64.b64decode, hook, action_name))
+    actual = observe(_decode_action_case(base64.b64decode, hook, action_name))
     assert actual == expected
 
 
-def _decode_into_action_invocation(
+def _decode_into_action_case(
     function: Callable[..., bytes] | Callable[..., int],
     native_into: bool,
     hook: str,
@@ -524,13 +530,13 @@ def _decode_into_action_invocation(
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize('hook', ['canonical', 'input.release'])
 @pytest.mark.parametrize('action_name', ['invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter'])
-def test_generated_destination_mutations_match_cpython_call_then_copy(hook: str, action_name: str) -> None:
-    expected = observe(_decode_into_action_invocation(stdlib_base64.b64decode, False, hook, action_name))
-    actual = observe(_decode_into_action_invocation(base64.b64decode_into, True, hook, action_name))
+def test_decode_destination_actions(hook: str, action_name: str) -> None:
+    expected = observe(_decode_into_action_case(stdlib_base64.b64decode, False, hook, action_name))
+    actual = observe(_decode_into_action_case(base64.b64decode_into, True, hook, action_name))
     assert actual == expected
 
 
-def _invalid_argument_invocation(function: Callable[..., bytes], scenario: str) -> Callable[[], Invocation]:
+def _invalid_args_case(function: Callable[..., bytes], scenario: str) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         events: list[str] = []
@@ -582,15 +588,13 @@ def _invalid_argument_invocation(function: Callable[..., bytes], scenario: str) 
         ('decode_altchars_before_validate', stdlib_base64.b64decode, base64.b64decode),
     ],
 )
-def test_two_invalid_arguments_preserve_cpython_error_precedence(
+def test_invalid_argument_precedence(
     scenario: str, reference: Callable[..., bytes], candidate: Callable[..., bytes]
 ) -> None:
-    assert observe(_invalid_argument_invocation(candidate, scenario)) == observe(
-        _invalid_argument_invocation(reference, scenario)
-    )
+    assert observe(_invalid_args_case(candidate, scenario)) == observe(_invalid_args_case(reference, scenario))
 
 
-def _configured_decode_observation(
+def _configured_result(
     function: Callable[..., bytes],
     encoded: object,
     altchars: bytes | None = None,
@@ -633,14 +637,14 @@ def _configured_decode_observation(
         b'YWJj====',
     ],
 )
-def test_generated_padding_placements_match_cpython(encoded: bytes) -> None:
+def test_padding_positions(encoded: bytes) -> None:
     for validate in (False, True):
         for padded in (False, True):
             for canonical in (False, True):
                 kwargs = {'validate': validate, 'padded': padded, 'canonical': canonical}
-                assert _configured_decode_observation(
-                    base64.b64decode, encoded, **kwargs
-                ) == _configured_decode_observation(stdlib_base64.b64decode, encoded, **kwargs)
+                assert _configured_result(base64.b64decode, encoded, **kwargs) == _configured_result(
+                    stdlib_base64.b64decode, encoded, **kwargs
+                )
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
@@ -660,20 +664,20 @@ def test_generated_padding_placements_match_cpython(encoded: bytes) -> None:
         (b'@#8=', b'@#', b'#='),
     ],
 )
-def test_ignored_bytes_overlapping_alphabet_and_padding_match_cpython(
+def test_ignorechar_overlap(
     encoded: bytes,
     altchars: bytes | None,
     ignorechars: bytes,
 ) -> None:
     for validate in (False, True):
         kwargs = {'validate': validate, 'ignorechars': ignorechars}
-        assert _configured_decode_observation(
-            base64.b64decode, encoded, altchars, **kwargs
-        ) == _configured_decode_observation(stdlib_base64.b64decode, encoded, altchars, **kwargs)
+        assert _configured_result(base64.b64decode, encoded, altchars, **kwargs) == _configured_result(
+            stdlib_base64.b64decode, encoded, altchars, **kwargs
+        )
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
-def test_exhaustive_canonical_trailing_bits_match_cpython() -> None:
+def test_canonical_trailing_bits() -> None:
     for symbol in BASE64_ALPHABET:
         for encoded in (
             b'Q' + bytes([symbol]),
@@ -685,12 +689,12 @@ def test_exhaustive_canonical_trailing_bits_match_cpython() -> None:
                 for padded in (False, True):
                     for canonical in (False, True):
                         kwargs = {'validate': validate, 'padded': padded, 'canonical': canonical}
-                        assert _configured_decode_observation(
-                            base64.b64decode, encoded, **kwargs
-                        ) == _configured_decode_observation(stdlib_base64.b64decode, encoded, **kwargs)
+                        assert _configured_result(base64.b64decode, encoded, **kwargs) == _configured_result(
+                            stdlib_base64.b64decode, encoded, **kwargs
+                        )
 
 
-def _released_memoryview(value: bytes) -> memoryview:
+def _released_view(value: bytes) -> memoryview:
     view = memoryview(value)
     view.release()
     return view
@@ -702,10 +706,10 @@ def _released_memoryview(value: bytes) -> memoryview:
         ('contiguous', lambda: memoryview(b'abc'), lambda: memoryview(b'YWJj')),
         ('sliced', lambda: memoryview(b'_abc_')[1:-1], lambda: memoryview(b'_YWJj_')[1:-1]),
         ('strided', lambda: memoryview(b'a.b.c')[::2], lambda: memoryview(b'YxWxJxjx')[::2]),
-        ('released', lambda: _released_memoryview(b'abc'), lambda: _released_memoryview(b'YWJj')),
+        ('released', lambda: _released_view(b'abc'), lambda: _released_view(b'YWJj')),
     ],
 )
-def test_memoryview_shapes_match_cpython(
+def test_memoryview_inputs(
     kind: str,
     encode_input: Callable[[], memoryview],
     decode_input: Callable[[], memoryview],
@@ -725,7 +729,7 @@ def test_memoryview_shapes_match_cpython(
     )
 
 
-def _overlapping_into_invocation(direction: str, native_into: bool) -> Callable[[], Invocation]:
+def _overlap_case(direction: str, native_into: bool) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
         if direction == 'encode':
@@ -760,10 +764,8 @@ def _overlapping_into_invocation(direction: str, native_into: bool) -> Callable[
 
 
 @pytest.mark.parametrize('direction', ['encode', 'decode'])
-def test_overlapping_memoryviews_match_cpython_call_then_copy(direction: str) -> None:
-    assert observe(_overlapping_into_invocation(direction, True)) == observe(
-        _overlapping_into_invocation(direction, False)
-    )
+def test_into_overlap(direction: str) -> None:
+    assert observe(_overlap_case(direction, True)) == observe(_overlap_case(direction, False))
 
 
 FAST_PATH_LENGTHS = (
@@ -793,7 +795,7 @@ FAST_PATH_LENGTHS = (
 
 
 @pytest.mark.parametrize('length', FAST_PATH_LENGTHS)
-def test_simd_block_and_tail_boundaries_match_cpython(length: int) -> None:
+def test_simd_boundaries(length: int) -> None:
     payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
     encoded = stdlib_base64.b64encode(payload)
     assert base64.b64encode(payload) == encoded
@@ -812,18 +814,18 @@ def test_simd_block_and_tail_boundaries_match_cpython(length: int) -> None:
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 @pytest.mark.parametrize('encoded_length', [4092, 4095, 4096, 4097, 4100, 8191, 8192, 8193])
-def test_configured_staging_boundaries_match_cpython(encoded_length: int) -> None:
+def test_staging_boundaries(encoded_length: int) -> None:
     symbols = (b'QUJD' * ((encoded_length + 3) // 4))[:encoded_length]
     insertion = min(encoded_length, 4096)
     encoded = symbols[:insertion] + b'!' + symbols[insertion:]
     kwargs = {'validate': True, 'ignorechars': b'!'}
-    assert _configured_decode_observation(base64.b64decode, encoded, **kwargs) == _configured_decode_observation(
+    assert _configured_result(base64.b64decode, encoded, **kwargs) == _configured_result(
         stdlib_base64.b64decode, encoded, **kwargs
     )
 
 
 @pytest.mark.parametrize('length', [256 * 1024 - 1, 256 * 1024, 256 * 1024 + 1])
-def test_gil_release_boundaries_match_cpython(length: int) -> None:
+def test_gil_boundary(length: int) -> None:
     payload = bytes((index * 17 + 3) & 0xFF for index in range(length))
     expected = stdlib_base64.b64encode(payload)
     assert base64.b64encode(payload) == expected
@@ -831,7 +833,7 @@ def test_gil_release_boundaries_match_cpython(length: int) -> None:
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
-def test_targeted_deterministic_decode_fuzz_matches_cpython() -> None:
+def test_decode_fuzz() -> None:
     randomizer = random.Random(0xB64C0DEC)
     altchar_choices = (None, b'-_', b'@#', b'++', b'=_', bytes([0x80, 0xFF]))
     ignorechar_choices = (None, b'', b'!', b' \n', b'=', bytes([0x80, 0xFF]))
@@ -855,15 +857,224 @@ def test_targeted_deterministic_decode_fuzz_matches_cpython() -> None:
         if ignorechars is not None:
             kwargs['ignorechars'] = ignorechars
         value = bytes(encoded)
-        assert _configured_decode_observation(
-            base64.b64decode, value, altchars, **kwargs
-        ) == _configured_decode_observation(stdlib_base64.b64decode, value, altchars, **kwargs)
+        assert _configured_result(base64.b64decode, value, altchars, **kwargs) == _configured_result(
+            stdlib_base64.b64decode, value, altchars, **kwargs
+        )
 
 
-def _batch_decode_invocation(mode: str, warning_case: bool = False) -> Callable[[], Invocation]:
+def _encode_fuzz_case(
+    function: Callable[..., bytes] | Callable[..., int],
+    native_into: bool,
+    payload: bytes,
+    altchars: bytes | None,
+    padded: bool,
+    wrapcol: int,
+) -> Invocation:
+    sentinel = SentinelError('sentinel')
+    output = bytearray([0xA5] * (((len(payload) + 2) // 3 * 4) * 2 + 5))
+    initial = bytes(output)
+
+    def call() -> int:
+        if native_into:
+            return function(payload, output, altchars, padded=padded, wrapcol=wrapcol)
+        result = function(payload, altchars, padded=padded, wrapcol=wrapcol)
+        output[: len(result)] = result
+        return len(result)
+
+    return Invocation(
+        call,
+        [],
+        sentinel,
+        mutables={'output': output},
+        outputs={'output': output},
+        output_initial={'output': initial},
+    )
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_encode_fuzz() -> None:
+    randomizer = random.Random(0xE64C0DEC)
+    altchar_choices = (None, b'-_', b'@#', b'++', b'==', b'A_', bytes([0x80, 0xFF]))
+    wrapcol_choices = (-129, -1, 0, 1, 2, 3, 4, 15, 16, 17, 63, 64, 65, 127, 128, 129)
+
+    for _ in range(512):
+        payload = randomizer.randbytes(randomizer.randrange(257))
+        altchars = randomizer.choice(altchar_choices)
+        padded = bool(randomizer.randrange(2))
+        wrapcol = randomizer.choice(wrapcol_choices)
+        expected = observe(
+            lambda payload=payload, altchars=altchars, padded=padded, wrapcol=wrapcol: Invocation(
+                lambda: stdlib_base64.b64encode(payload, altchars, padded=padded, wrapcol=wrapcol),
+                [],
+                SentinelError('sentinel'),
+            )
+        )
+        actual = observe(
+            lambda payload=payload, altchars=altchars, padded=padded, wrapcol=wrapcol: Invocation(
+                lambda: base64.b64encode(payload, altchars, padded=padded, wrapcol=wrapcol),
+                [],
+                SentinelError('sentinel'),
+            )
+        )
+        assert actual == expected
+        assert observe(
+            partial(_encode_fuzz_case, base64.b64encode_into, True, payload, altchars, padded, wrapcol)
+        ) == observe(partial(_encode_fuzz_case, stdlib_base64.b64encode, False, payload, altchars, padded, wrapcol))
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+def test_alphabet_fuzz() -> None:
+    randomizer = random.Random(0xA1F4BE7)
+
+    for _ in range(128):
+        alphabet = bytearray(randomizer.randbytes(64))
+        alphabet[1] = alphabet[0]
+        alphabet[2] = ord('=')
+        alphabet[3] = randomizer.randrange(128, 256)
+        payload = randomizer.randbytes(randomizer.randrange(97))
+
+        expected_events: list[str] = []
+        actual_events: list[str] = []
+        expected_altchars = AltcharsHook(b'-_', expected_events, SentinelError('sentinel'), alphabet=bytes(alphabet))
+        actual_altchars = AltcharsHook(b'-_', actual_events, SentinelError('sentinel'), alphabet=bytes(alphabet))
+        expected = stdlib_base64.b64encode(payload, expected_altchars)
+        assert base64.b64encode(payload, actual_altchars) == expected
+        assert actual_events == expected_events
+
+        assert observe(partial(_alphabet_decode_case, base64.b64decode, bytes(alphabet), expected)) == observe(
+            partial(
+                _alphabet_decode_case,
+                stdlib_base64.b64decode,
+                bytes(alphabet),
+                expected,
+            )
+        )
+
+
+def _capacity_case(direction: str, native_into: bool, output_size: int) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')
-        values = [b'YWJj', b'++8=' if warning_case else b'YWJjY===', b'ZGVm']
+        output = bytearray([0xA5] * output_size)
+        initial = bytes(output)
+
+        def call() -> int:
+            if direction == 'encode':
+                if native_into:
+                    return base64.b64encode_into(b'\xfb\xff', output, b'-_', padded=False)
+                result = stdlib_base64.b64encode(b'\xfb\xff', b'-_', padded=False)
+            else:
+                if native_into:
+                    return base64.b64decode_into(b'-_8', output, b'-_', validate=True, padded=False)
+                result = stdlib_base64.b64decode(b'-_8', b'-_', validate=True, padded=False)
+            if len(output) < len(result):
+                raise ValueError(f'Base64 output requires {len(result)} bytes but the destination has {len(output)}')
+            output[: len(result)] = result
+            return len(result)
+
+        return Invocation(
+            call,
+            [],
+            sentinel,
+            mutables={'output': output},
+            outputs={'output': output},
+            output_initial={'output': initial},
+        )
+
+    return factory
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+@pytest.mark.parametrize(('direction', 'required'), [('encode', 3), ('decode', 2)])
+@pytest.mark.parametrize('difference', [-2, -1, 0, 3])
+def test_into_capacity(
+    direction: str,
+    required: int,
+    difference: int,
+) -> None:
+    output_size = max(0, required + difference)
+    assert observe(_capacity_case(direction, True, output_size)) == observe(
+        _capacity_case(direction, False, output_size)
+    )
+
+
+def _encode_into_action_case(
+    function: Callable[..., bytes] | Callable[..., int],
+    native_into: bool,
+    hook: str,
+    action_name: str,
+) -> Callable[[], Invocation]:
+    def factory() -> Invocation:
+        sentinel = SentinelError('sentinel')
+        events: list[str] = []
+        output = bytearray(b'....')
+        initial = bytes(output)
+        action = Action(action_name)
+
+        def reentrant() -> object:
+            if native_into:
+                return function(b'x', bytearray(4))
+            return function(b'x')
+
+        if hook == 'input.release':
+            source_buffer = BufferHook(
+                'input',
+                b'abc',
+                events,
+                sentinel,
+                release=action,
+                target=output,
+                reentrant=reentrant,
+            )
+            source: object = source_buffer
+            buffers = (source_buffer,)
+            padded: object = True
+        else:
+            source = b'abc'
+            buffers = ()
+            padded = BoolHook('padded', action, events, sentinel, target=output, reentrant=reentrant)
+
+        def call() -> int:
+            if native_into:
+                return function(source, output, padded=padded)
+            result = function(source, padded=padded)
+            if len(output) < len(result):
+                raise ValueError(f'Base64 output requires {len(result)} bytes but the destination has {len(output)}')
+            output[: len(result)] = result
+            return len(result)
+
+        return Invocation(
+            call,
+            events,
+            sentinel,
+            mutables={'output': output},
+            buffers=buffers,  # type: ignore[arg-type]
+            outputs={'output': output},
+            output_initial={'output': initial},
+        )
+
+    return factory
+
+
+ENCODE_INTO_ACTION_CASES = tuple(
+    ('padded', action) for action in ('invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter')
+) + tuple(('input.release', action) for action in ('replace', 'grow', 'shrink', 'reenter'))
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
+@pytest.mark.parametrize(('hook', 'action_name'), ENCODE_INTO_ACTION_CASES)
+def test_encode_destination_actions(
+    hook: str,
+    action_name: str,
+) -> None:
+    expected = observe(_encode_into_action_case(stdlib_base64.urlsafe_b64encode, False, hook, action_name))
+    actual = observe(_encode_into_action_case(base64.urlsafe_b64encode_into, True, hook, action_name))
+    assert actual == expected
+
+
+def _batch_decode_case(mode: str, warning_case: bool = False) -> Callable[[], Invocation]:
+    def factory() -> Invocation:
+        sentinel = SentinelError('sentinel')
+        values = [b'YWJj', b'++8=', b'//8=', b'ZGVm'] if warning_case else [b'YWJj', b'YWJjY===', b'ZGVm']
         outputs = [bytearray(b'......') for _ in values]
         initial = {f'output{index}': bytes(output) for index, output in enumerate(outputs)}
 
@@ -903,44 +1114,95 @@ def _batch_decode_invocation(mode: str, warning_case: bool = False) -> Callable[
     return factory
 
 
+def _batch_encode_case(batch: bool) -> Callable[[], Invocation]:
+    def factory() -> Invocation:
+        sentinel = SentinelError('sentinel')
+        values = [b'abc', b'def', b'ghi']
+        outputs = [bytearray(b'.....'), bytearray(b'...'), bytearray(b'.....')]
+        initial = {f'output{index}': bytes(output) for index, output in enumerate(outputs)}
+
+        def call() -> list[int]:
+            if batch:
+                return base64.b64encode_batch_into(values, outputs)
+            return [base64.b64encode_into(value, output) for value, output in zip(values, outputs, strict=True)]
+
+        output_map = {f'output{index}': output for index, output in enumerate(outputs)}
+        return Invocation(
+            call,
+            [],
+            sentinel,
+            mutables=output_map,
+            outputs=output_map,
+            output_initial=initial,
+        )
+
+    return factory
+
+
 @pytest.mark.skipif(not PYTHON_315, reason='requires Python 3.15 compatibility warnings')
 @pytest.mark.parametrize('warning_filter', ['always', 'error'])
-def test_batch_warning_behavior_matches_sequential_cpython(
+def test_batch_warning_order(
     warning_filter: WarningFilter,
 ) -> None:
-    actual = observe(_batch_decode_invocation('batch', warning_case=True), warning_filter)
-    assert actual == observe(_batch_decode_invocation('cpython', warning_case=True), warning_filter)
+    actual = observe(_batch_decode_case('batch', warning_case=True), warning_filter)
+    assert actual == observe(_batch_decode_case('cpython', warning_case=True), warning_filter)
     if warning_filter == 'error':
         assert isinstance(actual.outcome, Raised)
         assert actual.outcome.type is FutureWarning
-        assert [state.contents for state in actual.outputs] == [b'abc...', b'......', b'......']
+        assert [state.contents for state in actual.outputs] == [b'abc...', b'......', b'......', b'......']
     else:
-        assert actual.outcome == Returned(list, [3, 2, 3])
-        assert len(actual.warnings) == 1
-        assert [state.contents for state in actual.outputs] == [b'abc...', b'\xfb\xef....', b'def...']
+        assert actual.outcome == Returned(list, [3, 2, 2, 3])
+        assert [warning.category for warning in actual.warnings] == [FutureWarning, FutureWarning]
+        assert [warning.message.split("'")[1] for warning in actual.warnings] == ['+', '/']
+        assert [state.contents for state in actual.outputs] == [
+            b'abc...',
+            b'\xfb\xef....',
+            b'\xff\xff....',
+            b'def...',
+        ]
 
 
-def test_batch_into_matches_repeated_into_failure_state() -> None:
-    actual = observe(_batch_decode_invocation('batch'))
-    assert actual == observe(_batch_decode_invocation('into'))
+def test_batch_failure_state() -> None:
+    actual = observe(_batch_decode_case('batch'))
+    assert actual == observe(_batch_decode_case('into'))
     assert isinstance(actual.outcome, Raised)
     assert actual.outcome.type is binascii.Error
     assert [state.contents for state in actual.outputs] == [b'abc...', b'abc...', b'......']
 
 
+def test_encode_batch_failure_state() -> None:
+    actual = observe(_batch_encode_case(True))
+    assert actual == observe(_batch_encode_case(False))
+    assert isinstance(actual.outcome, Raised)
+    assert actual.outcome.type is ValueError
+    assert [state.contents for state in actual.outputs] == [b'YWJj.', b'...', b'.....']
+
+
 @pytest.mark.skipif(not PYTHON_315, reason='requires Python-level buffer protocol support')
-def test_allocating_batch_is_fail_fast_in_callback_order() -> None:
-    def invocation(batch: bool) -> Callable[[], Invocation]:
+@pytest.mark.parametrize('operation', ['encode', 'decode'])
+def test_batch_callback_fail_fast(operation: str) -> None:
+    def case(batch: bool) -> Callable[[], Invocation]:
         def factory() -> Invocation:
             sentinel = SentinelError('sentinel')
             events: list[str] = []
-            inputs = (
-                BufferHook('input0', b'YWJj', events, sentinel),
-                BufferHook('input1', b'YWJ!', events, sentinel),
-                BufferHook('input2', b'ZGVm', events, sentinel),
-            )
+            if operation == 'encode':
+                inputs = (
+                    BufferHook('input0', b'abc', events, sentinel),
+                    BufferHook('input1', b'def', events, sentinel, acquire=Action('raise')),
+                    BufferHook('input2', b'ghi', events, sentinel),
+                )
+            else:
+                inputs = (
+                    BufferHook('input0', b'YWJj', events, sentinel),
+                    BufferHook('input1', b'YWJ!', events, sentinel),
+                    BufferHook('input2', b'ZGVm', events, sentinel),
+                )
 
             def call() -> list[bytes]:
+                if operation == 'encode':
+                    if batch:
+                        return base64.b64encode_batch(list(inputs))
+                    return [stdlib_base64.b64encode(value) for value in inputs]
                 if batch:
                     return base64.b64decode_batch(list(inputs), validate=True)
                 return [stdlib_base64.b64decode(value, validate=True) for value in inputs]
@@ -955,11 +1217,9 @@ def test_allocating_batch_is_fail_fast_in_callback_order() -> None:
 
         return factory
 
-    actual = observe(invocation(True))
-    assert actual == observe(invocation(False))
-    assert actual.callbacks == (
-        'input0.__buffer__',
-        'input0.__release_buffer__',
-        'input1.__buffer__',
-        'input1.__release_buffer__',
-    )
+    actual = observe(case(True))
+    assert actual == observe(case(False))
+    expected_callbacks = ['input0.__buffer__', 'input0.__release_buffer__', 'input1.__buffer__']
+    if operation == 'decode':
+        expected_callbacks.append('input1.__release_buffer__')
+    assert list(actual.callbacks) == expected_callbacks

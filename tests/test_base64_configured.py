@@ -565,6 +565,32 @@ def test_configured_lenient_padding_matches_the_running_cpython() -> None:
     assert observe_call(decode_into) == expected
 
 
+@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 binascii API')
+def test_configured_fallback_accepts_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def fallback(data: object, **kwargs: object) -> bytes:
+        calls.append((data, kwargs))
+        return b'abc'
+
+    monkeypatch.setattr(binascii, 'a2b_base64', fallback)
+    encoded = b'AA==AAAA'
+    options = {'validate': False, 'ignorechars': b'!'}
+
+    assert base64.b64decode(encoded, **options) == b'abc'
+
+    output = bytearray(b'.....')
+    assert base64.b64decode_into(encoded, output, **options) == 3
+    assert output == b'abc..'
+    expected = {
+        'strict_mode': False,
+        'padded': True,
+        'canonical': False,
+        'ignorechars': b'!',
+    }
+    assert calls == [(encoded, expected)] * 2
+
+
 def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pytest.MonkeyPatch) -> None:
     observed: list[object] = []
 

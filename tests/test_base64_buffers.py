@@ -213,6 +213,16 @@ def test_free_threaded_decode_snapshots_ignorechars_after_canonical_callback(reu
         assert base64.b64decode(b'Y?WJj', ignorechars=ignorechars, canonical=Canonical()) == b'abc'
 
 
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+def test_free_threaded_standard_into_snapshot() -> None:
+    source = bytearray(b'YWJj')
+    output = bytearray(b'.....')
+
+    assert base64.standard_b64decode_into(source, output) == 3
+    assert source == b'YWJj'
+    assert output == b'abc..'
+
+
 @pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
 def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes() -> None:
     class Buffer:

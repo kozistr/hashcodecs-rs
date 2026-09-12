@@ -469,6 +469,20 @@ def test_decode_callback_actions(hook: str, action_name: str) -> None:
     assert actual == expected
 
 
+@pytest.mark.parametrize('encoded', ['YWJj', 'é', '\ud800'])
+def test_decode_encode_result(encoded: str) -> None:
+    def run(function: Callable[..., bytes]) -> Observation:
+        def factory() -> Invocation:
+            sentinel = SentinelError('sentinel')
+            events: list[str] = []
+            source = EncodeHook('ignored', Action('normal'), events, sentinel, encoded=encoded)
+            return Invocation(lambda: function(source), events, sentinel)
+
+        return observe(factory)
+
+    assert run(base64.b64decode) == run(stdlib_base64.b64decode)
+
+
 def _decode_into_action_case(
     function: Callable[..., bytes] | Callable[..., int],
     native_into: bool,

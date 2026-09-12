@@ -359,8 +359,8 @@ def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
         assert base64.b64encode(BufferList()) == b'YWJj'
 
 
-@pytest.mark.parametrize('valid_symbols', [32, 128])
-@pytest.mark.parametrize('altchars', [None, b'-_'])
+@pytest.mark.parametrize('valid_symbols', [32, 128, 4096])
+@pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=='])
 def test_lenient_retry_preserves_suffix_after_avx2_validation_boundary(
     valid_symbols: int, altchars: bytes | None
 ) -> None:

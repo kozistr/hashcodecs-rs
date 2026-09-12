@@ -1,6 +1,7 @@
 import base64 as stdlib_base64
 import binascii
 import random
+import re
 import sys
 from collections.abc import Callable
 from functools import partial
@@ -159,6 +160,35 @@ def _decode_result(function: Callable[..., bytes], encoded: bytes, validate: boo
             SentinelError('sentinel'),
         )
     )
+
+
+@pytest.mark.parametrize(
+    'altchars', [b'@#', b'@@', b'==', b'=_', b'@=', b'AZ', b'/+', b'+@', b'++', b'//', b'\0\xff', b'\r\n']
+)
+@pytest.mark.parametrize('length', [15, 16, 17, 31, 32, 33, 63, 64, 65, 4095, 4096, 4097, 8192, 65536, 262145])
+def test_custom_lenient_symbol_runs(altchars: bytes, length: int) -> None:
+    symbols = b'AZaz09+/' + altchars
+    run = (symbols * (length // len(symbols) + 1))[:length]
+    for prefix in (b'', b'!A!', b'!AA!', b'!AAA!'):
+        for tail in (b'', b'=', b'==', b'===', b'!AA==AAAA==', b'A=!=A==AAAA', b'!AAAA', b'!A'):
+            encoded = prefix + run + tail
+            try:
+                expected = stdlib_b64decode(encoded, altchars)
+            except binascii.Error as error:
+                with pytest.raises(binascii.Error, match=f'^{re.escape(str(error))}$'):
+                    base64.b64decode(encoded, altchars)
+                continue
+
+            assert base64.b64decode(encoded, altchars) == expected
+            for extra in (0, 7):
+                output = bytearray(b'\xa5' * (len(expected) + extra))
+                assert base64.b64decode_into(encoded, output, altchars) == len(expected)
+                assert output == expected + b'\xa5' * extra
+            if expected:
+                output = bytearray(b'\xa5' * (len(expected) - 1))
+                with pytest.raises(ValueError, match='Base64 output requires'):
+                    base64.b64decode_into(encoded, output, altchars)
+                assert output == b'\xa5' * (len(expected) - 1)
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

@@ -432,23 +432,17 @@ fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<
     Ok((altchars != *b"+/").then_some(altchars))
 }
 
-pub(super) fn encode_parsed<'py>(
-    py: Python<'py>,
-    input: &Bound<'py, PyAny>,
-    altchars: Option<[u8; 2]>,
-    padded: bool,
-    wrapcol: Option<usize>,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let input = crate::bindings::buffer::binascii_contiguous_bytes_like(input)?;
-    encode(py, &input, altchars, padded, wrapcol)
-}
-
 /// Encode with the standard Base64 alphabet.
 pub(super) fn standard_b64encode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    encode_parsed(py, s, None, true, None)
+    let input = if PyBytes::is_exact_type_of(s) {
+        BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() })
+    } else {
+        crate::bindings::buffer::binascii_contiguous_bytes_like(s)?
+    };
+    encode(py, &input, None, true, None)
 }
 
 /// Encode with the standard Base64 alphabet into a reusable output.

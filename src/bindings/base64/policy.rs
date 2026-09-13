@@ -207,6 +207,9 @@ pub(super) struct PreparedPolicy {
 }
 
 impl PreparedPolicy {
+    // Expose fixed options to the caller and avoid copying intermediate policy
+    // values on each one-shot decode.
+    #[inline(always)]
     fn prepare(policy: DecodePolicy<'_, '_>) -> PyResult<(Self, bool)> {
         let ignorechars_specified = policy.ignorechars.is_some();
         let empty_exact_ignorechars = policy.ignorechars.is_some_and(|value| {
@@ -276,6 +279,7 @@ pub(super) struct PreparedDecoder {
 }
 
 impl PreparedDecoder {
+    #[inline(always)]
     pub(super) fn new(py: Python<'_>, policy: DecodePolicy<'_, '_>) -> PyResult<Self> {
         let semantics = python_semantics(py);
         let (policy, empty_exact_ignorechars) = PreparedPolicy::prepare(policy)?;

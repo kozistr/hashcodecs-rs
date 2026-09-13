@@ -594,6 +594,11 @@ def test_base64_binding_schema_drives_argument_errors() -> None:
         dynamic_standard_b64decode(b'', unknown=True)
     with pytest.raises(TypeError, match=r"b64encode\(\) got multiple values for argument 's'"):
         dynamic_b64encode(b'', s=b'')
+    with pytest.raises(TypeError, match=r"b64decode\(\) got multiple values for argument 's'"):
+        dynamic_b64decode(b'YWJj', validate=True, s=b'ZGVm')
+    with pytest.raises(TypeError, match=r"b64decode\(\) got multiple values for argument 'altchars'"):
+        dynamic_b64decode(b'YWJj', b'-_', validate=True, altchars=b'@#')
+    assert dynamic_b64decode(validate=True, s=b'YWJj') == b'abc'
 
 
 def test_b64decode_into_signature_does_not_advertise_sentinel_defaults_as_none() -> None:

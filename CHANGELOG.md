@@ -4,6 +4,24 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-13
+
+### What's Changed
+* fix: match CPython Base64 and XXH3 buffer semantics by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/114
+* fix: preserve Base64 callback buffer semantics by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/115
+* fix: preserve CPython Base64 observable behavior by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/116
+* fix: resolve repository type diagnostics by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/117
+* fix: release Base64 input buffers before writing output by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/118
+* refactor: centralize buffer callback policy and clarify finalizers by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/119
+* fix: accelerate custom-alphabet lenient Base64 decoding by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/120
+* fix: reduce XXH3 packed batch detachment overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/121
+* fix: delay MurmurHash3 x64 SIMD dispatch until 512 bytes by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/122
+* fix: restore Python buffer and batch throughput by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/123
+* fix: typo in the performance viz image by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/124
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...v1.4.1
+
 ## [1.4.0] - 2026-09-10
 
 ### What's Changed
@@ -193,7 +211,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.0...v1.2.1

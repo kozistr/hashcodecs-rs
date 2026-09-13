@@ -23,20 +23,20 @@
 <text x="108.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8</text>
 <text x="354.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">64</text>
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
-<polyline points="108.0,243.5 354.0,214.6 600.0,219.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="243.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 8, 0.52 GiB/s</title></circle>
-<text x="126.2" y="233.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.52</text>
-<circle cx="354.0" cy="214.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 64, 0.63 GiB/s</title></circle>
-<text x="354.0" y="204.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.63</text>
-<circle cx="600.0" cy="219.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 1,024, 0.61 GiB/s</title></circle>
-<text x="581.8" y="209.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.61</text>
-<polyline points="108.0,288.1 354.0,243.5 600.0,240.9" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="288.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 8, 0.35 GiB/s</title></circle>
-<text x="126.2" y="305.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.35</text>
-<circle cx="354.0" cy="243.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 64, 0.52 GiB/s</title></circle>
-<text x="354.0" y="260.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.52</text>
-<circle cx="600.0" cy="240.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 1,024, 0.53 GiB/s</title></circle>
-<text x="581.8" y="257.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.53</text>
+<polyline points="108.0,230.4 354.0,206.8 600.0,212.0" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="230.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 8, 0.57 GiB/s</title></circle>
+<text x="126.2" y="220.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.57</text>
+<circle cx="354.0" cy="206.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 64, 0.66 GiB/s</title></circle>
+<text x="354.0" y="196.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.66</text>
+<circle cx="600.0" cy="212.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>16 B items: encode, 1,024, 0.64 GiB/s</title></circle>
+<text x="581.8" y="202.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.64</text>
+<polyline points="108.0,269.8 354.0,238.2 600.0,233.0" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="269.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 8, 0.42 GiB/s</title></circle>
+<text x="126.2" y="286.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.42</text>
+<circle cx="354.0" cy="238.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 64, 0.54 GiB/s</title></circle>
+<text x="354.0" y="255.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.54</text>
+<circle cx="600.0" cy="233.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>16 B items: decode, 1,024, 0.56 GiB/s</title></circle>
+<text x="581.8" y="250.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.56</text>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">256 B items</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#007f73" stroke-width="3"/>
@@ -56,20 +56,20 @@
 <text x="718.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8</text>
 <text x="964.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">64</text>
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
-<polyline points="718.0,222.0 964.0,215.2 1210.0,225.1" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="222.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 8, 6.02 GiB/s</title></circle>
-<text x="736.2" y="212.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.02</text>
-<circle cx="964.0" cy="215.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 64, 6.28 GiB/s</title></circle>
-<text x="964.0" y="205.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.28</text>
-<circle cx="1210.0" cy="225.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 1,024, 5.90 GiB/s</title></circle>
-<text x="1191.8" y="215.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.90</text>
-<polyline points="718.0,253.5 964.0,219.6 1210.0,225.9" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="253.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 8, 4.82 GiB/s</title></circle>
-<text x="736.2" y="270.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.82</text>
-<circle cx="964.0" cy="219.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 64, 6.11 GiB/s</title></circle>
-<text x="964.0" y="236.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.11</text>
-<circle cx="1210.0" cy="225.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 1,024, 5.87 GiB/s</title></circle>
-<text x="1191.8" y="242.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.87</text>
+<polyline points="718.0,209.9 964.0,209.1 1210.0,214.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="209.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 8, 6.48 GiB/s</title></circle>
+<text x="736.2" y="199.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.48</text>
+<circle cx="964.0" cy="209.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 64, 6.51 GiB/s</title></circle>
+<text x="964.0" y="199.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.51</text>
+<circle cx="1210.0" cy="214.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>256 B items: encode, 1,024, 6.31 GiB/s</title></circle>
+<text x="1191.8" y="204.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.31</text>
+<polyline points="718.0,235.4 964.0,212.3 1210.0,212.5" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="235.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 8, 5.51 GiB/s</title></circle>
+<text x="736.2" y="252.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.51</text>
+<circle cx="964.0" cy="212.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 64, 6.39 GiB/s</title></circle>
+<text x="964.0" y="229.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.39</text>
+<circle cx="1210.0" cy="212.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>256 B items: decode, 1,024, 6.38 GiB/s</title></circle>
+<text x="1191.8" y="229.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">6.38</text>
 <text x="50" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">4 KiB items</text>
 <line x1="108" y1="710" x2="600" y2="710" stroke="#9aa5b4"/>
 <line x1="50" y1="478" x2="70" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -89,18 +89,18 @@
 <text x="108.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8</text>
 <text x="354.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">64</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1,024</text>
-<polyline points="108.0,519.6 354.0,526.5 600.0,594.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="519.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 8, 27.20 GiB/s</title></circle>
-<text x="129.5" y="536.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">27.20</text>
-<circle cx="354.0" cy="526.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 64, 26.22 GiB/s</title></circle>
-<text x="354.0" y="516.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">26.22</text>
-<circle cx="600.0" cy="594.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 1,024, 16.52 GiB/s</title></circle>
-<text x="578.5" y="584.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">16.52</text>
-<polyline points="108.0,567.9 354.0,562.9 600.0,597.9" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="567.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 8, 20.30 GiB/s</title></circle>
-<text x="129.5" y="584.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.30</text>
-<circle cx="354.0" cy="562.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 64, 21.01 GiB/s</title></circle>
-<text x="354.0" y="579.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.01</text>
-<circle cx="600.0" cy="597.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 1,024, 16.01 GiB/s</title></circle>
-<text x="578.5" y="614.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">16.01</text>
+<polyline points="108.0,512.6 354.0,515.5 600.0,587.3" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="512.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 8, 28.20 GiB/s</title></circle>
+<text x="129.5" y="529.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">28.20</text>
+<circle cx="354.0" cy="515.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 64, 27.78 GiB/s</title></circle>
+<text x="354.0" y="532.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">27.78</text>
+<circle cx="600.0" cy="587.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>4 KiB items: encode, 1,024, 17.53 GiB/s</title></circle>
+<text x="578.5" y="577.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.53</text>
+<polyline points="108.0,560.8 354.0,553.5 600.0,587.1" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="560.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 8, 21.32 GiB/s</title></circle>
+<text x="129.5" y="577.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.32</text>
+<circle cx="354.0" cy="553.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 64, 22.35 GiB/s</title></circle>
+<text x="354.0" y="570.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">22.35</text>
+<circle cx="600.0" cy="587.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>4 KiB items: decode, 1,024, 17.56 GiB/s</title></circle>
+<text x="578.5" y="604.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.56</text>
 </svg>

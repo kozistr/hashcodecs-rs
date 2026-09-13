@@ -213,28 +213,28 @@ CHARTS = (
             panel(
                 'Standard encode',
                 SIZES,
-                hashcodecs=[10.25, 23.21, 4.08, 5.23],
+                hashcodecs=[11.91, 24.75, 3.53, 4.67],
                 CPython=[0.44, 0.46, 0.40, 0.42],
                 pybase64=[5.02, 13.11, 2.68, 2.91],
             ),
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[7.51, 16.40, 5.08, 5.51],
+                hashcodecs=[8.74, 17.57, 4.43, 5.11],
                 CPython=[0.93, 1.08, 0.84, 0.90],
                 pybase64=[3.09, 8.01, 3.26, 3.57],
             ),
             panel(
                 'URL-safe encode',
                 SIZES,
-                hashcodecs=[11.76, 24.42, 3.73, 5.24],
+                hashcodecs=[11.90, 24.18, 3.57, 4.67],
                 CPython=[0.37, 0.41, 0.33, 0.34],
                 pybase64=[0.96, 1.19, 0.84, 0.84],
             ),
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[6.28, 12.87, 5.21, 5.57],
+                hashcodecs=[7.46, 14.05, 4.50, 5.12],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
             ),
@@ -323,10 +323,10 @@ CHARTS = (
         'base64-python-reusable.svg',
         'Reusable Python Base64 buffers',
         (
-            panel('Standard encode', SIZES, hashcodecs=[11.42, 24.31, 40.10, 31.57]),
-            panel('Standard decode', SIZES, hashcodecs=[9.11, 18.71, 29.96, 19.47]),
-            panel('URL-safe encode', SIZES, hashcodecs=[10.46, 23.60, 40.08, 31.59]),
-            panel('URL-safe decode', SIZES, hashcodecs=[7.48, 14.39, 21.31, 17.86]),
+            panel('Standard encode', SIZES, hashcodecs=[10.97, 23.57, 38.82, 30.52]),
+            panel('Standard decode', SIZES, hashcodecs=[10.60, 19.86, 29.07, 18.15]),
+            panel('URL-safe encode', SIZES, hashcodecs=[10.07, 22.87, 38.90, 30.48]),
+            panel('URL-safe decode', SIZES, hashcodecs=[8.79, 15.33, 20.74, 17.47]),
         ),
     ),
     Chart(
@@ -337,25 +337,25 @@ CHARTS = (
                 'Encode, returned bytes',
                 SIZES,
                 full_view=[6.24, 19.96, 3.88, 4.71],
-                nonzero_offset=[8.38, 20.74, 4.09, 5.24],
+                nonzero_offset=[8.57, 19.59, 3.48, 4.64],
             ),
             panel(
                 'Encode, reusable bytearray',
                 SIZES,
                 full_view=[7.16, 22.76, 40.06, 30.37],
-                nonzero_offset=[9.91, 22.23, 40.03, 31.63],
+                nonzero_offset=[9.57, 21.22, 38.85, 30.72],
             ),
             panel(
                 'Decode, returned bytes',
                 SIZES,
                 full_view=[5.60, 15.62, 4.48, 4.11],
-                nonzero_offset=[6.62, 15.27, 4.96, 5.52],
+                nonzero_offset=[7.44, 15.27, 4.36, 5.14],
             ),
             panel(
                 'Decode, reusable bytearray',
                 SIZES,
                 full_view=[6.21, 17.20, 29.38, 19.51],
-                nonzero_offset=[7.05, 16.20, 29.76, 19.53],
+                nonzero_offset=[8.11, 16.52, 29.01, 19.22],
             ),
         ),
     ),
@@ -367,12 +367,12 @@ CHARTS = (
                 title, ['8', '64', '1,024'], hashcodecs=ours, hashcodecs_loop=loop, pybase64=pybase64, CPython=cpython
             )
             for title, ours, loop, pybase64, cpython in (
-                ('16 B encode', [0.80, 1.13, 1.08], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
-                ('16 B decode', [0.47, 0.71, 0.71], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
-                ('256 B encode', [9.41, 10.84, 9.91], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
-                ('256 B decode', [6.11, 7.57, 7.36], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
-                ('4 KiB encode', [23.99, 16.73, 2.01], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
-                ('4 KiB decode', [18.84, 18.44, 3.34], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
+                ('16 B encode', [0.87, 1.23, 1.16], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
+                ('16 B decode', [0.52, 0.72, 0.75], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
+                ('256 B encode', [9.89, 11.56, 10.55], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
+                ('256 B decode', [6.70, 8.28, 7.81], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
+                ('4 KiB encode', [24.51, 19.38, 2.05], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
+                ('4 KiB decode', [20.16, 19.66, 2.62], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
             )
         ),
     ),
@@ -382,9 +382,9 @@ CHARTS = (
         tuple(
             panel(title, ['8', '64', '1,024'], encode=encode, decode=decode)
             for title, encode, decode in (
-                ('16 B items', [0.52, 0.63, 0.61], [0.35, 0.52, 0.53]),
-                ('256 B items', [6.02, 6.28, 5.90], [4.82, 6.11, 5.87]),
-                ('4 KiB items', [27.20, 26.22, 16.52], [20.30, 21.01, 16.01]),
+                ('16 B items', [0.57, 0.66, 0.64], [0.42, 0.54, 0.56]),
+                ('256 B items', [6.48, 6.51, 6.31], [5.51, 6.39, 6.38]),
+                ('4 KiB items', [28.20, 27.78, 17.53], [21.32, 22.35, 17.56]),
             )
         ),
     ),
@@ -447,14 +447,14 @@ CHARTS = (
             panel(
                 'Encode',
                 SIZES,
-                returned_bytes=[8.82, 21.39, 4.04, 5.32],
-                reusable_bytearray=[11.17, 24.02, 40.09, 31.71],
+                returned_bytes=[8.55, 20.58, 3.49, 4.68],
+                reusable_bytearray=[10.74, 23.28, 38.90, 30.64],
             ),
             panel(
                 'Decode',
                 SIZES,
-                returned_bytes=[7.65, 16.27, 5.17, 5.55],
-                reusable_bytearray=[8.12, 17.58, 29.90, 19.15],
+                returned_bytes=[8.09, 17.02, 4.69, 5.07],
+                reusable_bytearray=[9.19, 18.43, 29.09, 18.79],
             ),
         ),
     ),

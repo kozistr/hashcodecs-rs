@@ -11,26 +11,26 @@
 <line x1="108" y1="380.0" x2="600" y2="380.0" stroke="#e1e6ed"/>
 <text x="98" y="384.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">0</text>
 <line x1="108" y1="327.5" x2="600" y2="327.5" stroke="#e1e6ed"/>
-<text x="98" y="331.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">15</text>
+<text x="98" y="331.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">10</text>
 <line x1="108" y1="275.0" x2="600" y2="275.0" stroke="#e1e6ed"/>
-<text x="98" y="279.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
+<text x="98" y="279.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">20</text>
 <line x1="108" y1="222.5" x2="600" y2="222.5" stroke="#e1e6ed"/>
-<text x="98" y="226.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">45</text>
+<text x="98" y="226.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
 <line x1="108" y1="170.0" x2="600" y2="170.0" stroke="#e1e6ed"/>
-<text x="98" y="174.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">60</text>
+<text x="98" y="174.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">40</text>
 <text x="108.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 KiB</text>
 <text x="272.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,340.0 272.0,294.9 436.0,239.7 600.0,269.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="340.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 11.42 GiB/s</title></circle>
-<text x="129.5" y="330.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.42</text>
-<circle cx="272.0" cy="294.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 24.31 GiB/s</title></circle>
-<text x="272.0" y="284.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">24.31</text>
-<circle cx="436.0" cy="239.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 40.10 GiB/s</title></circle>
-<text x="436.0" y="229.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">40.10</text>
-<circle cx="600.0" cy="269.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 31.57 GiB/s</title></circle>
-<text x="578.5" y="259.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.57</text>
+<polyline points="108.0,322.4 272.0,256.3 436.0,176.2 600.0,219.8" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="322.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 10.97 GiB/s</title></circle>
+<text x="129.5" y="312.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.97</text>
+<circle cx="272.0" cy="256.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 23.57 GiB/s</title></circle>
+<text x="272.0" y="246.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">23.57</text>
+<circle cx="436.0" cy="176.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 38.82 GiB/s</title></circle>
+<text x="436.0" y="193.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">38.82</text>
+<circle cx="600.0" cy="219.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 30.52 GiB/s</title></circle>
+<text x="578.5" y="209.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">30.52</text>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">Standard decode</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#007f73" stroke-width="3"/>
@@ -49,15 +49,15 @@
 <text x="882.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,316.2 882.0,249.0 1046.0,170.3 1210.0,243.7" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="316.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 KiB, 9.11 GiB/s</title></circle>
-<text x="736.2" y="306.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.11</text>
-<circle cx="882.0" cy="249.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 4 KiB, 18.71 GiB/s</title></circle>
-<text x="882.0" y="239.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">18.71</text>
-<circle cx="1046.0" cy="170.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 MiB, 29.96 GiB/s</title></circle>
-<text x="1046.0" y="187.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.96</text>
-<circle cx="1210.0" cy="243.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 8 MiB, 19.47 GiB/s</title></circle>
-<text x="1188.5" y="233.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.47</text>
+<polyline points="718.0,305.8 882.0,241.0 1046.0,176.5 1210.0,252.9" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="305.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 KiB, 10.60 GiB/s</title></circle>
+<text x="739.5" y="295.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.60</text>
+<circle cx="882.0" cy="241.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 4 KiB, 19.86 GiB/s</title></circle>
+<text x="882.0" y="231.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.86</text>
+<circle cx="1046.0" cy="176.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 1 MiB, 29.07 GiB/s</title></circle>
+<text x="1046.0" y="193.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.07</text>
+<circle cx="1210.0" cy="252.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard decode: hashcodecs, 8 MiB, 18.15 GiB/s</title></circle>
+<text x="1188.5" y="242.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">18.15</text>
 <text x="50" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">URL-safe encode</text>
 <line x1="108" y1="710" x2="600" y2="710" stroke="#9aa5b4"/>
 <line x1="50" y1="478" x2="70" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -65,26 +65,26 @@
 <line x1="108" y1="710.0" x2="600" y2="710.0" stroke="#e1e6ed"/>
 <text x="98" y="714.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">0</text>
 <line x1="108" y1="657.5" x2="600" y2="657.5" stroke="#e1e6ed"/>
-<text x="98" y="661.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">15</text>
+<text x="98" y="661.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">10</text>
 <line x1="108" y1="605.0" x2="600" y2="605.0" stroke="#e1e6ed"/>
-<text x="98" y="609.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
+<text x="98" y="609.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">20</text>
 <line x1="108" y1="552.5" x2="600" y2="552.5" stroke="#e1e6ed"/>
-<text x="98" y="556.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">45</text>
+<text x="98" y="556.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
 <line x1="108" y1="500.0" x2="600" y2="500.0" stroke="#e1e6ed"/>
-<text x="98" y="504.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">60</text>
+<text x="98" y="504.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">40</text>
 <text x="108.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 KiB</text>
 <text x="272.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,673.4 272.0,627.4 436.0,569.7 600.0,599.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="673.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 10.46 GiB/s</title></circle>
-<text x="129.5" y="663.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.46</text>
-<circle cx="272.0" cy="627.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 23.60 GiB/s</title></circle>
-<text x="272.0" y="617.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">23.60</text>
-<circle cx="436.0" cy="569.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 40.08 GiB/s</title></circle>
-<text x="436.0" y="559.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">40.08</text>
-<circle cx="600.0" cy="599.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 31.59 GiB/s</title></circle>
-<text x="578.5" y="589.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.59</text>
+<polyline points="108.0,657.1 272.0,589.9 436.0,505.8 600.0,550.0" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="657.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 10.07 GiB/s</title></circle>
+<text x="129.5" y="647.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.07</text>
+<circle cx="272.0" cy="589.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 22.87 GiB/s</title></circle>
+<text x="272.0" y="579.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">22.87</text>
+<circle cx="436.0" cy="505.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 38.90 GiB/s</title></circle>
+<text x="436.0" y="522.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">38.90</text>
+<circle cx="600.0" cy="550.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 30.48 GiB/s</title></circle>
+<text x="578.5" y="540.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">30.48</text>
 <text x="660" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">URL-safe decode</text>
 <line x1="718" y1="710" x2="1210" y2="710" stroke="#9aa5b4"/>
 <line x1="660" y1="478" x2="680" y2="478" stroke="#007f73" stroke-width="3"/>
@@ -103,13 +103,13 @@
 <text x="882.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,657.6 882.0,609.3 1046.0,560.8 1210.0,585.0" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="657.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 KiB, 7.48 GiB/s</title></circle>
-<text x="736.2" y="647.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.48</text>
-<circle cx="882.0" cy="609.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 4 KiB, 14.39 GiB/s</title></circle>
-<text x="882.0" y="599.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">14.39</text>
-<circle cx="1046.0" cy="560.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 MiB, 21.31 GiB/s</title></circle>
-<text x="1046.0" y="550.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.31</text>
-<circle cx="1210.0" cy="585.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 8 MiB, 17.86 GiB/s</title></circle>
-<text x="1188.5" y="575.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.86</text>
+<polyline points="718.0,648.5 882.0,602.7 1046.0,564.8 1210.0,587.7" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="648.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 KiB, 8.79 GiB/s</title></circle>
+<text x="736.2" y="638.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">8.79</text>
+<circle cx="882.0" cy="602.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 4 KiB, 15.33 GiB/s</title></circle>
+<text x="882.0" y="592.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">15.33</text>
+<circle cx="1046.0" cy="564.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 1 MiB, 20.74 GiB/s</title></circle>
+<text x="1046.0" y="554.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.74</text>
+<circle cx="1210.0" cy="587.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe decode: hashcodecs, 8 MiB, 17.47 GiB/s</title></circle>
+<text x="1188.5" y="577.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">17.47</text>
 </svg>

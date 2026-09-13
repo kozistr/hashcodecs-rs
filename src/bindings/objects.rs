@@ -78,7 +78,7 @@ pub(super) fn list_items_and_all<'py>(
     #[cfg(Py_GIL_DISABLED)]
     {
         for item in items.iter() {
-            all &= predicate(&item);
+            all = all && predicate(&item);
             values.push(item);
         }
 
@@ -89,7 +89,7 @@ pub(super) fn list_items_and_all<'py>(
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
             let item = Bound::from_borrowed_ptr(items.py(), item);
-            all &= predicate(&item);
+            all = all && predicate(&item);
             values.push(item);
         }
 

@@ -10,8 +10,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyByteArray, PyBytes, PyInt, PyList, PyMemoryView, PyString};
 
 #[cfg(not(Py_GIL_DISABLED))]
-use super::encode::encode_exact;
-use super::encode::{encode_into, encode_parsed};
+use super::encode::encode_small_padded;
+use super::encode::{PreparedEncoder, encode_into, encode_with_prepared};
 use super::policy::{DecodePolicy, PreparedDecoder};
 use crate::bindings::buffer::{
     BufferRange, BytesLike, ascii_or_bytes, ascii_or_bytes_owned, contiguous_bytes_like,
@@ -266,39 +266,34 @@ pub(super) fn b64encode_batch_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
     let (items, exact_bytes_fast_path) = list_items_and_all(items, |item| {
-        PyBytes::is_exact_type_of(item)
-            && unsafe { item.cast_unchecked::<PyBytes>() }.as_bytes().len() <= EXACT_BYTES_BATCH_MAX
+        // Only the length is needed while retaining the list; avoid acquiring
+        // the bytes pointer through the C API for every tiny item.
+        unsafe {
+            ffi::PyBytes_CheckExact(item.as_ptr()) != 0
+                && ffi::Py_SIZE(item.as_ptr()) as usize <= EXACT_BYTES_BATCH_MAX
+        }
     })?;
     #[cfg(Py_GIL_DISABLED)]
     let items = list_items(items)?;
+
+    let encoder = PreparedEncoder::new(altchars, true, None);
 
     #[cfg(not(Py_GIL_DISABLED))]
     if exact_bytes_fast_path {
         // Validation retains every input before allocating the output list.
         // Creating a GC-tracked Python object can run finalizers which mutate
         // the original list.
-        let length = items.len();
-        let mut items = items.into_iter();
-        return list_from_fn(py, length, |_| {
-            let item = unsafe {
-                items
-                    .next()
-                    .expect("batch item count is exact")
-                    .cast_into_unchecked::<PyBytes>()
-            };
-            encode_exact(py, item.as_bytes(), altchars, true, None)
+        return list_from_fn(py, items.len(), |index| {
+            let input = BytesLike::Bytes(unsafe { items[index].cast_unchecked::<PyBytes>() });
+            unsafe { input.with_bytes(|input| encode_small_padded(py, input, &encoder)) }
         });
     }
     let length = items.len();
     let mut items = items.into_iter();
     list_from_fn(py, length, |_| {
-        encode_parsed(
-            py,
-            &items.next().expect("batch item count is exact"),
-            altchars,
-            true,
-            None,
-        )
+        let item = items.next().expect("batch item count is exact");
+        let input = crate::bindings::buffer::binascii_contiguous_bytes_like(&item)?;
+        encode_with_prepared(py, &input, &encoder)
     })
 }
 
@@ -375,9 +370,11 @@ pub(super) fn b64decode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
+    #[cfg(not(Py_GIL_DISABLED))]
+    let (items, exact_bytes_fast_path) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+    #[cfg(Py_GIL_DISABLED)]
     let items = list_items(items)?;
     let length = items.len();
-    let mut items = items.into_iter();
 
     let decoder = PreparedDecoder::new_for_batch(
         py,
@@ -385,6 +382,16 @@ pub(super) fn b64decode_batch_parsed<'py>(
         length,
     )?;
 
+    #[cfg(not(Py_GIL_DISABLED))]
+    if exact_bytes_fast_path {
+        // Retain the validated inputs through output-list allocation and borrow
+        // them throughout decoding, releasing the references after the batch.
+        return list_from_fn(py, length, |index| {
+            let input = BytesLike::Bytes(unsafe { items[index].cast_unchecked::<PyBytes>() });
+            decoder.decode_allocating(py, &input)
+        });
+    }
+    let mut items = items.into_iter();
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
         let input = ascii_or_bytes(py, &item, "s")?;

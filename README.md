@@ -222,10 +222,9 @@ cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 
 ## Performance snapshot
 
-In the focused 2026-09-09 hashcodecs-only run on the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input
-at 91.27 GiB/s. In the full 2026-09-02 run, the Base64 batch API reaches 11.84 GiB/s for encode and 6.23 GiB/s for
-decode with 256 B items in batches of 64. Each run pins one logical CPU and uses 15 samples with a 0.2-second
-minimum per sample. Read the
+On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 91.62 GiB/s. The Base64 batch API reaches
+10.84 GiB/s for encode and 7.57 GiB/s for decode with 256 B items in batches of 64. Each run pins one logical CPU
+and uses 15 samples with a 0.2-second minimum per sample. Read the
 [benchmark details](BENCHMARK.md) and [raw comparison results](docs/benchmarks/results.csv).
 
 ## Development

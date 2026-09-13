@@ -213,28 +213,28 @@ CHARTS = (
             panel(
                 'Standard encode',
                 SIZES,
-                hashcodecs=[11.75, 24.43, 3.75, 4.94],
+                hashcodecs=[11.91, 24.75, 3.53, 4.67],
                 CPython=[0.44, 0.46, 0.40, 0.42],
                 pybase64=[5.02, 13.11, 2.68, 2.91],
             ),
             panel(
                 'Standard decode',
                 SIZES,
-                hashcodecs=[7.91, 17.12, 4.72, 5.30],
+                hashcodecs=[8.74, 17.57, 4.43, 5.11],
                 CPython=[0.93, 1.08, 0.84, 0.90],
                 pybase64=[3.09, 8.01, 3.26, 3.57],
             ),
             panel(
                 'URL-safe encode',
                 SIZES,
-                hashcodecs=[10.54, 22.98, 3.73, 5.00],
+                hashcodecs=[11.90, 24.18, 3.57, 4.67],
                 CPython=[0.37, 0.41, 0.33, 0.34],
                 pybase64=[0.96, 1.19, 0.84, 0.84],
             ),
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[6.61, 13.45, 4.69, 5.25],
+                hashcodecs=[7.46, 14.05, 4.50, 5.12],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
             ),
@@ -284,11 +284,11 @@ CHARTS = (
         tuple(
             panel(title, SIZES, hashcodecs=ours, mmh3=upstream)
             for title, ours, upstream in (
-                ('x86 32-bit one-shot', [3.56, 3.85, 4.00, 3.99], [3.44, 3.72, 3.84, 3.83]),
+                ('x86 32-bit one-shot', [3.58, 3.86, 4.00, 4.00], [3.44, 3.72, 3.84, 3.83]),
                 ('x86 32-bit incremental', [2.86, 3.63, 4.00, 3.99], [2.86, 3.48, 3.84, 3.84]),
-                ('x86 128-bit one-shot', [6.59, 8.47, 9.46, 9.45], [6.69, 8.22, 8.89, 8.86]),
+                ('x86 128-bit one-shot', [6.68, 8.50, 9.42, 9.41], [6.69, 8.22, 8.89, 8.86]),
                 ('x86 128-bit incremental', [4.43, 7.28, 9.44, 9.44], [0.69, 0.78, 0.80, 0.81]),
-                ('x64 128-bit one-shot', [6.98, 9.01, 10.08, 10.10], [7.79, 9.48, 10.26, 10.26]),
+                ('x64 128-bit one-shot', [7.05, 8.96, 10.06, 10.10], [7.79, 9.48, 10.26, 10.26]),
                 ('x64 128-bit incremental', [4.78, 7.92, 10.11, 10.11], [5.32, 8.05, 9.36, 8.20]),
             )
         ),
@@ -298,23 +298,23 @@ CHARTS = (
         'Python XXH3 throughput',
         (
             panel(
-                'XXH3-64 one-shot', SIZES, hashcodecs=[14.74, 39.88, 91.27, 51.24], xxhash=[13.45, 29.13, 48.08, 38.62]
+                'XXH3-64 one-shot', SIZES, hashcodecs=[16.42, 42.70, 91.62, 51.05], xxhash=[13.45, 29.13, 48.08, 38.62]
             ),
             panel(
-                'XXH3-128 one-shot', SIZES, hashcodecs=[12.89, 36.37, 91.61, 51.20], xxhash=[9.26, 23.44, 48.46, 38.62]
+                'XXH3-128 one-shot', SIZES, hashcodecs=[13.98, 38.06, 91.54, 51.01], xxhash=[9.26, 23.44, 48.46, 38.62]
             ),
             panel(
                 'XXH3-64 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[5.50, 44.67, 73.87, 35.05],
-                hashcodecs_packed=[13.48, 62.64, 83.19, 36.71],
+                hashcodecs_list=[5.90, 45.69, 74.53, 36.76],
+                hashcodecs_packed=[14.89, 64.50, 84.21, 36.95],
                 xxhash=[2.20, 14.84, 30.53, 17.71],
             ),
             panel(
                 'XXH3-128 batch (32 items)',
                 ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[2.90, 32.13, 63.38, 36.49],
-                hashcodecs_packed=[7.53, 55.71, 80.11, 36.59],
+                hashcodecs_list=[3.03, 32.77, 64.07, 36.67],
+                hashcodecs_packed=[7.98, 57.34, 80.99, 36.93],
                 xxhash=[1.05, 9.95, 24.14, 17.45],
             ),
         ),
@@ -323,10 +323,10 @@ CHARTS = (
         'base64-python-reusable.svg',
         'Reusable Python Base64 buffers',
         (
-            panel('Standard encode', SIZES, hashcodecs=[13.69, 26.58, 39.96, 30.29]),
-            panel('Standard decode', SIZES, hashcodecs=[9.34, 17.73, 29.04, 18.89]),
-            panel('URL-safe encode', SIZES, hashcodecs=[12.97, 25.80, 40.06, 30.25]),
-            panel('URL-safe decode', SIZES, hashcodecs=[7.57, 14.04, 20.41, 17.13]),
+            panel('Standard encode', SIZES, hashcodecs=[10.97, 23.57, 38.82, 30.52]),
+            panel('Standard decode', SIZES, hashcodecs=[10.60, 19.86, 29.07, 18.15]),
+            panel('URL-safe encode', SIZES, hashcodecs=[10.07, 22.87, 38.90, 30.48]),
+            panel('URL-safe decode', SIZES, hashcodecs=[8.79, 15.33, 20.74, 17.47]),
         ),
     ),
     Chart(
@@ -337,25 +337,25 @@ CHARTS = (
                 'Encode, returned bytes',
                 SIZES,
                 full_view=[6.24, 19.96, 3.88, 4.71],
-                nonzero_offset=[8.11, 18.84, 3.59, 4.05],
+                nonzero_offset=[8.57, 19.59, 3.48, 4.64],
             ),
             panel(
                 'Encode, reusable bytearray',
                 SIZES,
                 full_view=[7.16, 22.76, 40.06, 30.37],
-                nonzero_offset=[8.32, 17.59, 22.60, 11.18],
+                nonzero_offset=[9.57, 21.22, 38.85, 30.72],
             ),
             panel(
                 'Decode, returned bytes',
                 SIZES,
                 full_view=[5.60, 15.62, 4.48, 4.11],
-                nonzero_offset=[7.16, 14.90, 4.11, 4.95],
+                nonzero_offset=[7.44, 15.27, 4.36, 5.14],
             ),
             panel(
                 'Decode, reusable bytearray',
                 SIZES,
                 full_view=[6.21, 17.20, 29.38, 19.51],
-                nonzero_offset=[6.78, 13.74, 15.15, 8.19],
+                nonzero_offset=[8.11, 16.52, 29.01, 19.22],
             ),
         ),
     ),
@@ -367,12 +367,12 @@ CHARTS = (
                 title, ['8', '64', '1,024'], hashcodecs=ours, hashcodecs_loop=loop, pybase64=pybase64, CPython=cpython
             )
             for title, ours, loop, pybase64, cpython in (
-                ('16 B encode', [0.79, 1.21, 1.21], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
-                ('16 B decode', [0.52, 0.68, 0.66], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
-                ('256 B encode', [9.70, 11.62, 10.63], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
-                ('256 B decode', [6.79, 7.61, 7.16], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
-                ('4 KiB encode', [24.82, 17.72, 2.12], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
-                ('4 KiB decode', [20.90, 20.06, 7.42], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
+                ('16 B encode', [0.87, 1.23, 1.16], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
+                ('16 B decode', [0.52, 0.72, 0.75], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
+                ('256 B encode', [9.89, 11.56, 10.55], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
+                ('256 B decode', [6.70, 8.28, 7.81], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
+                ('4 KiB encode', [24.51, 19.38, 2.05], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
+                ('4 KiB decode', [20.16, 19.66, 2.62], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
             )
         ),
     ),
@@ -382,9 +382,9 @@ CHARTS = (
         tuple(
             panel(title, ['8', '64', '1,024'], encode=encode, decode=decode)
             for title, encode, decode in (
-                ('16 B items', [0.44, 0.66, 0.65], [0.34, 0.48, 0.48]),
-                ('256 B items', [5.29, 6.55, 6.25], [4.88, 6.42, 6.24]),
-                ('4 KiB items', [27.72, 27.86, 17.91], [21.47, 22.61, 17.28]),
+                ('16 B items', [0.57, 0.66, 0.64], [0.42, 0.54, 0.56]),
+                ('256 B items', [6.48, 6.51, 6.31], [5.51, 6.39, 6.38]),
+                ('4 KiB items', [28.20, 27.78, 17.53], [21.32, 22.35, 17.56]),
             )
         ),
     ),
@@ -447,14 +447,14 @@ CHARTS = (
             panel(
                 'Encode',
                 SIZES,
-                returned_bytes=[10.40, 22.98, 3.56, 4.72],
-                reusable_bytearray=[13.49, 26.64, 39.97, 30.10],
+                returned_bytes=[8.55, 20.58, 3.49, 4.68],
+                reusable_bytearray=[10.74, 23.28, 38.90, 30.64],
             ),
             panel(
                 'Decode',
                 SIZES,
-                returned_bytes=[8.67, 17.97, 4.12, 4.14],
-                reusable_bytearray=[10.16, 19.57, 29.42, 19.10],
+                returned_bytes=[8.09, 17.02, 4.69, 5.07],
+                reusable_bytearray=[9.19, 18.43, 29.09, 18.79],
             ),
         ),
     ),
@@ -464,11 +464,11 @@ CHARTS = (
         tuple(
             panel(title, SIZES, hashcodecs=values)
             for title, values in (
-                ('x86 32-bit one-shot', [3.52, 3.85, 4.00, 3.99]),
+                ('x86 32-bit one-shot', [3.35, 3.80, 4.00, 3.90]),
                 ('x86 32-bit incremental', [2.84, 3.62, 3.98, 3.97]),
-                ('x86 128-bit one-shot', [6.00, 8.30, 9.47, 9.48]),
+                ('x86 128-bit one-shot', [6.11, 8.30, 9.46, 9.46]),
                 ('x86 128-bit incremental', [4.40, 7.24, 9.36, 9.34]),
-                ('x64 128-bit one-shot', [6.81, 9.05, 10.14, 10.06]),
+                ('x64 128-bit one-shot', [6.07, 8.55, 10.01, 10.11]),
                 ('x64 128-bit incremental', [4.75, 7.91, 10.08, 10.05]),
             )
         ),
@@ -731,7 +731,7 @@ def render_performance_at_a_glance() -> str:
         (
             '<text x="600" y="84" text-anchor="middle" fill="#465263" '
             'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">'
-            'Standard · CPython 3.12 · 4 KiB inputs · GiB/s, higher is better</text>'
+            'Standard 쨌 CPython 3.12 쨌 4 KiB inputs 쨌 GiB/s, higher is better</text>'
         ),
         '<line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>',
     ]
@@ -753,7 +753,7 @@ def render_performance_at_a_glance() -> str:
                 (
                     f'<text x="{center_x:.1f}" y="152" text-anchor="middle" fill="#637083" '
                     'font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">'
-                    f'{ours / cpython:.0f}&#215; CPython · {ours / pybase64:.0f}&#215; pybase64</text>'
+                    f'{ours / cpython:.0f}&#215; CPython 쨌 {ours / pybase64:.0f}&#215; pybase64</text>'
                 ),
             )
         )
@@ -794,7 +794,7 @@ def render_performance_at_a_glance() -> str:
             (
                 '<text x="600" y="433" text-anchor="middle" fill="#637083" '
                 'font-family="Segoe UI,Arial,sans-serif" font-size="12">'
-                'Intel Core Ultra 7 265K · Windows 10 x64 · pinned CPU · 15 samples</text>'
+                'Intel Core Ultra 7 265K 쨌 Windows 10 x64 쨌 pinned CPU 쨌 15 samples</text>'
             ),
             '</svg>',
         )

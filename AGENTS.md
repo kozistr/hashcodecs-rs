@@ -25,6 +25,7 @@
 
 - Add a new empty line properly between lines.
 - Do not add a redundant one-line wrapper style function.
+- Keep function and variable names concise and specific. Avoid ambiguous abbreviations and unnecessary words.
 
 ## Validation
 

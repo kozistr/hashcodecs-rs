@@ -7,7 +7,7 @@ use pyo3::exceptions::{PyAssertionError, PyDeprecationWarning, PyFutureWarning, 
 use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyDict, PyType};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyMemoryView, PyType};
 
 use super::configured::{
     ConfiguredDecoder, decode_configured, decode_configured_into, decode_configured_strict_into,
@@ -628,11 +628,23 @@ fn b64decode_with<'py, T>(
     arguments: DecodeArguments<'_, 'py>,
     decode: impl FnOnce(&PreparedDecoder, &BytesLike<'_, 'py>) -> PyResult<T>,
 ) -> PyResult<T> {
-    if PyBytes::is_exact_type_of(s)
+    if (PyBytes::is_exact_type_of(s)
+        || ((PyByteArray::is_exact_type_of(s) || PyMemoryView::is_exact_type_of(s))
+            && arguments.validate.has_builtin_truthiness()
+            && arguments.padded.has_builtin_truthiness()
+            && arguments.canonical.has_builtin_truthiness()))
         && arguments.altchars.is_none_or(PyBytes::is_exact_type_of)
         && arguments.ignorechars.is_none_or(PyBytes::is_exact_type_of)
     {
-        let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
+        // Without user-defined argument conversions, normalization need not
+        // materialize a bytes copy. Retain the input's owner and preserve the
+        // release-before-write policy for any acquired buffer exports.
+        let input = if PyBytes::is_exact_type_of(s) {
+            BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() })
+        } else {
+            ascii_or_bytes(py, s, "s")?
+                .into_stable_after_callbacks(arguments.before_output_write)?
+        };
         let altchars = parse_altchars(py, arguments.altchars, true)?;
         let validate = arguments.validate.optional_truthy(py)?;
         let padded = arguments.padded.truthy(py)?;

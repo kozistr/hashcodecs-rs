@@ -3,6 +3,7 @@ use std::ptr;
 
 use pyo3::ffi;
 
+#[inline]
 pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     args: *const *mut ffi::PyObject,
     nargs: isize,
@@ -40,8 +41,10 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     for keyword_index in 0..keyword_count {
         let keyword = unsafe { tuple_item(keywords, keyword_index) };
         let value = unsafe { *args.add(nargs + keyword_index) };
-        let parameter_index = parameter_names.iter().position(|parameter| {
-            (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, *parameter) }) == 0
+        // Valid keywords follow the positional arguments. Search those slots
+        // first, then check the filled slots to preserve duplicate diagnostics.
+        let parameter_index = (nargs..N).chain(0..nargs).find(|&index| {
+            (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, parameter_names[index]) }) == 0
         });
 
         let Some(parameter_index) = parameter_index else {

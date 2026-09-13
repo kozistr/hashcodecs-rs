@@ -109,6 +109,41 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     assert base64.b64decode(memoryview(large_encoded), validate=True) == large_payload
 
 
+@pytest.mark.parametrize('length', [1024, 65536, 262144, 1048576])
+@pytest.mark.parametrize('altchars', [None, b'-_', b'@#'])
+def test_sliced_decode_preserves_exact_output_boundaries(length: int, altchars: bytes | None) -> None:
+    payload = (bytes(range(256)) * (length // 256 + 1))[:length]
+    encoded = stdlib_base64.b64encode(payload, altchars)
+    view = memoryview(b'!' + encoded + b'!')[1:-1]
+    assert base64.b64decode(view, altchars, validate=True) == payload
+    output = bytearray(b'\xa5' * (length + 1))
+    assert base64.b64decode_into(view, output, altchars, validate=True) == length
+    assert output == payload + b'\xa5'
+    with pytest.raises(ValueError, match='destination'):
+        base64.b64decode_into(view, bytearray(length - 1), altchars, validate=True)
+
+
+@pytest.mark.parametrize('reusable', [False, True])
+def test_sliced_decode_snapshots_before_truthiness_callbacks(reusable: bool) -> None:
+    storage = bytearray(b'!YWJj!')
+    view = memoryview(storage)[1:-1]
+    output = bytearray(4)
+
+    class Validate:
+        def __bool__(self) -> bool:
+            storage[1:-1] = b'ZGVm'
+            view.release()
+            output.clear()
+            return True
+
+    if reusable:
+        with pytest.raises(ValueError, match='destination has 0'):
+            dynamic_b64decode_into(view, output, validate=Validate())
+        assert output == b''
+    else:
+        assert dynamic_b64decode(view, validate=Validate()) == b'abc'
+
+
 def _assert_mutable_input_race_is_serialized(
     operation: Callable[[], bytes],
     value: bytearray,

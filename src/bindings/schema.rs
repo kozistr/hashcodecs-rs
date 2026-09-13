@@ -46,6 +46,16 @@ impl Argument {
         self.value
     }
 
+    #[inline]
+    pub(super) fn has_builtin_truthiness(self) -> bool {
+        self.value.is_null()
+            || unsafe {
+                self.value == ffi::Py_True()
+                    || self.value == ffi::Py_False()
+                    || self.value == ffi::Py_None()
+            }
+    }
+
     #[inline(always)]
     pub(super) fn raw<'a, 'py>(&'a self, py: Python<'py>) -> &'a Bound<'py, PyAny> {
         assert!(
@@ -92,6 +102,12 @@ impl Argument {
     pub(super) fn truthy(self, py: Python<'_>) -> PyResult<bool> {
         if self.value.is_null() {
             return Ok(self.default_bool(py));
+        }
+        if self.value == unsafe { ffi::Py_True() } {
+            return Ok(true);
+        }
+        if self.value == unsafe { ffi::Py_False() } || self.value == unsafe { ffi::Py_None() } {
+            return Ok(false);
         }
 
         let truthy = unsafe { ffi::PyObject_IsTrue(self.value) };
@@ -166,16 +182,31 @@ impl<const N: usize> Binding<N> {
         let py = unsafe { Python::assume_attached() };
 
         catch_unwind_callback(py, || unsafe {
-            let Some(values) = parse_raw_arguments(
-                args,
-                nargs,
-                keywords,
-                self.name.as_ptr(),
-                self.parser.parameters.map(CStr::as_ptr),
-                self.parser.max_positional,
-                self.parser.required,
-            ) else {
-                return ptr::null_mut();
+            let values = if keywords.is_null()
+                && (self.parser.required..=self.parser.max_positional).contains(&(nargs as usize))
+            {
+                // Positional calls need no keyword names or error formatting.
+                // Keep their required-argument checks in the same schema.
+                std::array::from_fn(|index| {
+                    if index < nargs as usize {
+                        *args.add(index)
+                    } else {
+                        ptr::null_mut()
+                    }
+                })
+            } else {
+                let Some(values) = parse_raw_arguments(
+                    args,
+                    nargs,
+                    keywords,
+                    self.name.as_ptr(),
+                    self.parser.parameters.map(CStr::as_ptr),
+                    self.parser.max_positional,
+                    self.parser.required,
+                ) else {
+                    return ptr::null_mut();
+                };
+                values
             };
 
             operation(py, values)

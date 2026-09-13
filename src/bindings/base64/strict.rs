@@ -26,16 +26,19 @@ pub(super) fn decode_strict<'py>(
     if let Some(input) = input.snapshot_mutable()? {
         return decode_strict(py, &BytesLike::OwnedVec(input), alphabet);
     }
-    let layout = match unsafe { input.with_bytes(decode_layout) } {
-        Ok(layout) => layout,
-        Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
-            return Ok(Err(Base64Error::InvalidInput));
-        }
-    };
-    let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
-    let (output, result) = unsafe {
-        pybytes_with_len(py, layout.output_len(), |output| {
-            input.with_bytes(|input| {
+    let detach_safe = input.detach_safe();
+    unsafe {
+        input.with_bytes(|input| {
+            let layout = match decode_layout(input) {
+                Ok(layout) => layout,
+                Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
+                    return Ok(Err(Base64Error::InvalidInput));
+                }
+            };
+            let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
+            // bytes allocation is not GC-tracked and cannot invoke Python
+            // finalizers. Keep one input borrow through layout and decoding.
+            let (output, result) = pybytes_with_len(py, layout.output_len(), |output| {
                 let output_address = output as usize;
                 let decode = move || {
                     decode_to_ptr_with_layout(
@@ -47,15 +50,15 @@ pub(super) fn decode_strict<'py>(
                     )
                 };
                 if detach { py.detach(decode) } else { decode() }
+            })?;
+            Ok(match result {
+                Ok(()) => Ok(output),
+                Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
+                    Err(Base64Error::InvalidInput)
+                }
             })
         })
-    }?;
-    Ok(match result {
-        Ok(()) => Ok(output),
-        Err(Base64Error::InvalidInput | Base64Error::OutputTooSmall { .. }) => {
-            Err(Base64Error::InvalidInput)
-        }
-    })
+    }
 }
 
 pub(super) fn decode_strict_into(

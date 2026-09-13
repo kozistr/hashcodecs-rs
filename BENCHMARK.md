@@ -9,10 +9,8 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
-The standard and URL-safe Python decode panels report CPython 3.12.10 measurements from 2026-09-09. In the lenient
-decode chart, the custom `@#` panels report measurements from 2026-09-12; the standard MIME and noisy panels retain
-their 2026-09-05 measurements. Each value is the median of 15 samples lasting at least 0.2 seconds each, with one
-logical CPU pinned.
+Python values use CPython 3.12.10 and report the median of 15 samples lasting at least 0.2 seconds each, with one
+logical CPU pinned. Focused runs refresh only the affected series; other values retain their previous measurements.
 
 ## Timing Controls
 
@@ -189,9 +187,8 @@ Run `python benchmarks/python_base64.py --wrapped` with CPython 3.15 or newer. T
 ## Python Memoryview Inputs
 
 Use `--memoryview-input` for full immutable views and `--sliced-memoryview-input` for equal-length contiguous views
-with a nonzero starting offset. Full views can recover their exact immutable owner at detachment sizes; slices cover
-offset-buffer handling, which borrows under the GIL and stabilizes the input in free-threaded builds. The encoded data
-remains identical.
+with a nonzero starting offset. At detachment sizes, both retain the immutable bytes owner without copying the input.
+Callback-capable decode arguments keep their required snapshots and conversion order. Both modes use identical data.
 
 [![Python Base64 memoryview inputs](docs/benchmarks/base64-python-memoryview.svg)](docs/benchmarks/base64-python-memoryview.svg)
 

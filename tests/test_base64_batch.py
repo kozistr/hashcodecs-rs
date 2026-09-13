@@ -1,8 +1,10 @@
 import base64 as stdlib_base64
 import binascii
 import inspect
+import subprocess
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, TypeVar
 
 import pytest
@@ -33,6 +35,18 @@ class _ChangingBuffer:
     def __buffer__(self, flags: int) -> memoryview:
         self.calls += 1
         return memoryview(b'-_' if self.calls == 1 else b'@#')
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 12), reason='requires synchronous allocation GC in CPython 3.10/3.11')
+def test_base64_batch_survives_gc_finalizers() -> None:
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name('base64_gc.py'))],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_base64_batch_empty_single_heterogeneous_and_ordered() -> None:

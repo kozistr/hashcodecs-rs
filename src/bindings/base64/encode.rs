@@ -51,7 +51,7 @@ impl EncodeAlphabet {
         }
     }
 
-    fn is_urlsafe(self) -> bool {
+    fn is_urlsafe(&self) -> bool {
         matches!(self, Self::UrlSafe)
     }
 }
@@ -100,14 +100,14 @@ impl PreparedEncoder {
         }
     }
 
-    fn data_len(self, input_len: usize) -> usize {
+    fn data_len(&self, input_len: usize) -> usize {
         match self.padding {
             EncodePadding::Padded => encoded_len(input_len),
             EncodePadding::Unpadded => unpadded_encoded_len(input_len),
         }
     }
 
-    fn output_len(self, input_len: usize) -> usize {
+    fn output_len(&self, input_len: usize) -> usize {
         let data_len = self.data_len(input_len);
         match (data_len, self.wrapping) {
             (0, _) | (_, LineWrapping::None) => data_len,
@@ -115,7 +115,7 @@ impl PreparedEncoder {
         }
     }
 
-    fn direct_wrap_width(self, input_len: usize) -> Option<usize> {
+    fn direct_wrap_width(&self, input_len: usize) -> Option<usize> {
         if input_len <= DIRECT_WRAPPED_INPUT_THRESHOLD {
             return None;
         }
@@ -126,21 +126,21 @@ impl PreparedEncoder {
         }
     }
 
-    unsafe fn encode_to_ptr(self, input: &[u8], output: *mut u8) {
+    unsafe fn encode_to_ptr(&self, input: &[u8], output: *mut u8) {
         match self.wrapping {
             LineWrapping::None => unsafe {
-                encode_unwrapped_ptr::<false>(input, output, self.alphabet, self.padding)
+                encode_unwrapped_ptr::<false>(input, output, &self.alphabet, self.padding)
             },
             LineWrapping::Columns(width) => unsafe {
-                encode_unwrapped_ptr::<true>(input, output, self.alphabet, self.padding);
+                encode_unwrapped_ptr::<true>(input, output, &self.alphabet, self.padding);
                 wrap_encoded_ptr(output, self.data_len(input.len()), width);
             },
         }
     }
 
     #[cold]
-    unsafe fn encode_direct_to_ptr(self, input: &[u8], output: *mut u8, width: usize) {
-        match self.alphabet {
+    unsafe fn encode_direct_to_ptr(&self, input: &[u8], output: *mut u8, width: usize) {
+        match &self.alphabet {
             EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => unsafe {
                 encode_wrapped_to_ptr_cached(
                     input,
@@ -154,7 +154,7 @@ impl PreparedEncoder {
                 encode_wrapped_to_ptr_custom(
                     input,
                     output,
-                    &alphabet,
+                    alphabet,
                     matches!(self.padding, EncodePadding::Padded),
                     width,
                 )
@@ -164,22 +164,17 @@ impl PreparedEncoder {
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-pub(super) fn encode_exact<'py>(
+pub(super) fn encode_small_padded<'py>(
     py: Python<'py>,
     input: &[u8],
-    altchars: Option<[u8; 2]>,
-    padded: bool,
-    wrapcol: Option<usize>,
+    encoder: &PreparedEncoder,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
-    let output_len = encoder.output_len(input.len());
+    debug_assert!(matches!(encoder.padding, EncodePadding::Padded));
+    debug_assert!(matches!(encoder.wrapping, LineWrapping::None));
+    let output_len = encoded_len(input.len());
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {
-            if let Some(width) = encoder.direct_wrap_width(input.len()) {
-                encoder.encode_direct_to_ptr(input, output, width);
-            } else {
-                encoder.encode_to_ptr(input, output);
-            }
+            encode_ptr::<true>(input, output, &encoder.alphabet);
         })
     }?;
     Ok(output)
@@ -193,13 +188,13 @@ pub(super) fn encode<'py>(
     wrapcol: Option<usize>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
-    encode_with_prepared(py, input, encoder)
+    encode_with_prepared(py, input, &encoder)
 }
 
-fn encode_with_prepared<'py>(
+pub(super) fn encode_with_prepared<'py>(
     py: Python<'py>,
     input: &BytesLike<'_, '_>,
-    encoder: PreparedEncoder,
+    encoder: &PreparedEncoder,
 ) -> PyResult<Bound<'py, PyBytes>> {
     #[cfg(Py_GIL_DISABLED)]
     if let Some(input) = input.snapshot_mutable()? {
@@ -235,11 +230,11 @@ pub(super) fn encode_into(
 ) -> PyResult<usize> {
     let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
     if let Some(input) = input.snapshot_for_output(output)? {
-        return encode_slice_into(&input, output, encoder);
+        return encode_slice_into(&input, output, &encoder);
     }
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            encode_slice_to_ptr(input, output, provided, encoder)
+            encode_slice_to_ptr(input, output, provided, &encoder)
         })
     }
 }
@@ -277,7 +272,7 @@ fn unpadded_encoded_len(input_len: usize) -> usize {
 fn encode_slice_into(
     input: &[u8],
     output: &Bound<'_, PyByteArray>,
-    encoder: PreparedEncoder,
+    encoder: &PreparedEncoder,
 ) -> PyResult<usize> {
     let required = encoder.output_len(input.len());
     with_output_ptr(output, required, |output| {
@@ -294,7 +289,7 @@ fn encode_slice_to_ptr(
     input: &[u8],
     output: *mut u8,
     provided: usize,
-    encoder: PreparedEncoder,
+    encoder: &PreparedEncoder,
 ) -> PyResult<usize> {
     let required = encoder.output_len(input.len());
     if provided < required {
@@ -312,7 +307,7 @@ fn encode_slice_to_ptr(
 unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
     input: &[u8],
     output: *mut u8,
-    alphabet: EncodeAlphabet,
+    alphabet: &EncodeAlphabet,
     padding: EncodePadding,
 ) {
     if matches!(padding, EncodePadding::Padded) {
@@ -337,7 +332,7 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
 }
 
 #[inline]
-unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet: EncodeAlphabet) {
+unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet: &EncodeAlphabet) {
     match alphabet {
         EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => {
             if CACHED {
@@ -347,7 +342,7 @@ unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet
             }
         }
         EncodeAlphabet::Custom(alphabet) => unsafe {
-            encode_to_ptr_with_custom_alphabet(input, output, &alphabet, CACHED)
+            encode_to_ptr_with_custom_alphabet(input, output, alphabet, CACHED)
         },
     }
 }
@@ -437,23 +432,17 @@ fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<
     Ok((altchars != *b"+/").then_some(altchars))
 }
 
-pub(super) fn encode_parsed<'py>(
-    py: Python<'py>,
-    input: &Bound<'py, PyAny>,
-    altchars: Option<[u8; 2]>,
-    padded: bool,
-    wrapcol: Option<usize>,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let input = crate::bindings::buffer::binascii_contiguous_bytes_like(input)?;
-    encode(py, &input, altchars, padded, wrapcol)
-}
-
 /// Encode with the standard Base64 alphabet.
 pub(super) fn standard_b64encode<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    encode_parsed(py, s, None, true, None)
+    let input = if PyBytes::is_exact_type_of(s) {
+        BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() })
+    } else {
+        crate::bindings::buffer::binascii_contiguous_bytes_like(s)?
+    };
+    encode(py, &input, None, true, None)
 }
 
 /// Encode with the standard Base64 alphabet into a reusable output.
@@ -511,7 +500,7 @@ pub(super) fn b64encode<'py>(
         return encode_with_prepared(
             py,
             &input,
-            PreparedEncoder::with_alphabet(EncodeAlphabet::Standard, padded, wrapcol),
+            &PreparedEncoder::with_alphabet(EncodeAlphabet::Standard, padded, wrapcol),
         );
     }
 
@@ -548,7 +537,7 @@ pub(super) fn b64encode<'py>(
     );
     let encoder = PreparedEncoder::with_alphabet(alphabet, padded, wrapcol);
     let input = input.into_stable_after_callbacks(false)?;
-    let result = encode_with_prepared(py, &input, encoder);
+    let result = encode_with_prepared(py, &input, &encoder);
     #[cfg(Py_GIL_DISABLED)]
     {
         // CPython's free-threaded converter releases the input export before

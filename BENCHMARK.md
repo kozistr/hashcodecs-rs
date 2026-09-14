@@ -166,7 +166,7 @@ cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_prepared"
 
 The AVX2 lookup-table change improves Python reusable URL-safe decoding by 12.4% at 1 KiB, 24.6% at 4 KiB,
 and 40.4% at 1 MiB against `67540a2`. Returned bytes improve by 11.9% at 1 KiB and 22.1% at 4 KiB; the large
-allocating cases remain within 0.2% of the baseline. See the [final measurements](docs/benchmarks/base64-decode-comparison.csv).
+allocating cases remain within 0.2% of the baseline.
 
 The URL-safe hashcodecs decode series were refreshed on 2026-09-14 with Rust 1.98.1 and CPython 3.14.6 on the
 host described above. Rust uses 50 Criterion samples. The paired Python values use direct calls matching

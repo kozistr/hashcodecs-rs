@@ -35,10 +35,10 @@ Rust Base64 throughput,URL-safe encode,1 KiB,base64 turbo,25.41
 Rust Base64 throughput,URL-safe encode,4 KiB,base64 turbo,33.95
 Rust Base64 throughput,URL-safe encode,1 MiB,base64 turbo,38.29
 Rust Base64 throughput,URL-safe encode,8 MiB,base64 turbo,31.16
-Rust Base64 throughput,URL-safe decode,1 KiB,hashcodecs,17.84
-Rust Base64 throughput,URL-safe decode,4 KiB,hashcodecs,24.78
-Rust Base64 throughput,URL-safe decode,1 MiB,hashcodecs,28.64
-Rust Base64 throughput,URL-safe decode,8 MiB,hashcodecs,19.06
+Rust Base64 throughput,URL-safe decode,1 KiB,hashcodecs,18.66
+Rust Base64 throughput,URL-safe decode,4 KiB,hashcodecs,26.51
+Rust Base64 throughput,URL-safe decode,1 MiB,hashcodecs,30.72
+Rust Base64 throughput,URL-safe decode,8 MiB,hashcodecs,18.97
 Rust Base64 throughput,URL-safe decode,1 KiB,base64,3.76
 Rust Base64 throughput,URL-safe decode,4 KiB,base64,4.03
 Rust Base64 throughput,URL-safe decode,1 MiB,base64,3.81
@@ -191,10 +191,10 @@ Python Base64 throughput,URL-safe encode,1 KiB,pybase64,0.96
 Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.19
 Python Base64 throughput,URL-safe encode,1 MiB,pybase64,0.84
 Python Base64 throughput,URL-safe encode,8 MiB,pybase64,0.84
-Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,7.46
-Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,14.05
-Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.50
-Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.12
+Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,8.05
+Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,17.21
+Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.80
+Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.52
 Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.47
 Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.74
 Python Base64 throughput,URL-safe decode,1 MiB,CPython,0.60
@@ -367,10 +367,10 @@ Reusable Python Base64 buffers,URL-safe encode,1 KiB,hashcodecs,10.07
 Reusable Python Base64 buffers,URL-safe encode,4 KiB,hashcodecs,22.87
 Reusable Python Base64 buffers,URL-safe encode,1 MiB,hashcodecs,38.90
 Reusable Python Base64 buffers,URL-safe encode,8 MiB,hashcodecs,30.48
-Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,8.79
-Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,15.33
-Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,20.74
-Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,17.47
+Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,9.81
+Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,19.37
+Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,29.94
+Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,19.25
 Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,full view,6.24
 Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,full view,19.96
 Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,full view,3.88

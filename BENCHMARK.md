@@ -85,15 +85,8 @@ one CPU, and alternates their timing order across 15 samples. It checks matching
 bytearrays, and writable memoryviews. Use `--batch-counts 2 9 32 33 --sizes 64` to inspect small batches and the
 32-result stack boundary. Positive `change_percent` values mean higher branch throughput.
 
-The [32-item parent comparison](docs/benchmarks/xxh3-batch-parent-comparison.csv) records CPython 3.12.10 results
-against parent commit `f17ab86`, measured on 2026-09-05. These paired measurements also cover the 256 KiB
-GIL-detachment threshold and 1 MiB items. The Python XXH3 batch panels report CPython 3.12.10 measurements
+The Python XXH3 batch panels report CPython 3.12.10 measurements
 from 2026-09-13, using 15 samples of at least 0.2 seconds; one-shot and upstream values retain their prior measurements.
-
-Across the 30 paired 32-item cases, branch throughput ranges from 2.59% lower to 2.70% higher than the parent.
-The [stack-boundary comparison](docs/benchmarks/xxh3-batch-boundary-comparison.csv) covers counts 2 and 33 with
-64-byte items: two-item bytearray batches lose 5.40–6.05%, and 33-item bytes batches lose 6.06–7.05%. These
-measurements show residual overhead for some small-input batches; they do not establish zero regression.
 
 ### Packed-batch detachment
 
@@ -105,13 +98,11 @@ The detached packed path retains input owners, borrows 64 inputs at a time on th
 it reacquires the GIL and rechecks the output size. This removes one allocation and 16 bytes of temporary input
 descriptors per item on 64-bit hosts. Little-endian hosts copy staged results in one operation.
 
-The [candidate measurements](docs/benchmarks/xxh3-packed-candidates.csv) compare 256 KiB, 512 KiB, and 1 MiB
-byte thresholds with the same allocation reduction and 16,384-item limit. Each exploratory value uses five
-samples of at least 0.03 seconds. The 1 MiB policy keeps both 4,096- and 8,192-item batches of 64-byte inputs on
+The 1 MiB policy keeps both 4,096- and 8,192-item batches of 64-byte inputs on
 the direct-output path. This trades longer GIL holds for lower latency; it does not establish an optimal threshold
 for other processors or contended workloads.
 
-The [selected-policy measurements](docs/benchmarks/xxh3-packed-thresholds.csv) use CPython 3.15.0b4 on the
+The packed-batch measurements use CPython 3.15.0b4 on the
 Intel Core Ultra 7 265K, with one logical CPU pinned, independent input allocations, and 15 samples of at least
 0.2 seconds each, measured on 2026-09-13. They cover both digest widths and item sizes of 64 bytes, 1 KiB, and 64 KiB.
 For 64-byte inputs:
@@ -134,7 +125,7 @@ measurement on this host, not a bound on thread waiting time; the tests also ver
 and for 16,384-item batches of empty, one-byte, and 64-byte inputs.
 
 ```sh
-uv run --frozen --no-sync python benchmarks/python_xxhash_thresholds.py --output docs/benchmarks/xxh3-packed-thresholds.csv
+uv run --frozen --no-sync python benchmarks/python_xxhash_thresholds.py
 uv run --frozen --no-sync python benchmarks/python_xxhash.py --batches-only --hashcodecs-only
 ```
 

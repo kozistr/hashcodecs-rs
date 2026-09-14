@@ -65,11 +65,14 @@ Every commit subject must start with one of these prefixes:
 
 - `feat:`
 - `fix:`
+- `perf:`
 - `style:`
 - `refactor:`
 - `chore:`
 - `build:`
 - `update:`
+
+Use `perf:` for performance tuning commits.
 
 Keep the text after the prefix imperative, concise, and specific to the committed change.
 

@@ -5,6 +5,18 @@ pub(super) const STANDARD_OFFSETS: [u8; 16] =
 pub(super) const URLSAFE_OFFSETS: [u8; 16] =
     [0, 0, 17, 4, 191, 191, 185, 185, 0, 0, 0, 0, 0, 0, 0, 0];
 
+// Hash an ASCII symbol to its translation offset with
+// `(high_nibble + MIXED_SHIFTS[low_nibble]) & 15`. Moving low nibbles D and F
+// separates '-', '/', and '_' from '+', digits, and letters. The affected
+// letters M/m and O/o move with them and retain their original offsets.
+// Validation remains independent: unused hash slots do not accept new bytes.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) const MIXED_SHIFTS: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 11];
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub(super) const MIXED_HASH_OFFSETS: [u8; 16] = [
+    224, 185, 19, 4, 191, 191, 185, 185, 0, 0, 17, 0, 191, 16, 185, 191,
+];
+
 // Invalid high/low nibble pairs share a class bit. Valid pairs produce zero.
 // The same class maps work with every SIMD decoder; only their vector loads
 // differ by architecture.

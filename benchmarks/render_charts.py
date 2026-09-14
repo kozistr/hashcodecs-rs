@@ -234,7 +234,7 @@ CHARTS = (
             panel(
                 'URL-safe decode',
                 SIZES,
-                hashcodecs=[8.00, 16.71, 4.74, 5.28],
+                hashcodecs=[8.05, 17.21, 4.80, 5.52],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
             ),
@@ -326,7 +326,7 @@ CHARTS = (
             panel('Standard encode', SIZES, hashcodecs=[10.97, 23.57, 38.82, 30.52]),
             panel('Standard decode', SIZES, hashcodecs=[10.60, 19.86, 29.07, 18.15]),
             panel('URL-safe encode', SIZES, hashcodecs=[10.07, 22.87, 38.90, 30.48]),
-            panel('URL-safe decode', SIZES, hashcodecs=[9.93, 19.27, 29.95, 19.02]),
+            panel('URL-safe decode', SIZES, hashcodecs=[9.81, 19.37, 29.94, 19.25]),
         ),
     ),
     Chart(

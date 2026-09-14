@@ -172,7 +172,6 @@ equal-size inputs and include result-vector allocation.
 ### Base64: Python
 
 Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`.
-The URL-safe hashcodecs decode series use CPython 3.14.6.
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 

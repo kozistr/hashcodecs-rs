@@ -191,10 +191,10 @@ Python Base64 throughput,URL-safe encode,1 KiB,pybase64,0.96
 Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.19
 Python Base64 throughput,URL-safe encode,1 MiB,pybase64,0.84
 Python Base64 throughput,URL-safe encode,8 MiB,pybase64,0.84
-Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,8.00
-Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,16.71
-Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.74
-Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.28
+Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,8.05
+Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,17.21
+Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,4.80
+Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,5.52
 Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.47
 Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.74
 Python Base64 throughput,URL-safe decode,1 MiB,CPython,0.60
@@ -367,10 +367,10 @@ Reusable Python Base64 buffers,URL-safe encode,1 KiB,hashcodecs,10.07
 Reusable Python Base64 buffers,URL-safe encode,4 KiB,hashcodecs,22.87
 Reusable Python Base64 buffers,URL-safe encode,1 MiB,hashcodecs,38.90
 Reusable Python Base64 buffers,URL-safe encode,8 MiB,hashcodecs,30.48
-Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,9.93
-Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,19.27
-Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,29.95
-Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,19.02
+Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,9.81
+Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,19.37
+Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,29.94
+Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,19.25
 Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,full view,6.24
 Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,full view,19.96
 Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,full view,3.88

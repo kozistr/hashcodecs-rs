@@ -9,9 +9,8 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
-Python values use CPython 3.12.10, except the URL-safe hashcodecs decode series, which use CPython 3.14.6. They
-report the median of 15 samples lasting at least 0.2 seconds each, with one logical CPU pinned. Focused runs refresh
-only the affected series; other values retain their previous measurements.
+Python values use CPython 3.12.10 and report the median of 15 samples lasting at least 0.2 seconds each, with one
+logical CPU pinned. Focused runs refresh only the affected series; other values retain their previous measurements.
 
 ## Timing Controls
 

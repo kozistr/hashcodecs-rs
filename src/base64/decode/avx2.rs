@@ -8,9 +8,9 @@ use std::arch::x86_64::*;
 use super::super::Base64Error;
 use super::ssse3::{errors_are_zero_ssse3, pack_16_indices, store_12_exact};
 use super::tables::{
-    MIXED_LOW_CLASSES_COMPLEMENT, PACK_SHUFFLE, STANDARD_HIGH_CLASSES,
-    STANDARD_LOW_CLASSES_COMPLEMENT, STANDARD_OFFSETS, URLSAFE_HIGH_CLASSES,
-    URLSAFE_LOW_CLASSES_COMPLEMENT, URLSAFE_OFFSETS,
+    MIXED_HASH_OFFSETS, MIXED_LOW_CLASSES_COMPLEMENT, MIXED_SHIFTS, PACK_SHUFFLE,
+    STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT, STANDARD_OFFSETS, URLSAFE_HIGH_CLASSES,
+    URLSAFE_LOW_CLASSES_COMPLEMENT,
 };
 use super::x86_contracts::{Decoder, Store};
 
@@ -237,14 +237,7 @@ pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __
     let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
 
-    let offsets =
-        _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(URLSAFE_OFFSETS.as_ptr().cast()) });
-
-    let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, high_nibbles));
-    let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
-    let correction = _mm256_and_si256(underscore, _mm256_set1_epi8(33));
-
-    (_mm256_add_epi8(indices, correction), errors)
+    (translate_mixed(value, high_nibbles), errors)
 }
 
 #[target_feature(enable = "avx2")]
@@ -254,19 +247,17 @@ pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m2
     let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
     let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
-    let slash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'/' as i8));
-    let offset_indices = _mm256_add_epi8(high_nibbles, slash);
-    let offsets =
-        _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) });
-    let indices = _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices));
-    let dash = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'-' as i8));
-    let underscore = _mm256_cmpeq_epi8(value, _mm256_set1_epi8(b'_' as i8));
-    let corrections = _mm256_or_si256(
-        _mm256_and_si256(dash, _mm256_set1_epi8(-2)),
-        _mm256_and_si256(underscore, _mm256_set1_epi8(33)),
-    );
+    (translate_mixed(value, high_nibbles), errors)
+}
 
-    (_mm256_add_epi8(indices, corrections), errors)
+#[target_feature(enable = "avx2")]
+fn translate_mixed(value: __m256i, high_nibbles: __m256i) -> __m256i {
+    let shifts =
+        _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(MIXED_SHIFTS.as_ptr().cast()) });
+    let offsets =
+        _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(MIXED_HASH_OFFSETS.as_ptr().cast()) });
+    let offset_indices = _mm256_add_epi8(high_nibbles, _mm256_shuffle_epi8(shifts, value));
+    _mm256_add_epi8(value, _mm256_shuffle_epi8(offsets, offset_indices))
 }
 
 #[target_feature(enable = "avx2")]

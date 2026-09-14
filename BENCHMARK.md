@@ -9,8 +9,9 @@ Build the Python wheel with CPython 3.12 and the full C API. Keep competitor val
 Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
 [docs/benchmarks/results.csv](docs/benchmarks/results.csv).
 
-Python values use CPython 3.12.10 and report the median of 15 samples lasting at least 0.2 seconds each, with one
-logical CPU pinned. Focused runs refresh only the affected series; other values retain their previous measurements.
+Unless stated otherwise, Python values use CPython 3.12.10 and report the median of 15 samples lasting at least
+0.2 seconds each, with one logical CPU pinned. Focused runs refresh only the affected series; other values retain
+their previous measurements.
 
 ## Timing Controls
 
@@ -160,6 +161,24 @@ cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- "xxh3_prepared"
 [![Rust XXH3 batch remainder throughput](docs/benchmarks/xxh3-rust-batch-remainders.svg)](docs/benchmarks/xxh3-rust-batch-remainders.svg)
 
 [![Python XXH3 throughput](docs/benchmarks/xxh3-python.svg)](docs/benchmarks/xxh3-python.svg)
+
+## Base64 Decoding
+
+The AVX2 lookup-table change improves Python reusable URL-safe decoding by 12.4% at 1 KiB, 24.6% at 4 KiB,
+and 40.4% at 1 MiB against `67540a2`. Returned bytes improve by 11.9% at 1 KiB and 22.1% at 4 KiB; the large
+allocating cases remain within 0.2% of the baseline. See the [final measurements](docs/benchmarks/base64-decode-comparison.csv).
+
+The URL-safe hashcodecs decode series were refreshed on 2026-09-14 with Rust 1.98.1 and CPython 3.14.6 on the
+host described above. Rust uses 50 Criterion samples. The paired Python values use direct calls matching
+`python_base64.py`, alternating builds across 15 samples of at least 0.2 seconds. Other series retain their earlier
+measurements. These results describe this host; the implementation adds no CPU model checks or tuning thresholds.
+
+For further comparisons, the following script checks CPython results and pins one CPU. Use `.so` paths on Linux
+or macOS; `--help` lists input, output, and decoding modes.
+
+```sh
+uv run --frozen --no-sync python benchmarks/compare_base64.py path/to/baseline/_hashcodecs.pyd path/to/candidate/_hashcodecs.pyd --operations decode --alphabets urlsafe
+```
 
 ## Reusable Python Buffers
 

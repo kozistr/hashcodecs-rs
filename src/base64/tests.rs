@@ -1134,11 +1134,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_classifier_matches_tables_for_every_adjacent_byte_word() {
-    if !backend::is_supported(Backend::Avx2) {
-        return;
-    }
-
+fn x86_decoders_match_tables_for_every_adjacent_byte_word() {
     for (alphabet, table) in [
         (DecodeAlphabet::Standard, &STANDARD_DECODE),
         (DecodeAlphabet::UrlSafe, &URLSAFE_DECODE),
@@ -1159,11 +1155,36 @@ fn avx2_classifier_matches_tables_for_every_adjacent_byte_word() {
             } else {
                 Err(Base64Error::InvalidInput)
             };
-            assert_eq!(
-                validate_with_backend(&input, Backend::Avx2, alphabet),
-                expected,
-                "alphabet={alphabet:?} word={word:#06x}"
-            );
+            let decoded = expected.is_ok().then(|| {
+                let standard = input.map(|byte| match byte {
+                    b'-' => b'+',
+                    b'_' => b'/',
+                    byte => byte,
+                });
+                base64::engine::general_purpose::STANDARD
+                    .decode(standard)
+                    .unwrap()
+            });
+            for backend in [Backend::Ssse3, Backend::Sse41, Backend::Avx2]
+                .into_iter()
+                .filter(|candidate| backend::is_supported(*candidate))
+            {
+                assert_eq!(
+                    validate_with_backend(&input, backend, alphabet),
+                    expected,
+                    "backend={backend:?} alphabet={alphabet:?} word={word:#06x}"
+                );
+                let mut output = [0xa5; 98];
+                let result = decode_with_backend(&input, &mut output[1..97], backend, alphabet);
+                if let Some(decoded) = &decoded {
+                    assert_eq!(result, Ok((128, 96)));
+                    assert_eq!(&output[1..97], decoded);
+                } else {
+                    assert_eq!(result, Err(Base64Error::InvalidInput));
+                }
+                assert_eq!(output[0], 0xa5);
+                assert_eq!(output[97], 0xa5);
+            }
         }
     }
 }

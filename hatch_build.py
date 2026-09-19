@@ -14,7 +14,7 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 from packaging.tags import Tag, mac_platforms, sys_tags
 
 
-class CustomBuildHook(BuildHookInterface[Any]):
+class CustomBuildHook(BuildHookInterface):
     """Build the CPython extension wheel."""
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:

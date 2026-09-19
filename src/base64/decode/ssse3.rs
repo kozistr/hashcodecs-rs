@@ -34,9 +34,11 @@ pub(crate) unsafe fn decode_ssse3<A: Decoder, S: Store>(
         if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
             return Err(Base64Error::InvalidInput);
         }
-        unsafe { S::store_12(output.add(destination), pack_16_indices(first)) };
-        unsafe { S::store_12(output.add(destination + 12), pack_16_indices(second)) };
-        unsafe { S::store_12(output.add(destination + 24), pack_16_indices(third)) };
+        // The whole group is valid. Each following store replaces the previous
+        // store's four padding bytes; only the final store needs the boundary policy.
+        unsafe { store_12_padded(output.add(destination), pack_16_indices(first)) };
+        unsafe { store_12_padded(output.add(destination + 12), pack_16_indices(second)) };
+        unsafe { store_12_padded(output.add(destination + 24), pack_16_indices(third)) };
         unsafe { S::store_12(output.add(destination + 36), pack_16_indices(fourth)) };
         source += 64;
         destination += 48;
@@ -100,9 +102,10 @@ pub(crate) unsafe fn decode_prefix_ssse3<A: Decoder>(
         if !errors_are_zero_ssse3(errors) {
             break;
         }
-        unsafe { store_12_exact(output.add(destination), pack_16_indices(first)) };
-        unsafe { store_12_exact(output.add(destination + 12), pack_16_indices(second)) };
-        unsafe { store_12_exact(output.add(destination + 24), pack_16_indices(third)) };
+        // All four blocks are valid, so overlapping stores stay within this prefix.
+        unsafe { store_12_padded(output.add(destination), pack_16_indices(first)) };
+        unsafe { store_12_padded(output.add(destination + 12), pack_16_indices(second)) };
+        unsafe { store_12_padded(output.add(destination + 24), pack_16_indices(third)) };
         unsafe { store_12_exact(output.add(destination + 36), pack_16_indices(fourth)) };
         source += 64;
         destination += 48;

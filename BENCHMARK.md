@@ -22,6 +22,31 @@ script.
 Each Rust Criterion harness collects 50 samples per case. Pass Criterion's `--sample-size` option for an exploratory
 run with a different count.
 
+## SSE Base64 Decoding
+
+The SSSE3 and SSE4.1 decoders validate four blocks before writing their 48 decoded bytes. The first three stores
+can therefore overlap the next block, reducing eight stores to five for exact output buffers. The final store
+still stops at the output boundary, including when lenient decoding stops at an invalid block. Runtime dispatch
+continues to select the strongest available backend.
+
+The following standard-alphabet kernel measurements were collected on 2026-09-19 on the host above, with one
+logical CPU pinned and mimalloc. Each case alternated the original and updated kernels for 50 samples, calibrated
+to at least 50 ms with the original kernel. Both kernels used the same input and output addresses. The table gives
+updated latency, taking the median across output offsets 0, 1, and 32 within a cache line; it excludes allocation,
+Python call overhead, and runtime dispatch.
+
+| Decoded bytes | SSSE3 ns/call | SSE4.1 ns/call |
+| ---: | ---: | ---: |
+| 12 | 6.57 | 6.55 |
+| 48 | 6.94 | 6.93 |
+| 768 | 47.11 | 47.31 |
+| 3,072 | 189.30 | 189.21 |
+| 49,152 | 2,975.14 | 2,977.33 |
+
+Across the cases using the changed loop, median throughput increased by 9.1% for SSSE3 and 8.8% for SSE4.1.
+No regression was measured in this sweep. These results exercise the SSE fallbacks on one host; they do not
+establish performance on other processors. The main throughput charts exercise this host's AVX2 backend.
+
 ## Python Call Costs
 
 Run `python benchmarks/python_calls.py` to measure positional calls from 0 through 256 bytes in nanoseconds per

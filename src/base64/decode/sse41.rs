@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::ssse3::{pack_16_indices, store_12_exact};
+use super::ssse3::{pack_16_indices, store_12_exact, store_12_padded};
 use super::x86_contracts::{Decoder, Store};
 
 #[target_feature(enable = "ssse3,sse4.1")]
@@ -33,9 +33,11 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        unsafe { S::store_12(output.add(destination), pack_16_indices(first)) };
-        unsafe { S::store_12(output.add(destination + 12), pack_16_indices(second)) };
-        unsafe { S::store_12(output.add(destination + 24), pack_16_indices(third)) };
+        // The whole group is valid. Each following store replaces the previous
+        // store's four padding bytes; only the final store needs the boundary policy.
+        unsafe { store_12_padded(output.add(destination), pack_16_indices(first)) };
+        unsafe { store_12_padded(output.add(destination + 12), pack_16_indices(second)) };
+        unsafe { store_12_padded(output.add(destination + 24), pack_16_indices(third)) };
         unsafe { S::store_12(output.add(destination + 36), pack_16_indices(fourth)) };
 
         source += 64;
@@ -107,9 +109,10 @@ pub(crate) unsafe fn decode_prefix_sse41<A: Decoder>(
         if _mm_testz_si128(errors, errors) == 0 {
             break;
         }
-        unsafe { store_12_exact(output.add(destination), pack_16_indices(first)) };
-        unsafe { store_12_exact(output.add(destination + 12), pack_16_indices(second)) };
-        unsafe { store_12_exact(output.add(destination + 24), pack_16_indices(third)) };
+        // All four blocks are valid, so overlapping stores stay within this prefix.
+        unsafe { store_12_padded(output.add(destination), pack_16_indices(first)) };
+        unsafe { store_12_padded(output.add(destination + 12), pack_16_indices(second)) };
+        unsafe { store_12_padded(output.add(destination + 24), pack_16_indices(third)) };
         unsafe { store_12_exact(output.add(destination + 36), pack_16_indices(fourth)) };
         source += 64;
         destination += 48;

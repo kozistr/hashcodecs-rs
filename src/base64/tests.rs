@@ -485,6 +485,68 @@ fn rejects_invalid_input() {
     assert_eq!(b64decode(&invalid_wide), Err(Base64Error::InvalidInput));
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn sse_overlapping_stores_preserve_validated_prefix_boundaries() {
+    const CANARY: u8 = 0xa5;
+
+    for backend in [Backend::Ssse3, Backend::Sse41] {
+        if !backend::is_supported(backend) {
+            continue;
+        }
+        for length in [36, 48, 60, 96, 108] {
+            let input: Vec<u8> = (0..length)
+                .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+                .collect();
+            for (encoded, alphabet) in [
+                (b64encode(&input), DecodeAlphabet::Standard),
+                (b64encode_urlsafe(&input), DecodeAlphabet::UrlSafe),
+                (b64encode(&input), DecodeAlphabet::Mixed),
+            ] {
+                for offset in 0..16 {
+                    let start = 16 + offset;
+                    let mut output = vec![CANARY; start + length + 16];
+                    let decoded = &mut output[start..start + length];
+                    assert_eq!(
+                        decode_with_backend(encoded.as_bytes(), decoded, backend, alphabet),
+                        Ok((encoded.len(), length))
+                    );
+                    assert_eq!(decoded, input);
+                    assert!(output[..start].iter().all(|&byte| byte == CANARY));
+                    assert!(output[start + length..].iter().all(|&byte| byte == CANARY));
+
+                    // A failing group must not leave overlap bytes past the last
+                    // valid block, including when scalar decoding retries there.
+                    for invalid_at in 0..=encoded.len() {
+                        let mut source = encoded.as_bytes().to_vec();
+                        if invalid_at < source.len() {
+                            source[invalid_at] = 0xff;
+                        }
+                        output.fill(CANARY);
+                        let consumed = invalid_at / 16 * 16;
+                        let written = consumed / 4 * 3;
+                        assert_eq!(
+                            unsafe {
+                                decode_valid_prefix_with_backend(
+                                    &source,
+                                    output.as_mut_ptr().add(start),
+                                    backend,
+                                    alphabet,
+                                )
+                            },
+                            (consumed, written),
+                            "backend={backend:?} length={length} offset={offset} invalid_at={invalid_at}"
+                        );
+                        assert_eq!(&output[start..start + written], &input[..written]);
+                        assert!(output[..start].iter().all(|&byte| byte == CANARY));
+                        assert!(output[start + written..].iter().all(|&byte| byte == CANARY));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn rust_decoders_explicitly_accept_noncanonical_trailing_bits() {
     assert_eq!(b64decode(b"AB==").as_deref(), Ok(&[0][..]));

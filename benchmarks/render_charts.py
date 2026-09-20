@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / 'docs' / 'benchmarks'
+PYTHON_BASE64_RUNTIME = 'CPython 3.14.6 free-threaded'
 
 COLORS = {
     'hashcodecs': '#007f73',
@@ -159,6 +160,9 @@ def render(chart: Chart) -> str:
     panel_height = 330
     rows = math.ceil(len(chart.panels) / columns)
     height = 100 + rows * panel_height + 30
+    subtitle = 'Throughput (GiB/s), higher is better'
+    if chart.filename == 'base64-python.svg':
+        subtitle = f'{PYTHON_BASE64_RUNTIME} \u2022 {subtitle}'
 
     chunks = [
         (
@@ -174,7 +178,7 @@ def render(chart: Chart) -> str:
         ),
         (
             '<text x="50" y="74" fill="#637083" font-family="Segoe UI,Arial,sans-serif" '
-            'font-size="14">Throughput (GiB/s), higher is better</text>'
+            f'font-size="14">{esc(subtitle)}</text>'
         ),
     ]
 
@@ -377,9 +381,9 @@ def render_performance_at_a_glance(charts: Sequence[Chart]) -> str:
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
         ),
-        '<title id="title">CPython 3.12 standard Base64 throughput</title>',
+        f'<title id="title">{PYTHON_BASE64_RUNTIME} standard Base64 throughput</title>',
         (
-            '<desc id="desc">On CPython 3.12 with 4 KiB inputs, hashcodecs reaches '
+            f'<desc id="desc">On {PYTHON_BASE64_RUNTIME} with 4 KiB inputs, hashcodecs reaches '
             f'{benchmarks[0][1][0][1]:.2f} GiB/s encoding and {benchmarks[1][1][0][1]:.2f} GiB/s decoding. '
             'Both panels use the same throughput scale. Higher is better.</desc>'
         ),
@@ -392,7 +396,7 @@ def render_performance_at_a_glance(charts: Sequence[Chart]) -> str:
         (
             '<text x="600" y="84" text-anchor="middle" fill="#465263" '
             'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">'
-            'Standard \u2022 CPython 3.12 \u2022 4 KiB inputs \u2022 GiB/s, higher is better</text>'
+            f'Standard \u2022 {PYTHON_BASE64_RUNTIME} \u2022 4 KiB inputs \u2022 GiB/s, higher is better</text>'
         ),
         '<line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>',
     ]
@@ -414,7 +418,7 @@ def render_performance_at_a_glance(charts: Sequence[Chart]) -> str:
                 (
                     f'<text x="{center_x:.1f}" y="152" text-anchor="middle" fill="#637083" '
                     'font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">'
-                    f'{ours / cpython:.0f}&#215; CPython \u2022 {ours / pybase64:.0f}&#215; pybase64</text>'
+                    f'{ours / cpython:.1f}&#215; CPython \u2022 {ours / pybase64:.1f}&#215; pybase64</text>'
                 ),
             )
         )

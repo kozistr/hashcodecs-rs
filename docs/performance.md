@@ -25,6 +25,8 @@ allocation except where a reusable-buffer chart says otherwise. Higher is better
 
 ### Base64
 
+Use free-threaded CPython 3.14.6 with the GIL disabled for the standard and URL-safe comparison below.
+
 ![Python Base64 throughput](benchmarks/base64-python.svg)
 
 For ASCII string inputs, compare returned bytes with a reusable output buffer.

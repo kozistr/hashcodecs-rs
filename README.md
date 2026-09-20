@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="BENCHMARK.md">
-    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="CPython 3.12 standard Base64 encoding and decoding benchmark">
+    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="Free-threaded CPython 3.14.6 standard Base64 encoding and decoding benchmark">
   </a>
 </p>
 
@@ -171,7 +171,8 @@ equal-size inputs and include result-vector allocation.
 
 ### Base64: Python
 
-Pass `bytes` to Rust without an input copy. Python decoding uses `validate=True`.
+Use free-threaded CPython 3.14.6 with the GIL disabled for this chart. Pass `bytes` to Rust without an input copy.
+Python decoding uses `validate=True`.
 
 [![Python Base64 throughput](docs/benchmarks/base64-python.svg)](docs/benchmarks/base64-python.svg)
 

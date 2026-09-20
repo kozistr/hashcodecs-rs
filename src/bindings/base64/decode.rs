@@ -7,7 +7,7 @@ use pyo3::exceptions::{PyAssertionError, PyDeprecationWarning, PyFutureWarning, 
 use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes, PyDict, PyMemoryView, PyType};
+use pyo3::types::{PyByteArray, PyBytes, PyDict, PyMemoryView, PyString, PyType};
 
 use super::configured::{
     ConfiguredDecoder, decode_configured, decode_configured_into, decode_configured_strict_into,
@@ -124,11 +124,13 @@ impl<'py> DecodeOutput<'py> for Bound<'py, PyByteArray> {
         writes: ErrorWrites,
     ) -> PyResult<Result<usize, Base64Error>> {
         match decoder {
+            // `decode_into` stabilizes mutable inputs and snapshots aliases
+            // before any attempt. The helpers retain output locking and sizing.
             NativeDecoder::Direct(alphabet, Padding::Padded) => {
-                decode_strict_into(input, self, alphabet, writes)
+                Ok(unsafe { decode_strict_into(input, self, alphabet, writes) })
             }
             NativeDecoder::Direct(alphabet, Padding::Unpadded) => {
-                decode_unpadded_into(input, self, alphabet, writes)
+                Ok(unsafe { decode_unpadded_into(input, self, alphabet, writes) })
             }
             NativeDecoder::CustomStrict(decoder, altchars) => {
                 decode_configured_strict_into(input, self, altchars, decoder, writes)
@@ -622,6 +624,20 @@ struct DecodeArguments<'a, 'py> {
     before_output_write: bool,
 }
 
+impl DecodeArguments<'_, '_> {
+    #[inline(always)]
+    fn prepare(&self, py: Python<'_>) -> PyResult<PreparedDecoder> {
+        let altchars = parse_altchars(py, self.altchars, true)?;
+        let validate = self.validate.optional_truthy(py)?;
+        let padded = self.padded.truthy(py)?;
+        let canonical = self.canonical.truthy(py)?;
+        PreparedDecoder::new(
+            py,
+            DecodePolicy::new(altchars, validate, padded, self.ignorechars, canonical),
+        )
+    }
+}
+
 fn b64decode_with<'py, T>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
@@ -645,13 +661,18 @@ fn b64decode_with<'py, T>(
             ascii_or_bytes(py, s, "s")?
                 .into_stable_after_callbacks(arguments.before_output_write)?
         };
-        let altchars = parse_altchars(py, arguments.altchars, true)?;
-        let validate = arguments.validate.optional_truthy(py)?;
-        let padded = arguments.padded.truthy(py)?;
-        let canonical = arguments.canonical.truthy(py)?;
-        let policy =
-            DecodePolicy::new(altchars, validate, padded, arguments.ignorechars, canonical);
-        let decoder = PreparedDecoder::new(py, policy)?;
+        let decoder = arguments.prepare(py)?;
+        return decode(&decoder, &input);
+    }
+
+    if arguments.altchars.is_none()
+        && arguments.ignorechars.is_none_or(PyBytes::is_exact_type_of)
+        && PyString::is_exact_type_of(s)
+    {
+        // Exact strings remain immutable through argument callbacks. Check
+        // them after the existing buffer paths and preserve CPython's errors.
+        let input = binascii_ascii_or_bytes_exported(s)?;
+        let decoder = arguments.prepare(py)?;
         return decode(&decoder, &input);
     }
 

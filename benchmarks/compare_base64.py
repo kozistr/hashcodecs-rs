@@ -52,7 +52,7 @@ def main() -> None:
     parser.add_argument('baseline', type=Path)
     parser.add_argument('candidate', type=Path)
     parser.add_argument('--sizes', type=int, nargs='+', default=[0, 16, 64, 256, 1024, 4096, 65536, 1048576, 8388608])
-    parser.add_argument('--kinds', nargs='+', choices=['bytes', 'bytearray', 'memoryview'], default=['bytes'])
+    parser.add_argument('--kinds', nargs='+', choices=['bytes', 'bytearray', 'memoryview', 'str'], default=['bytes'])
     parser.add_argument(
         '--alphabets', nargs='+', choices=['standard', 'urlsafe', 'custom'], default=['standard', 'urlsafe']
     )
@@ -64,6 +64,8 @@ def main() -> None:
     args = parser.parse_args()
     if any(size < 0 for size in args.sizes):
         parser.error('sizes must be nonnegative')
+    if 'str' in args.kinds and 'encode' in args.operations:
+        parser.error('str inputs require decoding operations')
     modules = (load_extension('baseline', args.baseline), load_extension('candidate', args.candidate))
     pin_to_one_cpu()
     gc.disable()
@@ -82,21 +84,26 @@ def main() -> None:
                         source, expected = (payload, encoded) if operation == 'encode' else (encoded, payload)
                         if operation == 'mime':
                             source = b'\r\n'.join(source[offset : offset + 76] for offset in range(0, len(source), 76))
-                        source = {'bytes': bytes, 'bytearray': bytearray, 'memoryview': memoryview}[kind](source)
+                        if kind == 'str':
+                            source = source.decode('ascii')
+                        else:
+                            source = {'bytes': bytes, 'bytearray': bytearray, 'memoryview': memoryview}[kind](source)
                         kwargs = {} if altchars is None else {'altchars': altchars}
                         if operation == 'decode':
                             kwargs['validate'] = True
                         for output in args.outputs:
                             name = 'b64encode' if operation == 'encode' else 'b64decode'
-                            buffers = (bytearray(len(expected)), bytearray(len(expected)))
+                            # Use the same address for both builds so alignment
+                            # and cache placement cannot favor either kernel.
+                            buffer = bytearray(len(expected))
                             calls = []
-                            for index, module in enumerate(modules):
+                            for module in modules:
                                 function = getattr(module, name + ('_into' if output == 'into' else ''))
-                                arguments = (source, buffers[index]) if output == 'into' else (source,)
+                                arguments = (source, buffer) if output == 'into' else (source,)
                                 result = function(*arguments, **kwargs)
                                 if output == 'into':
                                     assert result == len(expected)
-                                    assert buffers[index] == expected
+                                    assert buffer == expected
                                 else:
                                     assert result == expected
                                 calls.append(lambda f=function, a=arguments, kw=kwargs: f(*a, **kw))

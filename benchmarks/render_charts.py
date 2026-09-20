@@ -48,6 +48,7 @@ OFFICIAL_SERIES = {
     'xxh3-rust-batch-remainders.svg': 'upstream C',
     'base64-python.svg': 'CPython',
     'base64-python-lenient.svg': 'CPython',
+    'base64-python-str.svg': 'CPython',
     'murmur3-python.svg': 'mmh3',
     'xxh3-python.svg': 'xxhash',
     'base64-python-batch.svg': 'CPython',
@@ -237,6 +238,20 @@ CHARTS = (
                 hashcodecs=[8.05, 17.21, 4.80, 5.52],
                 CPython=[0.47, 0.74, 0.60, 0.59],
                 pybase64=[1.13, 1.56, 1.34, 1.38],
+            ),
+        ),
+    ),
+    Chart(
+        'base64-python-str.svg',
+        'Python Base64 ASCII string throughput',
+        (
+            panel(
+                'Standard decode',
+                SIZES,
+                returned_bytes=[7.93, 16.97, 4.63, 5.47],
+                reusable_bytearray=[10.18, 19.61, 29.83, 18.38],
+                CPython=[0.95, 1.03, 0.70, 0.68],
+                pybase64=[3.24, 8.46, 4.22, 4.97],
             ),
         ),
     ),

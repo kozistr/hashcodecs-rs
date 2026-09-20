@@ -208,6 +208,17 @@ Callback-capable decode arguments keep their required snapshots and conversion o
 
 [![Python Base64 memoryview inputs](docs/benchmarks/base64-python-memoryview.svg)](docs/benchmarks/base64-python-memoryview.svg)
 
+## Python ASCII String Inputs
+
+Run `uv run --python 3.12 --no-project python benchmarks/python_base64.py --str-input` to measure standard Base64
+decoding from ASCII strings with returned bytes and a reusable `bytearray`.
+
+Exact `str` inputs with the standard alphabet avoid an intermediate ASCII bytes copy. Other decode paths use
+CPython's native ASCII conversion for exact strings; string subclasses retain their `encode` method behavior.
+The string chart uses the host and sampling settings above, refreshed on 2026-09-20.
+
+[![Python Base64 ASCII string throughput](docs/benchmarks/base64-python-str.svg)](docs/benchmarks/base64-python-str.svg)
+
 ## Python Base64 Batches
 
 Set the horizontal axis to batch size. Read total input throughput on the vertical axis.

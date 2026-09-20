@@ -7,14 +7,13 @@ use pyo3::types::{PyByteArray, PyBytes};
 use super::policy::ErrorWrites;
 use super::staging::pybytes_with_len;
 use crate::base64::{
-    Base64Error, DecodeAlphabet, DecodeLayout, decode_layout, decode_to_ptr_with_layout,
+    Base64Error, DecodeAlphabet, decode_layout, decode_to_ptr_with_layout,
     decode_to_ptr_with_unpadded_layout, decode_to_slice_with_layout_and_alphabet,
     decode_to_slice_with_layout_and_alphabet_validated_blocks,
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,
 };
-use crate::bindings::buffer::{BytesLike, with_bytearray};
-use crate::bindings::objects::{bytearray_data, bytearray_size};
+use crate::bindings::buffer::BytesLike;
 use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 
 pub(super) fn decode_strict<'py>(
@@ -61,79 +60,37 @@ pub(super) fn decode_strict<'py>(
     }
 }
 
-pub(super) fn decode_strict_into(
+/// Decode an input stabilized by `PreparedDecoder::decode_into`.
+///
+/// # Safety
+/// The input must not overlap the output. Mutable inputs on free-threaded
+/// builds must have been snapshotted before entering the decoder.
+pub(super) unsafe fn decode_strict_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
     error_writes: ErrorWrites,
-) -> PyResult<Result<usize, Base64Error>> {
-    if let Some(input) = input.snapshot_for_output(output)? {
-        return Ok(decode_strict_slice_into(
-            &input,
-            output,
-            alphabet,
-            error_writes,
-        ));
-    }
-    Ok(unsafe {
+) -> Result<usize, Base64Error> {
+    unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            decode_strict_to_ptr(input, output, provided, alphabet, error_writes)
+            let layout = decode_layout(input)?;
+            if provided < layout.output_len() {
+                return Err(Base64Error::OutputTooSmall {
+                    required: layout.output_len(),
+                    provided,
+                });
+            }
+            let output = slice::from_raw_parts_mut(output, layout.output_len());
+            if error_writes.validated_prefix_only() {
+                decode_to_slice_with_layout_and_alphabet_validated_blocks(
+                    input, output, layout, alphabet,
+                )?;
+            } else {
+                decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
+            }
+            Ok(layout.output_len())
         })
-    })
-}
-
-fn decode_strict_slice_into(
-    input: &[u8],
-    output: &Bound<'_, PyByteArray>,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    let layout = decode_layout(input)?;
-    with_bytearray(output, || {
-        let provided = unsafe { bytearray_size(output.as_ptr()) };
-        decode_strict_with_layout_to_ptr(
-            input,
-            unsafe { bytearray_data(output.as_ptr()) },
-            provided,
-            layout,
-            alphabet,
-            error_writes,
-        )
-    })
-}
-
-fn decode_strict_to_ptr(
-    input: &[u8],
-    output: *mut u8,
-    provided: usize,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    let layout = decode_layout(input)?;
-    decode_strict_with_layout_to_ptr(input, output, provided, layout, alphabet, error_writes)
-}
-
-fn decode_strict_with_layout_to_ptr(
-    input: &[u8],
-    output: *mut u8,
-    provided: usize,
-    layout: DecodeLayout,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    if provided < layout.output_len() {
-        return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len(),
-            provided,
-        });
     }
-    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
-    if error_writes.validated_prefix_only() {
-        decode_to_slice_with_layout_and_alphabet_validated_blocks(input, output, layout, alphabet)?;
-    } else {
-        decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
-    }
-    Ok(layout.output_len())
 }
 
 pub(super) fn decode_unpadded<'py>(
@@ -169,87 +126,40 @@ pub(super) fn decode_unpadded<'py>(
     Ok(result.map(|()| output))
 }
 
-pub(super) fn decode_unpadded_into(
+/// Decode an unpadded input stabilized by `PreparedDecoder::decode_into`.
+///
+/// # Safety
+/// The input must not overlap the output. Mutable inputs on free-threaded
+/// builds must have been snapshotted before entering the decoder.
+pub(super) unsafe fn decode_unpadded_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
     alphabet: DecodeAlphabet,
     error_writes: ErrorWrites,
-) -> PyResult<Result<usize, Base64Error>> {
-    if let Some(input) = input.snapshot_for_output(output)? {
-        return Ok(decode_unpadded_slice_into(
-            &input,
-            output,
-            alphabet,
-            error_writes,
-        ));
-    }
-    Ok(unsafe {
+) -> Result<usize, Base64Error> {
+    unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            decode_unpadded_to_ptr(input, output, provided, alphabet, error_writes)
+            if input.contains(&b'=') {
+                return Err(Base64Error::InvalidInput);
+            }
+            let layout = decode_unpadded_layout(input)?;
+            if provided < layout.output_len() {
+                return Err(Base64Error::OutputTooSmall {
+                    required: layout.output_len(),
+                    provided,
+                });
+            }
+            let output = slice::from_raw_parts_mut(output, layout.output_len());
+            if error_writes.validated_prefix_only() {
+                decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
+                    input, output, layout, alphabet,
+                )?;
+            } else {
+                decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
+            }
+            Ok(layout.output_len())
         })
-    })
-}
-
-fn decode_unpadded_slice_into(
-    input: &[u8],
-    output: &Bound<'_, PyByteArray>,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    if input.contains(&b'=') {
-        return Err(Base64Error::InvalidInput);
     }
-    let layout = decode_unpadded_layout(input)?;
-    with_bytearray(output, || {
-        let provided = unsafe { bytearray_size(output.as_ptr()) };
-        decode_unpadded_with_layout_to_ptr(
-            input,
-            unsafe { bytearray_data(output.as_ptr()) },
-            provided,
-            layout,
-            alphabet,
-            error_writes,
-        )
-    })
-}
-
-fn decode_unpadded_to_ptr(
-    input: &[u8],
-    output: *mut u8,
-    provided: usize,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    if input.contains(&b'=') {
-        return Err(Base64Error::InvalidInput);
-    }
-    let layout = decode_unpadded_layout(input)?;
-    decode_unpadded_with_layout_to_ptr(input, output, provided, layout, alphabet, error_writes)
-}
-
-fn decode_unpadded_with_layout_to_ptr(
-    input: &[u8],
-    output: *mut u8,
-    provided: usize,
-    layout: DecodeLayout,
-    alphabet: DecodeAlphabet,
-    error_writes: ErrorWrites,
-) -> Result<usize, Base64Error> {
-    if provided < layout.output_len() {
-        return Err(Base64Error::OutputTooSmall {
-            required: layout.output_len(),
-            provided,
-        });
-    }
-    let output = unsafe { slice::from_raw_parts_mut(output, layout.output_len()) };
-    if error_writes.validated_prefix_only() {
-        decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
-            input, output, layout, alphabet,
-        )?;
-    } else {
-        decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
-    }
-    Ok(layout.output_len())
 }
 
 pub(super) fn translate_altchars(

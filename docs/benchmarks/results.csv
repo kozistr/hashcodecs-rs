@@ -203,6 +203,22 @@ Python Base64 throughput,URL-safe decode,1 KiB,pybase64,1.13
 Python Base64 throughput,URL-safe decode,4 KiB,pybase64,1.56
 Python Base64 throughput,URL-safe decode,1 MiB,pybase64,1.34
 Python Base64 throughput,URL-safe decode,8 MiB,pybase64,1.38
+Python Base64 ASCII string throughput,Standard decode,1 KiB,returned bytes,7.93
+Python Base64 ASCII string throughput,Standard decode,4 KiB,returned bytes,16.97
+Python Base64 ASCII string throughput,Standard decode,1 MiB,returned bytes,4.63
+Python Base64 ASCII string throughput,Standard decode,8 MiB,returned bytes,5.47
+Python Base64 ASCII string throughput,Standard decode,1 KiB,reusable bytearray,10.18
+Python Base64 ASCII string throughput,Standard decode,4 KiB,reusable bytearray,19.61
+Python Base64 ASCII string throughput,Standard decode,1 MiB,reusable bytearray,29.83
+Python Base64 ASCII string throughput,Standard decode,8 MiB,reusable bytearray,18.38
+Python Base64 ASCII string throughput,Standard decode,1 KiB,CPython,0.95
+Python Base64 ASCII string throughput,Standard decode,4 KiB,CPython,1.03
+Python Base64 ASCII string throughput,Standard decode,1 MiB,CPython,0.70
+Python Base64 ASCII string throughput,Standard decode,8 MiB,CPython,0.68
+Python Base64 ASCII string throughput,Standard decode,1 KiB,pybase64,3.24
+Python Base64 ASCII string throughput,Standard decode,4 KiB,pybase64,8.46
+Python Base64 ASCII string throughput,Standard decode,1 MiB,pybase64,4.22
+Python Base64 ASCII string throughput,Standard decode,8 MiB,pybase64,4.97
 Lenient Python Base64 throughput,MIME whitespace,1 KiB,returned bytes,2.82
 Lenient Python Base64 throughput,MIME whitespace,4 KiB,returned bytes,4.36
 Lenient Python Base64 throughput,MIME whitespace,1 MiB,returned bytes,3.15

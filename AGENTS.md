@@ -50,7 +50,7 @@ Maintain 100% Rust core line coverage and 100% Python facade branch coverage. Th
 - Pin benchmark processes to one logical CPU and do not run benchmarks in CI.
 - Benchmark only the functionality changed by the branch and refresh only its corresponding README or BENCHMARK charts.
 - Use a complete clean benchmark run only for changes that can affect every benchmark group.
-- Don't need to add as-is/to-be comparison charts to the documentations.
+- Don't need to add as-is/to-be comparison or experiment results to the documentations.
 
 ## Delivery
 

@@ -315,6 +315,7 @@ impl<'py> BytesLike<'_, 'py> {
         }
     }
 
+    #[inline]
     pub(super) fn into_stable_after_callbacks(self, before_output_write: bool) -> PyResult<Self> {
         let Some(snapshot) = self.snapshot_after_callbacks(before_output_write)? else {
             return Ok(self);
@@ -562,7 +563,9 @@ pub(super) fn binascii_ascii_or_bytes_exported<'a, 'py>(
         let text = value.cast::<PyString>()?.to_str().map_err(|_| {
             PyValueError::new_err("string argument should contain only ASCII characters")
         })?;
-        if !text.is_ascii() {
+        // UTF-8 has one byte per code point exactly when every character is
+        // ASCII. CPython stores the character count, so no input scan is needed.
+        if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
             return Err(PyValueError::new_err(
                 "string argument should contain only ASCII characters",
             ));
@@ -614,7 +617,9 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
         // The exact-type check above establishes the unchecked cast's invariant.
         let text = unsafe { value.cast_unchecked::<PyString>() };
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
-        if !text.is_ascii() {
+        // Comparing the cached character count with UTF-8 length proves ASCII
+        // without scanning the input or depending on a Unicode object layout.
+        if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
             return Err(ascii_error(argument));
         }
         return Ok(BytesLike::Text(text));
@@ -688,15 +693,20 @@ pub(super) fn ascii_or_bytes_owned<'py>(
 
 fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py = value.py();
-    value
-        .call_method1(intern!(py, "encode"), ("ascii",))
-        .map_err(|error| {
-            if error.is_instance_of::<PyUnicodeEncodeError>(py) {
-                PyValueError::new_err("string argument should contain only ASCII characters")
-            } else {
-                error
-            }
-        })
+    let encoded = if PyString::is_exact_type_of(value) {
+        // Exact strings cannot override encode. Use the same CPython ASCII
+        // conversion without Python attribute lookup or argument handling.
+        unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyUnicode_AsASCIIString(value.as_ptr())) }
+    } else {
+        value.call_method1(intern!(py, "encode"), ("ascii",))
+    };
+    encoded.map_err(|error| {
+        if error.is_instance_of::<PyUnicodeEncodeError>(py) {
+            PyValueError::new_err("string argument should contain only ASCII characters")
+        } else {
+            error
+        }
+    })
 }
 
 #[inline]

@@ -690,13 +690,15 @@ def _configured_result(
         b'YWJj====',
     ],
 )
-def test_padding_positions(encoded: bytes) -> None:
+@pytest.mark.parametrize('as_text', [False, True])
+def test_padding_positions(encoded: bytes, as_text: bool) -> None:
+    source = encoded.decode('ascii') if as_text else encoded
     for validate in (False, True):
         for padded in (False, True):
             for canonical in (False, True):
                 kwargs = {'validate': validate, 'padded': padded, 'canonical': canonical}
-                assert _configured_result(base64.b64decode, encoded, **kwargs) == _configured_result(
-                    stdlib_base64.b64decode, encoded, **kwargs
+                assert _configured_result(base64.b64decode, source, **kwargs) == _configured_result(
+                    stdlib_base64.b64decode, source, **kwargs
                 )
 
 
@@ -717,15 +719,18 @@ def test_padding_positions(encoded: bytes) -> None:
         (b'@#8=', b'@#', b'#='),
     ],
 )
+@pytest.mark.parametrize('as_text', [False, True])
 def test_ignorechar_overlap(
     encoded: bytes,
     altchars: bytes | None,
     ignorechars: bytes,
+    as_text: bool,
 ) -> None:
+    source = encoded.decode('ascii') if as_text else encoded
     for validate in (False, True):
         kwargs = {'validate': validate, 'ignorechars': ignorechars}
-        assert _configured_result(base64.b64decode, encoded, altchars, **kwargs) == _configured_result(
-            stdlib_base64.b64decode, encoded, altchars, **kwargs
+        assert _configured_result(base64.b64decode, source, altchars, **kwargs) == _configured_result(
+            stdlib_base64.b64decode, source, altchars, **kwargs
         )
 
 

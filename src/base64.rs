@@ -27,8 +27,6 @@ use alphabet::{
 };
 pub(crate) use alphabet::{DecodeAlphabet, STANDARD_ALPHABET};
 
-#[cfg(feature = "python")]
-pub(crate) use decode::DecodeLayout;
 #[cfg(all(feature = "python", any(target_arch = "x86", target_arch = "x86_64")))]
 pub(crate) use decode::{STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT};
 #[cfg(any(feature = "python", test))]

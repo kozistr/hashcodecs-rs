@@ -27,6 +27,10 @@ allocation except where a reusable-buffer chart says otherwise. Higher is better
 
 ![Python Base64 throughput](benchmarks/base64-python.svg)
 
+For ASCII string inputs, compare returned bytes with a reusable output buffer.
+
+![Python Base64 ASCII string throughput](benchmarks/base64-python-str.svg)
+
 The focused lenient benchmark covers MIME whitespace and ignored non-alphabet bytes.
 
 ![Lenient Python Base64 throughput](benchmarks/base64-python-lenient.svg)

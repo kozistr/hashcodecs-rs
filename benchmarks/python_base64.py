@@ -82,6 +82,11 @@ def main() -> None:
         help='time hashcodecs with nonzero-offset immutable memoryview inputs',
     )
     mode.add_argument(
+        '--str-input',
+        action='store_true',
+        help='time standard decoding from ASCII strings',
+    )
+    mode.add_argument(
         '--lenient',
         action='store_true',
         help='time MIME-wrapped and noisy lenient decoding',
@@ -116,6 +121,29 @@ def main() -> None:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)
+
+            if args.str_input:
+                text = standard.decode('ascii')
+                decoded_output = bytearray(size)
+                benchmark(
+                    'str decode',
+                    size,
+                    lambda text=text: hashcodecs_base64.b64decode(text, validate=True),
+                    (
+                        ('stdlib', lambda text=text: stdlib_base64.b64decode(text, validate=True)),
+                        ('pybase64', lambda text=text: pybase64.b64decode(text, validate=True)),
+                    ),
+                )
+                benchmark_into(
+                    'str decode into',
+                    size,
+                    lambda text=text, output=decoded_output: hashcodecs_base64.b64decode_into(
+                        text, output, validate=True
+                    ),
+                    decoded_output,
+                    payload,
+                )
+                continue
 
             if args.wrapped:
                 wrapped = stdlib_b64encode(payload, wrapcol=76)

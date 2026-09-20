@@ -63,17 +63,18 @@ Maintain 100% Rust core line coverage and 100% Python facade branch coverage. Th
 
 Every commit subject must start with one of these prefixes:
 
-- `feat:`
-- `fix:`
-- `perf:`
-- `style:`
-- `refactor:`
-- `chore:`
-- `build:`
-- `update:`
-
-Use `perf:` for performance tuning commits.
+| Prefix | Use for |
+| --- | --- |
+| `feat:` | Add a feature or public API. |
+| `fix:` | Correct a bug or unintended behavior. |
+| `perf:` | Improve execution speed or resource use. |
+| `style:` | Change code formatting without changing behavior. |
+| `refactor:` | Restructure code without changing public behavior. |
+| `docs:` | Add, revise, or reorganize documentation. |
+| `chore:` | Maintain development tools, automation, or repository housekeeping. |
+| `build:` | Change build, packaging, or dependency configuration. |
+| `update:` | Refresh project content or metadata when no more specific prefix applies. |
 
 Keep the text after the prefix imperative, concise, and specific to the committed change.
 
-Note: do not use commit prefixes outside this list.
+Do not use commit prefixes outside this list.

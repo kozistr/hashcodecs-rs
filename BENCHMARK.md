@@ -6,8 +6,9 @@ Pin one logical CPU. Run each case in one thread. Collect 50 Rust samples and 15
 baseline with AVX2, the backend that hashcodecs selects on this host. Higher throughput wins.
 
 Build the Python wheel with CPython 3.12 and the full C API. Keep competitor values from the latest comparison run.
-Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to render the charts. Read exact values in
-[docs/benchmarks/results.csv](docs/benchmarks/results.csv).
+The measurements in [docs/benchmarks/results.csv](docs/benchmarks/results.csv) are the source for every chart.
+Use `uv run --python 3.12 --no-project python benchmarks/render_charts.py` to read that CSV and render the charts.
+The renderer does not run benchmarks or overwrite the CSV.
 
 Python values use CPython 3.12.10 and report the median of 15 samples lasting at least 0.2 seconds each, with one
 logical CPU pinned. Focused runs refresh only the affected series; other values retain their previous measurements.
@@ -302,7 +303,10 @@ uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with m
 uv run --python 3.12 --refresh-package hashcodecs --no-project --with . --with mmh3==5.2.1 --with pybase64==1.4.3 --with xxhash==3.8.1 python benchmarks/python_xxhash.py --hashcodecs-only
 ```
 
-Update the documentation
+Copy the measured GiB/s values from the relevant benchmark output into `docs/benchmarks/results.csv`, then render
+the charts. Refresh only the measured series and retain the other results. Each row identifies a chart, panel,
+input size, and implementation. Keep the same input categories for every series in a panel; leave
+`gib_per_second` empty for an unavailable result. CSV row order determines chart, panel, category, and legend order.
 
 ```
 uv run --python 3.12 --no-project python benchmarks/render_charts.py

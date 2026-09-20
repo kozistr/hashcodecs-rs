@@ -54,7 +54,25 @@ OFFICIAL_SERIES = {
     'base64-python-batch.svg': 'CPython',
 }
 
-SIZES = ['1 KiB', '4 KiB', '1 MiB', '8 MiB']
+CHART_FILES = {
+    'Rust Base64 throughput': 'base64-rust.svg',
+    'Rust MurmurHash3 throughput': 'murmur3-rust.svg',
+    'Rust XXH3 throughput': 'xxh3-rust.svg',
+    'Rust XXH3 batch remainder throughput': 'xxh3-rust-batch-remainders.svg',
+    'Python Base64 throughput': 'base64-python.svg',
+    'Python Base64 ASCII string throughput': 'base64-python-str.svg',
+    'Lenient Python Base64 throughput': 'base64-python-lenient.svg',
+    'Python MurmurHash3 throughput': 'murmur3-python.svg',
+    'Python XXH3 throughput': 'xxh3-python.svg',
+    'Reusable Python Base64 buffers': 'base64-python-reusable.svg',
+    'Python Base64 memoryview inputs': 'base64-python-memoryview.svg',
+    'Python Base64 batch throughput': 'base64-python-batch.svg',
+    'Reusable Python Base64 batch buffers': 'base64-python-batch-reusable.svg',
+    'Large Python Base64 batches': 'base64-python-batch-large.svg',
+    'Python Base64 memoryview batch throughput': 'base64-python-batch-memoryview.svg',
+    'Mutable Python Base64 inputs': 'base64-python-mutable.svg',
+    'Mutable Python MurmurHash3 inputs': 'murmur3-python-mutable.svg',
+}
 
 
 @dataclass(frozen=True)
@@ -71,424 +89,52 @@ class Chart:
     panels: tuple[Panel, ...]
 
 
-def panel(title: str, categories: Sequence[str], **series: Sequence[float | None]) -> Panel:
-    return Panel(
-        title,
-        tuple(categories),
-        tuple((name.replace('_', ' '), tuple(values)) for name, values in series.items()),
-    )
+def load_charts(path: Path) -> tuple[Chart, ...]:
+    """Load measurements in CSV order; an empty value marks an unavailable result."""
+    fields = ('chart', 'panel', 'input', 'implementation', 'gib_per_second')
+    data: dict[str, dict[str, dict[str, dict[str, float | None]]]] = {}
+    with path.open(newline='', encoding='utf-8') as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != list(fields):
+            raise ValueError(f'{path}: expected CSV columns {", ".join(fields)}')
+        for line, row in enumerate(reader, 2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f'{path}:{line}: expected {len(fields)} CSV fields')
+            title, panel, category, name, raw = (row[field].strip() for field in fields)
+            if not all((title, panel, category, name)):
+                raise ValueError(f'{path}:{line}: chart, panel, input and implementation must be nonempty')
+            if title not in CHART_FILES:
+                raise ValueError(f'{path}:{line}: unknown chart {title!r}')
+            value = float(raw) if raw else None
+            if value is not None and (not math.isfinite(value) or value <= 0):
+                raise ValueError(f'{path}:{line}: throughput must be finite and positive, or empty')
+            values = data.setdefault(title, {}).setdefault(panel, {}).setdefault(name, {})
+            if category in values:
+                raise ValueError(f'{path}:{line}: duplicate measurement: {title}, {panel}, {category}, {name}')
+            values[category] = value
 
-
-CHARTS = (
-    Chart(
-        'base64-rust.svg',
-        'Rust Base64 throughput',
-        (
-            panel(
-                'Standard encode',
-                SIZES,
-                hashcodecs=[25.19, 35.02, 38.27, 29.24],
-                base64=[4.77, 5.40, 4.83, 4.06],
-                base64_turbo=[25.11, 33.92, 37.81, 30.99],
-            ),
-            panel(
-                'Standard decode',
-                SIZES,
-                hashcodecs=[18.33, 26.09, 30.23, 19.10],
-                base64=[3.76, 3.98, 3.79, 3.56],
-                base64_turbo=[17.37, 23.28, 20.50, 16.87],
-            ),
-            panel(
-                'URL-safe encode',
-                SIZES,
-                hashcodecs=[25.87, 34.95, 39.68, 29.86],
-                base64=[4.79, 5.41, 4.82, 4.08],
-                base64_turbo=[25.41, 33.95, 38.29, 31.16],
-            ),
-            panel(
-                'URL-safe decode',
-                SIZES,
-                hashcodecs=[18.66, 26.51, 30.72, 18.97],
-                base64=[3.76, 4.03, 3.81, 3.57],
-                base64_turbo=[17.37, 23.16, 20.87, 17.10],
-            ),
-        ),
-    ),
-    Chart(
-        'murmur3-rust.svg',
-        'Rust MurmurHash3 throughput',
-        (
-            panel(
-                'x86 32-bit',
-                SIZES,
-                hashcodecs=[3.86, 3.77, 3.74, 3.77],
-                murmur3=[2.25, 2.26, 2.25, 2.26],
-                murmurs=[3.67, 3.51, 3.46, 3.51],
-                fastmurmur3=[None] * 4,
-                mm3h=[3.93, 3.74, 3.79, 3.74],
-            ),
-            panel(
-                'x86 128-bit',
-                SIZES,
-                hashcodecs=[7.82, 8.11, 8.38, 8.37],
-                murmur3=[4.14, 4.37, 4.35, 4.37],
-                murmurs=[7.28, 7.41, 7.57, 7.38],
-                fastmurmur3=[None] * 4,
-                mm3h=[None] * 4,
-            ),
-            panel(
-                'x64 128-bit',
-                SIZES,
-                hashcodecs=[9.85, 10.09, 10.13, 10.14],
-                murmur3=[5.60, 6.01, 6.04, 5.95],
-                murmurs=[8.18, 8.11, 8.22, 8.19],
-                fastmurmur3=[8.70, 8.66, 8.68, 8.68],
-                mm3h=[7.99, 8.01, 8.19, 7.91],
-            ),
-        ),
-    ),
-    Chart(
-        'xxh3-rust.svg',
-        'Rust XXH3 throughput',
-        (
-            panel(
-                'XXH3-64 one-shot',
-                ['64 B', *SIZES],
-                hashcodecs=[28.87, 46.97, 74.30, 92.44, 51.50],
-                upstream_C=[28.42, 26.27, 39.63, 48.79, 38.62],
-            ),
-            panel(
-                'XXH3-128 one-shot',
-                ['64 B', *SIZES],
-                hashcodecs=[23.14, 43.30, 72.22, 92.76, 51.67],
-                upstream_C=[8.40, 21.85, 37.36, 48.45, 38.61],
-            ),
-            panel(
-                'XXH3-64 batch (32 items)',
-                ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[21.30, 73.83, 89.63, 33.31],
-                upstream_C=[21.19, 26.12, 38.86, 17.98],
-            ),
-            panel(
-                'XXH3-128 batch (32 items)',
-                ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[10.19, 65.14, 85.91, 33.49],
-                upstream_C=[8.28, 21.84, 37.01, 17.94],
-            ),
-        ),
-    ),
-    Chart(
-        'xxh3-rust-batch-remainders.svg',
-        'Rust XXH3 batch remainder throughput',
-        (
-            panel(
-                'XXH3-64 batch (2 items)',
-                ['1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[54.27, 81.76, 95.68],
-                upstream_C=[25.82, 38.78, 48.17],
-            ),
-            panel(
-                'XXH3-128 batch (2 items)',
-                ['1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[49.04, 77.90, 95.55],
-                upstream_C=[21.10, 36.63, 48.25],
-            ),
-            panel(
-                'XXH3-64 batch (3 items)',
-                ['1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[63.02, 86.29, 94.17],
-                upstream_C=[26.05, 39.30, 46.87],
-            ),
-            panel(
-                'XXH3-128 batch (3 items)',
-                ['1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs=[52.73, 80.45, 94.54],
-                upstream_C=[21.44, 36.88, 47.47],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python.svg',
-        'Python Base64 throughput',
-        (
-            panel(
-                'Standard encode',
-                SIZES,
-                hashcodecs=[11.91, 24.75, 3.53, 4.67],
-                CPython=[0.44, 0.46, 0.40, 0.42],
-                pybase64=[5.02, 13.11, 2.68, 2.91],
-            ),
-            panel(
-                'Standard decode',
-                SIZES,
-                hashcodecs=[8.74, 17.57, 4.43, 5.11],
-                CPython=[0.93, 1.08, 0.84, 0.90],
-                pybase64=[3.09, 8.01, 3.26, 3.57],
-            ),
-            panel(
-                'URL-safe encode',
-                SIZES,
-                hashcodecs=[11.90, 24.18, 3.57, 4.67],
-                CPython=[0.37, 0.41, 0.33, 0.34],
-                pybase64=[0.96, 1.19, 0.84, 0.84],
-            ),
-            panel(
-                'URL-safe decode',
-                SIZES,
-                hashcodecs=[8.05, 17.21, 4.80, 5.52],
-                CPython=[0.47, 0.74, 0.60, 0.59],
-                pybase64=[1.13, 1.56, 1.34, 1.38],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-str.svg',
-        'Python Base64 ASCII string throughput',
-        (
-            panel(
-                'Standard decode',
-                SIZES,
-                returned_bytes=[7.93, 16.97, 4.63, 5.47],
-                reusable_bytearray=[10.18, 19.61, 29.83, 18.38],
-                CPython=[0.95, 1.03, 0.70, 0.68],
-                pybase64=[3.24, 8.46, 4.22, 4.97],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-lenient.svg',
-        'Lenient Python Base64 throughput',
-        (
-            panel(
-                'MIME whitespace',
-                SIZES,
-                returned_bytes=[2.82, 4.36, 3.15, 3.36],
-                reusable_bytearray=[2.11, 2.57, 2.67, 2.59],
-                CPython=[0.85, 0.94, 0.85, 0.84],
-                pybase64=[2.46, 3.76, 2.67, 2.62],
-            ),
-            panel(
-                'Ignored non-alphabet bytes',
-                SIZES,
-                returned_bytes=[2.85, 4.44, 3.16, 3.39],
-                reusable_bytearray=[2.27, 2.73, 2.86, 2.84],
-                CPython=[0.85, 0.94, 0.83, 0.84],
-                pybase64=[2.55, 3.96, 2.62, 2.74],
-            ),
-            panel(
-                'Custom @# clean input',
-                SIZES,
-                returned_bytes=[4.66, 9.29, 3.44, 3.89],
-                reusable_bytearray=[5.42, 10.17, 13.05, 9.37],
-                CPython=[0.56, 0.81, 0.60, 0.61],
-                pybase64=[1.08, 1.38, 1.05, 1.07],
-            ),
-            panel(
-                'Custom @# ignored bytes',
-                SIZES,
-                returned_bytes=[1.76, 2.09, 1.68, 1.76],
-                reusable_bytearray=[1.60, 1.73, 1.65, 1.61],
-                CPython=[0.57, 0.67, 0.52, 0.53],
-                pybase64=[1.04, 1.34, 1.00, 1.04],
-            ),
-        ),
-    ),
-    Chart(
-        'murmur3-python.svg',
-        'Python MurmurHash3 throughput',
-        tuple(
-            panel(title, SIZES, hashcodecs=ours, mmh3=upstream)
-            for title, ours, upstream in (
-                ('x86 32-bit one-shot', [3.58, 3.86, 4.00, 4.00], [3.44, 3.72, 3.84, 3.83]),
-                ('x86 32-bit incremental', [2.86, 3.63, 4.00, 3.99], [2.86, 3.48, 3.84, 3.84]),
-                ('x86 128-bit one-shot', [6.68, 8.50, 9.42, 9.41], [6.69, 8.22, 8.89, 8.86]),
-                ('x86 128-bit incremental', [4.43, 7.28, 9.44, 9.44], [0.69, 0.78, 0.80, 0.81]),
-                ('x64 128-bit one-shot', [7.05, 8.96, 10.06, 10.10], [7.79, 9.48, 10.26, 10.26]),
-                ('x64 128-bit incremental', [4.78, 7.92, 10.11, 10.11], [5.32, 8.05, 9.36, 8.20]),
+    if not data:
+        raise ValueError(f'{path}: no benchmark measurements')
+    charts = []
+    for title, panels in data.items():
+        specs = []
+        for panel, series in panels.items():
+            categories = tuple(next(iter(series.values())))
+            if any(values.keys() != set(categories) for values in series.values()):
+                raise ValueError(f'{path}: {title}, {panel}: each series must have the same inputs; use empty values')
+            if all(value is None for values in series.values() for value in values.values()):
+                raise ValueError(f'{path}: {title}, {panel}: no available measurements')
+            specs.append(
+                Panel(
+                    panel,
+                    categories,
+                    tuple(
+                        (name, tuple(values[category] for category in categories)) for name, values in series.items()
+                    ),
+                )
             )
-        ),
-    ),
-    Chart(
-        'xxh3-python.svg',
-        'Python XXH3 throughput',
-        (
-            panel(
-                'XXH3-64 one-shot', SIZES, hashcodecs=[16.42, 42.70, 91.62, 51.05], xxhash=[13.45, 29.13, 48.08, 38.62]
-            ),
-            panel(
-                'XXH3-128 one-shot', SIZES, hashcodecs=[13.98, 38.06, 91.54, 51.01], xxhash=[9.26, 23.44, 48.46, 38.62]
-            ),
-            panel(
-                'XXH3-64 batch (32 items)',
-                ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[5.90, 45.69, 74.53, 36.76],
-                hashcodecs_packed=[14.89, 64.50, 84.21, 36.95],
-                xxhash=[2.20, 14.84, 30.53, 17.71],
-            ),
-            panel(
-                'XXH3-128 batch (32 items)',
-                ['64 B', '1 KiB', '4 KiB', '1 MiB'],
-                hashcodecs_list=[3.03, 32.77, 64.07, 36.67],
-                hashcodecs_packed=[7.98, 57.34, 80.99, 36.93],
-                xxhash=[1.05, 9.95, 24.14, 17.45],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-reusable.svg',
-        'Reusable Python Base64 buffers',
-        (
-            panel('Standard encode', SIZES, hashcodecs=[10.97, 23.57, 38.82, 30.52]),
-            panel('Standard decode', SIZES, hashcodecs=[10.60, 19.86, 29.07, 18.15]),
-            panel('URL-safe encode', SIZES, hashcodecs=[10.07, 22.87, 38.90, 30.48]),
-            panel('URL-safe decode', SIZES, hashcodecs=[9.81, 19.37, 29.94, 19.25]),
-        ),
-    ),
-    Chart(
-        'base64-python-memoryview.svg',
-        'Python Base64 memoryview inputs',
-        (
-            panel(
-                'Encode, returned bytes',
-                SIZES,
-                full_view=[6.24, 19.96, 3.88, 4.71],
-                nonzero_offset=[8.57, 19.59, 3.48, 4.64],
-            ),
-            panel(
-                'Encode, reusable bytearray',
-                SIZES,
-                full_view=[7.16, 22.76, 40.06, 30.37],
-                nonzero_offset=[9.57, 21.22, 38.85, 30.72],
-            ),
-            panel(
-                'Decode, returned bytes',
-                SIZES,
-                full_view=[5.60, 15.62, 4.48, 4.11],
-                nonzero_offset=[7.44, 15.27, 4.36, 5.14],
-            ),
-            panel(
-                'Decode, reusable bytearray',
-                SIZES,
-                full_view=[6.21, 17.20, 29.38, 19.51],
-                nonzero_offset=[8.11, 16.52, 29.01, 19.22],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-batch.svg',
-        'Python Base64 batch throughput',
-        tuple(
-            panel(
-                title, ['8', '64', '1,024'], hashcodecs=ours, hashcodecs_loop=loop, pybase64=pybase64, CPython=cpython
-            )
-            for title, ours, loop, pybase64, cpython in (
-                ('16 B encode', [0.87, 1.23, 1.16], [0.30, 0.33, 0.33], [0.12, 0.13, 0.13], [0.18, 0.19, 0.19]),
-                ('16 B decode', [0.52, 0.72, 0.75], [0.22, 0.24, 0.24], [0.08, 0.08, 0.08], [0.12, 0.12, 0.13]),
-                ('256 B encode', [9.89, 11.56, 10.55], [4.33, 4.41, 4.34], [1.86, 1.82, 1.87], [0.38, 0.39, 0.38]),
-                ('256 B decode', [6.70, 8.28, 7.81], [3.26, 3.39, 3.27], [1.17, 1.22, 1.23], [0.74, 0.75, 0.72]),
-                ('4 KiB encode', [24.51, 19.38, 2.05], [20.55, 15.76, 3.77], [12.23, 8.99, 3.28], [0.46, 0.45, 0.43]),
-                ('4 KiB decode', [20.16, 19.66, 2.62], [16.03, 15.50, 12.75], [7.74, 7.62, 7.17], [1.07, 1.06, 1.11]),
-            )
-        ),
-    ),
-    Chart(
-        'base64-python-batch-reusable.svg',
-        'Reusable Python Base64 batch buffers',
-        tuple(
-            panel(title, ['8', '64', '1,024'], encode=encode, decode=decode)
-            for title, encode, decode in (
-                ('16 B items', [0.57, 0.66, 0.64], [0.42, 0.54, 0.56]),
-                ('256 B items', [6.48, 6.51, 6.31], [5.51, 6.39, 6.38]),
-                ('4 KiB items', [28.20, 27.78, 17.53], [21.32, 22.35, 17.56]),
-            )
-        ),
-    ),
-    Chart(
-        'base64-python-batch-large.svg',
-        'Large Python Base64 batches',
-        (
-            panel(
-                '1 MiB items',
-                ['1', '2', '4', '8', '16', '32'],
-                returned_encode=[3.04, 3.11, 3.14, 3.10, 2.91, 2.80],
-                reusable_encode=[39.13, 20.94, 20.16, 19.49, 13.32, 11.16],
-                returned_decode=[4.06, 3.89, 3.86, 3.80, 3.52, 3.37],
-                reusable_decode=[29.10, 21.57, 21.07, 19.16, 12.20, 10.60],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-batch-memoryview.svg',
-        'Python Base64 memoryview batch throughput',
-        (
-            panel(
-                '16 B items',
-                ['8', '64', '1,024'],
-                returned_encode=[0.34, 0.40, 0.39],
-                reusable_encode=[0.20, 0.22, 0.22],
-                returned_decode=[0.30, 0.34, 0.34],
-                reusable_decode=[0.16, 0.19, 0.18],
-            ),
-            panel(
-                '256 B items',
-                ['8', '64', '1,024'],
-                returned_encode=[4.83, 5.00, 4.85],
-                reusable_encode=[2.70, 3.08, 2.83],
-                returned_decode=[4.43, 4.63, 4.56],
-                reusable_decode=[2.48, 2.91, 2.71],
-            ),
-            panel(
-                '4 KiB items',
-                ['8', '64', '1,024'],
-                returned_encode=[13.89, 16.69, 1.99],
-                reusable_encode=[20.90, 21.27, 14.38],
-                returned_decode=[18.71, 18.14, 9.91],
-                reusable_decode=[16.64, 17.67, 13.92],
-            ),
-            panel(
-                '1 MiB items',
-                ['1', '2', '4', '8', '16', '32'],
-                returned_encode=[3.62, 3.85, 3.61, 3.04, 2.91, 2.80],
-                reusable_encode=[39.59, 22.90, 20.18, 19.59, 13.44, 11.00],
-                returned_decode=[4.09, 4.36, 4.34, 3.73, 3.54, 3.24],
-                reusable_decode=[29.12, 22.12, 20.94, 18.76, 12.37, 10.59],
-            ),
-        ),
-    ),
-    Chart(
-        'base64-python-mutable.svg',
-        'Mutable Python Base64 inputs',
-        (
-            panel(
-                'Encode',
-                SIZES,
-                returned_bytes=[8.55, 20.58, 3.49, 4.68],
-                reusable_bytearray=[10.74, 23.28, 38.90, 30.64],
-            ),
-            panel(
-                'Decode',
-                SIZES,
-                returned_bytes=[8.09, 17.02, 4.69, 5.07],
-                reusable_bytearray=[9.19, 18.43, 29.09, 18.79],
-            ),
-        ),
-    ),
-    Chart(
-        'murmur3-python-mutable.svg',
-        'Mutable Python MurmurHash3 inputs',
-        tuple(
-            panel(title, SIZES, hashcodecs=values)
-            for title, values in (
-                ('x86 32-bit one-shot', [3.35, 3.80, 4.00, 3.90]),
-                ('x86 32-bit incremental', [2.84, 3.62, 3.98, 3.97]),
-                ('x86 128-bit one-shot', [6.11, 8.30, 9.46, 9.46]),
-                ('x86 128-bit incremental', [4.40, 7.24, 9.36, 9.34]),
-                ('x64 128-bit one-shot', [6.07, 8.55, 10.01, 10.11]),
-                ('x64 128-bit incremental', [4.75, 7.91, 10.08, 10.05]),
-            )
-        ),
-    ),
-)
+        charts.append(Chart(CHART_FILES[title], title, tuple(specs)))
+    return tuple(charts)
 
 
 def esc(value: object) -> str:
@@ -689,8 +335,8 @@ def render(chart: Chart) -> str:
     return '\n'.join(chunks) + '\n'
 
 
-def chart_value(filename: str, panel_title: str, category: str, series_name: str) -> float:
-    chart = next(chart for chart in CHARTS if chart.filename == filename)
+def chart_value(charts: Sequence[Chart], filename: str, panel_title: str, category: str, series_name: str) -> float:
+    chart = next(chart for chart in charts if chart.filename == filename)
     spec = next(spec for spec in chart.panels if spec.title == panel_title)
     series = next(values for name, values in spec.series if name == series_name)
     value = series[spec.categories.index(category)]
@@ -699,7 +345,7 @@ def chart_value(filename: str, panel_title: str, category: str, series_name: str
     return value
 
 
-def render_performance_at_a_glance() -> str:
+def render_performance_at_a_glance(charts: Sequence[Chart]) -> str:
     """Render like-for-like Python encode and decode benchmarks for the README."""
     benchmarks = tuple(
         (
@@ -707,7 +353,7 @@ def render_performance_at_a_glance() -> str:
             tuple(
                 (
                     implementation,
-                    chart_value('base64-python.svg', f'Standard {operation.lower()}', '4 KiB', implementation),
+                    chart_value(charts, 'base64-python.svg', f'Standard {operation.lower()}', '4 KiB', implementation),
                 )
                 for implementation in ('hashcodecs', 'pybase64', 'CPython')
             ),
@@ -746,7 +392,7 @@ def render_performance_at_a_glance() -> str:
         (
             '<text x="600" y="84" text-anchor="middle" fill="#465263" '
             'font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600">'
-            'Standard 쨌 CPython 3.12 쨌 4 KiB inputs 쨌 GiB/s, higher is better</text>'
+            'Standard \u2022 CPython 3.12 \u2022 4 KiB inputs \u2022 GiB/s, higher is better</text>'
         ),
         '<line x1="600" y1="112" x2="600" y2="402" stroke="#d8dfe5"/>',
     ]
@@ -768,7 +414,7 @@ def render_performance_at_a_glance() -> str:
                 (
                     f'<text x="{center_x:.1f}" y="152" text-anchor="middle" fill="#637083" '
                     'font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">'
-                    f'{ours / cpython:.0f}&#215; CPython 쨌 {ours / pybase64:.0f}&#215; pybase64</text>'
+                    f'{ours / cpython:.0f}&#215; CPython \u2022 {ours / pybase64:.0f}&#215; pybase64</text>'
                 ),
             )
         )
@@ -809,7 +455,7 @@ def render_performance_at_a_glance() -> str:
             (
                 '<text x="600" y="433" text-anchor="middle" fill="#637083" '
                 'font-family="Segoe UI,Arial,sans-serif" font-size="12">'
-                'Intel Core Ultra 7 265K 쨌 Windows 10 x64 쨌 pinned CPU 쨌 15 samples</text>'
+                'Intel Core Ultra 7 265K \u2022 Windows 10 x64 \u2022 pinned CPU \u2022 15 samples</text>'
             ),
             '</svg>',
         )
@@ -818,32 +464,12 @@ def render_performance_at_a_glance() -> str:
     return '\n'.join(chunks) + '\n'
 
 
-def write_csv() -> None:
-    with (OUTPUT / 'results.csv').open('w', newline='', encoding='utf-8') as output:
-        writer = csv.writer(output, lineterminator='\n')
-        writer.writerow(('chart', 'panel', 'input', 'implementation', 'gib_per_second'))
-
-        for chart in CHARTS:
-            for spec in chart.panels:
-                for name, values in spec.series:
-                    for category, value in zip(spec.categories, values, strict=True):
-                        if value is not None:
-                            writer.writerow((chart.title, spec.title, category, name, f'{value:.2f}'))
-
-
 def main() -> None:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-
-    for chart in CHARTS:
-        (OUTPUT / chart.filename).write_text(render(chart), encoding='utf-8', newline='\n')
-
-    (
-        (OUTPUT / 'performance-at-a-glance.svg').write_text(
-            render_performance_at_a_glance(), encoding='utf-8', newline='\n'
-        )
-    )
-
-    write_csv()
+    charts = load_charts(OUTPUT / 'results.csv')
+    images = {chart.filename: render(chart) for chart in charts}
+    images['performance-at-a-glance.svg'] = render_performance_at_a_glance(charts)
+    for filename, svg in images.items():
+        (OUTPUT / filename).write_text(svg, encoding='utf-8', newline='\n')
 
 
 if __name__ == '__main__':

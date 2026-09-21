@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="BENCHMARK.md">
-    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="CPython 3.12 standard Base64 encoding and decoding benchmark">
+    <img src="docs/benchmarks/performance-at-a-glance.svg" alt="Free-threaded CPython 3.14.6 standard Base64 encoding and decoding benchmark">
   </a>
 </p>
 
@@ -153,6 +153,7 @@ CPython boundary, and safety invariants.
 
 Run the suite on Windows 10 x64 with an Intel Core Ultra 7 265K. Pin one logical CPU and run each case in one thread.
 Collect 50 Rust samples and 15 Python samples. Higher throughput wins.
+Use free-threaded CPython 3.14.6 with the GIL disabled for all Python charts.
 
 ### Base64: Rust
 
@@ -199,12 +200,13 @@ cargo bench --manifest-path benches/Cargo.toml --bench murmur3
 cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 cargo bench --manifest-path benches/Cargo.toml --bench crossover
 
-uv sync --group benchmark --no-install-project
-uv run --no-project --with . python benchmarks/python_base64.py
-uv run --no-project --with . python benchmarks/python_base64_batch.py
-uv run --no-project --with . python benchmarks/python_calls.py
-uv run --no-project --with . python benchmarks/python_murmur3.py
-uv run --no-project --with . python benchmarks/python_xxhash.py
+uv sync --python 3.14t --frozen --group benchmark --no-install-project
+uv run --python 3.14t --frozen --no-sync python tools/install_local_wheel.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64_batch.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_calls.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_murmur3.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_xxhash.py
 ```
 
 The Python benchmarks expose focused modes such as `--into`, `--lenient`, `--bytearray-input`, `--memoryview-input`,
@@ -222,7 +224,10 @@ cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 
 ## Performance snapshot
 
-On the benchmark host, `hashcodecs.xxh3_64` processes a 1 MiB input at 91.62 GiB/s. The Base64 batch API reaches 11.56 GiB/s for encode and 8.28 GiB/s for decode with 256 B items in batches of 64. Each run pins one logical CPU and uses 15 samples with a 0.2-second minimum per sample. Read the [benchmark details](BENCHMARK.md) and [raw comparison results](docs/benchmarks/results.csv).
+On the benchmark host with CPython 3.14.6t, `hashcodecs.xxh3_64` processes a 1 MiB input at 81.34 GiB/s. The Base64
+batch API reaches 5.10 GiB/s for encode and 5.03 GiB/s for decode with 256 B items in batches of 64. Each run pins
+one logical CPU and uses 15 samples with a 0.2-second minimum per sample. Read the [benchmark details](BENCHMARK.md)
+and [raw comparison results](docs/benchmarks/results.csv).
 
 ## Development
 

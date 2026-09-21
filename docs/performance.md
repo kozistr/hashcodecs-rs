@@ -23,6 +23,8 @@ allocation except where a reusable-buffer chart says otherwise. Higher is better
 
 ## Python
 
+Use free-threaded CPython 3.14.6 with the GIL disabled for all Python comparisons below.
+
 ### Base64
 
 ![Python Base64 throughput](benchmarks/base64-python.svg)
@@ -53,12 +55,13 @@ cargo bench --manifest-path benches/Cargo.toml --bench base64
 cargo bench --manifest-path benches/Cargo.toml --bench murmur3
 cargo bench --manifest-path benches/Cargo.toml --bench xxhash
 
-uv sync --group benchmark --no-install-project
-uv run --no-project --with . python benchmarks/python_base64.py
-uv run --no-project --with . python benchmarks/python_base64_batch.py
-uv run --no-project --with . python benchmarks/python_calls.py
-uv run --no-project --with . python benchmarks/python_murmur3.py
-uv run --no-project --with . python benchmarks/python_xxhash.py
+uv sync --python 3.14t --frozen --group benchmark --no-install-project
+uv run --python 3.14t --frozen --no-sync python tools/install_local_wheel.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64_batch.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_calls.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_murmur3.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_xxhash.py
 ```
 
 The [benchmark guide](https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md) describes the full

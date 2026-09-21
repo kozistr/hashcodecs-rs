@@ -3,7 +3,7 @@
 <desc id="desc">Large Python Base64 batches in GiB/s. Higher is better.</desc>
 <rect width="100%" height="100%" fill="#ffffff"/>
 <text x="50" y="48" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="700">Large Python Base64 batches</text>
-<text x="50" y="74" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14">Throughput (GiB/s), higher is better</text>
+<text x="50" y="74" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14">CPython 3.14.6 free-threaded • Throughput (GiB/s), higher is better</text>
 <text x="50" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">1 MiB items</text>
 <line x1="108" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="50" y1="148" x2="70" y2="148" stroke="#356ac3" stroke-width="3"/>
@@ -17,69 +17,69 @@
 <line x1="108" y1="380.0" x2="1210" y2="380.0" stroke="#e1e6ed"/>
 <text x="98" y="384.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">0</text>
 <line x1="108" y1="327.5" x2="1210" y2="327.5" stroke="#e1e6ed"/>
-<text x="98" y="331.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">10</text>
+<text x="98" y="331.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">15</text>
 <line x1="108" y1="275.0" x2="1210" y2="275.0" stroke="#e1e6ed"/>
-<text x="98" y="279.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">20</text>
+<text x="98" y="279.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
 <line x1="108" y1="222.5" x2="1210" y2="222.5" stroke="#e1e6ed"/>
-<text x="98" y="226.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">30</text>
+<text x="98" y="226.5" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">45</text>
 <line x1="108" y1="170.0" x2="1210" y2="170.0" stroke="#e1e6ed"/>
-<text x="98" y="174.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">40</text>
+<text x="98" y="174.0" text-anchor="end" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11">60</text>
 <text x="108.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1</text>
 <text x="328.4" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">2</text>
 <text x="548.8" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4</text>
 <text x="769.2" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8</text>
 <text x="989.6" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">16</text>
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">32</text>
-<polyline points="108.0,364.0 328.4,363.7 548.8,363.5 769.2,363.7 989.6,364.7 1210.0,365.3" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="364.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 1, 3.04 GiB/s</title></circle>
-<text x="126.2" y="354.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.04</text>
-<circle cx="328.4" cy="363.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 2, 3.11 GiB/s</title></circle>
-<text x="328.4" y="353.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.11</text>
-<circle cx="548.8" cy="363.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 4, 3.14 GiB/s</title></circle>
-<text x="548.8" y="353.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.14</text>
-<circle cx="769.2" cy="363.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 8, 3.10 GiB/s</title></circle>
-<text x="769.2" y="353.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.10</text>
-<circle cx="989.6" cy="364.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 16, 2.91 GiB/s</title></circle>
-<text x="989.6" y="354.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.91</text>
-<circle cx="1210.0" cy="365.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 32, 2.80 GiB/s</title></circle>
-<text x="1191.8" y="355.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.80</text>
-<polyline points="108.0,174.6 328.4,270.1 548.8,274.2 769.2,277.7 989.6,310.1 1210.0,321.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="174.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 1, 39.13 GiB/s</title></circle>
-<text x="129.5" y="191.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">39.13</text>
-<circle cx="328.4" cy="270.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 2, 20.94 GiB/s</title></circle>
-<text x="328.4" y="287.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.94</text>
-<circle cx="548.8" cy="274.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 4, 20.16 GiB/s</title></circle>
-<text x="548.8" y="291.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.16</text>
-<circle cx="769.2" cy="277.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 8, 19.49 GiB/s</title></circle>
-<text x="769.2" y="294.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.49</text>
-<circle cx="989.6" cy="310.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 16, 13.32 GiB/s</title></circle>
-<text x="989.6" y="327.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">13.32</text>
-<circle cx="1210.0" cy="321.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 32, 11.16 GiB/s</title></circle>
-<text x="1188.5" y="338.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.16</text>
-<polyline points="108.0,358.7 328.4,359.6 548.8,359.7 769.2,360.1 989.6,361.5 1210.0,362.3" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="358.7" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 1, 4.06 GiB/s</title></circle>
-<text x="126.2" y="375.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.06</text>
-<circle cx="328.4" cy="359.6" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 2, 3.89 GiB/s</title></circle>
-<text x="328.4" y="376.6" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.89</text>
-<circle cx="548.8" cy="359.7" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 4, 3.86 GiB/s</title></circle>
-<text x="548.8" y="376.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.86</text>
-<circle cx="769.2" cy="360.1" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 8, 3.80 GiB/s</title></circle>
-<text x="769.2" y="334.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.80</text>
-<circle cx="989.6" cy="361.5" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 16, 3.52 GiB/s</title></circle>
-<text x="989.6" y="303.5" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.52</text>
-<circle cx="1210.0" cy="362.3" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 32, 3.37 GiB/s</title></circle>
-<text x="1191.8" y="320.3" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.37</text>
-<polyline points="108.0,227.2 328.4,266.8 548.8,269.4 769.2,279.4 989.6,315.9 1210.0,324.4" fill="none" stroke="#d55e00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="227.2" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 1, 29.10 GiB/s</title></circle>
-<text x="129.5" y="244.2" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.10</text>
-<circle cx="328.4" cy="266.8" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 2, 21.57 GiB/s</title></circle>
-<text x="328.4" y="256.8" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.57</text>
-<circle cx="548.8" cy="269.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 4, 21.07 GiB/s</title></circle>
-<text x="548.8" y="259.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.07</text>
-<circle cx="769.2" cy="279.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 8, 19.16 GiB/s</title></circle>
-<text x="769.2" y="269.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.16</text>
-<circle cx="989.6" cy="315.9" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 16, 12.20 GiB/s</title></circle>
-<text x="989.6" y="273.9" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">12.20</text>
-<circle cx="1210.0" cy="324.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 32, 10.60 GiB/s</title></circle>
-<text x="1188.5" y="298.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.60</text>
+<polyline points="108.0,266.1 328.4,306.6 548.8,308.2 769.2,311.1 989.6,333.0 1210.0,342.0" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="266.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 1, 32.53 GiB/s</title></circle>
+<text x="129.5" y="256.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">32.53</text>
+<circle cx="328.4" cy="306.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 2, 20.96 GiB/s</title></circle>
+<text x="328.4" y="296.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.96</text>
+<circle cx="548.8" cy="308.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 4, 20.52 GiB/s</title></circle>
+<text x="548.8" y="298.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.52</text>
+<circle cx="769.2" cy="311.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 8, 19.69 GiB/s</title></circle>
+<text x="769.2" y="301.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.69</text>
+<circle cx="989.6" cy="333.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 16, 13.44 GiB/s</title></circle>
+<text x="989.6" y="323.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">13.44</text>
+<circle cx="1210.0" cy="342.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned encode, 32, 10.85 GiB/s</title></circle>
+<text x="1188.5" y="332.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.85</text>
+<polyline points="108.0,239.7 328.4,307.0 548.8,309.3 769.2,312.0 989.6,333.1 1210.0,340.8" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="239.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 1, 40.09 GiB/s</title></circle>
+<text x="129.5" y="229.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">40.09</text>
+<circle cx="328.4" cy="307.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 2, 20.87 GiB/s</title></circle>
+<text x="328.4" y="324.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.87</text>
+<circle cx="548.8" cy="309.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 4, 20.19 GiB/s</title></circle>
+<text x="548.8" y="326.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.19</text>
+<circle cx="769.2" cy="312.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 8, 19.42 GiB/s</title></circle>
+<text x="769.2" y="329.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">19.42</text>
+<circle cx="989.6" cy="333.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 16, 13.40 GiB/s</title></circle>
+<text x="989.6" y="350.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">13.40</text>
+<circle cx="1210.0" cy="340.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable encode, 32, 11.19 GiB/s</title></circle>
+<text x="1188.5" y="357.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.19</text>
+<polyline points="108.0,278.1 328.4,304.9 548.8,306.4 769.2,314.9 989.6,338.6 1210.0,342.9" fill="none" stroke="#8f4a73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="278.1" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 1, 29.12 GiB/s</title></circle>
+<text x="129.5" y="295.1" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.12</text>
+<circle cx="328.4" cy="304.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 2, 21.45 GiB/s</title></circle>
+<text x="328.4" y="278.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.45</text>
+<circle cx="548.8" cy="306.4" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 4, 21.03 GiB/s</title></circle>
+<text x="548.8" y="280.4" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.03</text>
+<circle cx="769.2" cy="314.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 8, 18.59 GiB/s</title></circle>
+<text x="769.2" y="347.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">18.59</text>
+<circle cx="989.6" cy="338.6" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 16, 11.82 GiB/s</title></circle>
+<text x="989.6" y="371.6" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.82</text>
+<circle cx="1210.0" cy="342.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>1 MiB items: returned decode, 32, 10.60 GiB/s</title></circle>
+<text x="1188.5" y="316.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.60</text>
+<polyline points="108.0,277.3 328.4,305.2 548.8,306.5 769.2,314.6 989.6,338.4 1210.0,342.5" fill="none" stroke="#d55e00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="277.3" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 1, 29.35 GiB/s</title></circle>
+<text x="129.5" y="310.3" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.35</text>
+<circle cx="328.4" cy="305.2" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 2, 21.38 GiB/s</title></circle>
+<text x="328.4" y="338.2" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.38</text>
+<circle cx="548.8" cy="306.5" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 4, 21.01 GiB/s</title></circle>
+<text x="548.8" y="264.5" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">21.01</text>
+<circle cx="769.2" cy="314.6" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 8, 18.69 GiB/s</title></circle>
+<text x="769.2" y="272.6" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">18.69</text>
+<circle cx="989.6" cy="338.4" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 16, 11.89 GiB/s</title></circle>
+<text x="989.6" y="296.4" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.89</text>
+<circle cx="1210.0" cy="342.5" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>1 MiB items: reusable decode, 32, 10.71 GiB/s</title></circle>
+<text x="1188.5" y="375.5" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.71</text>
 </svg>

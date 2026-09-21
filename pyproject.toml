@@ -36,15 +36,15 @@ Changelog = "https://github.com/kozistr/hashcodecs-rs/blob/main/CHANGELOG.md"
 wheel-test = ["pytest==9.1.1"]
 dev = [
     { include-group = "wheel-test" },
-    "hatchling==1.32.3",
+    "hatchling==1.32.4",
     "packaging==26.3",
     "pytest-cov==7.1.0",
     "ruff==0.16.8",
 ]
 benchmark = [
-    "mmh3==5.2.1",
-    "pybase64==1.4.3",
-    "xxhash==3.8.1",
+    "mmh3==5.3.0",
+    "pybase64==1.5.0",
+    "xxhash==4.0.1",
 ]
 
 [build-system]

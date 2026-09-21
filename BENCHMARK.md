@@ -11,8 +11,8 @@ behind the results, read [Architecture](docs/ARCHITECTURE.md).
 | Execution | One thread, pinned to one logical CPU |
 | Rust | Criterion, 50 samples per case, release optimization |
 | Python timing | Median of 15 samples, calibrated to at least 0.2 seconds per sample |
-| Python standard and URL-safe Base64 | Free-threaded CPython 3.14.6 (`3.14t`), GIL disabled; pybase64 1.4.3 |
-| Other Python charts | CPython 3.12.10 |
+| Python | Free-threaded CPython 3.14.6 (`3.14t`), GIL disabled |
+| Python baselines | pybase64 1.5.0, mmh3 5.3.0, xxhash 4.0.1 |
 | Allocation | `mimalloc` for Rust benchmark allocations and Rust allocations in the Python extension |
 | XXH3 C baseline | xxHash 0.8.3 through `xxhash-c-sys`, compiled with AVX2 to match this host's selected backend |
 
@@ -70,9 +70,8 @@ Packed batches write digests in little endian order into one reusable `bytearray
 ## Reproduce a benchmark
 
 Run commands from the repository root. Install Rust 1.89 or newer, a C/C++ compiler and linker for your platform,
-and `uv`. Use free-threaded CPython 3.14 for the standard and URL-safe Python Base64 chart and CPython 3.12 for
-the other Python charts. The Python setup below builds and installs the current checkout as a CPython wheel
-through Hatchling.
+and `uv`. Use free-threaded CPython 3.14 for the Python charts. The Python setup below builds and installs the
+current checkout as a CPython wheel through Hatchling.
 
 Run the group affected by your change. Reserve a complete run for changes that can affect all groups. Keep
 benchmarks out of CI. The standard harnesses set CPU affinity on Windows and Linux. On other platforms, arrange
@@ -105,29 +104,21 @@ cargo bench --manifest-path benches/Cargo.toml --bench murmur3 -- x64_128/hashco
 
 ### Python
 
-For the standard and URL-safe Base64 chart, use the free-threaded interpreter (`3.14t`):
+Prepare the free-threaded interpreter (`3.14t`) and pinned benchmark dependencies. Repeat the wheel installation
+after changing native code or switching interpreters:
 
 ```sh
 uv sync --python 3.14t --frozen --group benchmark --no-install-project
 uv run --python 3.14t --frozen --no-sync python tools/install_local_wheel.py
-uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64.py
-```
-
-For the other Python charts, prepare a CPython 3.12 environment. Repeat the wheel installation after changing
-native code or switching interpreters:
-
-```sh
-uv sync --python 3.12 --frozen --group benchmark --no-install-project
-uv run --python 3.12 --frozen --no-sync python tools/install_local_wheel.py
 ```
 
 Choose the relevant script:
 
 ```sh
-uv run --python 3.12 --frozen --no-sync python benchmarks/python_base64.py --into
-uv run --python 3.12 --frozen --no-sync python benchmarks/python_base64_batch.py
-uv run --python 3.12 --frozen --no-sync python benchmarks/python_murmur3.py
-uv run --python 3.12 --frozen --no-sync python benchmarks/python_xxhash.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64_batch.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_murmur3.py
+uv run --python 3.14t --frozen --no-sync python benchmarks/python_xxhash.py
 ```
 
 The scripts check outputs before timing and print GiB/s. Append a mode from the table to select a workload. Use
@@ -161,7 +152,7 @@ throughput without pinning to one CPU. Keep those results separate from the char
 3. Render the SVG files:
 
    ```sh
-   uv run --python 3.12 --no-project python benchmarks/render_charts.py
+   uv run --python 3.14t --no-project python benchmarks/render_charts.py
    ```
 
 4. Review the CSV and SVG diff. A focused update should change the corresponding charts, including any README

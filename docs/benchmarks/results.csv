@@ -167,481 +167,481 @@ Rust XXH3 batch remainder throughput,XXH3-128 batch (3 items),1 MiB,hashcodecs,9
 Rust XXH3 batch remainder throughput,XXH3-128 batch (3 items),1 KiB,upstream C,21.44
 Rust XXH3 batch remainder throughput,XXH3-128 batch (3 items),4 KiB,upstream C,36.88
 Rust XXH3 batch remainder throughput,XXH3-128 batch (3 items),1 MiB,upstream C,47.47
-Python Base64 throughput,Standard encode,1 KiB,hashcodecs,13.15
-Python Base64 throughput,Standard encode,4 KiB,hashcodecs,27.68
-Python Base64 throughput,Standard encode,1 MiB,hashcodecs,32.72
-Python Base64 throughput,Standard encode,8 MiB,hashcodecs,29.35
+Python Base64 throughput,Standard encode,1 KiB,hashcodecs,14.08
+Python Base64 throughput,Standard encode,4 KiB,hashcodecs,27.63
+Python Base64 throughput,Standard encode,1 MiB,hashcodecs,32.68
+Python Base64 throughput,Standard encode,8 MiB,hashcodecs,29.24
 Python Base64 throughput,Standard encode,1 KiB,CPython,0.48
 Python Base64 throughput,Standard encode,4 KiB,CPython,0.49
 Python Base64 throughput,Standard encode,1 MiB,CPython,0.50
 Python Base64 throughput,Standard encode,8 MiB,CPython,0.50
-Python Base64 throughput,Standard encode,1 KiB,pybase64,6.92
-Python Base64 throughput,Standard encode,4 KiB,pybase64,16.64
-Python Base64 throughput,Standard encode,1 MiB,pybase64,17.74
-Python Base64 throughput,Standard encode,8 MiB,pybase64,15.29
-Python Base64 throughput,Standard decode,1 KiB,hashcodecs,9.37
-Python Base64 throughput,Standard decode,4 KiB,hashcodecs,18.67
-Python Base64 throughput,Standard decode,1 MiB,hashcodecs,29.19
-Python Base64 throughput,Standard decode,8 MiB,hashcodecs,19.08
+Python Base64 throughput,Standard encode,1 KiB,pybase64,7.11
+Python Base64 throughput,Standard encode,4 KiB,pybase64,16.49
+Python Base64 throughput,Standard encode,1 MiB,pybase64,17.63
+Python Base64 throughput,Standard encode,8 MiB,pybase64,15.23
+Python Base64 throughput,Standard decode,1 KiB,hashcodecs,9.64
+Python Base64 throughput,Standard decode,4 KiB,hashcodecs,18.38
+Python Base64 throughput,Standard decode,1 MiB,hashcodecs,29.21
+Python Base64 throughput,Standard decode,8 MiB,hashcodecs,18.83
 Python Base64 throughput,Standard decode,1 KiB,CPython,1.02
 Python Base64 throughput,Standard decode,4 KiB,CPython,1.13
 Python Base64 throughput,Standard decode,1 MiB,CPython,1.19
-Python Base64 throughput,Standard decode,8 MiB,CPython,1.19
-Python Base64 throughput,Standard decode,1 KiB,pybase64,4.40
-Python Base64 throughput,Standard decode,4 KiB,pybase64,11.16
-Python Base64 throughput,Standard decode,1 MiB,pybase64,18.76
-Python Base64 throughput,Standard decode,8 MiB,pybase64,15.49
-Python Base64 throughput,URL-safe encode,1 KiB,hashcodecs,13.06
-Python Base64 throughput,URL-safe encode,4 KiB,hashcodecs,26.93
-Python Base64 throughput,URL-safe encode,1 MiB,hashcodecs,32.72
-Python Base64 throughput,URL-safe encode,8 MiB,hashcodecs,29.34
+Python Base64 throughput,Standard decode,8 MiB,CPython,1.18
+Python Base64 throughput,Standard decode,1 KiB,pybase64,4.37
+Python Base64 throughput,Standard decode,4 KiB,pybase64,11.07
+Python Base64 throughput,Standard decode,1 MiB,pybase64,18.79
+Python Base64 throughput,Standard decode,8 MiB,pybase64,15.44
+Python Base64 throughput,URL-safe encode,1 KiB,hashcodecs,14.01
+Python Base64 throughput,URL-safe encode,4 KiB,hashcodecs,26.88
+Python Base64 throughput,URL-safe encode,1 MiB,hashcodecs,32.66
+Python Base64 throughput,URL-safe encode,8 MiB,hashcodecs,29.23
 Python Base64 throughput,URL-safe encode,1 KiB,CPython,0.36
 Python Base64 throughput,URL-safe encode,4 KiB,CPython,0.37
-Python Base64 throughput,URL-safe encode,1 MiB,CPython,0.38
-Python Base64 throughput,URL-safe encode,8 MiB,CPython,0.38
-Python Base64 throughput,URL-safe encode,1 KiB,pybase64,1.07
-Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.23
+Python Base64 throughput,URL-safe encode,1 MiB,CPython,0.39
+Python Base64 throughput,URL-safe encode,8 MiB,CPython,0.39
+Python Base64 throughput,URL-safe encode,1 KiB,pybase64,1.00
+Python Base64 throughput,URL-safe encode,4 KiB,pybase64,1.18
 Python Base64 throughput,URL-safe encode,1 MiB,pybase64,1.25
 Python Base64 throughput,URL-safe encode,8 MiB,pybase64,1.23
-Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,8.37
-Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,17.67
-Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,29.15
-Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,19.16
-Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.56
+Python Base64 throughput,URL-safe decode,1 KiB,hashcodecs,8.33
+Python Base64 throughput,URL-safe decode,4 KiB,hashcodecs,17.28
+Python Base64 throughput,URL-safe decode,1 MiB,hashcodecs,29.14
+Python Base64 throughput,URL-safe decode,8 MiB,hashcodecs,18.97
+Python Base64 throughput,URL-safe decode,1 KiB,CPython,0.54
 Python Base64 throughput,URL-safe decode,4 KiB,CPython,0.64
 Python Base64 throughput,URL-safe decode,1 MiB,CPython,0.69
 Python Base64 throughput,URL-safe decode,8 MiB,CPython,0.60
-Python Base64 throughput,URL-safe decode,1 KiB,pybase64,1.33
-Python Base64 throughput,URL-safe decode,4 KiB,pybase64,1.63
-Python Base64 throughput,URL-safe decode,1 MiB,pybase64,2.19
-Python Base64 throughput,URL-safe decode,8 MiB,pybase64,2.16
-Python Base64 ASCII string throughput,Standard decode,1 KiB,returned bytes,7.93
-Python Base64 ASCII string throughput,Standard decode,4 KiB,returned bytes,16.97
-Python Base64 ASCII string throughput,Standard decode,1 MiB,returned bytes,4.63
-Python Base64 ASCII string throughput,Standard decode,8 MiB,returned bytes,5.47
-Python Base64 ASCII string throughput,Standard decode,1 KiB,reusable bytearray,10.18
-Python Base64 ASCII string throughput,Standard decode,4 KiB,reusable bytearray,19.61
-Python Base64 ASCII string throughput,Standard decode,1 MiB,reusable bytearray,29.83
-Python Base64 ASCII string throughput,Standard decode,8 MiB,reusable bytearray,18.38
-Python Base64 ASCII string throughput,Standard decode,1 KiB,CPython,0.95
-Python Base64 ASCII string throughput,Standard decode,4 KiB,CPython,1.03
-Python Base64 ASCII string throughput,Standard decode,1 MiB,CPython,0.70
-Python Base64 ASCII string throughput,Standard decode,8 MiB,CPython,0.68
-Python Base64 ASCII string throughput,Standard decode,1 KiB,pybase64,3.24
-Python Base64 ASCII string throughput,Standard decode,4 KiB,pybase64,8.46
-Python Base64 ASCII string throughput,Standard decode,1 MiB,pybase64,4.22
-Python Base64 ASCII string throughput,Standard decode,8 MiB,pybase64,4.97
-Lenient Python Base64 throughput,MIME whitespace,1 KiB,returned bytes,2.82
-Lenient Python Base64 throughput,MIME whitespace,4 KiB,returned bytes,4.36
-Lenient Python Base64 throughput,MIME whitespace,1 MiB,returned bytes,3.15
-Lenient Python Base64 throughput,MIME whitespace,8 MiB,returned bytes,3.36
-Lenient Python Base64 throughput,MIME whitespace,1 KiB,reusable bytearray,2.11
-Lenient Python Base64 throughput,MIME whitespace,4 KiB,reusable bytearray,2.57
-Lenient Python Base64 throughput,MIME whitespace,1 MiB,reusable bytearray,2.67
-Lenient Python Base64 throughput,MIME whitespace,8 MiB,reusable bytearray,2.59
-Lenient Python Base64 throughput,MIME whitespace,1 KiB,CPython,0.85
-Lenient Python Base64 throughput,MIME whitespace,4 KiB,CPython,0.94
-Lenient Python Base64 throughput,MIME whitespace,1 MiB,CPython,0.85
-Lenient Python Base64 throughput,MIME whitespace,8 MiB,CPython,0.84
-Lenient Python Base64 throughput,MIME whitespace,1 KiB,pybase64,2.46
-Lenient Python Base64 throughput,MIME whitespace,4 KiB,pybase64,3.76
-Lenient Python Base64 throughput,MIME whitespace,1 MiB,pybase64,2.67
-Lenient Python Base64 throughput,MIME whitespace,8 MiB,pybase64,2.62
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,returned bytes,2.85
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,returned bytes,4.44
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,returned bytes,3.16
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,returned bytes,3.39
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,reusable bytearray,2.27
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,reusable bytearray,2.73
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,reusable bytearray,2.86
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,reusable bytearray,2.84
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,CPython,0.85
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,CPython,0.94
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,CPython,0.83
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,CPython,0.84
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,pybase64,2.55
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,pybase64,3.96
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,pybase64,2.62
-Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,pybase64,2.74
-Lenient Python Base64 throughput,Custom @# clean input,1 KiB,returned bytes,4.66
-Lenient Python Base64 throughput,Custom @# clean input,4 KiB,returned bytes,9.29
-Lenient Python Base64 throughput,Custom @# clean input,1 MiB,returned bytes,3.44
-Lenient Python Base64 throughput,Custom @# clean input,8 MiB,returned bytes,3.89
-Lenient Python Base64 throughput,Custom @# clean input,1 KiB,reusable bytearray,5.42
-Lenient Python Base64 throughput,Custom @# clean input,4 KiB,reusable bytearray,10.17
-Lenient Python Base64 throughput,Custom @# clean input,1 MiB,reusable bytearray,13.05
-Lenient Python Base64 throughput,Custom @# clean input,8 MiB,reusable bytearray,9.37
-Lenient Python Base64 throughput,Custom @# clean input,1 KiB,CPython,0.56
-Lenient Python Base64 throughput,Custom @# clean input,4 KiB,CPython,0.81
-Lenient Python Base64 throughput,Custom @# clean input,1 MiB,CPython,0.60
-Lenient Python Base64 throughput,Custom @# clean input,8 MiB,CPython,0.61
-Lenient Python Base64 throughput,Custom @# clean input,1 KiB,pybase64,1.08
-Lenient Python Base64 throughput,Custom @# clean input,4 KiB,pybase64,1.38
-Lenient Python Base64 throughput,Custom @# clean input,1 MiB,pybase64,1.05
-Lenient Python Base64 throughput,Custom @# clean input,8 MiB,pybase64,1.07
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,returned bytes,1.76
-Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,returned bytes,2.09
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,returned bytes,1.68
-Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,returned bytes,1.76
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,reusable bytearray,1.60
-Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,reusable bytearray,1.73
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,reusable bytearray,1.65
-Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,reusable bytearray,1.61
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,CPython,0.57
-Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,CPython,0.67
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,CPython,0.52
-Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,CPython,0.53
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,pybase64,1.04
-Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,pybase64,1.34
-Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,pybase64,1.00
-Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,pybase64,1.04
-Python MurmurHash3 throughput,x86 32-bit one-shot,1 KiB,hashcodecs,3.58
-Python MurmurHash3 throughput,x86 32-bit one-shot,4 KiB,hashcodecs,3.86
+Python Base64 throughput,URL-safe decode,1 KiB,pybase64,0.83
+Python Base64 throughput,URL-safe decode,4 KiB,pybase64,0.96
+Python Base64 throughput,URL-safe decode,1 MiB,pybase64,1.01
+Python Base64 throughput,URL-safe decode,8 MiB,pybase64,1.01
+Python Base64 ASCII string throughput,Standard decode,1 KiB,returned bytes,9.36
+Python Base64 ASCII string throughput,Standard decode,4 KiB,returned bytes,18.01
+Python Base64 ASCII string throughput,Standard decode,1 MiB,returned bytes,29.19
+Python Base64 ASCII string throughput,Standard decode,8 MiB,returned bytes,18.84
+Python Base64 ASCII string throughput,Standard decode,1 KiB,reusable bytearray,9.10
+Python Base64 ASCII string throughput,Standard decode,4 KiB,reusable bytearray,18.16
+Python Base64 ASCII string throughput,Standard decode,1 MiB,reusable bytearray,29.52
+Python Base64 ASCII string throughput,Standard decode,8 MiB,reusable bytearray,19.15
+Python Base64 ASCII string throughput,Standard decode,1 KiB,CPython,1.00
+Python Base64 ASCII string throughput,Standard decode,4 KiB,CPython,1.12
+Python Base64 ASCII string throughput,Standard decode,1 MiB,CPython,1.14
+Python Base64 ASCII string throughput,Standard decode,8 MiB,CPython,1.13
+Python Base64 ASCII string throughput,Standard decode,1 KiB,pybase64,4.46
+Python Base64 ASCII string throughput,Standard decode,4 KiB,pybase64,11.30
+Python Base64 ASCII string throughput,Standard decode,1 MiB,pybase64,18.81
+Python Base64 ASCII string throughput,Standard decode,8 MiB,pybase64,15.44
+Lenient Python Base64 throughput,MIME whitespace,1 KiB,returned bytes,3.92
+Lenient Python Base64 throughput,MIME whitespace,4 KiB,returned bytes,5.10
+Lenient Python Base64 throughput,MIME whitespace,1 MiB,returned bytes,5.65
+Lenient Python Base64 throughput,MIME whitespace,8 MiB,returned bytes,5.50
+Lenient Python Base64 throughput,MIME whitespace,1 KiB,reusable bytearray,3.24
+Lenient Python Base64 throughput,MIME whitespace,4 KiB,reusable bytearray,4.15
+Lenient Python Base64 throughput,MIME whitespace,1 MiB,reusable bytearray,4.50
+Lenient Python Base64 throughput,MIME whitespace,8 MiB,reusable bytearray,4.32
+Lenient Python Base64 throughput,MIME whitespace,1 KiB,CPython,0.84
+Lenient Python Base64 throughput,MIME whitespace,4 KiB,CPython,0.89
+Lenient Python Base64 throughput,MIME whitespace,1 MiB,CPython,0.93
+Lenient Python Base64 throughput,MIME whitespace,8 MiB,CPython,0.93
+Lenient Python Base64 throughput,MIME whitespace,1 KiB,pybase64,3.19
+Lenient Python Base64 throughput,MIME whitespace,4 KiB,pybase64,4.23
+Lenient Python Base64 throughput,MIME whitespace,1 MiB,pybase64,4.70
+Lenient Python Base64 throughput,MIME whitespace,8 MiB,pybase64,4.58
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,returned bytes,4.01
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,returned bytes,5.27
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,returned bytes,5.86
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,returned bytes,5.72
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,reusable bytearray,3.35
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,reusable bytearray,4.25
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,reusable bytearray,4.65
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,reusable bytearray,4.45
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,CPython,0.84
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,CPython,0.91
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,CPython,0.95
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,CPython,0.96
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 KiB,pybase64,3.32
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,4 KiB,pybase64,4.47
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,1 MiB,pybase64,5.01
+Lenient Python Base64 throughput,Ignored non-alphabet bytes,8 MiB,pybase64,4.93
+Lenient Python Base64 throughput,Custom @# clean input,1 KiB,returned bytes,5.33
+Lenient Python Base64 throughput,Custom @# clean input,4 KiB,returned bytes,9.62
+Lenient Python Base64 throughput,Custom @# clean input,1 MiB,returned bytes,12.42
+Lenient Python Base64 throughput,Custom @# clean input,8 MiB,returned bytes,9.25
+Lenient Python Base64 throughput,Custom @# clean input,1 KiB,reusable bytearray,5.63
+Lenient Python Base64 throughput,Custom @# clean input,4 KiB,reusable bytearray,10.10
+Lenient Python Base64 throughput,Custom @# clean input,1 MiB,reusable bytearray,12.45
+Lenient Python Base64 throughput,Custom @# clean input,8 MiB,reusable bytearray,9.34
+Lenient Python Base64 throughput,Custom @# clean input,1 KiB,CPython,0.54
+Lenient Python Base64 throughput,Custom @# clean input,4 KiB,CPython,0.64
+Lenient Python Base64 throughput,Custom @# clean input,1 MiB,CPython,0.68
+Lenient Python Base64 throughput,Custom @# clean input,8 MiB,CPython,0.68
+Lenient Python Base64 throughput,Custom @# clean input,1 KiB,pybase64,0.77
+Lenient Python Base64 throughput,Custom @# clean input,4 KiB,pybase64,0.85
+Lenient Python Base64 throughput,Custom @# clean input,1 MiB,pybase64,0.89
+Lenient Python Base64 throughput,Custom @# clean input,8 MiB,pybase64,0.89
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,returned bytes,2.05
+Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,returned bytes,2.22
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,returned bytes,2.27
+Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,returned bytes,2.24
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,reusable bytearray,1.91
+Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,reusable bytearray,2.07
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,reusable bytearray,2.09
+Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,reusable bytearray,2.04
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,CPython,0.51
+Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,CPython,0.57
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,CPython,0.59
+Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,CPython,0.59
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 KiB,pybase64,0.78
+Lenient Python Base64 throughput,Custom @# ignored bytes,4 KiB,pybase64,0.85
+Lenient Python Base64 throughput,Custom @# ignored bytes,1 MiB,pybase64,0.89
+Lenient Python Base64 throughput,Custom @# ignored bytes,8 MiB,pybase64,0.89
+Python MurmurHash3 throughput,x86 32-bit one-shot,1 KiB,hashcodecs,3.48
+Python MurmurHash3 throughput,x86 32-bit one-shot,4 KiB,hashcodecs,3.82
 Python MurmurHash3 throughput,x86 32-bit one-shot,1 MiB,hashcodecs,4.00
 Python MurmurHash3 throughput,x86 32-bit one-shot,8 MiB,hashcodecs,4.00
-Python MurmurHash3 throughput,x86 32-bit one-shot,1 KiB,mmh3,3.44
-Python MurmurHash3 throughput,x86 32-bit one-shot,4 KiB,mmh3,3.72
+Python MurmurHash3 throughput,x86 32-bit one-shot,1 KiB,mmh3,3.34
+Python MurmurHash3 throughput,x86 32-bit one-shot,4 KiB,mmh3,3.67
 Python MurmurHash3 throughput,x86 32-bit one-shot,1 MiB,mmh3,3.84
 Python MurmurHash3 throughput,x86 32-bit one-shot,8 MiB,mmh3,3.83
-Python MurmurHash3 throughput,x86 32-bit incremental,1 KiB,hashcodecs,2.86
-Python MurmurHash3 throughput,x86 32-bit incremental,4 KiB,hashcodecs,3.63
-Python MurmurHash3 throughput,x86 32-bit incremental,1 MiB,hashcodecs,4.00
-Python MurmurHash3 throughput,x86 32-bit incremental,8 MiB,hashcodecs,3.99
-Python MurmurHash3 throughput,x86 32-bit incremental,1 KiB,mmh3,2.86
-Python MurmurHash3 throughput,x86 32-bit incremental,4 KiB,mmh3,3.48
+Python MurmurHash3 throughput,x86 32-bit incremental,1 KiB,hashcodecs,2.67
+Python MurmurHash3 throughput,x86 32-bit incremental,4 KiB,hashcodecs,3.55
+Python MurmurHash3 throughput,x86 32-bit incremental,1 MiB,hashcodecs,3.99
+Python MurmurHash3 throughput,x86 32-bit incremental,8 MiB,hashcodecs,4.00
+Python MurmurHash3 throughput,x86 32-bit incremental,1 KiB,mmh3,2.87
+Python MurmurHash3 throughput,x86 32-bit incremental,4 KiB,mmh3,3.54
 Python MurmurHash3 throughput,x86 32-bit incremental,1 MiB,mmh3,3.84
 Python MurmurHash3 throughput,x86 32-bit incremental,8 MiB,mmh3,3.84
-Python MurmurHash3 throughput,x86 128-bit one-shot,1 KiB,hashcodecs,6.68
-Python MurmurHash3 throughput,x86 128-bit one-shot,4 KiB,hashcodecs,8.50
-Python MurmurHash3 throughput,x86 128-bit one-shot,1 MiB,hashcodecs,9.42
-Python MurmurHash3 throughput,x86 128-bit one-shot,8 MiB,hashcodecs,9.41
-Python MurmurHash3 throughput,x86 128-bit one-shot,1 KiB,mmh3,6.69
-Python MurmurHash3 throughput,x86 128-bit one-shot,4 KiB,mmh3,8.22
-Python MurmurHash3 throughput,x86 128-bit one-shot,1 MiB,mmh3,8.89
-Python MurmurHash3 throughput,x86 128-bit one-shot,8 MiB,mmh3,8.86
-Python MurmurHash3 throughput,x86 128-bit incremental,1 KiB,hashcodecs,4.43
-Python MurmurHash3 throughput,x86 128-bit incremental,4 KiB,hashcodecs,7.28
-Python MurmurHash3 throughput,x86 128-bit incremental,1 MiB,hashcodecs,9.44
-Python MurmurHash3 throughput,x86 128-bit incremental,8 MiB,hashcodecs,9.44
-Python MurmurHash3 throughput,x86 128-bit incremental,1 KiB,mmh3,0.69
-Python MurmurHash3 throughput,x86 128-bit incremental,4 KiB,mmh3,0.78
-Python MurmurHash3 throughput,x86 128-bit incremental,1 MiB,mmh3,0.80
-Python MurmurHash3 throughput,x86 128-bit incremental,8 MiB,mmh3,0.81
-Python MurmurHash3 throughput,x64 128-bit one-shot,1 KiB,hashcodecs,7.05
-Python MurmurHash3 throughput,x64 128-bit one-shot,4 KiB,hashcodecs,8.96
-Python MurmurHash3 throughput,x64 128-bit one-shot,1 MiB,hashcodecs,10.06
-Python MurmurHash3 throughput,x64 128-bit one-shot,8 MiB,hashcodecs,10.10
-Python MurmurHash3 throughput,x64 128-bit one-shot,1 KiB,mmh3,7.79
-Python MurmurHash3 throughput,x64 128-bit one-shot,4 KiB,mmh3,9.48
-Python MurmurHash3 throughput,x64 128-bit one-shot,1 MiB,mmh3,10.26
-Python MurmurHash3 throughput,x64 128-bit one-shot,8 MiB,mmh3,10.26
-Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,hashcodecs,4.78
-Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,hashcodecs,7.92
-Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,hashcodecs,10.11
-Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,hashcodecs,10.11
-Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,mmh3,5.32
-Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,mmh3,8.05
-Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,mmh3,9.36
-Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,mmh3,8.20
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,16.42
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,42.70
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,91.62
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,51.05
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,13.45
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,29.13
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,48.08
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.62
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,13.98
-Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,38.06
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,91.54
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,51.01
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,9.26
-Python XXH3 throughput,XXH3-128 one-shot,4 KiB,xxhash,23.44
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,48.46
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.62
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs list,5.90
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs list,45.69
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs list,74.53
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs list,36.76
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs packed,14.89
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs packed,64.50
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs packed,84.21
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs packed,36.95
-Python XXH3 throughput,XXH3-64 batch (32 items),64 B,xxhash,2.20
-Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,xxhash,14.84
-Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,xxhash,30.53
-Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,xxhash,17.71
-Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs list,3.03
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs list,32.77
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs list,64.07
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs list,36.67
-Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs packed,7.98
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs packed,57.34
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs packed,80.99
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs packed,36.93
-Python XXH3 throughput,XXH3-128 batch (32 items),64 B,xxhash,1.05
-Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,xxhash,9.95
-Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,xxhash,24.14
-Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,xxhash,17.45
-Reusable Python Base64 buffers,Standard encode,1 KiB,hashcodecs,10.97
-Reusable Python Base64 buffers,Standard encode,4 KiB,hashcodecs,23.57
-Reusable Python Base64 buffers,Standard encode,1 MiB,hashcodecs,38.82
-Reusable Python Base64 buffers,Standard encode,8 MiB,hashcodecs,30.52
-Reusable Python Base64 buffers,Standard decode,1 KiB,hashcodecs,10.60
-Reusable Python Base64 buffers,Standard decode,4 KiB,hashcodecs,19.86
-Reusable Python Base64 buffers,Standard decode,1 MiB,hashcodecs,29.07
-Reusable Python Base64 buffers,Standard decode,8 MiB,hashcodecs,18.15
-Reusable Python Base64 buffers,URL-safe encode,1 KiB,hashcodecs,10.07
-Reusable Python Base64 buffers,URL-safe encode,4 KiB,hashcodecs,22.87
-Reusable Python Base64 buffers,URL-safe encode,1 MiB,hashcodecs,38.90
-Reusable Python Base64 buffers,URL-safe encode,8 MiB,hashcodecs,30.48
-Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,9.81
-Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,19.37
-Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,29.94
-Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,19.25
-Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,full view,6.24
-Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,full view,19.96
-Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,full view,3.88
-Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,full view,4.71
-Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,nonzero offset,8.57
-Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,nonzero offset,19.59
-Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,nonzero offset,3.48
-Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,nonzero offset,4.64
-Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,full view,7.16
-Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,full view,22.76
-Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,full view,40.06
-Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,full view,30.37
-Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,nonzero offset,9.57
-Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,nonzero offset,21.22
-Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,nonzero offset,38.85
-Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,nonzero offset,30.72
-Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,full view,5.60
-Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,full view,15.62
-Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,full view,4.48
-Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,full view,4.11
-Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,nonzero offset,7.44
-Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,nonzero offset,15.27
-Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,nonzero offset,4.36
-Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,nonzero offset,5.14
-Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,full view,6.21
-Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,full view,17.20
-Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,full view,29.38
-Python Base64 memoryview inputs,"Decode, reusable bytearray",8 MiB,full view,19.51
-Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,nonzero offset,8.11
-Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,nonzero offset,16.52
-Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,nonzero offset,29.01
+Python MurmurHash3 throughput,x86 128-bit one-shot,1 KiB,hashcodecs,6.47
+Python MurmurHash3 throughput,x86 128-bit one-shot,4 KiB,hashcodecs,8.42
+Python MurmurHash3 throughput,x86 128-bit one-shot,1 MiB,hashcodecs,9.40
+Python MurmurHash3 throughput,x86 128-bit one-shot,8 MiB,hashcodecs,9.39
+Python MurmurHash3 throughput,x86 128-bit one-shot,1 KiB,mmh3,6.32
+Python MurmurHash3 throughput,x86 128-bit one-shot,4 KiB,mmh3,8.00
+Python MurmurHash3 throughput,x86 128-bit one-shot,1 MiB,mmh3,8.77
+Python MurmurHash3 throughput,x86 128-bit one-shot,8 MiB,mmh3,8.73
+Python MurmurHash3 throughput,x86 128-bit incremental,1 KiB,hashcodecs,4.14
+Python MurmurHash3 throughput,x86 128-bit incremental,4 KiB,hashcodecs,6.99
+Python MurmurHash3 throughput,x86 128-bit incremental,1 MiB,hashcodecs,9.39
+Python MurmurHash3 throughput,x86 128-bit incremental,8 MiB,hashcodecs,9.37
+Python MurmurHash3 throughput,x86 128-bit incremental,1 KiB,mmh3,0.79
+Python MurmurHash3 throughput,x86 128-bit incremental,4 KiB,mmh3,0.83
+Python MurmurHash3 throughput,x86 128-bit incremental,1 MiB,mmh3,0.82
+Python MurmurHash3 throughput,x86 128-bit incremental,8 MiB,mmh3,0.82
+Python MurmurHash3 throughput,x64 128-bit one-shot,1 KiB,hashcodecs,6.69
+Python MurmurHash3 throughput,x64 128-bit one-shot,4 KiB,hashcodecs,8.79
+Python MurmurHash3 throughput,x64 128-bit one-shot,1 MiB,hashcodecs,10.00
+Python MurmurHash3 throughput,x64 128-bit one-shot,8 MiB,hashcodecs,10.06
+Python MurmurHash3 throughput,x64 128-bit one-shot,1 KiB,mmh3,7.28
+Python MurmurHash3 throughput,x64 128-bit one-shot,4 KiB,mmh3,9.17
+Python MurmurHash3 throughput,x64 128-bit one-shot,1 MiB,mmh3,10.03
+Python MurmurHash3 throughput,x64 128-bit one-shot,8 MiB,mmh3,10.01
+Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,hashcodecs,4.29
+Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,hashcodecs,7.53
+Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,hashcodecs,10.05
+Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,hashcodecs,10.06
+Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,mmh3,5.13
+Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,mmh3,8.06
+Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,mmh3,9.77
+Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,mmh3,9.73
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,16.30
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,42.06
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,81.34
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,52.09
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,12.65
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,28.24
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,48.45
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.63
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,13.41
+Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,37.49
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,81.61
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,51.73
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,8.54
+Python XXH3 throughput,XXH3-128 one-shot,4 KiB,xxhash,22.39
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,48.31
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.65
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs list,1.37
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs list,17.27
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs list,43.92
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs list,36.24
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs packed,1.58
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs packed,19.20
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs packed,46.64
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs packed,36.49
+Python XXH3 throughput,XXH3-64 batch (32 items),64 B,xxhash,1.79
+Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,xxhash,13.82
+Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,xxhash,29.64
+Python XXH3 throughput,XXH3-64 batch (32 items),1 MiB,xxhash,18.65
+Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs list,1.20
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs list,15.86
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs list,41.70
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs list,36.47
+Python XXH3 throughput,XXH3-128 batch (32 items),64 B,hashcodecs packed,1.45
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,hashcodecs packed,18.34
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,hashcodecs packed,45.84
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,hashcodecs packed,36.61
+Python XXH3 throughput,XXH3-128 batch (32 items),64 B,xxhash,0.88
+Python XXH3 throughput,XXH3-128 batch (32 items),1 KiB,xxhash,8.93
+Python XXH3 throughput,XXH3-128 batch (32 items),4 KiB,xxhash,22.78
+Python XXH3 throughput,XXH3-128 batch (32 items),1 MiB,xxhash,18.03
+Reusable Python Base64 buffers,Standard encode,1 KiB,hashcodecs,10.40
+Reusable Python Base64 buffers,Standard encode,4 KiB,hashcodecs,23.11
+Reusable Python Base64 buffers,Standard encode,1 MiB,hashcodecs,40.13
+Reusable Python Base64 buffers,Standard encode,8 MiB,hashcodecs,31.64
+Reusable Python Base64 buffers,Standard decode,1 KiB,hashcodecs,9.43
+Reusable Python Base64 buffers,Standard decode,4 KiB,hashcodecs,18.77
+Reusable Python Base64 buffers,Standard decode,1 MiB,hashcodecs,29.53
+Reusable Python Base64 buffers,Standard decode,8 MiB,hashcodecs,18.96
+Reusable Python Base64 buffers,URL-safe encode,1 KiB,hashcodecs,9.33
+Reusable Python Base64 buffers,URL-safe encode,4 KiB,hashcodecs,21.67
+Reusable Python Base64 buffers,URL-safe encode,1 MiB,hashcodecs,39.96
+Reusable Python Base64 buffers,URL-safe encode,8 MiB,hashcodecs,31.65
+Reusable Python Base64 buffers,URL-safe decode,1 KiB,hashcodecs,8.35
+Reusable Python Base64 buffers,URL-safe decode,4 KiB,hashcodecs,17.58
+Reusable Python Base64 buffers,URL-safe decode,1 MiB,hashcodecs,29.50
+Reusable Python Base64 buffers,URL-safe decode,8 MiB,hashcodecs,19.14
+Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,full view,6.19
+Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,full view,15.63
+Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,full view,19.09
+Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,full view,11.12
+Python Base64 memoryview inputs,"Encode, returned bytes",1 KiB,nonzero offset,6.34
+Python Base64 memoryview inputs,"Encode, returned bytes",4 KiB,nonzero offset,15.18
+Python Base64 memoryview inputs,"Encode, returned bytes",1 MiB,nonzero offset,18.95
+Python Base64 memoryview inputs,"Encode, returned bytes",8 MiB,nonzero offset,11.09
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,full view,8.72
+Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,full view,20.54
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,full view,40.08
+Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,full view,31.62
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 KiB,nonzero offset,8.66
+Python Base64 memoryview inputs,"Encode, reusable bytearray",4 KiB,nonzero offset,20.49
+Python Base64 memoryview inputs,"Encode, reusable bytearray",1 MiB,nonzero offset,40.08
+Python Base64 memoryview inputs,"Encode, reusable bytearray",8 MiB,nonzero offset,31.64
+Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,full view,6.75
+Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,full view,15.70
+Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,full view,29.17
+Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,full view,19.29
+Python Base64 memoryview inputs,"Decode, returned bytes",1 KiB,nonzero offset,6.90
+Python Base64 memoryview inputs,"Decode, returned bytes",4 KiB,nonzero offset,15.66
+Python Base64 memoryview inputs,"Decode, returned bytes",1 MiB,nonzero offset,29.14
+Python Base64 memoryview inputs,"Decode, returned bytes",8 MiB,nonzero offset,19.21
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,full view,6.87
+Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,full view,15.73
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,full view,29.49
+Python Base64 memoryview inputs,"Decode, reusable bytearray",8 MiB,full view,19.27
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 KiB,nonzero offset,6.87
+Python Base64 memoryview inputs,"Decode, reusable bytearray",4 KiB,nonzero offset,15.68
+Python Base64 memoryview inputs,"Decode, reusable bytearray",1 MiB,nonzero offset,29.46
 Python Base64 memoryview inputs,"Decode, reusable bytearray",8 MiB,nonzero offset,19.22
-Python Base64 batch throughput,16 B encode,8,hashcodecs,0.87
-Python Base64 batch throughput,16 B encode,64,hashcodecs,1.23
-Python Base64 batch throughput,16 B encode,"1,024",hashcodecs,1.16
-Python Base64 batch throughput,16 B encode,8,hashcodecs loop,0.30
-Python Base64 batch throughput,16 B encode,64,hashcodecs loop,0.33
-Python Base64 batch throughput,16 B encode,"1,024",hashcodecs loop,0.33
-Python Base64 batch throughput,16 B encode,8,pybase64,0.12
-Python Base64 batch throughput,16 B encode,64,pybase64,0.13
-Python Base64 batch throughput,16 B encode,"1,024",pybase64,0.13
-Python Base64 batch throughput,16 B encode,8,CPython,0.18
-Python Base64 batch throughput,16 B encode,64,CPython,0.19
-Python Base64 batch throughput,16 B encode,"1,024",CPython,0.19
-Python Base64 batch throughput,16 B decode,8,hashcodecs,0.52
-Python Base64 batch throughput,16 B decode,64,hashcodecs,0.72
-Python Base64 batch throughput,16 B decode,"1,024",hashcodecs,0.75
-Python Base64 batch throughput,16 B decode,8,hashcodecs loop,0.22
-Python Base64 batch throughput,16 B decode,64,hashcodecs loop,0.24
-Python Base64 batch throughput,16 B decode,"1,024",hashcodecs loop,0.24
-Python Base64 batch throughput,16 B decode,8,pybase64,0.08
-Python Base64 batch throughput,16 B decode,64,pybase64,0.08
-Python Base64 batch throughput,16 B decode,"1,024",pybase64,0.08
-Python Base64 batch throughput,16 B decode,8,CPython,0.12
+Python Base64 batch throughput,16 B encode,8,hashcodecs,0.34
+Python Base64 batch throughput,16 B encode,64,hashcodecs,0.42
+Python Base64 batch throughput,16 B encode,"1,024",hashcodecs,0.41
+Python Base64 batch throughput,16 B encode,8,hashcodecs loop,0.38
+Python Base64 batch throughput,16 B encode,64,hashcodecs loop,0.44
+Python Base64 batch throughput,16 B encode,"1,024",hashcodecs loop,0.45
+Python Base64 batch throughput,16 B encode,8,pybase64,0.17
+Python Base64 batch throughput,16 B encode,64,pybase64,0.19
+Python Base64 batch throughput,16 B encode,"1,024",pybase64,0.19
+Python Base64 batch throughput,16 B encode,8,CPython,0.17
+Python Base64 batch throughput,16 B encode,64,CPython,0.18
+Python Base64 batch throughput,16 B encode,"1,024",CPython,0.18
+Python Base64 batch throughput,16 B decode,8,hashcodecs,0.30
+Python Base64 batch throughput,16 B decode,64,hashcodecs,0.40
+Python Base64 batch throughput,16 B decode,"1,024",hashcodecs,0.39
+Python Base64 batch throughput,16 B decode,8,hashcodecs loop,0.24
+Python Base64 batch throughput,16 B decode,64,hashcodecs loop,0.26
+Python Base64 batch throughput,16 B decode,"1,024",hashcodecs loop,0.27
+Python Base64 batch throughput,16 B decode,8,pybase64,0.09
+Python Base64 batch throughput,16 B decode,64,pybase64,0.09
+Python Base64 batch throughput,16 B decode,"1,024",pybase64,0.09
+Python Base64 batch throughput,16 B decode,8,CPython,0.11
 Python Base64 batch throughput,16 B decode,64,CPython,0.12
-Python Base64 batch throughput,16 B decode,"1,024",CPython,0.13
-Python Base64 batch throughput,256 B encode,8,hashcodecs,9.89
-Python Base64 batch throughput,256 B encode,64,hashcodecs,11.56
-Python Base64 batch throughput,256 B encode,"1,024",hashcodecs,10.55
-Python Base64 batch throughput,256 B encode,8,hashcodecs loop,4.33
-Python Base64 batch throughput,256 B encode,64,hashcodecs loop,4.41
-Python Base64 batch throughput,256 B encode,"1,024",hashcodecs loop,4.34
-Python Base64 batch throughput,256 B encode,8,pybase64,1.86
-Python Base64 batch throughput,256 B encode,64,pybase64,1.82
-Python Base64 batch throughput,256 B encode,"1,024",pybase64,1.87
-Python Base64 batch throughput,256 B encode,8,CPython,0.38
-Python Base64 batch throughput,256 B encode,64,CPython,0.39
-Python Base64 batch throughput,256 B encode,"1,024",CPython,0.38
-Python Base64 batch throughput,256 B decode,8,hashcodecs,6.70
-Python Base64 batch throughput,256 B decode,64,hashcodecs,8.28
-Python Base64 batch throughput,256 B decode,"1,024",hashcodecs,7.81
-Python Base64 batch throughput,256 B decode,8,hashcodecs loop,3.26
-Python Base64 batch throughput,256 B decode,64,hashcodecs loop,3.39
-Python Base64 batch throughput,256 B decode,"1,024",hashcodecs loop,3.27
-Python Base64 batch throughput,256 B decode,8,pybase64,1.17
-Python Base64 batch throughput,256 B decode,64,pybase64,1.22
-Python Base64 batch throughput,256 B decode,"1,024",pybase64,1.23
-Python Base64 batch throughput,256 B decode,8,CPython,0.74
-Python Base64 batch throughput,256 B decode,64,CPython,0.75
-Python Base64 batch throughput,256 B decode,"1,024",CPython,0.72
-Python Base64 batch throughput,4 KiB encode,8,hashcodecs,24.51
-Python Base64 batch throughput,4 KiB encode,64,hashcodecs,19.38
-Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs,2.05
-Python Base64 batch throughput,4 KiB encode,8,hashcodecs loop,20.55
-Python Base64 batch throughput,4 KiB encode,64,hashcodecs loop,15.76
-Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs loop,3.77
-Python Base64 batch throughput,4 KiB encode,8,pybase64,12.23
-Python Base64 batch throughput,4 KiB encode,64,pybase64,8.99
-Python Base64 batch throughput,4 KiB encode,"1,024",pybase64,3.28
-Python Base64 batch throughput,4 KiB encode,8,CPython,0.46
-Python Base64 batch throughput,4 KiB encode,64,CPython,0.45
-Python Base64 batch throughput,4 KiB encode,"1,024",CPython,0.43
-Python Base64 batch throughput,4 KiB decode,8,hashcodecs,20.16
-Python Base64 batch throughput,4 KiB decode,64,hashcodecs,19.66
-Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs,2.62
-Python Base64 batch throughput,4 KiB decode,8,hashcodecs loop,16.03
-Python Base64 batch throughput,4 KiB decode,64,hashcodecs loop,15.50
-Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs loop,12.75
-Python Base64 batch throughput,4 KiB decode,8,pybase64,7.74
-Python Base64 batch throughput,4 KiB decode,64,pybase64,7.62
-Python Base64 batch throughput,4 KiB decode,"1,024",pybase64,7.17
-Python Base64 batch throughput,4 KiB decode,8,CPython,1.07
-Python Base64 batch throughput,4 KiB decode,64,CPython,1.06
-Python Base64 batch throughput,4 KiB decode,"1,024",CPython,1.11
-Reusable Python Base64 batch buffers,16 B items,8,encode,0.57
-Reusable Python Base64 batch buffers,16 B items,64,encode,0.66
-Reusable Python Base64 batch buffers,16 B items,"1,024",encode,0.64
-Reusable Python Base64 batch buffers,16 B items,8,decode,0.42
-Reusable Python Base64 batch buffers,16 B items,64,decode,0.54
-Reusable Python Base64 batch buffers,16 B items,"1,024",decode,0.56
-Reusable Python Base64 batch buffers,256 B items,8,encode,6.48
-Reusable Python Base64 batch buffers,256 B items,64,encode,6.51
-Reusable Python Base64 batch buffers,256 B items,"1,024",encode,6.31
-Reusable Python Base64 batch buffers,256 B items,8,decode,5.51
-Reusable Python Base64 batch buffers,256 B items,64,decode,6.39
-Reusable Python Base64 batch buffers,256 B items,"1,024",decode,6.38
-Reusable Python Base64 batch buffers,4 KiB items,8,encode,28.20
-Reusable Python Base64 batch buffers,4 KiB items,64,encode,27.78
-Reusable Python Base64 batch buffers,4 KiB items,"1,024",encode,17.53
-Reusable Python Base64 batch buffers,4 KiB items,8,decode,21.32
-Reusable Python Base64 batch buffers,4 KiB items,64,decode,22.35
-Reusable Python Base64 batch buffers,4 KiB items,"1,024",decode,17.56
-Large Python Base64 batches,1 MiB items,1,returned encode,3.04
-Large Python Base64 batches,1 MiB items,2,returned encode,3.11
-Large Python Base64 batches,1 MiB items,4,returned encode,3.14
-Large Python Base64 batches,1 MiB items,8,returned encode,3.10
-Large Python Base64 batches,1 MiB items,16,returned encode,2.91
-Large Python Base64 batches,1 MiB items,32,returned encode,2.80
-Large Python Base64 batches,1 MiB items,1,reusable encode,39.13
-Large Python Base64 batches,1 MiB items,2,reusable encode,20.94
-Large Python Base64 batches,1 MiB items,4,reusable encode,20.16
-Large Python Base64 batches,1 MiB items,8,reusable encode,19.49
-Large Python Base64 batches,1 MiB items,16,reusable encode,13.32
-Large Python Base64 batches,1 MiB items,32,reusable encode,11.16
-Large Python Base64 batches,1 MiB items,1,returned decode,4.06
-Large Python Base64 batches,1 MiB items,2,returned decode,3.89
-Large Python Base64 batches,1 MiB items,4,returned decode,3.86
-Large Python Base64 batches,1 MiB items,8,returned decode,3.80
-Large Python Base64 batches,1 MiB items,16,returned decode,3.52
-Large Python Base64 batches,1 MiB items,32,returned decode,3.37
-Large Python Base64 batches,1 MiB items,1,reusable decode,29.10
-Large Python Base64 batches,1 MiB items,2,reusable decode,21.57
-Large Python Base64 batches,1 MiB items,4,reusable decode,21.07
-Large Python Base64 batches,1 MiB items,8,reusable decode,19.16
-Large Python Base64 batches,1 MiB items,16,reusable decode,12.20
-Large Python Base64 batches,1 MiB items,32,reusable decode,10.60
-Python Base64 memoryview batch throughput,16 B items,8,returned encode,0.34
-Python Base64 memoryview batch throughput,16 B items,64,returned encode,0.40
-Python Base64 memoryview batch throughput,16 B items,"1,024",returned encode,0.39
-Python Base64 memoryview batch throughput,16 B items,8,reusable encode,0.20
-Python Base64 memoryview batch throughput,16 B items,64,reusable encode,0.22
-Python Base64 memoryview batch throughput,16 B items,"1,024",reusable encode,0.22
-Python Base64 memoryview batch throughput,16 B items,8,returned decode,0.30
-Python Base64 memoryview batch throughput,16 B items,64,returned decode,0.34
-Python Base64 memoryview batch throughput,16 B items,"1,024",returned decode,0.34
-Python Base64 memoryview batch throughput,16 B items,8,reusable decode,0.16
-Python Base64 memoryview batch throughput,16 B items,64,reusable decode,0.19
-Python Base64 memoryview batch throughput,16 B items,"1,024",reusable decode,0.18
-Python Base64 memoryview batch throughput,256 B items,8,returned encode,4.83
-Python Base64 memoryview batch throughput,256 B items,64,returned encode,5.00
-Python Base64 memoryview batch throughput,256 B items,"1,024",returned encode,4.85
-Python Base64 memoryview batch throughput,256 B items,8,reusable encode,2.70
-Python Base64 memoryview batch throughput,256 B items,64,reusable encode,3.08
-Python Base64 memoryview batch throughput,256 B items,"1,024",reusable encode,2.83
-Python Base64 memoryview batch throughput,256 B items,8,returned decode,4.43
-Python Base64 memoryview batch throughput,256 B items,64,returned decode,4.63
-Python Base64 memoryview batch throughput,256 B items,"1,024",returned decode,4.56
-Python Base64 memoryview batch throughput,256 B items,8,reusable decode,2.48
-Python Base64 memoryview batch throughput,256 B items,64,reusable decode,2.91
-Python Base64 memoryview batch throughput,256 B items,"1,024",reusable decode,2.71
-Python Base64 memoryview batch throughput,4 KiB items,8,returned encode,13.89
-Python Base64 memoryview batch throughput,4 KiB items,64,returned encode,16.69
-Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned encode,1.99
-Python Base64 memoryview batch throughput,4 KiB items,8,reusable encode,20.90
-Python Base64 memoryview batch throughput,4 KiB items,64,reusable encode,21.27
-Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable encode,14.38
-Python Base64 memoryview batch throughput,4 KiB items,8,returned decode,18.71
-Python Base64 memoryview batch throughput,4 KiB items,64,returned decode,18.14
-Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned decode,9.91
-Python Base64 memoryview batch throughput,4 KiB items,8,reusable decode,16.64
-Python Base64 memoryview batch throughput,4 KiB items,64,reusable decode,17.67
-Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable decode,13.92
-Python Base64 memoryview batch throughput,1 MiB items,1,returned encode,3.62
-Python Base64 memoryview batch throughput,1 MiB items,2,returned encode,3.85
-Python Base64 memoryview batch throughput,1 MiB items,4,returned encode,3.61
-Python Base64 memoryview batch throughput,1 MiB items,8,returned encode,3.04
-Python Base64 memoryview batch throughput,1 MiB items,16,returned encode,2.91
-Python Base64 memoryview batch throughput,1 MiB items,32,returned encode,2.80
-Python Base64 memoryview batch throughput,1 MiB items,1,reusable encode,39.59
-Python Base64 memoryview batch throughput,1 MiB items,2,reusable encode,22.90
-Python Base64 memoryview batch throughput,1 MiB items,4,reusable encode,20.18
-Python Base64 memoryview batch throughput,1 MiB items,8,reusable encode,19.59
-Python Base64 memoryview batch throughput,1 MiB items,16,reusable encode,13.44
-Python Base64 memoryview batch throughput,1 MiB items,32,reusable encode,11.00
-Python Base64 memoryview batch throughput,1 MiB items,1,returned decode,4.09
-Python Base64 memoryview batch throughput,1 MiB items,2,returned decode,4.36
-Python Base64 memoryview batch throughput,1 MiB items,4,returned decode,4.34
-Python Base64 memoryview batch throughput,1 MiB items,8,returned decode,3.73
-Python Base64 memoryview batch throughput,1 MiB items,16,returned decode,3.54
-Python Base64 memoryview batch throughput,1 MiB items,32,returned decode,3.24
-Python Base64 memoryview batch throughput,1 MiB items,1,reusable decode,29.12
-Python Base64 memoryview batch throughput,1 MiB items,2,reusable decode,22.12
-Python Base64 memoryview batch throughput,1 MiB items,4,reusable decode,20.94
-Python Base64 memoryview batch throughput,1 MiB items,8,reusable decode,18.76
-Python Base64 memoryview batch throughput,1 MiB items,16,reusable decode,12.37
-Python Base64 memoryview batch throughput,1 MiB items,32,reusable decode,10.59
-Mutable Python Base64 inputs,Encode,1 KiB,returned bytes,8.55
-Mutable Python Base64 inputs,Encode,4 KiB,returned bytes,20.58
-Mutable Python Base64 inputs,Encode,1 MiB,returned bytes,3.49
-Mutable Python Base64 inputs,Encode,8 MiB,returned bytes,4.68
-Mutable Python Base64 inputs,Encode,1 KiB,reusable bytearray,10.74
-Mutable Python Base64 inputs,Encode,4 KiB,reusable bytearray,23.28
-Mutable Python Base64 inputs,Encode,1 MiB,reusable bytearray,38.90
-Mutable Python Base64 inputs,Encode,8 MiB,reusable bytearray,30.64
-Mutable Python Base64 inputs,Decode,1 KiB,returned bytes,8.09
-Mutable Python Base64 inputs,Decode,4 KiB,returned bytes,17.02
-Mutable Python Base64 inputs,Decode,1 MiB,returned bytes,4.69
-Mutable Python Base64 inputs,Decode,8 MiB,returned bytes,5.07
-Mutable Python Base64 inputs,Decode,1 KiB,reusable bytearray,9.19
-Mutable Python Base64 inputs,Decode,4 KiB,reusable bytearray,18.43
-Mutable Python Base64 inputs,Decode,1 MiB,reusable bytearray,29.09
-Mutable Python Base64 inputs,Decode,8 MiB,reusable bytearray,18.79
-Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,1 KiB,hashcodecs,3.35
-Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,4 KiB,hashcodecs,3.80
-Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,1 MiB,hashcodecs,4.00
-Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,8 MiB,hashcodecs,3.90
-Mutable Python MurmurHash3 inputs,x86 32-bit incremental,1 KiB,hashcodecs,2.84
-Mutable Python MurmurHash3 inputs,x86 32-bit incremental,4 KiB,hashcodecs,3.62
-Mutable Python MurmurHash3 inputs,x86 32-bit incremental,1 MiB,hashcodecs,3.98
-Mutable Python MurmurHash3 inputs,x86 32-bit incremental,8 MiB,hashcodecs,3.97
-Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,1 KiB,hashcodecs,6.11
-Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,4 KiB,hashcodecs,8.30
-Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,1 MiB,hashcodecs,9.46
-Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,8 MiB,hashcodecs,9.46
-Mutable Python MurmurHash3 inputs,x86 128-bit incremental,1 KiB,hashcodecs,4.40
-Mutable Python MurmurHash3 inputs,x86 128-bit incremental,4 KiB,hashcodecs,7.24
-Mutable Python MurmurHash3 inputs,x86 128-bit incremental,1 MiB,hashcodecs,9.36
-Mutable Python MurmurHash3 inputs,x86 128-bit incremental,8 MiB,hashcodecs,9.34
-Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,1 KiB,hashcodecs,6.07
-Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,4 KiB,hashcodecs,8.55
-Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,1 MiB,hashcodecs,10.01
-Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,8 MiB,hashcodecs,10.11
-Mutable Python MurmurHash3 inputs,x64 128-bit incremental,1 KiB,hashcodecs,4.75
-Mutable Python MurmurHash3 inputs,x64 128-bit incremental,4 KiB,hashcodecs,7.91
-Mutable Python MurmurHash3 inputs,x64 128-bit incremental,1 MiB,hashcodecs,10.08
-Mutable Python MurmurHash3 inputs,x64 128-bit incremental,8 MiB,hashcodecs,10.05
+Python Base64 batch throughput,16 B decode,"1,024",CPython,0.12
+Python Base64 batch throughput,256 B encode,8,hashcodecs,4.53
+Python Base64 batch throughput,256 B encode,64,hashcodecs,5.10
+Python Base64 batch throughput,256 B encode,"1,024",hashcodecs,4.94
+Python Base64 batch throughput,256 B encode,8,hashcodecs loop,5.00
+Python Base64 batch throughput,256 B encode,64,hashcodecs loop,5.40
+Python Base64 batch throughput,256 B encode,"1,024",hashcodecs loop,5.64
+Python Base64 batch throughput,256 B encode,8,pybase64,2.39
+Python Base64 batch throughput,256 B encode,64,pybase64,2.67
+Python Base64 batch throughput,256 B encode,"1,024",pybase64,2.62
+Python Base64 batch throughput,256 B encode,8,CPython,0.43
+Python Base64 batch throughput,256 B encode,64,CPython,0.44
+Python Base64 batch throughput,256 B encode,"1,024",CPython,0.44
+Python Base64 batch throughput,256 B decode,8,hashcodecs,4.11
+Python Base64 batch throughput,256 B decode,64,hashcodecs,5.03
+Python Base64 batch throughput,256 B decode,"1,024",hashcodecs,5.08
+Python Base64 batch throughput,256 B decode,8,hashcodecs loop,3.30
+Python Base64 batch throughput,256 B decode,64,hashcodecs loop,3.59
+Python Base64 batch throughput,256 B decode,"1,024",hashcodecs loop,3.70
+Python Base64 batch throughput,256 B decode,8,pybase64,1.25
+Python Base64 batch throughput,256 B decode,64,pybase64,1.36
+Python Base64 batch throughput,256 B decode,"1,024",pybase64,1.39
+Python Base64 batch throughput,256 B decode,8,CPython,0.73
+Python Base64 batch throughput,256 B decode,64,CPython,0.76
+Python Base64 batch throughput,256 B decode,"1,024",CPython,0.76
+Python Base64 batch throughput,4 KiB encode,8,hashcodecs,24.23
+Python Base64 batch throughput,4 KiB encode,64,hashcodecs,23.62
+Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs,16.25
+Python Base64 batch throughput,4 KiB encode,8,hashcodecs loop,26.16
+Python Base64 batch throughput,4 KiB encode,64,hashcodecs loop,24.32
+Python Base64 batch throughput,4 KiB encode,"1,024",hashcodecs loop,16.55
+Python Base64 batch throughput,4 KiB encode,8,pybase64,14.67
+Python Base64 batch throughput,4 KiB encode,64,pybase64,13.17
+Python Base64 batch throughput,4 KiB encode,"1,024",pybase64,10.96
+Python Base64 batch throughput,4 KiB encode,8,CPython,0.49
+Python Base64 batch throughput,4 KiB encode,64,CPython,0.49
+Python Base64 batch throughput,4 KiB encode,"1,024",CPython,0.49
+Python Base64 batch throughput,4 KiB decode,8,hashcodecs,19.99
+Python Base64 batch throughput,4 KiB decode,64,hashcodecs,20.78
+Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs,15.28
+Python Base64 batch throughput,4 KiB decode,8,hashcodecs loop,18.91
+Python Base64 batch throughput,4 KiB decode,64,hashcodecs loop,18.64
+Python Base64 batch throughput,4 KiB decode,"1,024",hashcodecs loop,14.12
+Python Base64 batch throughput,4 KiB decode,8,pybase64,10.31
+Python Base64 batch throughput,4 KiB decode,64,pybase64,10.16
+Python Base64 batch throughput,4 KiB decode,"1,024",pybase64,8.63
+Python Base64 batch throughput,4 KiB decode,8,CPython,1.14
+Python Base64 batch throughput,4 KiB decode,64,CPython,1.14
+Python Base64 batch throughput,4 KiB decode,"1,024",CPython,1.13
+Reusable Python Base64 batch buffers,16 B items,8,encode,0.24
+Reusable Python Base64 batch buffers,16 B items,64,encode,0.27
+Reusable Python Base64 batch buffers,16 B items,"1,024",encode,0.28
+Reusable Python Base64 batch buffers,16 B items,8,decode,0.21
+Reusable Python Base64 batch buffers,16 B items,64,decode,0.25
+Reusable Python Base64 batch buffers,16 B items,"1,024",decode,0.26
+Reusable Python Base64 batch buffers,256 B items,8,encode,3.48
+Reusable Python Base64 batch buffers,256 B items,64,encode,3.79
+Reusable Python Base64 batch buffers,256 B items,"1,024",encode,3.78
+Reusable Python Base64 batch buffers,256 B items,8,decode,3.09
+Reusable Python Base64 batch buffers,256 B items,64,decode,3.69
+Reusable Python Base64 batch buffers,256 B items,"1,024",decode,3.80
+Reusable Python Base64 batch buffers,4 KiB items,8,encode,23.42
+Reusable Python Base64 batch buffers,4 KiB items,64,encode,24.41
+Reusable Python Base64 batch buffers,4 KiB items,"1,024",encode,15.23
+Reusable Python Base64 batch buffers,4 KiB items,8,decode,18.61
+Reusable Python Base64 batch buffers,4 KiB items,64,decode,19.54
+Reusable Python Base64 batch buffers,4 KiB items,"1,024",decode,14.13
+Large Python Base64 batches,1 MiB items,1,returned encode,32.53
+Large Python Base64 batches,1 MiB items,2,returned encode,20.96
+Large Python Base64 batches,1 MiB items,4,returned encode,20.52
+Large Python Base64 batches,1 MiB items,8,returned encode,19.69
+Large Python Base64 batches,1 MiB items,16,returned encode,13.44
+Large Python Base64 batches,1 MiB items,32,returned encode,10.85
+Large Python Base64 batches,1 MiB items,1,reusable encode,40.09
+Large Python Base64 batches,1 MiB items,2,reusable encode,20.87
+Large Python Base64 batches,1 MiB items,4,reusable encode,20.19
+Large Python Base64 batches,1 MiB items,8,reusable encode,19.42
+Large Python Base64 batches,1 MiB items,16,reusable encode,13.40
+Large Python Base64 batches,1 MiB items,32,reusable encode,11.19
+Large Python Base64 batches,1 MiB items,1,returned decode,29.12
+Large Python Base64 batches,1 MiB items,2,returned decode,21.45
+Large Python Base64 batches,1 MiB items,4,returned decode,21.03
+Large Python Base64 batches,1 MiB items,8,returned decode,18.59
+Large Python Base64 batches,1 MiB items,16,returned decode,11.82
+Large Python Base64 batches,1 MiB items,32,returned decode,10.60
+Large Python Base64 batches,1 MiB items,1,reusable decode,29.35
+Large Python Base64 batches,1 MiB items,2,reusable decode,21.38
+Large Python Base64 batches,1 MiB items,4,reusable decode,21.01
+Large Python Base64 batches,1 MiB items,8,reusable decode,18.69
+Large Python Base64 batches,1 MiB items,16,reusable decode,11.89
+Large Python Base64 batches,1 MiB items,32,reusable decode,10.71
+Python Base64 memoryview batch throughput,16 B items,8,returned encode,0.23
+Python Base64 memoryview batch throughput,16 B items,64,returned encode,0.27
+Python Base64 memoryview batch throughput,16 B items,"1,024",returned encode,0.27
+Python Base64 memoryview batch throughput,16 B items,8,reusable encode,0.14
+Python Base64 memoryview batch throughput,16 B items,64,reusable encode,0.15
+Python Base64 memoryview batch throughput,16 B items,"1,024",reusable encode,0.16
+Python Base64 memoryview batch throughput,16 B items,8,returned decode,0.22
+Python Base64 memoryview batch throughput,16 B items,64,returned decode,0.26
+Python Base64 memoryview batch throughput,16 B items,"1,024",returned decode,0.26
+Python Base64 memoryview batch throughput,16 B items,8,reusable decode,0.13
+Python Base64 memoryview batch throughput,16 B items,64,reusable decode,0.15
+Python Base64 memoryview batch throughput,16 B items,"1,024",reusable decode,0.15
+Python Base64 memoryview batch throughput,256 B items,8,returned encode,3.32
+Python Base64 memoryview batch throughput,256 B items,64,returned encode,3.66
+Python Base64 memoryview batch throughput,256 B items,"1,024",returned encode,3.50
+Python Base64 memoryview batch throughput,256 B items,8,reusable encode,2.12
+Python Base64 memoryview batch throughput,256 B items,64,reusable encode,2.26
+Python Base64 memoryview batch throughput,256 B items,"1,024",reusable encode,2.26
+Python Base64 memoryview batch throughput,256 B items,8,returned decode,3.04
+Python Base64 memoryview batch throughput,256 B items,64,returned decode,3.57
+Python Base64 memoryview batch throughput,256 B items,"1,024",returned decode,3.55
+Python Base64 memoryview batch throughput,256 B items,8,reusable decode,2.01
+Python Base64 memoryview batch throughput,256 B items,64,reusable decode,2.24
+Python Base64 memoryview batch throughput,256 B items,"1,024",reusable decode,2.28
+Python Base64 memoryview batch throughput,4 KiB items,8,returned encode,22.02
+Python Base64 memoryview batch throughput,4 KiB items,64,returned encode,20.52
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned encode,14.89
+Python Base64 memoryview batch throughput,4 KiB items,8,reusable encode,18.58
+Python Base64 memoryview batch throughput,4 KiB items,64,reusable encode,19.08
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable encode,12.94
+Python Base64 memoryview batch throughput,4 KiB items,8,returned decode,18.70
+Python Base64 memoryview batch throughput,4 KiB items,64,returned decode,18.92
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",returned decode,14.11
+Python Base64 memoryview batch throughput,4 KiB items,8,reusable decode,15.48
+Python Base64 memoryview batch throughput,4 KiB items,64,reusable decode,16.07
+Python Base64 memoryview batch throughput,4 KiB items,"1,024",reusable decode,12.07
+Python Base64 memoryview batch throughput,1 MiB items,1,returned encode,32.48
+Python Base64 memoryview batch throughput,1 MiB items,2,returned encode,20.92
+Python Base64 memoryview batch throughput,1 MiB items,4,returned encode,20.49
+Python Base64 memoryview batch throughput,1 MiB items,8,returned encode,19.52
+Python Base64 memoryview batch throughput,1 MiB items,16,returned encode,13.40
+Python Base64 memoryview batch throughput,1 MiB items,32,returned encode,10.86
+Python Base64 memoryview batch throughput,1 MiB items,1,reusable encode,39.94
+Python Base64 memoryview batch throughput,1 MiB items,2,reusable encode,20.83
+Python Base64 memoryview batch throughput,1 MiB items,4,reusable encode,20.14
+Python Base64 memoryview batch throughput,1 MiB items,8,reusable encode,19.42
+Python Base64 memoryview batch throughput,1 MiB items,16,reusable encode,13.36
+Python Base64 memoryview batch throughput,1 MiB items,32,reusable encode,11.16
+Python Base64 memoryview batch throughput,1 MiB items,1,returned decode,29.09
+Python Base64 memoryview batch throughput,1 MiB items,2,returned decode,21.42
+Python Base64 memoryview batch throughput,1 MiB items,4,returned decode,20.99
+Python Base64 memoryview batch throughput,1 MiB items,8,returned decode,18.63
+Python Base64 memoryview batch throughput,1 MiB items,16,returned decode,11.80
+Python Base64 memoryview batch throughput,1 MiB items,32,returned decode,10.62
+Python Base64 memoryview batch throughput,1 MiB items,1,reusable decode,29.29
+Python Base64 memoryview batch throughput,1 MiB items,2,reusable decode,21.32
+Python Base64 memoryview batch throughput,1 MiB items,4,reusable decode,20.93
+Python Base64 memoryview batch throughput,1 MiB items,8,reusable decode,18.75
+Python Base64 memoryview batch throughput,1 MiB items,16,reusable decode,11.86
+Python Base64 memoryview batch throughput,1 MiB items,32,reusable decode,10.66
+Mutable Python Base64 inputs,Encode,1 KiB,returned bytes,5.63
+Mutable Python Base64 inputs,Encode,4 KiB,returned bytes,14.50
+Mutable Python Base64 inputs,Encode,1 MiB,returned bytes,18.93
+Mutable Python Base64 inputs,Encode,8 MiB,returned bytes,11.10
+Mutable Python Base64 inputs,Encode,1 KiB,reusable bytearray,9.35
+Mutable Python Base64 inputs,Encode,4 KiB,reusable bytearray,21.57
+Mutable Python Base64 inputs,Encode,1 MiB,reusable bytearray,39.85
+Mutable Python Base64 inputs,Encode,8 MiB,reusable bytearray,31.48
+Mutable Python Base64 inputs,Decode,1 KiB,returned bytes,6.15
+Mutable Python Base64 inputs,Decode,4 KiB,returned bytes,14.06
+Mutable Python Base64 inputs,Decode,1 MiB,returned bytes,14.90
+Mutable Python Base64 inputs,Decode,8 MiB,returned bytes,8.50
+Mutable Python Base64 inputs,Decode,1 KiB,reusable bytearray,6.16
+Mutable Python Base64 inputs,Decode,4 KiB,reusable bytearray,14.47
+Mutable Python Base64 inputs,Decode,1 MiB,reusable bytearray,14.86
+Mutable Python Base64 inputs,Decode,8 MiB,reusable bytearray,8.51
+Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,1 KiB,hashcodecs,3.25
+Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,4 KiB,hashcodecs,3.75
+Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,1 MiB,hashcodecs,3.99
+Mutable Python MurmurHash3 inputs,x86 32-bit one-shot,8 MiB,hashcodecs,4.00
+Mutable Python MurmurHash3 inputs,x86 32-bit incremental,1 KiB,hashcodecs,2.62
+Mutable Python MurmurHash3 inputs,x86 32-bit incremental,4 KiB,hashcodecs,3.54
+Mutable Python MurmurHash3 inputs,x86 32-bit incremental,1 MiB,hashcodecs,4.00
+Mutable Python MurmurHash3 inputs,x86 32-bit incremental,8 MiB,hashcodecs,3.99
+Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,1 KiB,hashcodecs,5.86
+Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,4 KiB,hashcodecs,8.22
+Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,1 MiB,hashcodecs,9.47
+Mutable Python MurmurHash3 inputs,x86 128-bit one-shot,8 MiB,hashcodecs,9.47
+Mutable Python MurmurHash3 inputs,x86 128-bit incremental,1 KiB,hashcodecs,4.07
+Mutable Python MurmurHash3 inputs,x86 128-bit incremental,4 KiB,hashcodecs,7.03
+Mutable Python MurmurHash3 inputs,x86 128-bit incremental,1 MiB,hashcodecs,9.38
+Mutable Python MurmurHash3 inputs,x86 128-bit incremental,8 MiB,hashcodecs,9.39
+Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,1 KiB,hashcodecs,5.80
+Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,4 KiB,hashcodecs,8.47
+Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,1 MiB,hashcodecs,10.02
+Mutable Python MurmurHash3 inputs,x64 128-bit one-shot,8 MiB,hashcodecs,10.08
+Mutable Python MurmurHash3 inputs,x64 128-bit incremental,1 KiB,hashcodecs,4.19
+Mutable Python MurmurHash3 inputs,x64 128-bit incremental,4 KiB,hashcodecs,7.49
+Mutable Python MurmurHash3 inputs,x64 128-bit incremental,1 MiB,hashcodecs,10.10
+Mutable Python MurmurHash3 inputs,x64 128-bit incremental,8 MiB,hashcodecs,10.10

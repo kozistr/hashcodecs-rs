@@ -67,6 +67,9 @@ Rust allocating batches include allocation of the result vector. Python list bat
 Packed batches write digests in little endian order into one reusable `bytearray`. Python batch comparisons use
 32 inputs of equal size by default and compare against the upstream `xxhash` extension.
 
+The Python small-input panels cover 16, 17, 33, 65, 97, and 240 bytes. These sizes use scalar formulas; runtime SIMD
+dispatch starts at 241 bytes.
+
 ## Reproduce a benchmark
 
 Run commands from the repository root. Install Rust 1.89 or newer, a C/C++ compiler and linker for your platform,
@@ -129,7 +132,7 @@ The scripts check outputs before timing and print GiB/s. Append a mode from the 
 | `python_base64.py` | `--into`, `--lenient`, `--custom-lenient`, `--bytearray-input`, `--memoryview-input`, `--sliced-memoryview-input`, `--str-input` |
 | `python_base64_batch.py` | `--large`, `--memoryview-input`, `--decode-only`. Select sizes with `--item-sizes` and `--batch-sizes`. |
 | `python_murmur3.py` | `--incremental`, `--bytearray-input` |
-| `python_xxhash.py` | `--batches-only`, `--batch-counts 2 3` |
+| `python_xxhash.py` | `--one-shot-only`, `--sizes 17 33 65 97 240`, `--batches-only`, `--batch-counts 2 3` |
 
 `python_base64.py` accepts one mode per run. Its `--configured` and `--wrapped` modes require CPython 3.15 or newer.
 Use that interpreter for both setup commands and the benchmark. These modes cover configured decoding and

@@ -53,6 +53,41 @@ def test_xxh3_one_shot_argument_compatibility(function: Callable[..., object]) -
         function(b'hello', 1 << 64)
 
 
+@pytest.mark.parametrize(
+    ('bits', 'expected'),
+    [(64, 0x241E5D5372565724), (128, 0xF7209D113313B8877E4D66691B80364D)],
+)
+def test_xxh3_seed_error_sentinel_is_also_a_valid_seed(bits: int, expected: int) -> None:
+    one_shot = getattr(hashcodecs, f'xxh3_{bits}')
+    batch = getattr(hashcodecs, f'xxh3_{bits}_batch')
+    batch_into = getattr(hashcodecs, f'xxh3_{bits}_batch_into')
+    seed = (1 << 64) - 1
+    output = bytearray(bits // 8)
+    assert one_shot(b'hello', seed) == expected
+    assert one_shot(s=b'hello', seed=seed) == expected
+    assert batch([b'hello'], seed) == [expected]
+    assert batch_into([b'hello'], output, seed) == len(output)
+    assert int.from_bytes(output, 'little') == expected
+
+    class IndexSeed:
+        def __index__(self) -> int:
+            return 42
+
+    for function, args in (
+        (one_shot, (b'hello',)),
+        (batch, ([b'hello'],)),
+        (batch_into, ([b'hello'], output)),
+    ):
+        for invalid in (-1, 1 << 64):
+            with pytest.raises(OverflowError):
+                function(*args, seed=invalid)
+        for invalid in (None, 1.0, IndexSeed()):
+            with pytest.raises(TypeError):
+                function(*args, seed=invalid)
+
+    assert int.from_bytes(output, 'little') == expected
+
+
 @pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
 @pytest.mark.parametrize('function', [hashcodecs.xxh3_64, hashcodecs.xxh3_128])
 def test_large_xxh3_calls_release_the_gil(

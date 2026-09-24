@@ -117,7 +117,9 @@ pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
 
     let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
 
-    if unsafe { ffi::PyErr_Occurred() }.is_null() {
+    // The conversion reports failure with ULLONG_MAX; all other values succeed.
+    // Check the exception only for the sentinel, which is also a valid seed.
+    if value != u64::MAX || unsafe { ffi::PyErr_Occurred() }.is_null() {
         Some(value as u64)
     } else {
         None

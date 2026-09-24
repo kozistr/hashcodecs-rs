@@ -20,13 +20,14 @@ def report(
     hashcodecs_only: bool,
 ) -> None:
     assert ours() == upstream()
+    size = f'{input_size // 1024} KiB' if input_size % 1024 == 0 else f'{input_size} B'
     ours_rate = throughput(ours, input_size)
     if hashcodecs_only:
-        print(f'{name:20} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
+        print(f'{name:20} {size:>10}  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
         return
     upstream_rate = throughput(upstream, input_size)
     print(
-        f'{name:20} {input_size // 1024:>6} KiB  '
+        f'{name:20} {size:>10}  '
         f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  '
         f'xxhash={upstream_rate / 1024**3:6.2f} GiB/s  '
         f'({ours_rate / upstream_rate:4.2f}x)'
@@ -45,10 +46,20 @@ def main() -> None:
         action='store_true',
         help='time hashcodecs without timing xxhash',
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         '--batches-only',
         action='store_true',
         help='time only allocating and packed batches',
+    )
+    mode.add_argument('--one-shot-only', action='store_true', help='time only single calls')
+    parser.add_argument(
+        '--sizes',
+        nargs='+',
+        type=positive_int,
+        default=[16, 17, 33, 65, 97, 240, *SIZES],
+        metavar='BYTES',
+        help='one-shot input sizes in bytes',
     )
     parser.add_argument(
         '--batch-counts',
@@ -65,7 +76,7 @@ def main() -> None:
     pin_to_one_cpu()
     gc.disable()
     try:
-        for size in () if arguments.batches_only else SIZES:
+        for size in () if arguments.batches_only else arguments.sizes:
             payload = data(size)
             report(
                 'XXH3-64',
@@ -82,7 +93,7 @@ def main() -> None:
                 arguments.hashcodecs_only,
             )
 
-        for item_count in arguments.batch_counts:
+        for item_count in () if arguments.one_shot_only else arguments.batch_counts:
             print(f'\nBatch items: {item_count}')
             for size in (64, 1024, 4 * 1024, 1024 * 1024):
                 items = [data(size) for _ in range(item_count)]

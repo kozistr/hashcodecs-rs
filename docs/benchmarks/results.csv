@@ -343,22 +343,46 @@ Python MurmurHash3 throughput,x64 128-bit incremental,1 KiB,mmh3,5.13
 Python MurmurHash3 throughput,x64 128-bit incremental,4 KiB,mmh3,8.06
 Python MurmurHash3 throughput,x64 128-bit incremental,1 MiB,mmh3,9.77
 Python MurmurHash3 throughput,x64 128-bit incremental,8 MiB,mmh3,9.73
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,16.30
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,42.06
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,81.34
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,52.09
-Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,12.65
-Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,28.24
-Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,48.45
-Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.63
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,13.41
-Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,37.49
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,81.61
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,51.73
-Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,8.54
+Python XXH3 throughput,XXH3-64 small inputs,16 B,hashcodecs,0.39
+Python XXH3 throughput,XXH3-64 small inputs,17 B,hashcodecs,0.42
+Python XXH3 throughput,XXH3-64 small inputs,33 B,hashcodecs,0.79
+Python XXH3 throughput,XXH3-64 small inputs,65 B,hashcodecs,1.55
+Python XXH3 throughput,XXH3-64 small inputs,97 B,hashcodecs,2.20
+Python XXH3 throughput,XXH3-64 small inputs,240 B,hashcodecs,4.61
+Python XXH3 throughput,XXH3-64 small inputs,16 B,xxhash,0.37
+Python XXH3 throughput,XXH3-64 small inputs,17 B,xxhash,0.39
+Python XXH3 throughput,XXH3-64 small inputs,33 B,xxhash,0.73
+Python XXH3 throughput,XXH3-64 small inputs,65 B,xxhash,1.43
+Python XXH3 throughput,XXH3-64 small inputs,97 B,xxhash,2.05
+Python XXH3 throughput,XXH3-64 small inputs,240 B,xxhash,4.58
+Python XXH3 throughput,XXH3-128 small inputs,16 B,hashcodecs,0.35
+Python XXH3 throughput,XXH3-128 small inputs,17 B,hashcodecs,0.36
+Python XXH3 throughput,XXH3-128 small inputs,33 B,hashcodecs,0.68
+Python XXH3 throughput,XXH3-128 small inputs,65 B,hashcodecs,1.29
+Python XXH3 throughput,XXH3-128 small inputs,97 B,hashcodecs,1.84
+Python XXH3 throughput,XXH3-128 small inputs,240 B,hashcodecs,4.28
+Python XXH3 throughput,XXH3-128 small inputs,16 B,xxhash,0.20
+Python XXH3 throughput,XXH3-128 small inputs,17 B,xxhash,0.21
+Python XXH3 throughput,XXH3-128 small inputs,33 B,xxhash,0.41
+Python XXH3 throughput,XXH3-128 small inputs,65 B,xxhash,0.80
+Python XXH3 throughput,XXH3-128 small inputs,97 B,xxhash,1.19
+Python XXH3 throughput,XXH3-128 small inputs,240 B,xxhash,2.74
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,16.19
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,42.25
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,80.87
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,hashcodecs,51.54
+Python XXH3 throughput,XXH3-64 one-shot,1 KiB,xxhash,12.69
+Python XXH3 throughput,XXH3-64 one-shot,4 KiB,xxhash,28.33
+Python XXH3 throughput,XXH3-64 one-shot,1 MiB,xxhash,48.41
+Python XXH3 throughput,XXH3-64 one-shot,8 MiB,xxhash,38.18
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,hashcodecs,13.56
+Python XXH3 throughput,XXH3-128 one-shot,4 KiB,hashcodecs,38.11
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,hashcodecs,81.63
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,hashcodecs,50.64
+Python XXH3 throughput,XXH3-128 one-shot,1 KiB,xxhash,8.55
 Python XXH3 throughput,XXH3-128 one-shot,4 KiB,xxhash,22.39
-Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,48.31
-Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.65
+Python XXH3 throughput,XXH3-128 one-shot,1 MiB,xxhash,48.30
+Python XXH3 throughput,XXH3-128 one-shot,8 MiB,xxhash,38.38
 Python XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs list,1.37
 Python XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs list,17.27
 Python XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs list,43.92

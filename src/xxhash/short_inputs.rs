@@ -67,6 +67,8 @@ pub(super) fn xxh3_64_len_17_to_128(input: &[u8], seed: u64) -> u64 {
     xxh3_avalanche(acc)
 }
 
+// Keep the caller's length bounds and constant seeds visible to the optimizer.
+#[inline(always)]
 pub(super) fn xxh3_64_len_129_to_240(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
     let mut acc = (len as u64).wrapping_mul(P64_1);
@@ -77,11 +79,14 @@ pub(super) fn xxh3_64_len_129_to_240(input: &[u8], seed: u64) -> u64 {
 
     acc = xxh3_avalanche(acc);
 
+    // These products are independent of the first avalanche.
+    let mut tail = mix16(input, len - 16, &SECRET, 119, seed);
+
     for i in 8..(len / 16) {
-        acc = acc.wrapping_add(mix16(input, 16 * i, &SECRET, 3 + 16 * (i - 8), seed));
+        tail = tail.wrapping_add(mix16(input, 16 * i, &SECRET, 3 + 16 * (i - 8), seed));
     }
 
-    xxh3_avalanche(acc.wrapping_add(mix16(input, len - 16, &SECRET, 119, seed)))
+    xxh3_avalanche(acc.wrapping_add(tail))
 }
 
 #[inline(always)]
@@ -231,14 +236,22 @@ pub(super) fn xxh3_128_len_17_to_128(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];
 
-    for i in (0..=((len - 1) / 32)).rev() {
-        acc = mix32(acc, input, i * 16, len - 16 * (i + 1), i * 32, seed);
+    if len > 32 {
+        if len > 64 {
+            if len > 96 {
+                acc = mix32(acc, input, 48, len - 64, 96, seed);
+            }
+
+            acc = mix32(acc, input, 32, len - 48, 64, seed);
+        }
+
+        acc = mix32(acc, input, 16, len - 32, 32, seed);
     }
 
-    final128(acc, len, seed)
+    final128(mix32(acc, input, 0, len - 16, 0, seed), len, seed)
 }
 
-#[inline(never)]
+#[inline(always)]
 pub(super) fn xxh3_128_len_129_to_240(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
     let mut acc = [(len as u64).wrapping_mul(P64_1), 0];

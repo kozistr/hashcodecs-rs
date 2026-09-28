@@ -230,6 +230,31 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
 }
 
 #[test]
+fn short_inputs_match_reference_with_unaligned_slices() {
+    for offset in 0..16 {
+        for length in 0..=240 {
+            let owned = (0..offset + length)
+                .map(|index| (index as u8).wrapping_mul(131).wrapping_add(17))
+                .collect::<Vec<_>>();
+            // End at the allocation boundary, including for overlapping tail loads.
+            let input = &owned[offset..];
+            for seed in [0, 1, 0x0123_4567_89ab_cdef, u64::MAX] {
+                assert_eq!(
+                    xxh3_64(input, seed),
+                    c_xxh3_64(input, seed),
+                    "XXH3-64 mismatch at offset {offset}, length {length}, seed {seed:#x}",
+                );
+                assert_eq!(
+                    xxh3_128(input, seed),
+                    c_xxh3_128(input, seed),
+                    "XXH3-128 mismatch at offset {offset}, length {length}, seed {seed:#x}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
     const LENGTHS: &[usize] = &[
         0, 1, 2, 3, 4, 8, 9, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129, 159, 160, 191,

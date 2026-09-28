@@ -6,13 +6,19 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 
 mod support;
 
-const SIZES: [usize; 16] = [
+const SIZES: [usize; 22] = [
     16,
     17,
     32,
+    33,
     64,
+    65,
+    97,
     128,
     129,
+    160,
+    192,
+    224,
     240,
     241,
     512,

@@ -28,7 +28,7 @@ use super::short_inputs::{
 ///     assert_eq!(xxh3_64(b"", 0), 0x2d06_8005_38d3_94c2);
 ///     assert_ne!(xxh3_64(b"hello", 0), xxh3_64(b"hello", 1));
 ///
-#[inline]
+#[inline(always)]
 pub fn xxh3_64(input: &[u8], seed: u64) -> u64 {
     match input.len() {
         0..=16 => xxh3_64_len_0_to_16(input, seed),

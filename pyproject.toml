@@ -1,6 +1,6 @@
 [project]
 name = "hashcodecs"
-version = "1.4.1"
+version = "1.4.2"
 description = "SIMD-accelerated Base64, MurmurHash3, and xxHash codecs"
 readme = "README.md"
 requires-python = ">=3.10"

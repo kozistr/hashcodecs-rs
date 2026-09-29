@@ -4,6 +4,20 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-09-29
+
+### What's Changed
+* perf: Improve AVX2 Base64 decoding throughput by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/125
+* perf: Reduce SSE Base64 decode stores by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/126
+* perf: Reduce Python Base64 ASCII decoding overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/127
+* docs: Clarify benchmarks, architecture, and safety guidance by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/128
+* chore: Refresh all Python benchmarks on free-threaded 3.14 by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/129
+* perf: Reduce Python XXH3 seed conversion overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/130
+* perf: Speed up short XXH3 inputs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/131
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.1...v1.4.2
+
 ## [1.4.1] - 2026-09-13
 
 ### What's Changed
@@ -211,7 +225,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.2.1...v1.3.0

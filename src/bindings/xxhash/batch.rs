@@ -1,20 +1,23 @@
 use std::borrow::Cow;
 use std::mem::MaybeUninit;
 
+#[cfg(Py_GIL_DISABLED)]
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyMemoryError, PyValueError};
 #[cfg(any(not(Py_3_14), not(Py_GIL_DISABLED)))]
 use pyo3::ffi;
 use pyo3::prelude::*;
-#[cfg(not(Py_GIL_DISABLED))]
 use pyo3::types::PyBytes;
 use pyo3::types::{PyByteArray, PyInt, PyList};
 
 use crate::bindings::buffer::{BytesLike, bytes_like, with_bytearray};
-use crate::bindings::objects::{
-    batch_results, bytearray_data, bytearray_size, list_from_fn, list_items,
-};
+#[cfg(Py_GIL_DISABLED)]
+use crate::bindings::objects::list_items_and_all;
+use crate::bindings::objects::{batch_results, bytearray_data, bytearray_size, list_from_fn};
 #[cfg(not(Py_GIL_DISABLED))]
-use crate::bindings::objects::{bytes_data, bytes_size, exact_bytes_at, exact_bytes_total};
+use crate::bindings::objects::{
+    bytes_data, bytes_size, exact_bytes_at, exact_bytes_total, list_items,
+};
 use crate::xxhash::{xxh3_64_batch_for_each, xxh3_128_batch_for_each};
 
 const BATCH_TOO_LARGE: &str = "XXH3 batch is too large";
@@ -111,6 +114,21 @@ fn parse_batch<'a, 'py>(items: &'a [Bound<'py, PyAny>]) -> PyResult<Vec<BytesLik
     Ok(inputs)
 }
 
+#[cfg(Py_GIL_DISABLED)]
+fn borrow_exact<'a>(items: &'a [Bound<'_, PyAny>]) -> PyResult<Vec<&'a [u8]>> {
+    // The synchronized list reads retained each object. Immutable payloads
+    // remain valid while detached even if another thread changes the list.
+    // Both callers checked every retained item is an exact bytes object.
+    debug_assert!(items.iter().all(PyBytes::is_exact_type_of));
+    let mut inputs = batch_results(items.len(), BATCH_TOO_LARGE)?;
+    inputs.extend(
+        items
+            .iter()
+            .map(|item| unsafe { item.cast_unchecked::<PyBytes>().as_bytes() }),
+    );
+    Ok(inputs)
+}
+
 fn batch_detach_safe(inputs: &[BytesLike<'_, '_>]) -> bool {
     let total = inputs
         .iter()
@@ -201,7 +219,22 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
         return hashes;
     }
 
+    #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
+    #[cfg(Py_GIL_DISABLED)]
+    let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+    #[cfg(Py_GIL_DISABLED)]
+    if exact {
+        let inputs = borrow_exact(&items)?;
+        let total = inputs
+            .iter()
+            .fold(0_usize, |total, input| total.saturating_add(input.len()));
+        return if should_detach(inputs.len(), total) {
+            py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) })
+        } else {
+            unsafe { hash_into_scratch(&inputs, seed, scratch, hash) }
+        };
+    }
     let parsed = parse_batch(&items)?;
     let detach = batch_detach_safe(&parsed);
     let inputs = borrow_batch(&parsed)?;
@@ -458,8 +491,23 @@ fn packed_batch_into<D: PackedDigest>(
         return D::write_results(output, &hashes?);
     }
 
+    #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
+    #[cfg(Py_GIL_DISABLED)]
+    let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
     with_bytearray(output, || packed_output_len(output, items.len(), D::SIZE))?;
+    #[cfg(Py_GIL_DISABLED)]
+    if exact {
+        let inputs = borrow_exact(&items)?;
+        let total = inputs
+            .iter()
+            .fold(0_usize, |total, input| total.saturating_add(input.len()));
+        if !should_detach(inputs.len(), total) {
+            return D::write_direct(output, &inputs, seed);
+        }
+        let hashes = py.detach(|| D::collect(&inputs, seed))?;
+        return D::write_results(output, &hashes);
+    }
     let parsed = parse_batch(&items)?;
     let detach = batch_detach_safe(&parsed);
     let direct = direct_output_safe(&parsed, output, detach);

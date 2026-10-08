@@ -224,17 +224,14 @@ pub(super) fn encode_with_prepared<'py>(
 pub(super) fn encode_into(
     input: &BytesLike<'_, '_>,
     output: &Bound<'_, PyByteArray>,
-    altchars: Option<[u8; 2]>,
-    padded: bool,
-    wrapcol: Option<usize>,
+    encoder: &PreparedEncoder,
 ) -> PyResult<usize> {
-    let encoder = PreparedEncoder::new(altchars, padded, wrapcol);
     if let Some(input) = input.snapshot_for_output(output)? {
-        return encode_slice_into(&input, output, &encoder);
+        return encode_slice_into(&input, output, encoder);
     }
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
-            encode_slice_to_ptr(input, output, provided, &encoder)
+            encode_slice_to_ptr(input, output, provided, encoder)
         })
     }
 }
@@ -452,7 +449,7 @@ pub(super) fn standard_b64encode_into(
 ) -> PyResult<usize> {
     let input = contiguous_bytes_like(s, "s")?;
     let input = input.into_stable_after_callbacks(true)?;
-    encode_into(&input, output, None, true, None)
+    encode_into(&input, output, &PreparedEncoder::new(None, true, None))
 }
 
 /// Encode with the URL-safe Base64 alphabet.
@@ -483,7 +480,11 @@ pub(super) fn urlsafe_b64encode_into(
     let input = contiguous_bytes_like_exported(s, "s")?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(true)?;
-    encode_into(&input, output, Some(*b"-_"), padded, None)
+    encode_into(
+        &input,
+        output,
+        &PreparedEncoder::new(Some(*b"-_"), padded, None),
+    )
 }
 
 pub(super) fn b64encode<'py>(
@@ -562,9 +563,7 @@ pub(super) fn b64encode_into(
     encode_into(
         &input,
         output,
-        altchars,
-        padded,
-        normalize_wrapcol(wrapcol)?,
+        &PreparedEncoder::new(altchars, padded, normalize_wrapcol(wrapcol)?),
     )
 }
 

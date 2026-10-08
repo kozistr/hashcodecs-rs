@@ -251,10 +251,16 @@ impl PreparedDecoder {
                 self.attempt,
             )?
         } else {
+            // Large allocating x86 SIMD calls retain decoded prefixes in the
+            // lenient writer instead of restarting after a failed strict probe.
             let padded = if direct && {
                 let length = input.len();
                 length.is_multiple_of(4)
-                    && (length < BASE64_DETACH_THRESHOLD || !self.has_edge_noise(input))
+                    && (length < BASE64_DETACH_THRESHOLD
+                        || ((O::REUSABLE
+                            || !crate::backend::capabilities()
+                                .supports(crate::backend::CpuFeature::Ssse3))
+                            && !self.has_edge_noise(input)))
             } {
                 self.try_native(
                     py,

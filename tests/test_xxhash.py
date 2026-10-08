@@ -331,6 +331,45 @@ def test_xxh3_rejects_non_buffers(function: Callable[..., object]) -> None:
         function([1, 2, 3])
 
 
+@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
+@pytest.mark.parametrize('bits', [64, 128])
+@pytest.mark.parametrize('count', [8, 16384])
+def test_xxh3_exact_bytes_batches_retain_inputs_during_list_mutation(bits: int, count: int) -> None:
+    first = b'a' * 16
+    second = b'b' * 16
+    items = [bytes(bytearray(first))] * count
+    batch = getattr(hashcodecs, f'xxh3_{bits}_batch')
+    batch_into = getattr(hashcodecs, f'xxh3_{bits}_batch_into')
+    one_shot = getattr(hashcodecs, f'xxh3_{bits}')
+    expected = {one_shot(first, 42), one_shot(second, 42)}
+    width = bits // 8
+    output = bytearray(width * count)
+    start = Barrier(2)
+
+    def hash_values() -> None:
+        start.wait()
+        for _ in range(32):
+            hashes = batch(items, 42)
+            assert len(hashes) == count
+            assert set(hashes) <= expected
+            assert batch_into(items, output, 42) == len(output)
+            assert {
+                int.from_bytes(output[index : index + width], 'little') for index in range(0, len(output), width)
+            } <= expected
+
+    def mutate_items() -> None:
+        start.wait()
+        for index in range(128):
+            value = bytes(bytearray(first if index % 2 else second))
+            items[:] = [value] * count
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hashes_future = executor.submit(hash_values)
+        mutation_future = executor.submit(mutate_items)
+        hashes_future.result()
+        mutation_future.result()
+
+
 def test_xxh3_rejects_invalid_batch_and_seed_inputs() -> None:
     with pytest.raises(TypeError):
         dynamic_xxh3_64_batch((b'a', b'b'))

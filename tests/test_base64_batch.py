@@ -54,6 +54,7 @@ def test_base64_batch_empty_single_heterogeneous_and_ordered() -> None:
     expected = [stdlib_base64.b64encode(payload) for payload in payloads]
 
     assert base64.b64encode_batch([]) == []
+    assert base64.b64encode_batch_into([], []) == []
     assert base64.b64encode_batch([b'a']) == [b'YQ==']
     assert base64.b64encode_batch(payloads) == expected
     assert hashcodecs.b64encode_batch(payloads) == expected

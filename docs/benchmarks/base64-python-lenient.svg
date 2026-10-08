@@ -28,15 +28,15 @@
 <text x="272.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,242.8 272.0,201.5 436.0,182.2 600.0,187.5" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="242.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 1 KiB, 3.92 GiB/s</title></circle>
-<text x="126.2" y="232.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.92</text>
-<circle cx="272.0" cy="201.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 4 KiB, 5.10 GiB/s</title></circle>
-<text x="272.0" y="191.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.10</text>
-<circle cx="436.0" cy="182.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 1 MiB, 5.65 GiB/s</title></circle>
-<text x="436.0" y="199.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.65</text>
-<circle cx="600.0" cy="187.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 8 MiB, 5.50 GiB/s</title></circle>
-<text x="581.8" y="204.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.50</text>
+<polyline points="108.0,252.9 272.0,212.0 436.0,194.2 600.0,201.2" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="252.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 1 KiB, 3.63 GiB/s</title></circle>
+<text x="126.2" y="242.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.63</text>
+<circle cx="272.0" cy="212.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 4 KiB, 4.80 GiB/s</title></circle>
+<text x="272.0" y="202.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.80</text>
+<circle cx="436.0" cy="194.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 1 MiB, 5.31 GiB/s</title></circle>
+<text x="436.0" y="184.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.31</text>
+<circle cx="600.0" cy="201.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: returned bytes, 8 MiB, 5.11 GiB/s</title></circle>
+<text x="581.8" y="191.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.11</text>
 <polyline points="108.0,266.6 272.0,234.7 436.0,222.5 600.0,228.8" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="266.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: reusable bytearray, 1 KiB, 3.24 GiB/s</title></circle>
 <text x="126.2" y="283.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.24</text>
@@ -61,9 +61,9 @@
 <circle cx="272.0" cy="231.9" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: pybase64, 4 KiB, 4.23 GiB/s</title></circle>
 <text x="272.0" y="221.9" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.23</text>
 <circle cx="436.0" cy="215.5" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: pybase64, 1 MiB, 4.70 GiB/s</title></circle>
-<text x="436.0" y="264.5" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.70</text>
+<text x="436.0" y="205.5" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.70</text>
 <circle cx="600.0" cy="219.7" r="4.5" fill="#8f4a73" stroke="#ffffff" stroke-width="2"><title>MIME whitespace: pybase64, 8 MiB, 4.58 GiB/s</title></circle>
-<text x="581.8" y="268.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.58</text>
+<text x="581.8" y="209.7" text-anchor="middle" fill="#8f4a73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.58</text>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">Ignored non-alphabet bytes</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#356ac3" stroke-width="3"/>
@@ -88,15 +88,15 @@
 <text x="882.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,239.7 882.0,195.6 1046.0,174.9 1210.0,179.8" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="239.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 1 KiB, 4.01 GiB/s</title></circle>
-<text x="736.2" y="229.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.01</text>
-<circle cx="882.0" cy="195.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 4 KiB, 5.27 GiB/s</title></circle>
-<text x="882.0" y="185.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.27</text>
-<circle cx="1046.0" cy="174.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 1 MiB, 5.86 GiB/s</title></circle>
-<text x="1046.0" y="191.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.86</text>
-<circle cx="1210.0" cy="179.8" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 8 MiB, 5.72 GiB/s</title></circle>
-<text x="1191.8" y="196.8" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.72</text>
+<polyline points="718.0,248.1 882.0,206.1 1046.0,187.5 1210.0,195.6" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="248.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 1 KiB, 3.77 GiB/s</title></circle>
+<text x="736.2" y="238.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.77</text>
+<circle cx="882.0" cy="206.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 4 KiB, 4.97 GiB/s</title></circle>
+<text x="882.0" y="196.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.97</text>
+<circle cx="1046.0" cy="187.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 1 MiB, 5.50 GiB/s</title></circle>
+<text x="1046.0" y="204.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.50</text>
+<circle cx="1210.0" cy="195.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: returned bytes, 8 MiB, 5.27 GiB/s</title></circle>
+<text x="1191.8" y="185.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.27</text>
 <polyline points="718.0,262.8 882.0,231.2 1046.0,217.2 1210.0,224.2" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="262.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Ignored non-alphabet bytes: reusable bytearray, 1 KiB, 3.35 GiB/s</title></circle>
 <text x="736.2" y="279.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">3.35</text>
@@ -148,24 +148,24 @@
 <text x="272.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,635.4 272.0,575.3 436.0,536.1 600.0,580.5" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="635.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 1 KiB, 5.33 GiB/s</title></circle>
-<text x="126.2" y="625.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.33</text>
-<circle cx="272.0" cy="575.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 4 KiB, 9.62 GiB/s</title></circle>
-<text x="272.0" y="565.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.62</text>
-<circle cx="436.0" cy="536.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 1 MiB, 12.42 GiB/s</title></circle>
-<text x="436.0" y="526.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">12.42</text>
-<circle cx="600.0" cy="580.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 8 MiB, 9.25 GiB/s</title></circle>
-<text x="581.8" y="570.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.25</text>
+<polyline points="108.0,640.3 272.0,582.9 436.0,547.6 600.0,603.5" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="640.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 1 KiB, 4.98 GiB/s</title></circle>
+<text x="126.2" y="630.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.98</text>
+<circle cx="272.0" cy="582.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 4 KiB, 9.08 GiB/s</title></circle>
+<text x="272.0" y="572.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.08</text>
+<circle cx="436.0" cy="547.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 1 MiB, 11.60 GiB/s</title></circle>
+<text x="436.0" y="537.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">11.60</text>
+<circle cx="600.0" cy="603.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: returned bytes, 8 MiB, 7.61 GiB/s</title></circle>
+<text x="581.8" y="593.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.61</text>
 <polyline points="108.0,631.2 272.0,568.6 436.0,535.7 600.0,579.2" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="631.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: reusable bytearray, 1 KiB, 5.63 GiB/s</title></circle>
 <text x="126.2" y="648.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.63</text>
 <circle cx="272.0" cy="568.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: reusable bytearray, 4 KiB, 10.10 GiB/s</title></circle>
-<text x="272.0" y="585.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.10</text>
+<text x="272.0" y="558.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">10.10</text>
 <circle cx="436.0" cy="535.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: reusable bytearray, 1 MiB, 12.45 GiB/s</title></circle>
 <text x="436.0" y="552.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">12.45</text>
 <circle cx="600.0" cy="579.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: reusable bytearray, 8 MiB, 9.34 GiB/s</title></circle>
-<text x="581.8" y="596.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.34</text>
+<text x="581.8" y="569.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">9.34</text>
 <polyline points="108.0,702.4 272.0,701.0 436.0,700.5 600.0,700.5" fill="none" stroke="#637083" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="108.0" cy="702.4" r="4.5" fill="#637083" stroke="#ffffff" stroke-width="2"><title>Custom @# clean input: CPython, 1 KiB, 0.54 GiB/s</title></circle>
 <text x="126.2" y="692.4" text-anchor="middle" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">0.54</text>
@@ -208,15 +208,15 @@
 <text x="882.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1046.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,566.5 882.0,554.6 1046.0,551.1 1210.0,553.2" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="718.0" cy="566.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 1 KiB, 2.05 GiB/s</title></circle>
-<text x="736.2" y="556.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.05</text>
-<circle cx="882.0" cy="554.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 4 KiB, 2.22 GiB/s</title></circle>
-<text x="882.0" y="544.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.22</text>
-<circle cx="1046.0" cy="551.1" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 1 MiB, 2.27 GiB/s</title></circle>
-<text x="1046.0" y="541.1" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.27</text>
-<circle cx="1210.0" cy="553.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 8 MiB, 2.24 GiB/s</title></circle>
-<text x="1191.8" y="543.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.24</text>
+<polyline points="718.0,574.2 882.0,564.4 1046.0,560.2 1210.0,562.3" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="718.0" cy="574.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 1 KiB, 1.94 GiB/s</title></circle>
+<text x="736.2" y="564.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.94</text>
+<circle cx="882.0" cy="564.4" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 4 KiB, 2.08 GiB/s</title></circle>
+<text x="882.0" y="554.4" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.08</text>
+<circle cx="1046.0" cy="560.2" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 1 MiB, 2.14 GiB/s</title></circle>
+<text x="1046.0" y="550.2" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.14</text>
+<circle cx="1210.0" cy="562.3" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: returned bytes, 8 MiB, 2.11 GiB/s</title></circle>
+<text x="1191.8" y="552.3" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">2.11</text>
 <polyline points="718.0,576.3 882.0,565.1 1046.0,563.7 1210.0,567.2" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="576.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Custom @# ignored bytes: reusable bytearray, 1 KiB, 1.91 GiB/s</title></circle>
 <text x="736.2" y="593.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">1.91</text>

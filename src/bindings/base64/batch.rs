@@ -322,9 +322,13 @@ pub(super) fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
+    if items.is_empty() {
+        return Ok(PyList::empty(py));
+    }
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?
         .into_iter()
         .peekable();
+    let encoder = PreparedEncoder::new(altchars, true, None);
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
         match prepared
@@ -332,17 +336,11 @@ pub(super) fn b64encode_batch_into_parsed<'py>(
             .is_some_and(|(prepared_index, _, _)| *prepared_index == index)
             .then(|| prepared.next().expect("matching prepared input exists").1)
         {
-            Some(Ok(input)) => Ok(PyInt::new(
-                py,
-                encode_into(&input, output, altchars, true, None)?,
-            )),
+            Some(Ok(input)) => Ok(PyInt::new(py, encode_into(&input, output, &encoder)?)),
             Some(Err(error)) => Err(error),
             None => {
                 let input = contiguous_bytes_like(&items[index], "s")?;
-                Ok(PyInt::new(
-                    py,
-                    encode_into(&input, output, altchars, true, None)?,
-                ))
+                Ok(PyInt::new(py, encode_into(&input, output, &encoder)?))
             }
         }
     })

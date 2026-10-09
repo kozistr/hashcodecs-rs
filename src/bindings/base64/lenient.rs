@@ -402,10 +402,14 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                             Translation::new(table, altchars, decode_byte_kernels().translate);
                         let mut writer =
                             StagingWriter::new(unsafe { output.add(written) }, translation);
-                        writer
-                            .push_symbols::<false>(symbols)
-                            .expect("the scanner accepted every symbol before translation");
-                        let staged = writer.finish::<false>().expect("validated symbol quartets");
+                        // The scanner validated complete quartets, and the
+                        // remaining output capacity was checked above.
+                        let staged = unsafe {
+                            writer
+                                .push_symbols::<false>(symbols)
+                                .expect("the scanner accepted every symbol before translation");
+                            writer.finish::<false>().expect("validated symbol quartets")
+                        };
                         debug_assert_eq!(staged, decoded);
                     }
                 }

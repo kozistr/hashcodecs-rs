@@ -25,6 +25,7 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_64(
                 return std::ptr::null_mut();
             };
 
+            // The call retains input; the hash operation cannot reenter Python.
             let result = with_function_bytes(py, input.as_ptr(), XXH3_DETACH_THRESHOLD, |bytes| {
                 hash_64(bytes, seed)
             });
@@ -48,6 +49,7 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_128(
                 return std::ptr::null_mut();
             };
 
+            // The call retains input; the hash operation cannot reenter Python.
             let result = with_function_bytes(py, input.as_ptr(), XXH3_DETACH_THRESHOLD, |bytes| {
                 hash_128(bytes, seed)
             });

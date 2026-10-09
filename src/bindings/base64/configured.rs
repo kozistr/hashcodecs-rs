@@ -456,9 +456,15 @@ pub(super) fn decode_configured_into(
 
 trait ScanSink: Sized {
     fn set_translation(&mut self, translation: Option<Translation>);
-    fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8], validate: bool) -> Option<()>;
-    fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()>;
-    fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize>;
+    // Write sinks require valid, non-overlapping output storage for the entire
+    // decoded stream. Unchecked symbols must be valid after translation.
+    unsafe fn push_symbols<const CHECKED: bool>(
+        &mut self,
+        input: &[u8],
+        validate: bool,
+    ) -> Option<()>;
+    unsafe fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()>;
+    unsafe fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize>;
 }
 
 struct CountSink {
@@ -480,7 +486,11 @@ impl ScanSink for CountSink {
         self.translation = translation;
     }
 
-    fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8], validate: bool) -> Option<()> {
+    unsafe fn push_symbols<const CHECKED: bool>(
+        &mut self,
+        input: &[u8],
+        validate: bool,
+    ) -> Option<()> {
         let _ = CHECKED;
 
         if validate {
@@ -496,12 +506,12 @@ impl ScanSink for CountSink {
         Some(())
     }
 
-    fn push_value<const CHECKED: bool>(&mut self, _value: u8) -> Option<()> {
+    unsafe fn push_value<const CHECKED: bool>(&mut self, _value: u8) -> Option<()> {
         let _ = CHECKED;
         Some(())
     }
 
-    fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
+    unsafe fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
         let _ = CHECKED;
 
         if let Some(validator) = self.validator {
@@ -527,16 +537,20 @@ impl ScanSink for WriteSink<'_> {
         self.writer.set_translation(translation);
     }
 
-    fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8], _validate: bool) -> Option<()> {
-        self.writer.push_symbols::<CHECKED>(input)
+    unsafe fn push_symbols<const CHECKED: bool>(
+        &mut self,
+        input: &[u8],
+        _validate: bool,
+    ) -> Option<()> {
+        unsafe { self.writer.push_symbols::<CHECKED>(input) }
     }
 
-    fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
-        self.writer.push_value::<CHECKED>(value)
+    unsafe fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
+        unsafe { self.writer.push_value::<CHECKED>(value) }
     }
 
-    fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
-        let written = self.writer.finish::<CHECKED>()?;
+    unsafe fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
+        let written = unsafe { self.writer.finish::<CHECKED>()? };
 
         if CHECKED {
             debug_assert_eq!(written, expected);
@@ -574,9 +588,13 @@ impl ConfiguredDecoder {
     }
 
     pub(super) fn decoded_len(&self, input: &[u8], continue_after_padding: bool) -> Option<usize> {
-        self.scan::<CountSink, true>(input, CountSink::new(), continue_after_padding)
+        // CountSink never accesses output storage, and CHECKED validates input.
+        unsafe { self.scan::<CountSink, true>(input, CountSink::new(), continue_after_padding) }
     }
 
+    /// # Safety
+    /// `output` must be writable for the decoded length of all accepted symbol
+    /// prefixes, including before an error, and must not overlap `input`.
     pub(super) unsafe fn decode_checked_to_ptr(
         &self,
         input: &[u8],
@@ -584,9 +602,14 @@ impl ConfiguredDecoder {
         continue_after_padding: bool,
     ) -> Option<usize> {
         let mut writer = StagingWriter::new(output, None);
-        self.scan::<WriteSink, true>(input, WriteSink::new(&mut writer), continue_after_padding)
+        unsafe {
+            self.scan::<WriteSink, true>(input, WriteSink::new(&mut writer), continue_after_padding)
+        }
     }
 
+    /// # Safety
+    /// `input` must have passed `decoded_len` with this decoder and padding
+    /// policy. `output` must be writable for that length without overlapping input.
     pub(super) unsafe fn decode_validated_to_ptr(
         &self,
         input: &[u8],
@@ -594,11 +617,21 @@ impl ConfiguredDecoder {
         continue_after_padding: bool,
     ) -> usize {
         let mut writer = StagingWriter::new(output, None);
-        self.scan::<WriteSink, false>(input, WriteSink::new(&mut writer), continue_after_padding)
+        unsafe {
+            self.scan::<WriteSink, false>(
+                input,
+                WriteSink::new(&mut writer),
+                continue_after_padding,
+            )
             .expect("validated configured Base64 remains valid")
+        }
     }
 
-    fn scan<S: ScanSink, const CHECKED: bool>(
+    /// # Safety
+    /// A write sink must have writable, non-overlapping storage for all decoded
+    /// prefixes of `input`. With `CHECKED` false, input must already be validated
+    /// using this decoder and the same `continue_after_padding` policy.
+    unsafe fn scan<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
         sink: S,
@@ -609,25 +642,26 @@ impl ConfiguredDecoder {
             && self.padding.is_padded()
             && self.table[usize::from(b'=')] == IGNORED_CONFIGURED_VALUE
         {
-            return self.scan_strict_ignored_padding(input, sink);
+            return unsafe { self.scan_strict_ignored_padding(input, sink) };
         }
 
         if self.validation == Validation::Strict
             && !matches!(self.strict_specials, StrictSpecials::Many)
             && !matches!(self.strict_forbidden, StrictSpecials::Many)
         {
-            return self.scan_strict_specials::<S, CHECKED>(input, sink);
+            return unsafe { self.scan_strict_specials::<S, CHECKED>(input, sink) };
         }
 
         match self.validation {
-            Validation::Strict => self.scan_strict::<S, CHECKED>(input, sink),
-            Validation::Lenient => {
+            Validation::Strict => unsafe { self.scan_strict::<S, CHECKED>(input, sink) },
+            Validation::Lenient => unsafe {
                 self.scan_lenient::<S, CHECKED>(input, sink, continue_after_padding)
-            }
+            },
         }
     }
 
-    fn scan_strict<S: ScanSink, const CHECKED: bool>(
+    // Same safety requirements as `scan`, with strict validation selected.
+    unsafe fn scan_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
         mut sink: S,
@@ -643,7 +677,7 @@ impl ConfiguredDecoder {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
 
                 if run != 0 {
-                    sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
+                    unsafe { sink.push_symbols::<CHECKED>(&input[source..source + run], false)? };
 
                     if CHECKED {
                         symbols += run;
@@ -666,7 +700,7 @@ impl ConfiguredDecoder {
                     return None;
                 }
 
-                sink.push_value::<CHECKED>(value)?;
+                unsafe { sink.push_value::<CHECKED>(value)? };
 
                 if CHECKED {
                     symbols += 1;
@@ -687,10 +721,11 @@ impl ConfiguredDecoder {
             }
         }
 
-        self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
+        unsafe { self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value) }
     }
 
-    fn scan_lenient<S: ScanSink, const CHECKED: bool>(
+    // Same safety requirements as `scan`, with lenient validation selected.
+    unsafe fn scan_lenient<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
         mut sink: S,
@@ -708,7 +743,7 @@ impl ConfiguredDecoder {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
 
                 if run != 0 {
-                    sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
+                    unsafe { sink.push_symbols::<CHECKED>(&input[source..source + run], false)? };
 
                     if CHECKED {
                         symbols += run;
@@ -741,7 +776,7 @@ impl ConfiguredDecoder {
                         return None;
                     }
 
-                    return sink.finish::<CHECKED>(decoded_symbol_len(symbols));
+                    return unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) };
                 }
 
                 continue;
@@ -751,7 +786,7 @@ impl ConfiguredDecoder {
                 continue;
             }
 
-            sink.push_value::<CHECKED>(value)?;
+            unsafe { sink.push_value::<CHECKED>(value)? };
 
             if CHECKED {
                 symbols += 1;
@@ -772,11 +807,12 @@ impl ConfiguredDecoder {
         {
             None
         } else {
-            sink.finish::<CHECKED>(decoded_symbol_len(symbols))
+            unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) }
         }
     }
 
-    fn scan_strict_specials<S: ScanSink, const CHECKED: bool>(
+    // Same safety requirements as `scan`, with strict special-byte scanning selected.
+    unsafe fn scan_strict_specials<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
         mut sink: S,
@@ -806,7 +842,7 @@ impl ConfiguredDecoder {
                 .map_or(data_end, |offset| source + offset);
 
             if source != run_end {
-                sink.push_symbols::<CHECKED>(&input[source..run_end], true)?;
+                unsafe { sink.push_symbols::<CHECKED>(&input[source..run_end], true)? };
                 symbols += run_end - source;
                 last_value = self.table[usize::from(input[run_end - 1])];
             }
@@ -840,12 +876,17 @@ impl ConfiguredDecoder {
             }
         }
 
-        self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value)
+        unsafe { self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value) }
     }
 
     #[cold]
     #[inline(never)]
-    fn scan_strict_ignored_padding<S: ScanSink>(&self, input: &[u8], sink: S) -> Option<usize> {
+    // Same safety requirements as `scan` with CHECKED true.
+    unsafe fn scan_strict_ignored_padding<S: ScanSink>(
+        &self,
+        input: &[u8],
+        sink: S,
+    ) -> Option<usize> {
         let mut symbols = 0;
         let mut padding = 0;
 
@@ -871,10 +912,11 @@ impl ConfiguredDecoder {
 
         let mut decoder = self.clone();
         decoder.padding = Padding::Unpadded;
-        decoder.scan::<S, true>(input, sink, false)
+        unsafe { decoder.scan::<S, true>(input, sink, false) }
     }
 
-    fn finish_strict<S: ScanSink, const CHECKED: bool>(
+    // The sink must satisfy `scan`'s output contract for the accumulated symbols.
+    unsafe fn finish_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         sink: S,
         symbols: usize,
@@ -903,7 +945,7 @@ impl ConfiguredDecoder {
             }
         }
 
-        sink.finish::<CHECKED>(decoded_symbol_len(symbols))
+        unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) }
     }
 }
 

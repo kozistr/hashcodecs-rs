@@ -1,10 +1,5 @@
 use super::{LongInput, Secret, build_long_input_schedule, initial_accumulator};
-use crate::xxhash::primitives::P32_1;
-
-#[inline(always)]
-unsafe fn read_u64_le(ptr: *const u8, offset: usize) -> u64 {
-    u64::from_le(unsafe { ptr.add(offset).cast::<u64>().read_unaligned() })
-}
+use crate::xxhash::primitives::{P32_1, read_u64_le_ptr};
 
 #[inline(always)]
 unsafe fn accumulate_stripe(
@@ -23,8 +18,8 @@ unsafe fn accumulate_stripe(
     for lane in 0..8 {
         // `LongSchedule` keeps each data stripe in bounds, and every secret
         // offset passed by `accumulate` leaves a complete 64-byte stripe.
-        let value = unsafe { read_u64_le(data, data_offset + lane * 8) };
-        let mixed = value ^ unsafe { read_u64_le(secret, secret_offset + lane * 8) };
+        let value = unsafe { read_u64_le_ptr(data, data_offset + lane * 8) };
+        let mixed = value ^ unsafe { read_u64_le_ptr(secret, secret_offset + lane * 8) };
         acc[lane ^ 1] = acc[lane ^ 1].wrapping_add(value);
         acc[lane] = acc[lane].wrapping_add((mixed as u32 as u64).wrapping_mul(mixed >> 32));
     }
@@ -37,7 +32,7 @@ fn scramble(acc: &mut [u64; 8], secret: &Secret) {
     for (lane, value) in acc.iter_mut().enumerate() {
         *value ^= *value >> 47;
         // A `Secret` is 192 bytes, so all eight fixed-offset loads are valid.
-        *value ^= unsafe { read_u64_le(secret, 128 + lane * 8) };
+        *value ^= unsafe { read_u64_le_ptr(secret, 128 + lane * 8) };
         *value = value.wrapping_mul(P32_1);
     }
 }

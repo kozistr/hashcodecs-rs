@@ -14,7 +14,7 @@ fn snapshot_before_writes() {
             b"mutable"
         );
 
-        let buffer = acquire_buffer(owner.as_any(), ptr::null_mut()).unwrap();
+        let buffer = acquire_buffer(owner.as_any(), ptr::null_mut(), ffi::PyBUF_FULL_RO).unwrap();
         let guarded = BytesLike::GuardedBytes {
             bytes: b"mutable".to_vec(),
             buffer,
@@ -29,7 +29,7 @@ fn snapshot_before_writes() {
         owner.resize(1).unwrap();
 
         let bytes = PyBytes::new(py, b"exported");
-        let buffer = acquire_buffer(bytes.as_any(), ptr::null_mut()).unwrap();
+        let buffer = acquire_buffer(bytes.as_any(), ptr::null_mut(), ffi::PyBUF_FULL_RO).unwrap();
         let guarded = BytesLike::GuardedBytes {
             bytes: bytes.as_bytes().to_vec(),
             buffer,
@@ -67,8 +67,8 @@ fn reject_noncontiguous_exports() {
             );
         }
 
-        let buffer = acquire_buffer(&view, ptr::null_mut()).unwrap();
-        assert_eq!(copy_buffer(py, &buffer).unwrap().as_bytes(), b"ace");
+        let mut buffer = acquire_buffer(&view, ptr::null_mut(), ffi::PyBUF_FULL_RO).unwrap();
+        assert_eq!(copy_buffer(py, &mut buffer).unwrap().as_bytes(), b"ace");
         drop(buffer);
         let error = binascii_ascii_or_bytes_exported(&py.None().into_bound(py))
             .err()
@@ -116,6 +116,88 @@ fn encode_string_subclasses() {
             .unwrap();
         let input = ascii_or_bytes(py, &value, "s").unwrap();
         assert_eq!(input.stable_bytes(), b"YWJj");
+    });
+}
+
+#[test]
+fn retain_inline_buffer_metadata_after_moves() {
+    Python::initialize();
+    Python::attach(|py| {
+        for bytes in [b"".as_slice(), b"YWJj"] {
+            for owner in [
+                PyBytes::new(py, bytes).into_any(),
+                PyByteArray::new(py, bytes).into_any(),
+            ] {
+                let buffer = acquire_buffer(&owner, ptr::null_mut(), ffi::PyBUF_FULL_RO).unwrap();
+                // Moving through heap storage makes the export's original
+                // stack address unavailable, even in optimized builds.
+                let mut moved = vec![buffer];
+                let inline_shape = moved[0].metadata & INLINE_SHAPE != 0;
+                let inline_strides = moved[0].metadata & INLINE_STRIDES != 0;
+                moved[0].with_view(|view| {
+                    if inline_shape {
+                        assert_eq!(view.shape, &raw mut view.len);
+                    }
+
+                    if inline_strides {
+                        assert_eq!(view.strides, &raw mut view.itemsize);
+                    }
+
+                    assert_eq!(unsafe { *view.shape }, bytes.len() as isize);
+                    assert_eq!(unsafe { *view.strides }, 1);
+                    assert_ne!(unsafe { ffi::PyBuffer_IsContiguous(view, b'C' as _) }, 0);
+                });
+                // Move again after repairing the pointers. Every subsequent
+                // C API access must use the descriptor's current address.
+                let mut buffer = moved.pop().unwrap();
+                drop(moved);
+                assert_eq!(copy_buffer(py, &mut buffer).unwrap().as_bytes(), bytes);
+                drop(buffer);
+
+                if let Ok(owner) = owner.cast::<PyByteArray>() {
+                    owner.resize(1).unwrap();
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn copy_buffer_layouts() {
+    Python::initialize();
+    Python::attach(|py| {
+        let views = py
+            .eval(
+                c"[
+                    memoryview(b''),
+                    memoryview(b'abcdef')[::2],
+                    memoryview(b'abcdef')[::-1],
+                    memoryview(b'ab')[::2],
+                    memoryview(b'abcdef').cast('B', shape=[2, 3]),
+                    memoryview(b'abcd').cast('I', shape=[]),
+                    memoryview(__import__('array').array('H', [1, 2, 3])),
+                ]",
+                None,
+                None,
+            )
+            .unwrap();
+
+        for view in views.try_iter().unwrap() {
+            let view = view.unwrap();
+            let c_contiguous = view
+                .getattr("c_contiguous")
+                .unwrap()
+                .extract::<bool>()
+                .unwrap();
+            let expected = view.call_method0("tobytes").unwrap();
+            let expected = expected.cast::<PyBytes>().unwrap();
+            let mut buffer = acquire_buffer(&view, ptr::null_mut(), ffi::PyBUF_FULL_RO).unwrap();
+            assert_eq!(buffer.metadata & C_CONTIGUOUS != 0, c_contiguous);
+            assert_eq!(
+                copy_buffer(py, &mut buffer).unwrap().as_bytes(),
+                expected.as_bytes()
+            );
+        }
     });
 }
 

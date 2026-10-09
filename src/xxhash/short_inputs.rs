@@ -197,13 +197,11 @@ unsafe fn mix32_ptr(
     seed: u64,
 ) {
     acc[0] = acc[0].wrapping_add(unsafe { mix16_ptr(first, secret, seed) });
-    acc[0] ^= u64::from_le(unsafe { second.cast::<u64>().read_unaligned() }).wrapping_add(
-        u64::from_le(unsafe { second.add(8).cast::<u64>().read_unaligned() }),
-    );
+    acc[0] ^=
+        unsafe { read_u64_le_ptr(second, 0) }.wrapping_add(unsafe { read_u64_le_ptr(second, 8) });
     acc[1] = acc[1].wrapping_add(unsafe { mix16_ptr(second, secret.add(16), seed) });
-    acc[1] ^= u64::from_le(unsafe { first.cast::<u64>().read_unaligned() }).wrapping_add(
-        u64::from_le(unsafe { first.add(8).cast::<u64>().read_unaligned() }),
-    );
+    acc[1] ^=
+        unsafe { read_u64_le_ptr(first, 0) }.wrapping_add(unsafe { read_u64_le_ptr(first, 8) });
 }
 
 #[inline(always)]

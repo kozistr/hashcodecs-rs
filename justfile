@@ -19,17 +19,17 @@ docs-build:
     uv run --no-project --with-requirements {{ docs_requirements }} zensical build --strict
 
 format:
-    cargo fmt
+    cargo fmt --all
     uv run --frozen --no-sync ruff check --fix .
     uv run --frozen --no-sync ruff format .
 
 format-check:
-    cargo fmt --check
+    cargo fmt --all --check
     uv run --frozen --no-sync ruff format --check .
 
 lint:
     cargo clippy -- -D warnings
-    cargo clippy --all-targets --features python -- -D warnings
+    cargo clippy --workspace --all-targets --features python -- -D warnings
     uv run --frozen --no-sync ruff check .
 
 test:

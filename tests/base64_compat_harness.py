@@ -10,6 +10,10 @@ WarningFilter = Literal['always', 'error']
 ActionKind = Literal['normal', 'invalid', 'raise', 'replace', 'grow', 'shrink', 'reenter']
 
 
+class SentinelError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class Returned:
     type: type[object]

@@ -962,7 +962,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn memoryview_metadata() {
+    fn read_memoryview_metadata() {
         Python::initialize();
         Python::attach(|py| {
             let owner_data = vec![b'a'; 64 * 1024];
@@ -996,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn memoryview_slice_owner_and_offset() {
+    fn retain_memoryview_slice() {
         Python::initialize();
         Python::attach(|py| {
             let memoryview = py

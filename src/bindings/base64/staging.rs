@@ -374,7 +374,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scratch_buffer_layout() {
+    fn align_scratch_buffers() {
         assert_eq!(std::mem::align_of::<StagingBuffer>(), 32);
         assert_eq!(std::mem::offset_of!(StagingBuffer, bytes) % 32, 0);
 

@@ -115,3 +115,27 @@ pub(super) fn parse_altchars(
 
     Ok((altchars != *b"+/").then_some(altchars))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PythonSemantics;
+
+    #[test]
+    fn select_padding_continuation() {
+        for (version, expected) in [
+            ((3, 12, 99), false),
+            ((3, 13, 12), false),
+            ((3, 13, 13), true),
+            ((3, 14, 3), false),
+            ((3, 14, 4), true),
+            ((3, 15, 0), true),
+            ((4, 0, 0), true),
+        ] {
+            assert_eq!(
+                PythonSemantics::from_version(version).continues_after_padding,
+                expected,
+                "version={version:?}",
+            );
+        }
+    }
+}

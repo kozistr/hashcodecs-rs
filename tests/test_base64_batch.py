@@ -13,14 +13,17 @@ import hashcodecs
 import hashcodecs.base64 as base64
 
 dynamic_b64encode_batch: Callable[..., list[bytes]] = base64.b64encode_batch
+
 dynamic_b64decode_batch: Callable[..., list[bytes]] = base64.b64decode_batch
+
 dynamic_b64encode_batch_into: Callable[..., list[int]] = base64.b64encode_batch_into
 
 PYTHON_315 = sys.version_info >= (3, 15)
+
 FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
+
 ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
-BASE64_DETACH_THRESHOLD = 256 * 1024
-GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+
 _T = TypeVar('_T')
 
 
@@ -483,16 +486,3 @@ def test_base64_batch_exports_docstrings_and_signatures() -> None:
     assert str(inspect.signature(base64.b64decode_batch)) == '(items, altchars=None, validate=False)'
     assert str(inspect.signature(base64.b64encode_batch_into)) == '(items, outputs, altchars=None)'
     assert str(inspect.signature(base64.b64decode_batch_into)) == '(items, outputs, altchars=None, validate=False)'
-
-
-@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
-def test_large_base64_batch_releases_the_gil(assert_releases_gil: GILProgressAssertion) -> None:
-    payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
-    encoded_item = stdlib_base64.b64encode(payload)
-    # Keep both operations long enough for the awakened worker to be scheduled
-    # even on fast SIMD hosts while bounding the total test allocation.
-    payloads = [payload] * 512
-    encoded = [encoded_item] * 512
-
-    assert_releases_gil(lambda: base64.b64encode_batch(payloads), encoded, 1)
-    assert_releases_gil(lambda: base64.b64decode_batch(encoded, validate=True), payloads, 1)

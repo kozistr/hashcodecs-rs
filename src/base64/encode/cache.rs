@@ -89,7 +89,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exact_cache_geometry() {
+    fn calculate_cache_size() {
         // 64-byte lines, one partition, eight ways, and 1,024 sets: 512 KiB.
         let ebx = 63 | (7 << 22);
         assert_eq!(deterministic_cache_bytes(ebx, 1023), 512 << 10);
@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn topology_fallback() {
+    fn fall_back_to_extended_topology() {
         assert_eq!(
             private_cache_from_leaves(4, 0x8000_001d, |leaf| {
                 assert_eq!(leaf, 4);
@@ -116,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn streaming_store_requirements() {
+    fn select_streaming_stores() {
         let mut output = [0_u8; 32];
         let offset = output.as_mut_ptr().align_offset(16);
         let aligned = unsafe { output.as_mut_ptr().add(offset) };

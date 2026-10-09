@@ -39,11 +39,6 @@ on:
       ref:
         required: false
         type: string
-      full_check:
-        description: Run safety checks outside pull requests
-        required: false
-        type: boolean
-        default: false
       skip_coverage_upload:
         required: false
         type: boolean
@@ -60,26 +55,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rust_msrv:
-    name: Rust / MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-
-      - name: Set up minimum supported Rust
-        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # stable
-        with:
-          toolchain: 1.94.0
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-
-      - name: Check all targets and features on MSRV
-        run: cargo check --locked --all-targets --all-features
-
   rust_quality:
     name: Rust / Quality
     runs-on: ubuntu-latest
@@ -106,6 +81,11 @@ jobs:
 
       - name: Lint all Rust targets
         run: cargo clippy --all-targets --features python -- -D warnings
+
+      - name: Check all targets and features on MSRV
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          cargo +1.94.0 check --locked --all-targets --all-features
 
       - name: Install Rust coverage tool
         uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad # v2.85.10
@@ -285,7 +265,6 @@ jobs:
 
   rust_sanitizers:
     name: Rust / Safety / ${{ matrix.name }}
-    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -315,7 +294,6 @@ jobs:
 
   rust_safety_kani:
     name: Rust / Safety / Kani
-    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -328,7 +306,6 @@ jobs:
 
   rust_safety_miri:
     name: Rust / Safety / Miri
-    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -349,7 +326,6 @@ jobs:
 
   rust_safety_fuzz:
     name: Rust / Safety / Fuzz / ${{ matrix.target }}
-    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true

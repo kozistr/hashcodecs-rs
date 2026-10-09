@@ -39,7 +39,6 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.sha }}
-      full_check: true
       skip_coverage_upload: true
 
   prepare:

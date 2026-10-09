@@ -203,7 +203,7 @@ impl<const N: usize> Binding<N> {
                     nargs,
                     keywords,
                     self.name.as_ptr(),
-                    self.parser.parameters.map(CStr::as_ptr),
+                    self.parser.parameters,
                     self.parser.max_positional,
                     self.parser.required,
                 ) else {

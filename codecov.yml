@@ -1,3 +1,6 @@
+ignore:
+  - "**/avx512.rs"
+
 coverage:
   status:
     project:

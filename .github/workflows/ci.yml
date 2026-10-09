@@ -13,6 +13,7 @@ on:
       - "**/Cargo.lock"
       - pyproject.toml
       - uv.lock
+      - codecov.yml
       - hashcodecs/py.typed
       - "fuzz/corpus/**"
       - ".cargo/**"
@@ -29,6 +30,7 @@ on:
       - "**/Cargo.lock"
       - pyproject.toml
       - uv.lock
+      - codecov.yml
       - hashcodecs/py.typed
       - "fuzz/corpus/**"
       - ".cargo/**"
@@ -153,7 +155,7 @@ jobs:
           uv pip install --python .venv --reinstall --no-index --find-links coverage-dist hashcodecs
           uv run --frozen --no-sync pytest tests
           cargo test --release --features python --lib
-          cargo llvm-cov report --release --cobertura --output-path rust-bindings-coverage.xml
+          cargo llvm-cov report --release --ignore-filename-regex 'avx512\.rs$' --cobertura --output-path rust-bindings-coverage.xml
 
       - name: Upload Rust binding coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}

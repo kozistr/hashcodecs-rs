@@ -1,12 +1,128 @@
 import json
 import platform
 import runpy
+import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from packaging.tags import Tag, mac_platforms
 
 CustomBuildHook = runpy.run_path(str(Path(__file__).parents[1] / 'hatch_build.py'))['CustomBuildHook']
+
+
+@pytest.mark.parametrize('base_executable', ['python', None])
+def test_isolated_builds_reuse_interpreter_and_dependency_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, base_executable: str | None
+) -> None:
+    monkeypatch.delenv('CARGO_TARGET_DIR', raising=False)
+    monkeypatch.delenv('CARGO_LLVM_COV_TARGET_DIR', raising=False)
+    globals_ = CustomBuildHook.initialize.__globals__
+    monkeypatch.setitem(globals_, 'sys_tags', lambda: iter([Tag('cp314', 'cp314', 'win_amd64')]))
+    interpreter = tmp_path / 'python'
+    monkeypatch.setattr(sys, '_base_executable', str(interpreter) if base_executable else None)
+    environments = []
+    artifact = tmp_path / 'hashcodecs.dll'
+    messages = json.dumps(
+        {
+            'reason': 'compiler-artifact',
+            'target': {'name': 'hashcodecs', 'crate_types': ['cdylib']},
+            'filenames': [str(artifact)],
+        }
+    )
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        assert command[:2] == ['cargo', 'rustc']
+        assert command[command.index('--crate-type') + 1] == 'cdylib'
+        assert '--lib' in command
+        assert '--release' in command
+        environments.append(kwargs['env'])
+        return subprocess.CompletedProcess(command, 0, stdout=messages)
+
+    monkeypatch.setattr(subprocess, 'run', run)
+    monkeypatch.setattr(CustomBuildHook, '_wheel_tag', staticmethod(lambda _extension: 'cp314-cp314-win_amd64'))
+    hook = CustomBuildHook(str(tmp_path), {}, None, None, str(tmp_path / 'dist'), 'wheel')
+    for name in ['isolated-first', 'isolated-second']:
+        monkeypatch.setattr(
+            sys, 'executable', str(tmp_path / name / 'python') if base_executable else str(interpreter)
+        )
+        build_data: dict[str, Any] = {}
+        hook.initialize('standard', build_data)
+        assert build_data['pure_python'] is False
+        assert str(artifact) in build_data['force_include']
+
+    assert environments[0]['PYO3_PYTHON'] == environments[1]['PYO3_PYTHON'] == str(interpreter.resolve())
+    assert (
+        environments[0]['CARGO_TARGET_DIR']
+        == environments[1]['CARGO_TARGET_DIR']
+        == str(tmp_path / 'target' / 'hatch' / 'cp314-cp314-win_amd64')
+    )
+
+
+def test_python_abis_use_separate_output_directories(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv('CARGO_TARGET_DIR', raising=False)
+    monkeypatch.delenv('CARGO_LLVM_COV_TARGET_DIR', raising=False)
+    directories = []
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        directory = Path(kwargs['env']['CARGO_TARGET_DIR'])
+        directories.append(directory)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    'reason': 'compiler-artifact',
+                    'target': {'name': 'hashcodecs', 'crate_types': ['cdylib']},
+                    'filenames': [str(directory / 'release' / 'hashcodecs.dll')],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(subprocess, 'run', run)
+    hook = CustomBuildHook(str(tmp_path), {}, None, None, str(tmp_path / 'dist'), 'wheel')
+    for tag in [Tag('cp314', 'cp314', 'win_amd64'), Tag('cp314', 'cp314t', 'win_amd64')]:
+        monkeypatch.setitem(CustomBuildHook.initialize.__globals__, 'sys_tags', lambda tag=tag: iter([tag]))
+        build_data: dict[str, Any] = {}
+        hook.initialize('standard', build_data)
+        extension = directories[-1] / 'release' / 'hashcodecs.dll'
+        assert str(extension) in build_data['force_include']
+
+    assert directories[0] != directories[1]
+
+
+@pytest.mark.parametrize(
+    ('target', 'coverage_target', 'expected'),
+    [
+        ('custom-target', 'coverage-target', 'custom-target'),
+        (None, 'coverage-target', 'coverage-target'),
+        ('', 'coverage-target', 'coverage-target'),
+        ('absolute', None, 'absolute'),
+    ],
+)
+def test_configured_target_directory_is_preserved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, target: str | None, coverage_target: str | None, expected: str
+) -> None:
+    if target == 'absolute':
+        target = str(tmp_path / target)
+    for name, value in [('CARGO_TARGET_DIR', target), ('CARGO_LLVM_COV_TARGET_DIR', coverage_target)]:
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        assert kwargs['env']['CARGO_TARGET_DIR'] == str(tmp_path / expected)
+        return subprocess.CompletedProcess(command, 0, stdout='')
+
+    monkeypatch.setattr(subprocess, 'run', run)
+    monkeypatch.setattr(
+        CustomBuildHook, '_cdylib_artifact', staticmethod(lambda _messages: tmp_path / 'hashcodecs.so')
+    )
+    monkeypatch.setattr(CustomBuildHook, '_wheel_tag', staticmethod(lambda _extension: 'cp314-cp314-win_amd64'))
+    hook = CustomBuildHook(str(tmp_path), {}, None, None, str(tmp_path / 'dist'), 'wheel')
+    hook.initialize('standard', {})
 
 
 def cargo_message(rendered: str | None) -> str:

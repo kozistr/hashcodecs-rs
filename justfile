@@ -57,7 +57,7 @@ check: format-check lint test test-build docs-build
 full-check: check test-release coverage verify-sdist
 
 build:
-    uv build
+    uv build --sdist --wheel
 
 bench-base64:
     cargo bench --manifest-path benches/Cargo.toml --bench base64

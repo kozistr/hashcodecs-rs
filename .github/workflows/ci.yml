@@ -60,6 +60,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rust_msrv:
+    name: Rust / MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up minimum supported Rust
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # stable
+        with:
+          toolchain: 1.93.0
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Check all targets and features on MSRV
+        run: cargo check --locked --all-targets --all-features
+
   rust_quality:
     name: Rust / Quality
     runs-on: ubuntu-latest

@@ -4,13 +4,46 @@ run-name: CI / ${{ github.ref_name }}
 on:
   pull_request:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - pyproject.toml
+      - uv.lock
+      - hashcodecs/py.typed
+      - "fuzz/corpus/**"
+      - ".cargo/**"
+      - rust-toolchain
+      - rust-toolchain.toml
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - pyproject.toml
+      - uv.lock
+      - hashcodecs/py.typed
+      - "fuzz/corpus/**"
+      - ".cargo/**"
+      - rust-toolchain
+      - rust-toolchain.toml
   workflow_call:
     inputs:
       ref:
         required: false
         type: string
+      full_check:
+        description: Run safety checks outside pull requests
+        required: false
+        type: boolean
+        default: false
       skip_coverage_upload:
         required: false
         type: boolean
@@ -232,7 +265,7 @@ jobs:
 
   rust_sanitizers:
     name: Rust / Safety / ${{ matrix.name }}
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -262,7 +295,7 @@ jobs:
 
   rust_safety_kani:
     name: Rust / Safety / Kani
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -275,7 +308,7 @@ jobs:
 
   rust_safety_miri:
     name: Rust / Safety / Miri
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -296,7 +329,7 @@ jobs:
 
   rust_safety_fuzz:
     name: Rust / Safety / Fuzz / ${{ matrix.target }}
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.full_check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true

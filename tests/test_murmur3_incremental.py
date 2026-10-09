@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -78,3 +79,20 @@ def test_hasher_rejects_invalid_inputs(constructor: Callable[..., Any]) -> None:
         constructor(seed=-1)
     with pytest.raises(TypeError):
         constructor().update([1, 2, 3])
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer callbacks')
+@pytest.mark.parametrize('constructor', [murmur3.murmur3_x86_32, murmur3.murmur3_x86_128, murmur3.murmur3_x64_128])
+def test_reject_reentrant_updates(constructor: Callable[..., Any]) -> None:
+    hasher = constructor(b'prefix')
+
+    class Reentrant:
+        def __buffer__(self, flags: int) -> memoryview:
+            with pytest.raises(RuntimeError, match='borrowed'):
+                hasher.update(b'ignored')
+            with pytest.raises(RuntimeError, match='borrowed'):
+                hasher.digest()
+            return memoryview(b'-suffix')
+
+    hasher.update(Reentrant())
+    assert hasher.digest() == constructor(b'prefix-suffix').digest()

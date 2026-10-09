@@ -586,6 +586,41 @@ mod tests {
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]
+    fn bound_stack_inputs() {
+        Python::initialize();
+        Python::attach(|py| {
+            let items = PyList::new(py, [PyBytes::new(py, b""), PyBytes::new(py, b"")]).unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<1, ()>(|_| panic!("oversized batch must not borrow stack inputs"))
+                    .is_none()
+            );
+            let items = PyList::new(
+                py,
+                std::iter::repeat_n(PyBytes::new(py, b""), BATCH_DETACH_ITEMS),
+            )
+            .unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<BATCH_DETACH_ITEMS, ()>(|_| panic!(
+                        "detached batch must retain its inputs"
+                    ))
+                    .is_none()
+            );
+            let items = PyList::new(py, [PyBytes::new(py, &vec![0; BATCH_DETACH_BYTES])]).unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<1, ()>(|_| panic!("detached batch must retain its inputs"))
+                    .is_none()
+            );
+        });
+    }
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    #[test]
     fn retain_mutated_inputs() {
         Python::initialize();
         Python::attach(|py| {

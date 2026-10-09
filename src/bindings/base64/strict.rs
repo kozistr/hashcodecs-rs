@@ -201,3 +201,6 @@ pub(super) fn translate_altchars(
     }));
     Ok(Some(translated))
 }
+
+#[cfg(test)]
+mod tests;

@@ -81,6 +81,7 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     encoded = b'YWJj'
     for value in (payload, bytearray(payload), memoryview(payload)):
         assert base64.b64encode(value) == encoded
+        assert base64.standard_b64encode(value) == encoded
     for value in (encoded, bytearray(encoded), memoryview(encoded), encoded.decode('ascii')):
         assert base64.b64decode(value, validate=True) == payload
 

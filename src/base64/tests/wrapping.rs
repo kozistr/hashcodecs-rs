@@ -1,7 +1,7 @@
 use crate::base64::backend::{self, Backend};
 use crate::base64::encode as encode_backend;
 use crate::base64::runtime_dispatch::{
-    encode_custom_with_backend, encode_wrapped_custom_with_backend,
+    encode_custom_with_backend, encode_wrapped_custom_with_backend, encode_wrapped_with_backend,
 };
 use crate::base64::{b64encode, b64encode_urlsafe, encoded_len};
 
@@ -142,6 +142,10 @@ fn preserve_custom_bounds() {
         unsafe {
             encode_wrapped_custom_with_backend(&input[..16], &mut output, unavailable, &alphabet)
         },
+        0,
+    );
+    assert_eq!(
+        unsafe { encode_wrapped_with_backend(&input[..16], &mut output, unavailable, false) },
         0,
     );
     assert_eq!(

@@ -53,7 +53,7 @@ DECODE_ACTION_CASES = (
 
 @pytest.mark.parametrize('urlsafe', [False, True])
 @pytest.mark.parametrize('reusable', [False, True])
-@pytest.mark.parametrize('translated', [b'ZGVm', 'ZGVm'])
+@pytest.mark.parametrize('translated', [b'ZGVm', 'ZGVm', 'é'])
 def test_decode_dispatches_translate_for_bytes_subclasses(
     urlsafe: bool, reusable: bool, translated: bytes | str
 ) -> None:
@@ -62,6 +62,22 @@ def test_decode_dispatches_translate_for_bytes_subclasses(
             return translated
 
     source = Source(b'YWJj')
+    if translated == 'é':
+        reference_function = stdlib_base64.urlsafe_b64decode if urlsafe else stdlib_base64.b64decode
+        reference_args = (source,) if urlsafe else (source, b'-_')
+        with pytest.raises(ValueError, match='ASCII') as reference:
+            reference_function(*reference_args)
+        function = getattr(base64, f'{"urlsafe_" if urlsafe else ""}b64decode{"_into" if reusable else ""}')
+        output = bytearray(b'....')
+        args = (source, output) if reusable else (source,)
+        if not urlsafe:
+            args += (b'-_',)
+        with pytest.raises(type(reference.value)) as actual:
+            function(*args)
+        assert str(actual.value) == str(reference.value)
+        assert output == b'....'
+        return
+
     expected = stdlib_base64.urlsafe_b64decode(source) if urlsafe else stdlib_base64.b64decode(source, b'-_')
     if not reusable:
         function = cast(Callable[..., bytes], base64.urlsafe_b64decode if urlsafe else base64.b64decode)
@@ -76,6 +92,45 @@ def test_decode_dispatches_translate_for_bytes_subclasses(
         written = base64.b64decode_into(source, output, b'-_')
     assert written == len(expected)
     assert output == expected
+
+
+@pytest.mark.parametrize('urlsafe', [False, True])
+@pytest.mark.parametrize('reusable', [False, True])
+@pytest.mark.parametrize(
+    'hook',
+    [
+        'translate',
+        pytest.param('contains', marks=pytest.mark.skipif(not PYTHON_315, reason='requires legacy-symbol warnings')),
+    ],
+)
+def test_propagate_input_errors(urlsafe: bool, reusable: bool, hook: str) -> None:
+    failure = SentinelError(hook)
+
+    class Source(bytes):
+        def __contains__(self, item: object) -> bool:
+            if hook == 'contains':
+                raise failure
+            return super().__contains__(item)
+
+        def translate(self, table: Any, delete: Any = b'') -> bytes:
+            raise failure
+
+    source = Source(b'-_8=')
+    reference = stdlib_base64.urlsafe_b64decode if urlsafe else stdlib_base64.b64decode
+    args = (source,) if urlsafe else (source, b'-_')
+    with pytest.raises(SentinelError) as expected:
+        reference(*args)
+    assert expected.value is failure
+
+    output = bytearray(b'....')
+    function = getattr(base64, f'{"urlsafe_" if urlsafe else ""}b64decode{"_into" if reusable else ""}')
+    args = (source, output) if reusable else (source,)
+    if not urlsafe:
+        args += (b'-_',)
+    with pytest.raises(SentinelError) as actual:
+        function(*args)
+    assert actual.value is failure
+    assert output == b'....'
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

@@ -51,11 +51,27 @@ def _decode_result(function: Callable[..., bytes], encoded: bytes, validate: boo
 
 
 @pytest.mark.parametrize(
-    'altchars', [b'@#', b'@@', b'==', b'=_', b'@=', b'AZ', b'/+', b'+@', b'++', b'//', b'\0\xff', b'\r\n']
+    'altchars',
+    [
+        pytest.param(None, id='standard'),
+        pytest.param(b'-_', id='urlsafe'),
+        b'@#',
+        b'@@',
+        b'==',
+        b'=_',
+        b'@=',
+        b'AZ',
+        b'/+',
+        b'+@',
+        b'++',
+        b'//',
+        b'\0\xff',
+        b'\r\n',
+    ],
 )
 @pytest.mark.parametrize('length', [15, 16, 17, 31, 32, 33, 63, 64, 65, 4095, 4096, 4097, 8192, 65536, 262145])
-def test_custom_lenient_symbol_runs(altchars: bytes, length: int) -> None:
-    symbols = b'AZaz09+/' + altchars
+def test_decode_symbol_runs(altchars: bytes | None, length: int) -> None:
+    symbols = b'AZaz09+/' + (altchars or b'')
     run = (symbols * (length // len(symbols) + 1))[:length]
     for prefix in (b'', b'!A!', b'!AA!', b'!AAA!'):
         for tail in (b'', b'=', b'==', b'===', b'!AA==AAAA==', b'A=!=A==AAAA', b'!AAAA', b'!A'):

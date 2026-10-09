@@ -386,4 +386,32 @@ mod tests {
             assert_eq!(offset % 32, 0);
         }
     }
+
+    #[test]
+    fn reject_oversized_allocations() {
+        use pyo3::exceptions::PyOverflowError;
+
+        Python::initialize();
+        Python::attach(|py| {
+            for capacity in [isize::MAX as usize, usize::MAX] {
+                let error = BytesWriter::new(py, capacity).err().unwrap();
+                assert!(
+                    error.is_instance_of::<PyMemoryError>(py)
+                        || (capacity == isize::MAX as usize
+                            && error.is_instance_of::<PyOverflowError>(py)),
+                    "{error}"
+                );
+                let error =
+                    unsafe { pybytes_with_len(py, capacity, |_| panic!("allocation must fail")) }
+                        .unwrap_err();
+                assert!(
+                    error.is_instance_of::<PyMemoryError>(py)
+                        || (capacity == isize::MAX as usize
+                            && error.is_instance_of::<PyOverflowError>(py)),
+                    "{error}"
+                );
+                assert!(!PyErr::occurred(py));
+            }
+        });
+    }
 }

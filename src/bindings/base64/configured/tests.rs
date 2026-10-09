@@ -10,6 +10,7 @@ use crate::bindings::base64::{
 
 mod lenient;
 mod scan;
+mod snapshots;
 mod staging;
 mod strict;
 

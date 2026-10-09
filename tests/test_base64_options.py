@@ -14,6 +14,7 @@ stdlib_b64encode: Callable[..., bytes] = stdlib_base64.b64encode
 
 stdlib_b64decode: Callable[..., bytes] = stdlib_base64.b64decode
 
+
 dynamic_b64encode: Callable[..., bytes] = base64.b64encode
 
 dynamic_b64decode: Callable[..., bytes] = base64.b64decode
@@ -25,6 +26,17 @@ PYTHON_315 = sys.version_info >= (3, 15)
 BASE64_ALPHABET = getattr(
     binascii, 'BASE64_ALPHABET', b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 )
+
+
+@pytest.mark.skipif(not PYTHON_315, reason='requires configurable ignored symbols')
+def test_ignore_replaced_symbols() -> None:
+    encoded = b'+@/#8='
+    expected = stdlib_b64decode(encoded, b'@#', ignorechars=b'+/')
+    assert expected == b'\xfb\xff'
+    assert base64.b64decode(encoded, b'@#', ignorechars=b'+/') == expected
+    output = bytearray(b'....')
+    assert base64.b64decode_into(encoded, output, b'@#', ignorechars=b'+/') == len(expected)
+    assert output == expected + b'..'
 
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')

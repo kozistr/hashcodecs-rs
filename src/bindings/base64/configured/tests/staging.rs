@@ -60,6 +60,28 @@ fn stage_partial_blocks() {
     let mut validator = StagingValidator::new(None);
     assert_eq!(validator.push(b"AA?"), Some(()));
     assert_eq!(validator.finish(), None);
+
+    let mut validator = StagingValidator::new(None);
+    assert_eq!(
+        validator.push(&symbols[..CONFIGURED_STAGING_CAPACITY]),
+        Some(())
+    );
+    assert_eq!(validator.finish(), Some(()));
+}
+
+#[test]
+fn flush_staged_values() {
+    let symbols = CONFIGURED_STAGING_CAPACITY + 4;
+    let required = symbols / 4 * 3;
+    let mut output = vec![0xa5; required + 2];
+    let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
+    for _ in 0..symbols {
+        assert_eq!(writer.push_value::<true>(0), Some(()));
+    }
+    assert_eq!(writer.finish::<true>(), Some(required));
+    assert_eq!(output[0], 0xa5);
+    assert!(output[1..=required].iter().all(|&byte| byte == 0));
+    assert_eq!(output[required + 1], 0xa5);
 }
 
 #[test]

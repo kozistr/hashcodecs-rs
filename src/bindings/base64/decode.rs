@@ -1124,3 +1124,6 @@ fn strict_base64_310(input: &[u8]) -> bool {
         && input[padding..].len() <= 2
         && input[padding..].iter().all(|&byte| byte == b'=')
 }
+
+#[cfg(test)]
+mod tests;

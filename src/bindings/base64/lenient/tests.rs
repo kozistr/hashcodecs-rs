@@ -1,4 +1,42 @@
 use super::*;
+use crate::bindings::compatibility::python_semantics;
+
+#[test]
+fn snapshot_mutable_input() {
+    Python::initialize();
+    Python::attach(|py| {
+        let source = PyByteArray::new(py, b"Y!WJj");
+        let input = BytesLike::ByteArray(&source);
+        let semantics = python_semantics(py);
+        let output = try_decode_lenient(
+            py,
+            &input,
+            None,
+            Padding::Padded,
+            &STANDARD_LENIENT_TABLE,
+            semantics,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(output.as_bytes(), b"abc");
+        assert_eq!(
+            try_decode_lenient_into(
+                &input,
+                &source,
+                None,
+                Padding::Padded,
+                &STANDARD_LENIENT_TABLE,
+                semantics,
+            )
+            .unwrap(),
+            Ok(3)
+        );
+        with_bytearray(&source, || {
+            assert_eq!(unsafe { source.as_bytes() }, b"abcJj")
+        });
+        assert_eq!(output.as_bytes(), b"abc");
+    });
+}
 
 #[test]
 fn check_capacity_bounds() {

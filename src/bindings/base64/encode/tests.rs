@@ -209,3 +209,61 @@ fn wrap_short_custom_inputs() {
     assert_eq!(&actual[..expected.len()], expected);
     assert_eq!(actual[expected.len()], 0xa5);
 }
+
+#[test]
+fn wrap_short_standard_inputs() {
+    let mut output = [0xa5; 10];
+    unsafe { encode_wrapped_to_ptr_cached(b"abcde", output.as_mut_ptr(), false, true, 4) };
+    assert_eq!(&output[..9], b"YWJj\nZGU=");
+    assert_eq!(output[9], 0xa5);
+}
+
+#[test]
+fn wrap_aliased_input() {
+    Python::initialize();
+    Python::attach(|py| {
+        let payload = vec![0xfb; DIRECT_WRAPPED_INPUT_THRESHOLD + 1];
+        let contiguous = ::base64::engine::general_purpose::STANDARD.encode(&payload);
+        let expected = contiguous
+            .as_bytes()
+            .chunks(76)
+            .collect::<Vec<_>>()
+            .join(&b'\n');
+        let output = PyByteArray::new(py, &vec![0xa5; expected.len() + 1]);
+        with_bytearray(&output, || unsafe {
+            output.as_bytes_mut()[..payload.len()].copy_from_slice(&payload)
+        });
+        let view = pyo3::types::PyMemoryView::from(output.as_any()).unwrap();
+        let slice = pyo3::types::PySlice::new(py, 0, payload.len() as isize, 1);
+        let view = view.get_item(slice).unwrap();
+        let input = contiguous_bytes_like_exported(&view, "s").unwrap();
+        assert_eq!(
+            encode_into(&input, &output, &PreparedEncoder::new(None, true, Some(76))).unwrap(),
+            expected.len()
+        );
+        with_bytearray(&output, || {
+            assert_eq!(&unsafe { output.as_bytes() }[..expected.len()], expected);
+            assert_eq!(unsafe { output.as_bytes() }[expected.len()], 0xa5);
+        });
+    });
+}
+
+#[test]
+fn parse_mutable_alphabets() {
+    Python::initialize();
+    Python::attach(|py| {
+        let alphabet = PyByteArray::new(py, STANDARD_ALPHABET);
+        let (encoder, guard) = parse_b64encode_alphabet(alphabet.as_any()).unwrap();
+        let mut output = [0; 4];
+        let encoder = PreparedEncoder::with_alphabet(encoder, true, None);
+        unsafe { encoder.encode_to_ptr(b"abc", output.as_mut_ptr()) };
+        assert_eq!(&output, b"YWJj");
+        assert_eq!(guard.stable_bytes(), STANDARD_ALPHABET);
+        drop(guard);
+        let altchars = PyByteArray::new(py, b"@#");
+        assert_eq!(
+            parse_legacy_b64encode_altchars(altchars.as_any()).unwrap(),
+            Some(*b"@#")
+        );
+    });
+}

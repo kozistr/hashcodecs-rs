@@ -64,6 +64,17 @@ fn match_x86_scans() {
             .count()
     );
     let mut symbols: Vec<u8> = b"A+/_".iter().copied().cycle().take(97).collect();
+    for length in [0, 1, 15, 16, 17, 31, 32, 97] {
+        assert_eq!(
+            unsafe { x86::symbol_prefix_sse2(&symbols[..length], Some(*b"-_")) },
+            length
+        );
+    }
+    symbols[96] = b'!';
+    assert_eq!(
+        unsafe { x86::symbol_prefix_sse2(&symbols, Some(*b"-_")) },
+        96
+    );
     symbols[47] = b'!';
     assert_eq!(
         unsafe { x86::symbol_prefix_sse2(&symbols, Some(*b"-_")) },

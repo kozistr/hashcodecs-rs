@@ -107,10 +107,70 @@ mod tests {
     fn convert_callback_panics() {
         Python::initialize();
         Python::attach(|py| {
-            let result = catch_unwind_callback(py, || panic!("callback panic"));
-            assert!(result.is_null());
-            assert!(PyErr::occurred(py));
-            unsafe { ffi::PyErr_Clear() };
+            for (payload, expected) in [
+                (0, "callback panic"),
+                (1, "owned panic"),
+                (2, "panic from Rust code"),
+            ] {
+                let result = catch_unwind_callback(py, || match payload {
+                    0 => panic!("callback panic"),
+                    1 => std::panic::panic_any(String::from("owned panic")),
+                    _ => std::panic::panic_any(42_u8),
+                });
+                assert!(result.is_null());
+                let mut error_type = ptr::null_mut();
+                let mut error_value = ptr::null_mut();
+                let mut traceback = ptr::null_mut();
+                // PyErr::fetch resumes PanicException; inspect and clear the C error instead.
+                #[allow(deprecated)]
+                unsafe {
+                    ffi::PyErr_Fetch(
+                        &raw mut error_type,
+                        &raw mut error_value,
+                        &raw mut traceback,
+                    );
+                }
+                let error_type = unsafe { Bound::<PyAny>::from_owned_ptr(py, error_type) };
+                let error_value = unsafe { Bound::<PyAny>::from_owned_ptr(py, error_value) };
+                let _traceback = unsafe { Bound::<PyAny>::from_owned_ptr_or_opt(py, traceback) };
+                assert!(error_type.is(py.get_type::<PanicException>()));
+                assert_eq!(error_value.str().unwrap().to_str().unwrap(), expected);
+                assert!(!PyErr::occurred(py));
+            }
+        });
+    }
+
+    #[test]
+    fn detach_retained_views() {
+        Python::initialize();
+        Python::attach(|py| {
+            let view = py
+                .eval(c"memoryview(b'x' + b'a' * 65536 + b'y')[1:-1]", None, None)
+                .unwrap();
+            let result = with_function_bytes(py, view.as_ptr(), 1, |input| input.to_vec()).unwrap();
+            assert_eq!(result, vec![b'a'; 65536]);
+        });
+    }
+
+    #[test]
+    fn reject_invalid_methods() {
+        use crate::bindings::schema::base64::{BINDING_COUNT, register_all};
+        use pyo3::exceptions::PyValueError;
+
+        Python::initialize();
+        Python::attach(|py| {
+            let mut methods = [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];
+            let init = Once::new();
+            init.call_once(|| unsafe {
+                register_all(methods.as_mut_ptr(), (3, 15));
+            });
+            methods[0].ml_flags |= ffi::METH_CLASS;
+            let module = PyModule::new(py, "invalid_methods").unwrap();
+            let error = unsafe { add_methods(&module, methods.as_mut_ptr(), &init, register_all) }
+                .unwrap_err();
+            assert!(error.is_instance_of::<PyValueError>(py));
+            assert!(!PyErr::occurred(py));
+            assert!(!module.hasattr("b64encode").unwrap());
         });
     }
 }

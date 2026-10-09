@@ -45,7 +45,7 @@ pub(super) fn with_function_bytes<T: Send>(
     })
 }
 
-pub(super) unsafe fn return_function_result(
+pub(super) fn return_function_result(
     py: Python<'_>,
     result: PyResult<*mut ffi::PyObject>,
 ) -> *mut ffi::PyObject {

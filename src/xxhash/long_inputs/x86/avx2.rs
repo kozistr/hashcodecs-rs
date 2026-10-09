@@ -21,9 +21,7 @@ pub(super) struct Accumulator {
 }
 
 #[target_feature(enable = "avx2")]
-/// # Safety
-/// The caller must have detected AVX2 support.
-pub(in crate::xxhash::long_inputs) unsafe fn init_secret(seed: u64) -> Secret {
+pub(in crate::xxhash::long_inputs) fn init_secret(seed: u64) -> Secret {
     let negative = 0_u64.wrapping_sub(seed);
     let delta = _mm256_set_epi64x(negative as i64, seed as i64, negative as i64, seed as i64);
     let mut output = [0_u8; 192];
@@ -72,7 +70,7 @@ unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(super) unsafe fn initial() -> Accumulator {
+pub(super) fn initial() -> Accumulator {
     let initial = AlignedAccumulator(initial_accumulator());
 
     Accumulator {
@@ -101,7 +99,7 @@ pub(super) unsafe fn scramble_registers(acc: &mut Accumulator, secret: *const u8
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
+fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
     unsafe {
         _mm256_store_si256(output.0.as_mut_ptr().cast(), acc.low);
         _mm256_store_si256(output.0.as_mut_ptr().add(4).cast(), acc.high);
@@ -110,17 +108,17 @@ unsafe fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(super) unsafe fn finish(acc: Accumulator) -> [u64; 8] {
+pub(super) fn finish(acc: Accumulator) -> [u64; 8] {
     let mut output = AlignedAccumulator([0; 8]);
 
-    unsafe { store(acc, &mut output) };
+    store(acc, &mut output);
 
     output.0
 }
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn reduce_chains(
+fn reduce_chains(
     mut acc0: Accumulator,
     acc1: Accumulator,
     acc2: Accumulator,
@@ -194,7 +192,7 @@ unsafe fn accumulate_block_chains(
         };
     }
 
-    unsafe { reduce_chains(acc0, acc1, acc2, acc3) }
+    reduce_chains(acc0, acc1, acc2, acc3)
 }
 
 #[inline]
@@ -256,24 +254,20 @@ unsafe fn accumulate_tail_chains(
 
     let last_secret = unsafe { secret.add(121) };
 
-    unsafe {
-        accumulate_registers(&mut acc3, last, last_secret);
+    unsafe { accumulate_registers(&mut acc3, last, last_secret) };
 
-        reduce_chains(acc0, acc1, acc2, acc3)
-    }
+    reduce_chains(acc0, acc1, acc2, acc3)
 }
 
 #[target_feature(enable = "avx2")]
-/// # Safety
-/// The caller must have detected AVX2 support.
-pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
+pub(in crate::xxhash::long_inputs) fn accumulate(
     input: LongInput<'_>,
     secret: &Secret,
 ) -> [u64; 8] {
     let data = input.as_bytes();
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);
-    let mut acc = unsafe { initial() };
+    let mut acc = initial();
 
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
@@ -304,5 +298,5 @@ pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
         unsafe { accumulate_registers(&mut acc, last, secret_ptr) };
     }
 
-    unsafe { finish(acc) }
+    finish(acc)
 }

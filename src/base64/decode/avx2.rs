@@ -89,7 +89,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 }
 
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
+pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
 
     while source + 128 <= input.len() {

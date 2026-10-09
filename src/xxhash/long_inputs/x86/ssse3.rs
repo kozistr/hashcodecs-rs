@@ -60,9 +60,7 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
 }
 
 #[target_feature(enable = "ssse3")]
-/// # Safety
-/// The caller must have detected SSSE3 support.
-pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
+pub(in crate::xxhash::long_inputs) fn accumulate(
     input: LongInput<'_>,
     secret: &Secret,
 ) -> [u64; 8] {

@@ -9,7 +9,7 @@ use crate::murmur3::dispatch::Backend;
 use crate::murmur3::primitives::read_u32_le;
 
 #[target_feature(enable = "avx2")]
-unsafe fn mix_x86_32_body_avx2(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
+fn mix_x86_32_body_avx2(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     let input = blocks.as_bytes();
     let mut value = *hash;
     let mut offset = 0;
@@ -65,7 +65,7 @@ fn premix_avx2(blocks: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn mix_x86_32_body_sse41(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
+fn mix_x86_32_body_sse41(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     let input = blocks.as_bytes();
     let mut value = *hash;
     let mut offset = 0;

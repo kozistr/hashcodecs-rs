@@ -3,7 +3,7 @@ use std::arch::aarch64::*;
 use super::scalar::{is_lenient_symbol, translate_scalar};
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+pub(super) fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     let [extra0, extra1] = altchars.unwrap_or(*b"AA");
     let mut source = 0;
     let mut symbols = 0;
@@ -42,7 +42,7 @@ pub(super) unsafe fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> us
 }
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn symbol_prefix(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+pub(super) fn symbol_prefix(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     let [extra0, extra1] = altchars.unwrap_or(*b"AA");
     let mut source = 0;
     while source + 16 <= input.len() {
@@ -85,13 +85,7 @@ pub(super) unsafe fn symbol_prefix(input: &[u8], altchars: Option<[u8; 2]>) -> u
 }
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn translate(
-    input: &mut [u8],
-    source0: u8,
-    target0: u8,
-    source1: u8,
-    target1: u8,
-) {
+pub(super) fn translate(input: &mut [u8], source0: u8, target0: u8, source1: u8, target1: u8) {
     let mut offset = 0;
     while offset + 16 <= input.len() {
         let bytes = unsafe { vld1q_u8(input.as_ptr().add(offset)) };
@@ -108,5 +102,5 @@ pub(super) unsafe fn translate(
         unsafe { vst1q_u8(input.as_mut_ptr().add(offset), translated1) };
         offset += 16;
     }
-    unsafe { translate_scalar(&mut input[offset..], source0, target0, source1, target1) };
+    translate_scalar(&mut input[offset..], source0, target0, source1, target1);
 }

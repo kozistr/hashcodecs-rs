@@ -24,7 +24,7 @@ pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let tables = decode_tables::<URLSAFE, MIXED>();
     let mut source = 0;
     let mut destination = 0;
 
@@ -56,7 +56,7 @@ pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: b
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
-    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let tables = decode_tables::<URLSAFE, MIXED>();
     let mut source = 0;
     let mut destination = 0;
 
@@ -77,10 +77,10 @@ pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: b
 }
 
 #[target_feature(enable = "neon")]
-pub(crate) unsafe fn validate<const URLSAFE: bool, const MIXED: bool>(
+pub(crate) fn validate<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
 ) -> Result<usize, Base64Error> {
-    let tables = unsafe { decode_tables::<URLSAFE, MIXED>() };
+    let tables = decode_tables::<URLSAFE, MIXED>();
 
     let mut source = 0;
 
@@ -277,7 +277,7 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn translate_standard(
+fn translate_standard(
     value: uint8x16_t,
     high_nibbles: uint8x16_t,
     offsets: uint8x16_t,
@@ -292,12 +292,12 @@ unsafe fn translate_standard(
 #[cfg(any(feature = "python", test))]
 fn standard_indices(value: uint8x16_t, offsets: uint8x16_t) -> uint8x16_t {
     let high_nibbles = vshrq_n_u8::<4>(value);
-    unsafe { translate_standard(value, high_nibbles, offsets) }
+    translate_standard(value, high_nibbles, offsets)
 }
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn translate_urlsafe(
+fn translate_urlsafe(
     value: uint8x16_t,
     high_nibbles: uint8x16_t,
     offsets: uint8x16_t,
@@ -309,11 +309,7 @@ unsafe fn translate_urlsafe(
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn translate_mixed(
-    value: uint8x16_t,
-    high_nibbles: uint8x16_t,
-    offsets: uint8x16_t,
-) -> uint8x16_t {
+fn translate_mixed(value: uint8x16_t, high_nibbles: uint8x16_t, offsets: uint8x16_t) -> uint8x16_t {
     let slash = vceqq_u8(value, vdupq_n_u8(b'/'));
     let dash = vceqq_u8(value, vdupq_n_u8(b'-'));
     let underscore = vceqq_u8(value, vdupq_n_u8(b'_'));
@@ -325,7 +321,7 @@ unsafe fn translate_mixed(
 
 #[target_feature(enable = "neon")]
 #[inline]
-unsafe fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
+fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
     let (high_classes, low_classes, offsets) = const {
         if MIXED {
             (&URLSAFE_HIGH_CLASSES, &MIXED_LOW_CLASSES, &MIXED_OFFSETS)

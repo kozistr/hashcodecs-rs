@@ -6,7 +6,7 @@ use super::super::primitives::P32_1;
 use super::{LongInput, Secret, build_long_input_schedule, initial_accumulator};
 
 #[inline(always)]
-unsafe fn compiler_guard(mut value: uint64x2_t) -> uint64x2_t {
+fn compiler_guard(mut value: uint64x2_t) -> uint64x2_t {
     unsafe {
         std::arch::asm!(
             "/* {value:v} */",
@@ -84,10 +84,8 @@ unsafe fn scramble(acc: &mut [u64; 8], secret: *const u8) {
 }
 
 #[target_feature(enable = "neon")]
-/// # Safety
-/// The caller must have detected NEON support. This kernel is only compiled
-/// for little-endian AArch64, matching XXH3's lane byte order.
-pub(super) unsafe fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+/// This kernel is only compiled for little-endian AArch64, matching XXH3's lane byte order.
+pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     let data = input.as_bytes();
     let secret = secret.as_bytes();
     let schedule = build_long_input_schedule(input);

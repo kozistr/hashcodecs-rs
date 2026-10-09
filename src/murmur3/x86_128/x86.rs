@@ -9,7 +9,7 @@ use crate::murmur3::block_buffer::FullBlocks;
 use crate::murmur3::dispatch::Backend;
 
 #[target_feature(enable = "avx2")]
-unsafe fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
+fn mix_x86_128_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     let input = blocks.as_bytes();
     let c1 = _mm256_setr_epi32(
         X86_128_C1[0] as i32,
@@ -89,7 +89,7 @@ fn premix_x86_128_avx2(
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
+fn mix_x86_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     let input = blocks.as_bytes();
     let mut mixed = MaybeUninit::<[u32; 64]>::uninit();
     let mixed = mixed.as_mut_ptr().cast::<u32>();

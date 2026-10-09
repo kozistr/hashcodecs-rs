@@ -22,7 +22,7 @@ macro_rules! define_accumulate_batch {
         ) -> [[u64; 8]; $size] {
             let data = inputs.map(LongInput::as_bytes);
             let secret = secret.as_bytes();
-            $(let mut $acc = unsafe { initial() };)+
+            $(let mut $acc = initial();)+
             let schedule = build_long_input_schedule(inputs[0]);
 
             for block in 0..schedule.full_blocks() {
@@ -77,8 +77,9 @@ macro_rules! define_accumulate_batch {
                     data[$index].as_ptr().add(inputs[$index].len() - 64),
                     secret_ptr,
                 );)+
-                [$(finish($acc)),+]
             }
+
+            [$(finish($acc)),+]
         }
     };
 }

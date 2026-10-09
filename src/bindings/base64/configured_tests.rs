@@ -95,13 +95,13 @@ fn simd_lenient_symbol_count_matches_scalar_for_all_bytes_and_alignments() {
 
 #[test]
 fn scalar_prefix_and_translation_cover_boundaries() {
-    assert_eq!(unsafe { alphanumeric_prefix_scalar(b"") }, 0);
-    assert_eq!(unsafe { alphanumeric_prefix_scalar(b"abcXYZ09") }, 8);
-    assert_eq!(unsafe { alphanumeric_prefix_scalar(b"abc!XYZ") }, 3);
-    assert_eq!(unsafe { symbol_prefix_scalar(b"A+/9-_!", Some(*b"-_")) }, 6);
+    assert_eq!(alphanumeric_prefix_scalar(b""), 0);
+    assert_eq!(alphanumeric_prefix_scalar(b"abcXYZ09"), 8);
+    assert_eq!(alphanumeric_prefix_scalar(b"abc!XYZ"), 3);
+    assert_eq!(symbol_prefix_scalar(b"A+/9-_!", Some(*b"-_")), 6);
 
     let mut input = *b"@a#b@#";
-    unsafe { translate_bytes_scalar(&mut input, b'@', b'+', b'#', b'/') };
+    translate_bytes_scalar(&mut input, b'@', b'+', b'#', b'/');
     assert_eq!(&input, b"+a/b+/");
 }
 
@@ -139,7 +139,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
 
     let original: Vec<u8> = b"@#ab".iter().copied().cycle().take(67).collect();
     let mut expected = original.clone();
-    unsafe { translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/') };
+    translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
     let mut translated = original.clone();
     unsafe { super::super::scan::x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/') };
     assert_eq!(translated, expected);
@@ -179,7 +179,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
         );
         let mut translated: Vec<u8> = b"@#ab".iter().copied().cycle().take(99).collect();
         let mut expected = translated.clone();
-        unsafe { translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/') };
+        translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
         unsafe { super::super::scan::x86::translate_avx2(&mut translated, b'@', b'+', b'#', b'/') };
         assert_eq!(translated, expected);
     }

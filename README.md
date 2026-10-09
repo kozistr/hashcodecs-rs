@@ -237,14 +237,7 @@ Build the Python wheel and source distribution:
 uv build --sdist --wheel
 ```
 
-`just build` runs the same command. Passing both flags builds from the checkout and keeps the Rust cache
-available between runs. Plain `uv build` builds the wheel from a temporary extracted source distribution.
 For a wheel alone, use `uv build --wheel`.
-
-Wheel builds compile only the Python extension and cache Rust artifacts under `target/hatch`, with separate
-directories for each Python ABI and platform. Repeated builds with the same base interpreter reuse the compiled
-extension, including when uv creates a fresh isolated build environment. Set `CARGO_TARGET_DIR` to choose a
-different cache directory. Release optimization settings also apply to wheel builds.
 
 Run the primary local checks:
 

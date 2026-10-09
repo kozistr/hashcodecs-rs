@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn one_shot_and_incremental_boundaries_are_defined() {
+fn one_shot_and_incremental_bounds() {
     const LENGTHS: &[usize] = &[
         0, 1, 2, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256, 257, 511,
         512, 513, 1025,

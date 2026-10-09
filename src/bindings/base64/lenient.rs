@@ -535,7 +535,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn capacity_bound_covers_noise_padding_and_equals_aliases() {
+    fn capacity_bounds_with_aliases() {
         for (input, expected) in [
             (b"".as_slice(), 0),
             (b"=", 0),
@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_lenient_sizing_rejects_incomplete_input() {
+    fn legacy_rejects_incomplete_input() {
         assert_eq!(
             lenient_decoded_len(b"A", None, false, false),
             Err(LenientDecodeError::InvalidInput)
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_runs_preserve_padding_modes_and_output_bounds() {
+    fn custom_run_padding_bounds() {
         let altchars = Some(*b"@#");
         let table = lenient_decode_table(altchars);
 

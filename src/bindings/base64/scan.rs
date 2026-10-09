@@ -140,7 +140,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn x86_backend_selectors_cover_each_dispatch_tier() {
+    fn x86_dispatch_tiers() {
         for (avx2, sse2, expected) in [
             (
                 true,

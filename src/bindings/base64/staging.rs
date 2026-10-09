@@ -374,7 +374,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scratch_buffers_are_aligned_and_follow_hot_metadata() {
+    fn scratch_buffer_layout() {
         assert_eq!(std::mem::align_of::<StagingBuffer>(), 32);
         assert_eq!(std::mem::offset_of!(StagingBuffer, bytes) % 32, 0);
 

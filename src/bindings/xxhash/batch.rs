@@ -586,7 +586,7 @@ mod tests {
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]
-    fn retained_packed_inputs_survive_source_mutation() {
+    fn packed_inputs_survive_mutation() {
         Python::initialize();
         Python::attach(|py| {
             let payloads: Vec<_> = (0..65).map(|index| vec![index; 16385]).collect();
@@ -633,7 +633,7 @@ mod tests {
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]
-    fn gil_batch_retains_exact_bytearrays() {
+    fn gil_batch_retains_bytearrays() {
         Python::initialize();
         Python::attach(|py| {
             let items = [PyByteArray::new(py, b"mutable").into_any()];
@@ -643,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_u128_conversion_preserves_unsigned_boundaries() {
+    fn u128_conversion_bounds() {
         Python::initialize();
         Python::attach(|py| {
             for value in [

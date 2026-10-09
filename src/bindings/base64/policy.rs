@@ -415,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn route_selection_covers_decode_policies() {
+    fn decode_policy_routes() {
         let old = PythonSemantics::from_version((3, 14, 4));
         let new = PythonSemantics::from_version((3, 15, 0));
         assert_eq!(
@@ -495,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn attempts_bound_probe_writes_and_report_strict_capacity_errors() {
+    fn probe_writes_and_capacity_errors() {
         use crate::base64::Base64Error;
         let small = Base64Error::OutputTooSmall {
             required: 3,

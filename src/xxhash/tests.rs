@@ -33,7 +33,7 @@ fn empty_vectors() {
 }
 
 #[test]
-fn prepared_seeds_match_one_shot_across_length_classes() {
+fn prepared_seed_lengths() {
     let input = (0..=2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
@@ -68,7 +68,7 @@ fn prepared_seeds_match_one_shot_across_length_classes() {
 }
 
 #[test]
-fn prepared_batches_match_one_shot_across_mixed_runs() {
+fn prepared_batch_runs() {
     let owned = [17, 241, 257, 258, 259, 260, 1024, 1025].map(|length| vec![length as u8; length]);
     let inputs = owned.each_ref().map(Vec::as_slice);
 
@@ -155,7 +155,7 @@ fn batches_match_one_shot() {
 }
 
 #[test]
-fn batches_consume_contiguous_equal_stripe_runs() {
+fn batch_stripe_runs() {
     let owned = [257, 258, 259, 260, 17, 1025, 1026, 1088, 1089].map(|length| {
         (0..length)
             .map(|index| (index as u8).wrapping_mul(43).wrapping_add(length as u8))
@@ -176,7 +176,7 @@ fn batches_consume_contiguous_equal_stripe_runs() {
 }
 
 #[test]
-fn matches_reference_at_every_length_through_two_blocks() {
+fn reference_block_lengths() {
     let input = (0..=2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
@@ -202,7 +202,7 @@ fn matches_reference_at_every_length_through_two_blocks() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_tail_hashes_match_reference_at_every_length() {
+fn avx2_tail_lengths() {
     use super::long_inputs::{finalize_long_64, finalize_long_128};
 
     if !backend::capabilities().supports(CpuFeature::Avx2) {
@@ -236,7 +236,7 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
 }
 
 #[test]
-fn short_inputs_match_reference_with_unaligned_slices() {
+fn unaligned_short_inputs() {
     for offset in 0..16 {
         for length in 0..=240 {
             let owned = (0..offset + length)
@@ -262,7 +262,7 @@ fn short_inputs_match_reference_with_unaligned_slices() {
 }
 
 #[test]
-fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
+fn reference_length_boundaries() {
     const LENGTHS: &[usize] = &[
         0, 1, 2, 3, 4, 8, 9, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129, 159, 160, 191,
         192, 239, 240, 241, 255, 256, 511, 512, 1023, 1024, 1025, 4161,
@@ -292,7 +292,7 @@ fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
 }
 
 #[test]
-fn randomized_inputs_match_the_official_c_implementation() {
+fn random_inputs_match_c() {
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
 
     for case in 0..128 {
@@ -317,7 +317,7 @@ fn randomized_inputs_match_the_official_c_implementation() {
 }
 
 #[test]
-fn scalar_long_inputs_match_reference_and_native_backend() {
+fn scalar_long_inputs() {
     use super::long_inputs::{LongEngine, finalize_long_64, finalize_long_128};
 
     let input: Vec<u8> = (0..4161)
@@ -347,7 +347,7 @@ fn scalar_long_inputs_match_reference_and_native_backend() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn every_supported_x86_backend_matches_scalar() {
+fn x86_backends_match_scalar() {
     use crate::backend::Capabilities;
 
     let input: Vec<u8> = (0..4161)

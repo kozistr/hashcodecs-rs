@@ -5,7 +5,7 @@ use super::x86_32::mix_x86_32_body_scalar;
 use super::x86_128::mix_x86_128_body_scalar;
 
 #[kani::proof]
-fn little_endian_loads_stay_within_the_slice() {
+fn load_bounds() {
     let bytes: [u8; 16] = kani::any();
     let offset16: usize = kani::any();
     let offset32: usize = kani::any();
@@ -44,7 +44,7 @@ fn little_endian_loads_stay_within_the_slice() {
 
 #[kani::proof]
 #[kani::unwind(9)]
-fn scalar_block_loops_and_partial_loads_stay_in_bounds() {
+fn block_and_tail_bounds() {
     let input: [u8; 32] = kani::any();
     let partial_length: usize = kani::any();
     kani::assume(partial_length <= 8);

@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn scalar_batch_engine_processes_and_finalizes_inputs_individually() {
+    fn scalar_batch_results() {
         let owned = [
             300, 300, 300, 300, 17, 301, 301, 301, 17, 302, 302, 17, 1024,
         ]
@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn grouped_runs_match_one_shot_with_scalar_and_native_engines() {
+    fn grouped_runs_match_one_shot() {
         let owned = [
             257, 258, 259, 260, 17, 1025, 1026, 1088, 17, 1089, 1090, 17, 2048,
         ]
@@ -414,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn long_runs_stop_at_short_inputs_and_stripe_boundaries() {
+    fn long_run_boundaries() {
         let owned = [257, 258, 260, 17, 261, 320, 321].map(|length| vec![0; length]);
         let refs = owned.each_ref().map(Vec::as_slice);
 
@@ -429,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn scalar_engine_falls_back_for_batch_groups() {
+    fn scalar_batch_fallback() {
         let owned = [300, 300].map(|length| vec![length as u8; length]);
         let refs = owned.each_ref().map(Vec::as_slice);
         let run = LongRun::new(&refs).unwrap();

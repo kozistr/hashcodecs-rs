@@ -23,7 +23,7 @@ fn select_backend(features: &[CpuFeature]) -> Backend {
 use base64::Engine;
 
 #[test]
-fn standard_and_url_safe_round_trip() {
+fn alphabet_round_trips() {
     let input = b"the quick brown fox jumps over the lazy dog";
     assert_eq!(
         b64encode(input),
@@ -41,7 +41,7 @@ fn standard_and_url_safe_round_trip() {
 
 #[cfg(feature = "python")]
 #[test]
-fn wrapped_encoders_write_final_layout_with_every_available_backend() {
+fn wrapped_backend_layouts() {
     let input = (0..=1024)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect::<Vec<_>>();
@@ -106,7 +106,7 @@ fn wrapped_encoders_write_final_layout_with_every_available_backend() {
 
 #[cfg(feature = "python")]
 #[test]
-fn custom_wrapped_encoders_cover_every_available_backend_and_boundary() {
+fn custom_wrapped_boundaries() {
     let input = (0..=1024)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect::<Vec<_>>();
@@ -190,7 +190,7 @@ fn custom_wrapped_encoders_cover_every_available_backend_and_boundary() {
 }
 
 #[test]
-fn validation_only_kernels_classify_without_output_storage() {
+fn validation_without_output() {
     for backend in [
         Backend::Scalar,
         Backend::Neon,
@@ -290,7 +290,7 @@ fn validation_only_kernels_classify_without_output_storage() {
 }
 
 #[test]
-fn validated_standard_kernels_pack_into_exact_storage() {
+fn validated_decode_exact_storage() {
     let input: Vec<u8> = (0..204)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
@@ -348,7 +348,7 @@ fn validated_standard_kernels_pack_into_exact_storage() {
 }
 
 #[test]
-fn validated_standard_decoder_handles_every_tail_at_exact_bounds() {
+fn validated_decode_tails() {
     const GUARD: usize = 16;
 
     for length in 0..=257 {
@@ -379,7 +379,7 @@ fn validated_standard_decoder_handles_every_tail_at_exact_bounds() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn valid_prefix_kernels_stop_before_the_first_invalid_block() {
+fn prefix_stops_before_invalid_block() {
     let input = [b'A'; 32];
     let mut output = [0xa5; 24];
 
@@ -508,7 +508,7 @@ fn rejects_invalid_input() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn sse_overlapping_stores_preserve_validated_prefix_boundaries() {
+fn sse_overlap_prefix_bounds() {
     const CANARY: u8 = 0xa5;
 
     for backend in [Backend::Ssse3, Backend::Sse41] {
@@ -573,13 +573,13 @@ fn sse_overlapping_stores_preserve_validated_prefix_boundaries() {
 }
 
 #[test]
-fn rust_decoders_explicitly_accept_noncanonical_trailing_bits() {
+fn accepts_noncanonical_trailing_bits() {
     assert_eq!(b64decode(b"AB==").as_deref(), Ok(&[0][..]));
     assert_eq!(b64decode_urlsafe(b"AB==").as_deref(), Ok(&[0][..]));
 }
 
 #[test]
-fn matches_the_standard_engine_for_all_short_lengths() {
+fn short_lengths_match_reference() {
     for length in 0..=1024 {
         let input: Vec<u8> = (0..length)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
@@ -604,7 +604,7 @@ fn matches_the_standard_engine_for_all_short_lengths() {
 
 #[cfg(feature = "python")]
 #[test]
-fn custom_alphabet_encoder_matches_standard_with_every_available_backend() {
+fn custom_alphabet_backends() {
     let input = (0..=1024)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect::<Vec<_>>();
@@ -654,7 +654,7 @@ fn custom_alphabet_encoder_matches_standard_with_every_available_backend() {
 }
 
 #[test]
-fn scalar_encoder_handles_every_short_length_and_input_alignment() {
+fn scalar_encode_lengths_and_alignment() {
     const GUARD: usize = 16;
     const CANARY: u8 = 0xa5;
 
@@ -709,7 +709,7 @@ fn next_random(state: &mut u64) -> u64 {
 }
 
 #[test]
-fn seeded_randomized_inputs_match_the_reference_engine() {
+fn random_inputs_match_reference() {
     let mut state = 0x1828_97d4_3c61_5aef_u64;
 
     for case in 0..128 {
@@ -758,7 +758,7 @@ fn seeded_randomized_inputs_match_the_reference_engine() {
 }
 
 #[test]
-fn backend_selection_and_kernels_match_scalar_output() {
+fn backends_match_scalar() {
     assert_eq!(select_backend(&[]), Backend::Scalar);
     assert_eq!(select_backend(&[CpuFeature::Neon]), Backend::Neon);
     assert_eq!(select_backend(&[CpuFeature::Ssse3]), Backend::Ssse3);
@@ -964,7 +964,7 @@ fn backend_selection_and_kernels_match_scalar_output() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx512_masked_tails_match_scalar_output_and_preserve_boundaries() {
+fn avx512_masked_tail_bounds() {
     if !backend::is_supported(Backend::Avx512Vbmi) {
         return;
     }
@@ -1030,7 +1030,7 @@ fn avx512_masked_tails_match_scalar_output_and_preserve_boundaries() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
+fn avx2_shifted_load_guards() {
     if !backend::is_supported(Backend::Avx2) {
         return;
     }
@@ -1116,7 +1116,7 @@ fn avx2_encoder_shifted_load_boundaries_match_scalar_and_preserve_guards() {
 
 #[cfg(target_arch = "x86_64")]
 #[test]
-fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
+fn avx2_assembly_loop_guards() {
     if !backend::is_supported(Backend::Avx2) {
         return;
     }
@@ -1177,7 +1177,7 @@ fn avx2_encoder_assembly_loop_matches_scalar_and_preserves_guards() {
 }
 
 #[test]
-fn every_byte_is_classified_consistently_by_each_simd_decoder() {
+fn simd_byte_classification() {
     for backend in [
         Backend::Neon,
         Backend::Ssse3,
@@ -1242,7 +1242,7 @@ fn every_byte_is_classified_consistently_by_each_simd_decoder() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn x86_decoders_match_tables_for_every_adjacent_byte_word() {
+fn x86_byte_pair_classification() {
     for (alphabet, table) in [
         (DecodeAlphabet::Standard, &STANDARD_DECODE),
         (DecodeAlphabet::UrlSafe, &URLSAFE_DECODE),
@@ -1304,7 +1304,7 @@ fn x86_decoders_match_tables_for_every_adjacent_byte_word() {
 
 #[cfg(target_arch = "x86_64")]
 #[test]
-fn avx2_streaming_encoder_matches_scalar() {
+fn avx2_streaming_matches_scalar() {
     if !backend::is_supported(Backend::Avx2) {
         return;
     }
@@ -1351,7 +1351,7 @@ fn avx2_streaming_encoder_matches_scalar() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx512_control_vectors_describe_the_base64_transforms() {
+fn avx512_control_vectors() {
     assert_eq!(
         <x86_contracts::StandardDecoder as x86_contracts::Decoder>::decode_table(),
         &STANDARD_DECODE
@@ -1424,7 +1424,7 @@ fn avx512_control_vectors_describe_the_base64_transforms() {
 }
 
 #[test]
-fn length_helpers_and_buffer_errors_are_precise() {
+fn length_and_buffer_errors() {
     assert_eq!(b64encoded_len(0), Some(0));
     assert_eq!(b64encoded_len(1), Some(4));
     assert_eq!(b64encoded_len(2), Some(4));
@@ -1472,13 +1472,13 @@ fn length_helpers_and_buffer_errors_are_precise() {
 
 #[test]
 #[should_panic(expected = "Base64 output slice must have the exact encoded length")]
-fn safe_encoder_rejects_an_inexact_output_slice() {
+fn encode_rejects_inexact_output() {
     let mut output = [0_u8; 3];
     encode_backend::encode_to_slice(b"abc", &mut output, false);
 }
 
 #[test]
-fn decode_tables_cover_both_alphabets() {
+fn decode_tables_cover_alphabets() {
     for (urlsafe, mixed) in [(false, false), (true, false), (true, true)] {
         let table = decode_table(std::hint::black_box(urlsafe), std::hint::black_box(mixed));
 
@@ -1507,7 +1507,7 @@ fn decode_tables_cover_both_alphabets() {
 }
 
 #[test]
-fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
+fn unpadded_decode_guards() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;
 
@@ -1575,7 +1575,7 @@ fn unpadded_decoder_matches_padded_reference_without_touching_guards() {
 }
 
 #[test]
-fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
+fn unpadded_invalid_tail_guards() {
     const CANARY: u8 = 0xa5;
 
     for alphabet in [
@@ -1623,7 +1623,7 @@ fn unpadded_decoder_rejects_invalid_tails_before_storing_them() {
 }
 
 #[test]
-fn unpadded_decoder_propagates_invalid_prefix_errors() {
+fn unpadded_prefix_errors() {
     let encoded = b"!AAAaa";
     let layout = decode_unpadded_layout(encoded).unwrap();
     let mut output = [0xa5; 4];
@@ -1641,7 +1641,7 @@ fn unpadded_decoder_propagates_invalid_prefix_errors() {
 }
 
 #[test]
-fn validated_blocks_decoder_matches_regular_decoder() {
+fn validated_blocks_match_decode() {
     let input: Vec<u8> = (0..96)
         .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
         .collect();
@@ -1661,7 +1661,7 @@ fn validated_blocks_decoder_matches_regular_decoder() {
 }
 
 #[test]
-fn buffer_apis_respect_exact_slice_boundaries() {
+fn buffer_api_bounds() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;
 
@@ -1719,7 +1719,7 @@ fn buffer_apis_respect_exact_slice_boundaries() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_interior_stores_respect_exact_slice_boundaries() {
+fn avx2_interior_store_bounds() {
     if !backend::is_supported(Backend::Avx2) {
         return;
     }
@@ -1774,7 +1774,7 @@ fn avx2_interior_stores_respect_exact_slice_boundaries() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_overlapping_stores_respect_exact_slice_boundaries() {
+fn avx2_overlap_store_bounds() {
     if !backend::is_supported(Backend::Avx2) {
         return;
     }
@@ -1832,7 +1832,7 @@ fn avx2_overlapping_stores_respect_exact_slice_boundaries() {
 }
 
 #[test]
-fn padded_decoder_stores_stay_within_four_bytes_of_slack() {
+fn padded_store_slack() {
     const GUARD: usize = 32;
     const CANARY: u8 = 0xa5;
 

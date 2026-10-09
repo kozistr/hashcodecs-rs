@@ -598,9 +598,65 @@ pub(super) fn b64encode_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bindings::buffer::with_bytearray;
+    use ::base64::Engine;
 
     #[test]
-    fn custom_lookup_tables_cover_wrapping_byte_offsets_and_exact_boundaries() {
+    fn large_encode_layout_and_guards() {
+        Python::initialize();
+        Python::attach(|py| {
+            for length in [
+                DIRECT_WRAPPED_INPUT_THRESHOLD,
+                DIRECT_WRAPPED_INPUT_THRESHOLD + 1,
+            ] {
+                let input = vec![0xfb; length];
+                let reference = ::base64::engine::general_purpose::STANDARD.encode(&input);
+                let source = PyBytes::new(py, &input);
+                let source = BytesLike::Bytes(&source);
+
+                for padded in [false, true] {
+                    let contiguous = if padded {
+                        reference.as_bytes()
+                    } else {
+                        reference.trim_end_matches('=').as_bytes()
+                    };
+
+                    for wrapcol in [
+                        None,
+                        Some(76),
+                        Some(reference.len()),
+                        Some(reference.len() + 4),
+                    ] {
+                        let mut expected = Vec::new();
+
+                        for chunk in contiguous.chunks(wrapcol.unwrap_or(contiguous.len())) {
+                            if !expected.is_empty() {
+                                expected.push(b'\n');
+                            }
+
+                            expected.extend_from_slice(chunk);
+                        }
+
+                        let encoder = PreparedEncoder::new(None, padded, wrapcol);
+                        let allocated = encode_with_prepared(py, &source, &encoder).unwrap();
+                        assert_eq!(allocated.as_bytes(), expected);
+
+                        let output = PyByteArray::new(py, &vec![0xa5; expected.len() + 16]);
+                        let written = encode_into(&source, &output, &encoder).unwrap();
+                        assert_eq!(written, expected.len());
+                        with_bytearray(&output, || {
+                            let output = unsafe { output.as_bytes() };
+                            assert_eq!(&output[..written], expected);
+                            assert_eq!(&output[written..], &[0xa5; 16]);
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn custom_lookup_wrapping_bounds() {
         let input = (0..=256)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect::<Vec<_>>();
@@ -637,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    fn large_wrapped_custom_unpadded_output_uses_final_layout() {
+    fn large_custom_unpadded_layout() {
         let input = (0..DIRECT_WRAPPED_INPUT_THRESHOLD + 2)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect::<Vec<_>>();
@@ -674,7 +730,7 @@ mod tests {
     }
 
     #[test]
-    fn wrapped_arbitrary_alphabet_uses_complete_table() {
+    fn wrapped_alphabet_lookup() {
         let input = (0..=256)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect::<Vec<_>>();
@@ -699,7 +755,7 @@ mod tests {
     }
 
     #[test]
-    fn large_wrapped_standard_padded_output_uses_final_layout() {
+    fn large_standard_padded_layout() {
         let input = (0..DIRECT_WRAPPED_INPUT_THRESHOLD + 1)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect::<Vec<_>>();
@@ -723,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn short_wrapped_custom_output_uses_scalar_fallback_and_exact_store() {
+    fn short_custom_scalar_bounds() {
         let input = [0xfb; 15];
         let alphabet = CustomEncodeAlphabet::new(*b"@#");
         let mut actual = [0xa5; 25];

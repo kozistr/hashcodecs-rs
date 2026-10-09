@@ -2,7 +2,7 @@ use super::long_inputs::{LongInput, build_long_input_schedule};
 use super::primitives::{SECRET, read_u32_le, read_u64_le};
 
 #[kani::proof]
-fn little_endian_loads_stay_within_the_slice() {
+fn load_bounds() {
     let bytes: [u8; 16] = kani::any();
     let offset32: usize = kani::any();
     let offset64: usize = kani::any();
@@ -30,7 +30,7 @@ fn little_endian_loads_stay_within_the_slice() {
 }
 
 #[kani::proof]
-fn long_schedule_keeps_vector_loads_in_bounds() {
+fn long_schedule_bounds() {
     const MAX_LENGTH: usize = 3072;
 
     let length: usize = kani::any();

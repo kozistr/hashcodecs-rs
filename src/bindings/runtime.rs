@@ -104,7 +104,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn callback_panics_become_python_exceptions() {
+    fn callback_panic_conversion() {
         Python::initialize();
         Python::attach(|py| {
             let result = catch_unwind_callback(py, || panic!("callback panic"));

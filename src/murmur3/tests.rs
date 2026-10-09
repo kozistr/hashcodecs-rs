@@ -31,7 +31,7 @@ fn x64_words_as_u128(words: [u64; 2]) -> u128 {
 }
 
 #[test]
-fn dispatch_thresholds_are_explicit_and_feature_gated() {
+fn dispatch_thresholds() {
     use crate::backend::{Capabilities, CpuFeature as Feature};
     use dispatch::Backend::{Avx2, Scalar, Sse41};
     let caps = |feature| Capabilities::from_features(&[feature]);
@@ -80,7 +80,7 @@ fn dispatch_thresholds_are_explicit_and_feature_gated() {
 }
 
 #[test]
-fn x64_dispatch_keeps_small_inputs_scalar_with_any_features() {
+fn x64_scalar_small_inputs() {
     use crate::backend::{Capabilities, CpuFeature as Feature};
     use dispatch::Backend::{Avx2, Scalar, Sse41};
 
@@ -132,7 +132,7 @@ fn x64_dispatch_keeps_small_inputs_scalar_with_any_features() {
 }
 
 #[test]
-fn x64_incremental_updates_match_reference_across_simd_threshold() {
+fn x64_incremental_simd_threshold() {
     let input: Vec<u8> = (0..2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
         .collect();
@@ -160,7 +160,7 @@ fn x64_incremental_updates_match_reference_across_simd_threshold() {
 }
 
 #[test]
-fn incremental_hashers_match_one_shot_for_all_tail_lengths() {
+fn incremental_tail_lengths() {
     let seeds = [0, 1, u32::MAX];
     let chunk_sizes = [1, 2, 3, 4, 7, 16, 31, 64];
 
@@ -205,7 +205,7 @@ fn incremental_hashers_match_one_shot_for_all_tail_lengths() {
 }
 
 #[test]
-fn incremental_hasher_debug_is_redacted() {
+fn incremental_debug_redaction() {
     let secret = b"secret message bytes";
 
     let mut x86_32 = Murmur3X86Hasher32::new(7);
@@ -286,7 +286,7 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
 }
 
 #[test]
-fn known_answer_vectors() {
+fn known_vectors() {
     assert_eq!(read_partial_u64_le(&[]), 0);
     assert_eq!(murmur3_x86_32(b"hello", 0), 0x248b_fa47);
     assert_eq!(murmur3_x86_32(&[1, 2, 3], 0), 2_161_234_436);
@@ -301,7 +301,7 @@ fn known_answer_vectors() {
 }
 
 #[test]
-fn scalar_x86_128_body_matches_the_reference() {
+fn scalar_x86_128_matches_reference() {
     let data: Vec<u8> = (0..255).map(|value| value as u8).collect();
     let mut scalar = [7; 4];
     mix_x86_128_body(FullBlocks::new(&data[..240]).unwrap(), &mut scalar);
@@ -314,7 +314,7 @@ fn scalar_x86_128_body_matches_the_reference() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn scalar_dispatch_fallbacks_process_full_blocks() {
+fn scalar_fallback_blocks() {
     let data = (0..256).map(|value| value as u8).collect::<Vec<_>>();
 
     let blocks32 = FullBlocks::new(&data[..32]).unwrap();
@@ -339,7 +339,7 @@ fn scalar_dispatch_fallbacks_process_full_blocks() {
 }
 
 #[test]
-fn matches_the_reference_implementation_for_every_tail_length() {
+fn tail_lengths_match_reference() {
     let seeds = [0, 1, 0xfeed_beef, u32::MAX];
 
     for length in 0..=543 {

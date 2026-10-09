@@ -786,7 +786,7 @@ mod tests {
     use crate::base64::{b64encode, encode_scalar};
 
     #[test]
-    fn validated_blocks_preserve_suffix_before_invalid_successor() {
+    fn validated_block_suffix_guards() {
         for backend in [
             Backend::Avx512Vbmi,
             Backend::Avx2,
@@ -834,7 +834,7 @@ mod tests {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
-    fn every_x86_backend_has_a_dispatch_path_without_running_unsupported_instructions() {
+    fn x86_dispatch_paths() {
         for backend in [
             Backend::Avx512Vbmi,
             Backend::Avx2,
@@ -873,7 +873,7 @@ mod tests {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
-    fn avx2_cached_and_streaming_dispatch_match() {
+    fn avx2_cached_and_streaming_dispatch() {
         if backend::is_supported(Backend::Avx2) {
             check_avx2_cached_and_streaming_dispatch();
             #[cfg(feature = "python")]

@@ -364,7 +364,7 @@ mod tests {
     use super::active_lane_mask;
 
     #[test]
-    fn active_lane_masks_include_one_through_sixty_four_bytes() {
+    fn active_lane_mask_lengths() {
         for active_lanes in 1..=64 {
             assert_eq!(
                 active_lane_mask(active_lanes).count_ones(),

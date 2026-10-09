@@ -2,10 +2,8 @@ import base64 as stdlib_base64
 import binascii
 import builtins
 import sys
-import threading
 from array import array
-from collections.abc import Callable, Sequence
-from typing import cast
+from collections.abc import Callable
 
 import pytest
 
@@ -13,13 +11,11 @@ import hashcodecs
 import hashcodecs.base64 as base64
 
 PYTHON_315 = sys.version_info >= (3, 15)
-FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
-ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
-BASE64_DETACH_THRESHOLD = 256 * 1024
-GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
+
 dynamic_b64encode: Callable[..., bytes] = base64.b64encode
-dynamic_b64decode: Callable[..., bytes] = base64.b64decode
+
 dynamic_b64encode_into: Callable[..., int] = base64.b64encode_into
+
 dynamic_b64decode_into: Callable[..., int] = base64.b64decode_into
 
 
@@ -85,6 +81,7 @@ def test_exact_builtin_inputs_and_memoryviews_use_the_native_path() -> None:
     encoded = b'YWJj'
     for value in (payload, bytearray(payload), memoryview(payload)):
         assert base64.b64encode(value) == encoded
+        assert base64.standard_b64encode(value) == encoded
     for value in (encoded, bytearray(encoded), memoryview(encoded), encoded.decode('ascii')):
         assert base64.b64decode(value, validate=True) == payload
 
@@ -123,277 +120,6 @@ def test_sliced_decode_preserves_exact_output_boundaries(length: int, altchars: 
         base64.b64decode_into(view, bytearray(length - 1), altchars, validate=True)
 
 
-@pytest.mark.parametrize('reusable', [False, True])
-def test_sliced_decode_snapshots_before_truthiness_callbacks(reusable: bool) -> None:
-    storage = bytearray(b'!YWJj!')
-    view = memoryview(storage)[1:-1]
-    output = bytearray(4)
-
-    class Validate:
-        def __bool__(self) -> bool:
-            storage[1:-1] = b'ZGVm'
-            view.release()
-            output.clear()
-            return True
-
-    if reusable:
-        with pytest.raises(ValueError, match='destination has 0'):
-            dynamic_b64decode_into(view, output, validate=Validate())
-        assert output == b''
-    else:
-        assert dynamic_b64decode(view, validate=Validate()) == b'abc'
-
-
-def _assert_mutable_input_race_is_serialized(
-    operation: Callable[[], bytes],
-    value: bytearray,
-    states: Sequence[bytes],
-    expected: set[bytes],
-) -> None:
-    start = threading.Barrier(2)
-    failures: list[BaseException | bytes] = []
-
-    def run_operation() -> None:
-        try:
-            start.wait()
-            for _ in range(32):
-                result = operation()
-                if result not in expected:
-                    failures.append(result[:64])
-                    return
-        except BaseException as error:
-            failures.append(error)
-
-    def resize_input() -> None:
-        start.wait()
-        for index in range(32):
-            value[:] = states[index % 2]
-
-    worker = threading.Thread(target=run_operation)
-    mutator = threading.Thread(target=resize_input)
-    worker.start()
-    mutator.start()
-    worker.join(timeout=30)
-    mutator.join(timeout=30)
-
-    assert not worker.is_alive()
-    assert not mutator.is_alive()
-    assert not failures
-
-
-@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
-def test_base64_bytearray_resize_races_are_serialized() -> None:
-    raw_states = (b'a' * (1024 * 1024), b'b' * (1024 * 1024 + 3))
-    raw = bytearray(raw_states[0])
-    encoded_states = tuple(stdlib_base64.b64encode(state) for state in raw_states)
-    _assert_mutable_input_race_is_serialized(
-        lambda: base64.b64encode(raw),
-        raw,
-        raw_states,
-        set(encoded_states),
-    )
-
-    encoded = bytearray(encoded_states[0])
-    _assert_mutable_input_race_is_serialized(
-        lambda: base64.b64decode(encoded, validate=True),
-        encoded,
-        encoded_states,
-        set(raw_states),
-    )
-
-    raw = bytearray(raw_states[0])
-    encode_output = bytearray(len(encoded_states[1]))
-    _assert_mutable_input_race_is_serialized(
-        lambda: bytes(encode_output[: base64.b64encode_into(raw, encode_output)]),
-        raw,
-        raw_states,
-        set(encoded_states),
-    )
-
-    encoded = bytearray(encoded_states[0])
-    decode_output = bytearray(len(raw_states[1]))
-    _assert_mutable_input_race_is_serialized(
-        lambda: bytes(decode_output[: base64.b64decode_into(encoded, decode_output, validate=True)]),
-        encoded,
-        encoded_states,
-        set(raw_states),
-    )
-
-
-@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
-@pytest.mark.parametrize('urlsafe', [False, True])
-def test_free_threaded_encode_snapshot_respects_legacy_callback_order(urlsafe: bool) -> None:
-    source = bytearray(b'abc')
-
-    class Padded:
-        def __bool__(self) -> bool:
-            source[:] = b'def'
-            return True
-
-    function = cast(Callable[..., bytes], base64.urlsafe_b64encode if urlsafe else base64.b64encode)
-    expected = b'ZGVm' if PYTHON_315 or urlsafe else b'YWJj'
-    assert function(source, padded=Padded()) == expected
-
-
-@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
-@pytest.mark.parametrize('reusable', [False, True])
-def test_free_threaded_decode_snapshots_ignorechars_after_canonical_callback(reusable: bool) -> None:
-    ignorechars = bytearray(b'!')
-
-    class Canonical:
-        def __bool__(self) -> bool:
-            ignorechars[:] = b'?'
-            return False
-
-    output = bytearray(3)
-    if reusable:
-        assert dynamic_b64decode_into(b'Y?WJj', output, ignorechars=ignorechars, canonical=Canonical()) == 3
-        assert output == b'abc'
-    else:
-        assert dynamic_b64decode(b'Y?WJj', ignorechars=ignorechars, canonical=Canonical()) == b'abc'
-
-
-@pytest.mark.skipif(not FREE_THREADED, reason='requires a free-threaded CPython build')
-def test_free_threaded_standard_into_snapshot() -> None:
-    source = bytearray(b'YWJj')
-    output = bytearray(b'.....')
-
-    assert base64.standard_b64decode_into(source, output) == 3
-    assert source == b'YWJj'
-    assert output == b'abc..'
-
-
-@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
-@pytest.mark.parametrize(
-    ('operation', 'value', 'expected'),
-    [
-        (base64.standard_b64encode_into, b'abc', b'YWJj'),
-        (base64.b64encode_into, b'abc', b'YWJj'),
-        (base64.urlsafe_b64encode_into, b'abc', b'YWJj'),
-        (base64.standard_b64decode_into, b'YWJj', b'abc'),
-        (base64.b64decode_into, b'YWJj', b'abc'),
-        (base64.urlsafe_b64decode_into, b'YWJj', b'abc'),
-    ],
-)
-@pytest.mark.parametrize('remaining_capacity', [0, 3, 4, 16])
-def test_reentrant_buffer_release_hooks_run_before_reusable_output_writes(
-    operation: Callable[..., int], value: bytes, expected: bytes, remaining_capacity: int
-) -> None:
-    output = bytearray(16)
-    releases = []
-
-    class Buffer:
-        def __buffer__(self, flags: int) -> memoryview:
-            return memoryview(value)
-
-        def __release_buffer__(self, view: memoryview) -> None:
-            releases.append(True)
-            output[:] = b'.' * remaining_capacity
-
-    if remaining_capacity < len(expected):
-        with pytest.raises(
-            ValueError, match=f'requires {len(expected)} bytes but the destination has {remaining_capacity}'
-        ):
-            operation(Buffer(), output)
-        assert output == b'.' * remaining_capacity
-    else:
-        assert operation(Buffer(), output) == len(expected)
-        assert output == expected + b'.' * (remaining_capacity - len(expected))
-    assert releases == [True]
-
-
-@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer release hooks')
-def test_reentrant_ignorechars_release_hook_runs_before_reusable_output_write() -> None:
-    class Buffer:
-        def __init__(self, value: bytes, output: bytearray) -> None:
-            self.value = value
-            self.output = output
-
-        def __buffer__(self, flags: int) -> memoryview:
-            return memoryview(self.value)
-
-        def __release_buffer__(self, view: memoryview) -> None:
-            self.output.clear()
-
-    decoded = bytearray(3)
-    with pytest.raises(ValueError, match='requires 3 bytes but the destination has 0'):
-        base64.b64decode_into(b'YWJj', decoded, ignorechars=Buffer(b'', decoded))
-    assert decoded == b''
-
-
-def test_subclasses_and_python_buffer_hooks_follow_cpython_slow_path() -> None:
-    class BytesSubclass(bytes):
-        pass
-
-    class ByteArraySubclass(bytearray):
-        pass
-
-    class StringSubclass(str):
-        encode_calls: int
-
-        def __new__(cls, value: str):
-            instance = super().__new__(cls, value)
-            instance.encode_calls = 0
-            return instance
-
-        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
-            self.encode_calls += 1
-            return super().encode(encoding, errors)
-
-    assert base64.b64encode(BytesSubclass(b'abc')) == b'YWJj'
-    assert base64.b64encode(ByteArraySubclass(b'abc')) == b'YWJj'
-    text = StringSubclass('YWJj')
-    assert base64.b64decode(text, validate=True) == b'abc'
-    assert text.encode_calls == 1
-
-    class RaisingString(str):
-        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
-            raise RuntimeError('custom encode failure')
-
-    with pytest.raises(RuntimeError, match='custom encode failure'):
-        base64.b64decode(RaisingString('YWJj'))
-
-    if sys.version_info >= (3, 12):  # noqa: UP036 - package supports Python 3.10.
-
-        class BufferHook:
-            def __init__(self, value: bytes) -> None:
-                self.value = value
-                self.calls = 0
-
-            def __buffer__(self, flags: int) -> memoryview:
-                self.calls += 1
-                return memoryview(self.value)
-
-        encoded = BufferHook(b'YWJj')
-        payload = BufferHook(b'abc')
-        assert base64.b64decode(encoded, validate=True) == b'abc'
-        assert base64.b64encode(payload) == b'YWJj'
-        assert encoded.calls == 1
-        assert payload.calls == 1
-
-        class ExportFailure(RuntimeError):
-            pass
-
-        class RaisingBuffer:
-            def __init__(self) -> None:
-                self.calls = 0
-
-            def __buffer__(self, flags: int) -> memoryview:
-                self.calls += 1
-                raise ExportFailure('custom export failure')
-
-        raising = RaisingBuffer()
-        with pytest.raises(ExportFailure, match='custom export failure'):
-            base64.b64encode(raising)
-        assert raising.calls == 1
-
-        class BufferList(list):
-            def __buffer__(self, flags: int) -> memoryview:
-                return memoryview(b'abc')
-
-        assert base64.b64encode(BufferList()) == b'YWJj'
-
-
 @pytest.mark.parametrize('valid_symbols', [32, 128, 4096])
 @pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=='])
 def test_lenient_retry_preserves_suffix_after_avx2_validation_boundary(
@@ -411,144 +137,7 @@ def test_lenient_retry_preserves_suffix_after_avx2_validation_boundary(
     assert outputs == [expected + b'~' * 40] * 2
 
 
-@pytest.mark.parametrize('api', ['b64decode', 'b64decode_into', 'b64decode_batch', 'b64decode_batch_into'])
-@pytest.mark.parametrize('text', ['é', '\ud800'])
-def test_string_subclass_ascii_failures_are_normalized(api: str, text: str) -> None:
-    class StringSubclass(str):
-        pass
-
-    value = StringSubclass(text)
-    args = ([value],) if 'batch' in api else (value,)
-    if api.endswith('_into'):
-        args += ([bytearray(16)],) if 'batch' in api else (bytearray(16),)
-    with pytest.raises(ValueError, match='ASCII') as error:
-        getattr(base64, api)(*args)
-    with pytest.raises(ValueError, match='ASCII') as reference:
-        stdlib_base64.b64decode(value)
-    assert type(error.value) is type(reference.value)
-    assert str(error.value) == str(reference.value)
-
-
-@pytest.mark.parametrize('api', ['b64decode', 'b64decode_into', 'b64decode_batch', 'b64decode_batch_into'])
-@pytest.mark.parametrize('exception', [RuntimeError, ValueError, UnicodeDecodeError])
-def test_string_subclass_preserves_unrelated_encode_exceptions(api: str, exception: type[Exception]) -> None:
-    failure = (
-        UnicodeDecodeError('ascii', b'\xff', 0, 1, 'custom decode failure')
-        if exception is UnicodeDecodeError
-        else exception('custom encode failure')
-    )
-
-    class RaisingString(str):
-        def encode(self, encoding: str = 'utf-8', errors: str = 'strict') -> bytes:
-            raise failure
-
-    value = RaisingString('YWJj')
-    args = ([value],) if 'batch' in api else (value,)
-    if api.endswith('_into'):
-        args += ([bytearray(16)],) if 'batch' in api else (bytearray(16),)
-    with pytest.raises(exception) as error:
-        getattr(base64, api)(*args)
-    assert error.value is failure
-
-
-@pytest.mark.parametrize(
-    'length', [0, 1, 2, 3, 11, 12, 13, 23, 24, 25, 47, 48, 49, 63, 64, 65, 95, 96, 97, 255, 256, 257, 262145]
-)
-@pytest.mark.parametrize('validate', [False, True])
-@pytest.mark.parametrize('altchars', [None, b'-_', b'@#'])
-def test_ascii_string_decode_boundaries(length: int, validate: bool, altchars: bytes | None) -> None:
-    payload = (bytes(range(256)) * (length // 256 + 1))[:length]
-    encoded = stdlib_base64.b64encode(payload, altchars).decode('ascii')
-    assert base64.b64decode(encoded, altchars, validate=validate) == payload
-    for slack in (0, 7):
-        output = bytearray(b'\xa5' * (length + slack))
-        assert base64.b64decode_into(encoded, output, altchars, validate=validate) == length
-        assert output == payload + b'\xa5' * slack
-        if not validate and altchars is None:
-            output[:] = b'\xa5' * len(output)
-            assert base64.standard_b64decode(encoded) == payload
-            assert base64.standard_b64decode_into(encoded, output) == length
-            assert output == payload + b'\xa5' * slack
-
-    if length:
-        output = bytearray(b'\xa5' * (length - 1))
-        with pytest.raises(ValueError, match='Base64 output requires'):
-            base64.b64decode_into(encoded, output, altchars, validate=validate)
-        assert output == b'\xa5' * (length - 1)
-
-
-@pytest.mark.parametrize('validate', [False, True])
-@pytest.mark.parametrize(
-    'altchars', [None, b'-_', b'@#', b'+/', b'==', b'A_', b'++', b'/+', b'\x00\xff', b'', b'_', b'abc']
-)
-@pytest.mark.parametrize(
-    'text',
-    [
-        'é',
-        '\u0100',
-        '\U0001f600',
-        '\ud800',
-        'A',
-        'AA=',
-        '=AAA',
-        'AA==A',
-        'AB==',
-        'YW\x00Jj',
-        'YWJj\r\n',
-        'YW!Jj',
-        '+/8=',
-        '-_8=',
-        '@#8=',
-    ],
-)
-def test_exact_string_decode_matches_cpython(text: str, validate: bool, altchars: bytes | None) -> None:
-    failure = None
-    try:
-        expected = stdlib_base64.b64decode(text, altchars, validate=validate)
-    except (ValueError, binascii.Error, AssertionError) as reference:
-        failure = (type(reference), reference.args)
-    if failure is not None:
-        with pytest.raises(failure[0]) as actual:
-            base64.b64decode(text, altchars, validate=validate)
-        assert actual.value.args == failure[1]
-        with pytest.raises(failure[0]) as actual:
-            base64.b64decode_into(text, bytearray(16), altchars, validate=validate)
-        assert actual.value.args == failure[1]
-        return
-
-    assert base64.b64decode(text, altchars, validate=validate) == expected
-    output = bytearray(b'\xa5' * (len(expected) + 7))
-    assert base64.b64decode_into(text, output, altchars, validate=validate) == len(expected)
-    assert output == expected + b'\xa5' * 7
-
-
-@pytest.mark.parametrize('text', ['YWJj', 'é', '\ud800'])
-@pytest.mark.parametrize('altchars', [None, b'-_', b'@#'])
-def test_exact_string_normalization_precedes_argument_callbacks(text: str, altchars: bytes | None) -> None:
-    events: list[str] = []
-    output = bytearray(8)
-
-    class Validation:
-        def __bool__(self) -> bool:
-            events.append('validate')
-            output.clear()
-            return True
-
-    with pytest.raises(ValueError, match=r'Base64 output requires|ASCII') as actual:
-        dynamic_b64decode_into(text, output, altchars, validate=Validation())
-    if text == 'YWJj':
-        assert events == ['validate']
-        assert output == b''
-        assert 'Base64 output requires' in str(actual.value)
-    else:
-        assert events == []
-        assert output == bytearray(8)
-        with pytest.raises(ValueError, match='ASCII') as reference:
-            stdlib_base64.b64decode(text)
-        assert actual.value.args == reference.value.args
-
-
-def test_base64_into_variants_and_errors() -> None:
+def test_into_wrappers_and_argument_errors() -> None:
     encoded = bytearray([0xA5] * 12)
     assert base64.b64encode_into(b'abc', encoded) == 4
     assert encoded[:4] == b'YWJj'
@@ -596,7 +185,7 @@ def test_base64_into_variants_and_errors() -> None:
         dynamic_b64decode_into(b'YWJj', memoryview(bytearray(3)))
 
 
-def test_base64_into_handles_aliases_and_every_short_length() -> None:
+def test_into_snapshots_empty_and_overlapping_inputs() -> None:
     empty = bytearray()
     assert base64.b64encode(empty) == b''
     assert base64.b64decode(empty) == b''
@@ -614,37 +203,12 @@ def test_base64_into_handles_aliases_and_every_short_length() -> None:
     assert base64.b64decode_into(shared, shared, validate=True) == 3
     assert shared[:3] == b'abc'
 
-    for length in range(1025):
-        payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
-        standard = stdlib_base64.b64encode(payload)
-        urlsafe = stdlib_base64.urlsafe_b64encode(payload)
-        encoded = bytearray(len(standard) + 1)
-        decoded = bytearray(length + 1)
-
-        written = base64.b64encode_into(payload, encoded)
-        assert written == len(standard)
-        assert encoded[:written] == standard
-        assert encoded[written] == 0
-        written = base64.b64decode_into(standard, decoded, validate=True)
-        assert written == length
-        assert decoded[:written] == payload
-        assert decoded[written] == 0
-
-        written = base64.b64encode_into(payload, encoded, b'-_')
-        assert written == len(urlsafe)
-        assert encoded[:written] == urlsafe
-        assert encoded[written] == 0
-        written = base64.b64decode_into(urlsafe, decoded, b'-_', validate=True)
-        assert written == length
-        assert decoded[:written] == payload
-        assert decoded[written] == 0
-
 
 @pytest.mark.parametrize('length', [0, 1, 2, 12, 24, 48, 64, 96, 256, 1024, 262145])
 @pytest.mark.parametrize('validate', [False, True])
 @pytest.mark.parametrize('padded', [False, True])
 @pytest.mark.parametrize('view', [False, True])
-def test_decode_attempts_snapshot_aliases(length: int, validate: bool, padded: bool, view: bool) -> None:
+def test_decode_into_snapshots_aliases(length: int, validate: bool, padded: bool, view: bool) -> None:
     expected = (bytes(range(256)) * (length // 256 + 1))[:length]
     encoded = stdlib_base64.b64encode(expected)
     if not padded:

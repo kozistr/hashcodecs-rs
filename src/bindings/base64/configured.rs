@@ -918,5 +918,4 @@ fn partial_value(quad_pos: usize, value: u8) -> u8 {
 }
 
 #[cfg(test)]
-#[path = "configured_tests.rs"]
 mod tests;

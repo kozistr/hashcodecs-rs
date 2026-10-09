@@ -148,12 +148,12 @@ mod tests {
     use pyo3::types::PyByteArray;
 
     #[test]
-    fn oversized_batch_capacity_fails() {
+    fn reject_oversized_batch() {
         assert!(batch_results::<u8>(usize::MAX, "batch is too large").is_err());
     }
 
     #[test]
-    fn empty_bytearray_pointer() {
+    fn access_empty_bytearray() {
         Python::initialize();
         Python::attach(|py| {
             let value = PyByteArray::new(py, b"");

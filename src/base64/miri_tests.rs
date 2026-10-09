@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn scalar_allocation_and_buffer_bounds() {
+fn check_scalar_buffers() {
     const LENGTHS: &[usize] = &[
         0, 1, 2, 3, 4, 5, 6, 7, 8, 15, 16, 17, 31, 32, 47, 48, 63, 64, 65, 95, 96, 97, 255, 256,
         257, 1023, 1024, 1025, 4097,

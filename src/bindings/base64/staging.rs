@@ -374,7 +374,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scratch_buffer_layout() {
+    fn align_scratch_buffers() {
         assert_eq!(std::mem::align_of::<StagingBuffer>(), 32);
         assert_eq!(std::mem::offset_of!(StagingBuffer, bytes) % 32, 0);
 
@@ -385,5 +385,33 @@ mod tests {
             assert!(offset <= 64);
             assert_eq!(offset % 32, 0);
         }
+    }
+
+    #[test]
+    fn reject_oversized_allocations() {
+        use pyo3::exceptions::PyOverflowError;
+
+        Python::initialize();
+        Python::attach(|py| {
+            for capacity in [isize::MAX as usize, usize::MAX] {
+                let error = BytesWriter::new(py, capacity).err().unwrap();
+                assert!(
+                    error.is_instance_of::<PyMemoryError>(py)
+                        || (capacity == isize::MAX as usize
+                            && error.is_instance_of::<PyOverflowError>(py)),
+                    "{error}"
+                );
+                let error =
+                    unsafe { pybytes_with_len(py, capacity, |_| panic!("allocation must fail")) }
+                        .unwrap_err();
+                assert!(
+                    error.is_instance_of::<PyMemoryError>(py)
+                        || (capacity == isize::MAX as usize
+                            && error.is_instance_of::<PyOverflowError>(py)),
+                    "{error}"
+                );
+                assert!(!PyErr::occurred(py));
+            }
+        });
     }
 }

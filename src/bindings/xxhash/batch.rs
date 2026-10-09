@@ -586,7 +586,42 @@ mod tests {
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]
-    fn packed_inputs_survive_mutation() {
+    fn bound_stack_inputs() {
+        Python::initialize();
+        Python::attach(|py| {
+            let items = PyList::new(py, [PyBytes::new(py, b""), PyBytes::new(py, b"")]).unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<1, ()>(|_| panic!("oversized batch must not borrow stack inputs"))
+                    .is_none()
+            );
+            let items = PyList::new(
+                py,
+                std::iter::repeat_n(PyBytes::new(py, b""), BATCH_DETACH_ITEMS),
+            )
+            .unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<BATCH_DETACH_ITEMS, ()>(|_| panic!(
+                        "detached batch must retain its inputs"
+                    ))
+                    .is_none()
+            );
+            let items = PyList::new(py, [PyBytes::new(py, &vec![0; BATCH_DETACH_BYTES])]).unwrap();
+            let checked = ExactBytesList::checked(&items).unwrap();
+            assert!(
+                checked
+                    .with_stack::<1, ()>(|_| panic!("detached batch must retain its inputs"))
+                    .is_none()
+            );
+        });
+    }
+
+    #[cfg(not(Py_GIL_DISABLED))]
+    #[test]
+    fn retain_mutated_inputs() {
         Python::initialize();
         Python::attach(|py| {
             let payloads: Vec<_> = (0..65).map(|index| vec![index; 16385]).collect();
@@ -633,7 +668,7 @@ mod tests {
 
     #[cfg(not(Py_GIL_DISABLED))]
     #[test]
-    fn gil_batch_retains_bytearrays() {
+    fn retain_bytearrays() {
         Python::initialize();
         Python::attach(|py| {
             let items = [PyByteArray::new(py, b"mutable").into_any()];
@@ -643,7 +678,7 @@ mod tests {
     }
 
     #[test]
-    fn u128_conversion_bounds() {
+    fn convert_u128_bounds() {
         Python::initialize();
         Python::attach(|py| {
             for value in [

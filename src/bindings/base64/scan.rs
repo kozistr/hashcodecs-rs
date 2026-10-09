@@ -140,7 +140,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn x86_dispatch_tiers() {
+    fn select_x86_kernels() {
         for (avx2, sse2, expected) in [
             (
                 true,

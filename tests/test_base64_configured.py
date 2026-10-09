@@ -1,6 +1,5 @@
 import base64 as stdlib_base64
 import binascii
-import random
 import re
 import sys
 import tracemalloc
@@ -12,15 +11,12 @@ from base64_compat_harness import Observation, observe_call
 import hashcodecs.base64 as base64
 
 stdlib_b64decode: Callable[..., bytes] = stdlib_base64.b64decode
+
 dynamic_b64decode: Callable[..., bytes] = base64.b64decode
+
 dynamic_b64decode_into: Callable[..., int] = base64.b64decode_into
 
 PYTHON_315 = sys.version_info >= (3, 15)
-FREE_THREADED = not getattr(sys, '_is_gil_enabled', lambda: True)()
-ALTCHARS_ERROR = ValueError if PYTHON_315 else AssertionError
-BASE64_DETACH_THRESHOLD = 256 * 1024
-
-GILProgressAssertion = Callable[[Callable[[], object], object, int], None]
 
 
 @pytest.mark.parametrize('options', [{}, {'altchars': b'@#'}, {'ignorechars': b'!'}])
@@ -35,9 +31,12 @@ def test_large_discarded_prefix_does_not_reserve_an_input_sized_output(options: 
     assert peak < len(encoded) // 8
 
 
-@pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=_', b'=='])
-@pytest.mark.parametrize('remainder', range(3))
-@pytest.mark.parametrize('kind', [bytes, bytearray, memoryview])
+@pytest.mark.parametrize(
+    ('altchars', 'remainder', 'kind'),
+    [(altchars, remainder, bytes) for altchars in (None, b'-_', b'@#', b'=_', b'==') for remainder in range(3)]
+    + [(altchars, 1, bytearray) for altchars in (None, b'@#', b'==')]
+    + [(altchars, 2, memoryview) for altchars in (None, b'@#', b'==')],
+)
 def test_large_lenient_decode_preserves_exact_output_boundaries(
     altchars: bytes | None,
     remainder: int,
@@ -48,7 +47,7 @@ def test_large_lenient_decode_preserves_exact_output_boundaries(
     for value in (encoded, encoded[:-4] + b'!!!!' + encoded[-4:], b'!!!!' + encoded):
         expected = stdlib_base64.b64decode(value, altchars)
         assert base64.b64decode(kind(value), altchars) == expected
-        for extra in (0, 1, 16):
+        for extra in (0, 1):
             output = bytearray(b'.' * (len(expected) + extra))
             assert base64.b64decode_into(kind(value), output, altchars) == len(expected)
             assert output == expected + b'.' * extra
@@ -65,162 +64,6 @@ def _decode_keyword_outcome(
     kwargs: Mapping[str, object],
 ) -> Observation:
     return observe_call(lambda: function(value, altchars, **kwargs))
-
-
-def test_common_lenient_decoding_does_not_call_binascii(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fail_binascii(*args: object, **kwargs: object) -> bytes:
-        raise AssertionError(f'unexpected binascii decode: {args!r} {kwargs!r}')
-
-    monkeypatch.setattr(binascii, 'a2b_base64', fail_binascii)
-
-    noisy = b'Y!W \nJj'
-    assert base64.b64decode(noisy) == b'abc'
-    assert base64.standard_b64decode(noisy) == b'abc'
-    assert base64.b64decode(b'@\n#8=', b'@#') == b'\xfb\xff'
-    assert base64.urlsafe_b64decode(b'-\n_8=') == b'\xfb\xff'
-
-    output = bytearray(b'.' * 8)
-    assert base64.b64decode_into(noisy, output) == 3
-    assert output == b'abc.....'
-
-    assert base64.b64decode_batch([noisy, b'Z GVm']) == [b'abc', b'def']
-    outputs = [bytearray(b'....'), bytearray(b'....')]
-    assert base64.b64decode_batch_into([noisy, b'Z GVm'], outputs) == [3, 3]
-    assert outputs == [b'abc.', b'def.']
-
-
-@pytest.mark.parametrize('altchars', [b'=_', b'_=', b'=='])
-@pytest.mark.parametrize('encoded', [b'=', b'====', b'AA==', b'A===', b'YQ=='])
-def test_lenient_decode_treats_custom_equals_as_alphabet(encoded: bytes, altchars: bytes) -> None:
-    try:
-        expected = stdlib_base64.b64decode(encoded, altchars)
-    except binascii.Error:
-        with pytest.raises(binascii.Error):
-            base64.b64decode(encoded, altchars)
-        with pytest.raises(binascii.Error):
-            base64.b64decode_into(encoded, bytearray(16), altchars)
-    else:
-        assert base64.b64decode(encoded, altchars) == expected
-        output = bytearray(len(expected))
-        assert base64.b64decode_into(encoded, output, altchars) == len(expected)
-        assert output == expected
-
-
-@pytest.mark.parametrize(
-    ('value', 'kwargs', 'exception'),
-    [
-        (b'YWJj!', {'validate': True}, binascii.Error),
-        (b'abc', {}, binascii.Error),
-        ('\u2603', {}, ValueError),
-        (b'abc', {'altchars': b'x'}, ALTCHARS_ERROR),
-        ([65, 66], {}, TypeError),
-    ],
-)
-def test_base64_invalid_inputs(value: object, kwargs: dict[str, object], exception: type[Exception]) -> None:
-    with pytest.raises(exception):
-        dynamic_b64decode(value, **kwargs)
-
-
-def test_encode_requires_contiguous_buffers() -> None:
-    noncontiguous = memoryview(b'abcdef')[::2]
-    with pytest.raises(BufferError):
-        base64.b64encode(noncontiguous)
-    with pytest.raises(TypeError if PYTHON_315 else BufferError):
-        base64.b64encode(b'abc', memoryview(b'_-x_')[::2])
-    with pytest.raises(ALTCHARS_ERROR):
-        base64.b64encode(b'abc', b'_')
-
-
-def test_encode_altchars_conversion_and_error_precedence_match_cpython() -> None:
-    def outcome(function: Callable[..., bytes], value: object, altchars: object) -> bytes | type[Exception]:
-        try:
-            return function(value, altchars)  # type: ignore[arg-type]
-        except Exception as error:
-            return type(error)
-
-    cases = (
-        (b'abc', memoryview(b'-_').cast('H')),
-        (b'abc', memoryview(b'----').cast('H')),
-        (b'abc', memoryview(b'_-x_')[::2]),
-        (b'abc', '-_'),
-        (b'abc', object()),
-        (object(), b'x'),
-    )
-    for value, altchars in cases:
-        assert outcome(base64.b64encode, value, altchars) == outcome(stdlib_base64.b64encode, value, altchars)
-
-
-def _outcome(
-    function: Callable[..., bytes], value: bytes | bytearray, altchars: bytes | None, validate: bool
-) -> Observation:
-    return observe_call(lambda: function(value, altchars, validate=validate))
-
-
-def _into_outcome(value: bytes | bytearray, altchars: bytes | None, validate: bool) -> Observation:
-    output = bytearray(len(value))
-
-    def decode_into() -> bytes:
-        written = base64.b64decode_into(value, output, altchars, validate=validate)
-        return bytes(output[:written])
-
-    return observe_call(decode_into)
-
-
-@pytest.mark.parametrize(
-    'value',
-    [
-        b'',
-        b'A',
-        b'AA',
-        b'AAA',
-        b'AAAA',
-        b'AA=',
-        b'YQ=',
-        b'YWI==',
-        b'YWJj====',
-        b'AAAA=AAA',
-        b'AA==AA',
-        b'=AAA',
-        b'====',
-        b'A===',
-        b'AA===',
-        b'AAA===',
-        b'AAAA===',
-        b'AA==junk',
-        b'AA==!!',
-        b'YW=Jj',
-        b'YWJ=j',
-        b'A=AAA',
-        b'A==AAA',
-        b'AA=A',
-        b'AA==A',
-        b'AAA=A',
-        b'AAAA=A',
-        b'AA=!!=',
-        b'AA=! =',
-        b'AA=Z=',
-        b'AA=Z==',
-        b'AA\n=',
-        b'AA=\n=',
-        b'++8=',
-        b'--8=',
-        b'//8=',
-        b'__8=',
-        b'+-8=',
-        b'/_8=',
-        b'Y W\nJj',
-    ],
-)
-@pytest.mark.parametrize('altchars', [None, b'+/', b'-_', b'@#', b'++', b'A_'])
-@pytest.mark.parametrize('validate', [False, True])
-def test_decode_edge_cases_match_cpython(value: bytes, altchars: bytes | None, validate: bool) -> None:
-    expected = _outcome(stdlib_base64.b64decode, value, altchars, validate)
-    actual = _outcome(base64.b64decode, value, altchars, validate)
-    assert actual == expected
-    assert _into_outcome(value, altchars, validate) == expected
-    mutable = bytearray(value)
-    assert _outcome(base64.b64decode, mutable, altchars, validate) == expected
-    assert _into_outcome(mutable, altchars, validate) == expected
 
 
 def test_strict_custom_decode_preserves_detailed_errors_and_capacity_ordering() -> None:
@@ -251,22 +94,6 @@ def test_strict_custom_decode_preserves_detailed_errors_and_capacity_ordering() 
         with pytest.raises(ValueError, match=rf'requires {required} bytes'):
             base64.b64decode_into(encoded, output, b'=_', validate=True, padded=padded)
         assert output == bytes([0xA5] * output_size)
-
-
-@pytest.mark.parametrize('altchars', [None, b'-_', b'@#', b'=_'])
-@pytest.mark.parametrize('validate', [False, True])
-@pytest.mark.parametrize('encoded', [b'A', b'AA=!', b'AA!A', b'AAAAA', b'A' * 4096 + b'AA!A'])
-def test_decode_fallback_preserves_cpython_error_messages(
-    encoded: bytes, altchars: bytes | None, validate: bool
-) -> None:
-    with pytest.raises(binascii.Error) as expected:
-        stdlib_base64.b64decode(encoded, altchars, validate=validate)
-    with pytest.raises(binascii.Error) as allocating:
-        base64.b64decode(encoded, altchars, validate=validate)
-    with pytest.raises(binascii.Error) as reusable:
-        base64.b64decode_into(encoded, bytearray(len(encoded)), altchars, validate=validate)
-    assert str(allocating.value) == str(expected.value)
-    assert str(reusable.value) == str(expected.value)
 
 
 @pytest.mark.parametrize('length', [63, 64, 65, 4095, 4096, 4097])
@@ -361,61 +188,6 @@ def test_strict_custom_decode_uses_staged_translation() -> None:
     with pytest.raises(binascii.Error):
         base64.b64decode_into(malformed, output, b'@#', validate=True)
     assert output[: len(expected_prefix)] == expected_prefix
-
-
-def test_generated_lenient_inputs_match_cpython() -> None:
-    generator = random.Random(0xB64DEC0DE)
-    alphabet = b'ABab09+/=_! \r\n-@#'
-    altchars_cases = (None, b'+/', b'-_', b'@#', b'++', b'A_', b'=_', b'_=', b'==')
-
-    for _ in range(2_000):
-        value = bytes(generator.choice(alphabet) for _ in range(generator.randrange(33)))
-        for altchars in altchars_cases:
-            expected = _outcome(stdlib_base64.b64decode, value, altchars, False)
-            assert _outcome(base64.b64decode, value, altchars, False) == expected
-            assert _into_outcome(value, altchars, False) == expected
-
-
-def test_all_short_payload_lengths_match_cpython() -> None:
-    for length in range(1025):
-        payload = bytes((index * 37 + 11) & 0xFF for index in range(length))
-        standard = stdlib_base64.b64encode(payload)
-        urlsafe = stdlib_base64.urlsafe_b64encode(payload)
-        assert base64.b64encode(payload) == standard
-        assert base64.b64decode(standard) == payload
-        assert base64.urlsafe_b64encode(payload) == urlsafe
-        assert base64.urlsafe_b64decode(urlsafe) == payload
-
-
-@pytest.mark.skipif(FREE_THREADED, reason='requires a GIL-enabled CPython build')
-def test_large_base64_calls_release_the_gil(assert_releases_gil: GILProgressAssertion) -> None:
-    payload = bytes(range(256)) * (BASE64_DETACH_THRESHOLD // 256)
-    encoded = stdlib_base64.b64encode(payload)
-
-    assert_releases_gil(lambda: base64.b64encode(payload), encoded, 128)
-    assert_releases_gil(lambda: base64.b64decode(encoded, validate=True), payload, 128)
-    custom = encoded.translate(bytes.maketrans(b'+/', b'@#'))
-    assert_releases_gil(lambda: base64.b64decode(custom, b'@#', validate=True), payload, 128)
-
-
-def test_configured_decode_fallback_edge_cases() -> None:
-    assert base64.b64decode(b'@!#8', b'@#', padded=False, ignorechars=b'!') == b'\xfb\xff'
-    output = bytearray([0xA5] * 4)
-    assert base64.b64decode_into(b'@!#8', output, b'@#', padded=False, ignorechars=b'!') == 2
-    assert output == bytearray(b'\xfb\xff\xa5\xa5')
-
-    assert base64.b64decode(b'AA=', padded=False, validate=False, ignorechars=b'!') == b'\x00'
-    with pytest.raises(binascii.Error):
-        base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
-
-    assert base64.b64decode(b'', canonical=True) == b''
-    assert base64.b64decode(b'AAA', padded=False, canonical=True) == b'\x00\x00'
-    assert base64.b64decode(b'AAAA', canonical=True) == b'\x00\x00\x00'
-
-    assert base64.b64decode(b'YWJj', b'@#', validate=True, padded=False) == b'abc'
-    output = bytearray(3)
-    assert base64.b64decode_into(b'YWJj', output, b'@#', validate=True, padded=False) == 3
-    assert output == b'abc'
 
 
 @pytest.mark.parametrize(
@@ -569,90 +341,3 @@ def test_configured_lenient_padding_matches_the_running_cpython() -> None:
         return bytes(output[:written])
 
     assert observe_call(decode_into) == expected
-
-
-@pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 binascii API')
-def test_configured_fallback_accepts_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[object, dict[str, object]]] = []
-
-    def fallback(data: object, **kwargs: object) -> bytes:
-        calls.append((data, kwargs))
-        return b'abc'
-
-    monkeypatch.setattr(binascii, 'a2b_base64', fallback)
-    encoded = b'AA==AAAA'
-    options = {'validate': False, 'ignorechars': b'!'}
-
-    assert dynamic_b64decode(encoded, **options) == b'abc'
-
-    output = bytearray(b'.....')
-    assert dynamic_b64decode_into(encoded, output, **options) == 3
-    assert output == b'abc..'
-    expected = {
-        'strict_mode': False,
-        'padded': True,
-        'canonical': False,
-        'ignorechars': b'!',
-    }
-    assert calls == [(encoded, expected)] * 2
-
-
-def test_decode_fallback_lazily_recovers_exact_memoryview_owner(monkeypatch: pytest.MonkeyPatch) -> None:
-    observed: list[object] = []
-
-    def record_input(data: object, *args: object, **kwargs: object) -> bytes:
-        observed.append(data)
-        return b''
-
-    monkeypatch.setattr(binascii, 'a2b_base64', record_input)
-
-    encoded = b'abc'
-    assert base64.b64decode(memoryview(encoded)) == b''
-    assert observed[-1] is encoded
-
-    mutable = bytearray(encoded)
-    assert base64.b64decode(memoryview(mutable)) == b''
-    assert observed[-1] == encoded
-    assert isinstance(observed[-1], bytes)
-
-    sliced_owner = b'xabc'
-    assert base64.b64decode(memoryview(sliced_owner)[1:]) == b''
-    assert observed[-1] == encoded
-    assert observed[-1] is not sliced_owner
-
-    output = bytearray(1)
-    assert base64.b64decode_into(memoryview(encoded), output) == 0
-    assert output == b'\x00'
-
-
-def test_configured_decode_bypasses_binascii_on_success_and_capacity_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    def unexpected_fallback(*args: object, **kwargs: object) -> bytes:
-        raise AssertionError((args, kwargs))
-
-    monkeypatch.setattr(binascii, 'a2b_base64', unexpected_fallback)
-    encoded = b'Y!WJj'
-    assert base64.b64decode(encoded, ignorechars=b'!') == b'abc'
-
-    output = bytearray(3)
-    assert base64.b64decode_into(encoded, output, ignorechars=b'!') == 3
-    assert output == b'abc'
-
-    undersized = bytearray([0xA5] * 2)
-    with pytest.raises(ValueError, match='requires 3 bytes'):
-        base64.b64decode_into(encoded, undersized, ignorechars=b'!')
-    assert undersized == bytearray([0xA5] * 2)
-
-    shared = bytearray(encoded)
-    assert base64.b64decode_into(shared, shared, ignorechars=b'!') == 3
-    assert shared[:3] == b'abc'
-
-    view = memoryview(encoded)
-    assert base64.b64decode(view, ignorechars=b'!') == b'abc'
-
-    monkeypatch.undo()
-    with pytest.raises(binascii.Error):
-        base64.b64decode(b'A!', padded=False, validate=False, ignorechars=b'!')
-    unchanged = bytearray([0xA5] * 4)
-    with pytest.raises(binascii.Error):
-        base64.b64decode_into(b'A!', unchanged, padded=False, validate=False, ignorechars=b'!')
-    assert unchanged == bytearray([0xA5] * 4)

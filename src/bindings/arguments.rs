@@ -175,7 +175,7 @@ mod tests {
     use pyo3::prelude::*;
 
     #[test]
-    fn keyword_storage_widths() {
+    fn match_unicode_keywords() {
         Python::initialize();
         Python::attach(|py| unsafe {
             for max_char in [0x7f, 0xff, 0xffff, 0x10ffff] {

@@ -9,7 +9,7 @@ const CANARY: u8 = 0xa5;
 const GUARD: usize = 32;
 
 #[test]
-fn prefix_fallback_preserves_output() {
+fn preserve_fallback_output() {
     for alphabet in [
         super::super::DecodeAlphabet::Standard,
         super::super::DecodeAlphabet::UrlSafe,
@@ -86,7 +86,7 @@ fn error_checks_are_bounded<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_error_bounds() {
+fn preserve_error_guards() {
     error_checks_are_bounded::<false, false>();
     error_checks_are_bounded::<true, false>();
     error_checks_are_bounded::<false, true>();
@@ -209,7 +209,7 @@ fn encode_misaligned_boundaries<const URLSAFE: bool>() {
 }
 
 #[test]
-fn encode_misaligned_guards() {
+fn encode_unaligned_inputs() {
     encode_misaligned_boundaries::<false>();
     encode_misaligned_boundaries::<true>();
 }
@@ -288,7 +288,7 @@ fn decode_misaligned_boundaries<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_misaligned_guards() {
+fn decode_unaligned_inputs() {
     decode_misaligned_boundaries::<false, false>();
     decode_misaligned_boundaries::<true, false>();
     decode_misaligned_boundaries::<false, true>();
@@ -370,7 +370,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn invalid_lane_tail_guards() {
+fn preserve_invalid_tail_guards() {
     invalid_lanes::<false, false>();
     invalid_lanes::<true, false>();
     invalid_lanes::<false, true>();
@@ -438,7 +438,7 @@ fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn checkpoint_error_guards() {
+fn preserve_checkpoint_guards() {
     guarded_checkpoint_invalids::<false, false>();
     guarded_checkpoint_invalids::<true, false>();
     guarded_checkpoint_invalids::<false, true>();
@@ -564,7 +564,7 @@ fn invalid_scalar_checkpoint_tail<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn checkpoint_handoffs() {
+fn match_checkpoint_handoffs() {
     full_decode_misaligned_handoffs::<false, false>();
     full_decode_misaligned_handoffs::<true, false>();
     full_decode_misaligned_handoffs::<false, true>();
@@ -624,7 +624,7 @@ fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn validated_block_error_guards() {
+fn preserve_validated_guards() {
     validated_invalid_blocks::<false, false>();
     validated_invalid_blocks::<true, false>();
     validated_invalid_blocks::<false, true>();

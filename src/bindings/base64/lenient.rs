@@ -402,8 +402,6 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                             Translation::new(table, altchars, decode_byte_kernels().translate);
                         let mut writer =
                             StagingWriter::new(unsafe { output.add(written) }, translation);
-                        // The scanner validated complete quartets, and the
-                        // remaining output capacity was checked above.
                         let staged = unsafe {
                             writer
                                 .push_symbols::<false>(symbols)

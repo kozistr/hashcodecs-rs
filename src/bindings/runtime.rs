@@ -15,8 +15,6 @@ pub(super) const MURMUR3_DETACH_THRESHOLD: usize = 64 * 1024;
 pub(super) const XXH3_DETACH_THRESHOLD: usize = 256 * 1024;
 pub(super) const METHOD_FLAGS: i32 = ffi::METH_FASTCALL | ffi::METH_KEYWORDS;
 
-/// Borrow a Python bytes-like argument for a Rust operation.
-///
 /// # Safety
 /// `object` must be a non-null, live Python object retained for this call,
 /// including while detached. `operation` must not execute Python code or
@@ -154,7 +152,6 @@ mod tests {
             let view = py
                 .eval(c"memoryview(b'x' + b'a' * 65536 + b'y')[1:-1]", None, None)
                 .unwrap();
-            // The view stays alive, and the operation only copies its bytes.
             let result = unsafe {
                 with_function_bytes(py, view.as_ptr(), 1, |input| input.to_vec()).unwrap()
             };

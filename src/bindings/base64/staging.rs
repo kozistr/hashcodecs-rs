@@ -100,8 +100,6 @@ impl StagingBuffer {
     }
 }
 
-/// A raw output cursor. Construction does not access the output; callers of
-/// the unsafe write methods must supply its capacity and lifetime guarantees.
 // Keep hot metadata beside the start of the SIMD-aligned scratch buffer.
 #[repr(C)]
 pub(super) struct StagingWriter {
@@ -167,7 +165,6 @@ impl StagingWriter {
         Some(())
     }
 
-    // Same safety requirements as `push_symbols`.
     unsafe fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
 
@@ -197,7 +194,6 @@ impl StagingWriter {
         Some(())
     }
 
-    // Same output requirements as `finish`, including valid unchecked input.
     unsafe fn flush<const CHECKED: bool>(&mut self) -> Option<()> {
         let staging = self.staging.initialized_mut();
 

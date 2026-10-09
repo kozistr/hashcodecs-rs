@@ -67,8 +67,6 @@ pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usi
     }
 }
 
-/// Retain list items while testing a non-reentrant predicate.
-///
 /// # Safety
 /// `predicate` must not execute Python code, detach from Python, or mutate
 /// `items`. On GIL builds, list slots are accessed unchecked between calls.
@@ -107,7 +105,6 @@ pub(super) unsafe fn list_items_and_all<'py>(
 }
 
 pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
-    // This predicate does not call Python or mutate the source list.
     let (items, all) = unsafe { list_items_and_all(items, |_| true)? };
     debug_assert!(all);
     Ok(items)

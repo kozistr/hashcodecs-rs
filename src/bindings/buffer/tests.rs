@@ -147,8 +147,6 @@ fn retain_inline_buffer_metadata_after_moves() {
                     assert_eq!(unsafe { *view.strides }, 1);
                     assert_ne!(unsafe { ffi::PyBuffer_IsContiguous(view, b'C' as _) }, 0);
                 });
-                // Move again after repairing the pointers. Every subsequent
-                // C API access must use the descriptor's current address.
                 let mut buffer = moved.pop().unwrap();
                 drop(moved);
                 assert_eq!(copy_buffer(py, &mut buffer).unwrap().as_bytes(), bytes);

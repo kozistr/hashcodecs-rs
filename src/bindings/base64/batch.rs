@@ -278,7 +278,6 @@ pub(super) fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    // Exact type and size checks cannot reenter Python or mutate the list.
     let (items, exact_bytes_fast_path) = unsafe {
         list_items_and_all(items, |item| {
             // Only the length is needed while retaining the list; avoid acquiring
@@ -387,7 +386,6 @@ pub(super) fn b64decode_batch_parsed<'py>(
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    // Exact type checks cannot reenter Python or mutate the list.
     let (items, exact_bytes_fast_path) =
         unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
     #[cfg(Py_GIL_DISABLED)]

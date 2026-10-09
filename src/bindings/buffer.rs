@@ -925,7 +925,6 @@ fn acquire_buffer<'py>(
 
     let release_may_reenter = !PyByteArray::is_exact_type_of(value)
         && (memoryview_source.is_null() || view.obj != memoryview_source);
-    // Inspect self-referential metadata before moving its descriptor.
     let c_contiguous =
         flags == ffi::PyBUF_SIMPLE || unsafe { ffi::PyBuffer_IsContiguous(&view, b'C' as _) != 0 };
     let metadata = if flags == ffi::PyBUF_SIMPLE {

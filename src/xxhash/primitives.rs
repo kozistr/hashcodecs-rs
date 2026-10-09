@@ -45,8 +45,6 @@ pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
     )
 }
 
-/// Read one little-endian word from a caller-validated pointer range.
-///
 /// # Safety
 /// `input.add(offset)` must be valid for reading eight bytes within the same
 /// allocation, with no concurrent writes to those bytes. Alignment is not required.

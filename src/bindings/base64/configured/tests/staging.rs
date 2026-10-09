@@ -27,7 +27,6 @@ fn stage_partial_blocks() {
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
-    // The output holds both decoded blocks and does not overlap the symbols.
     assert_eq!(unsafe { writer.push_symbols::<true>(&symbols) }, Some(()));
     let written = unsafe { writer.finish::<true>() }.unwrap();
     assert_eq!(written, CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2);
@@ -76,7 +75,6 @@ fn flush_staged_values() {
     let required = symbols / 4 * 3;
     let mut output = vec![0xa5; required + 2];
     let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
-    // The interior has exactly the decoded capacity; guards remain outside it.
     for _ in 0..symbols {
         assert_eq!(unsafe { writer.push_value::<true>(0) }, Some(()));
     }
@@ -158,7 +156,6 @@ fn preserve_fragment_guards() {
         for split in 0..=5.min(length) {
             let mut output = vec![0xa5; required + 17];
             let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
-            // Both fragments share one cursor with space for the full result.
             assert_eq!(
                 unsafe { writer.push_symbols::<true>(&input[..split]) },
                 Some(())

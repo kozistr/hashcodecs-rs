@@ -588,7 +588,6 @@ impl ConfiguredDecoder {
     }
 
     pub(super) fn decoded_len(&self, input: &[u8], continue_after_padding: bool) -> Option<usize> {
-        // CountSink never accesses output storage, and CHECKED validates input.
         unsafe { self.scan::<CountSink, true>(input, CountSink::new(), continue_after_padding) }
     }
 
@@ -660,7 +659,6 @@ impl ConfiguredDecoder {
         }
     }
 
-    // Same safety requirements as `scan`, with strict validation selected.
     unsafe fn scan_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -724,7 +722,6 @@ impl ConfiguredDecoder {
         unsafe { self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value) }
     }
 
-    // Same safety requirements as `scan`, with lenient validation selected.
     unsafe fn scan_lenient<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -811,7 +808,6 @@ impl ConfiguredDecoder {
         }
     }
 
-    // Same safety requirements as `scan`, with strict special-byte scanning selected.
     unsafe fn scan_strict_specials<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -881,7 +877,6 @@ impl ConfiguredDecoder {
 
     #[cold]
     #[inline(never)]
-    // Same safety requirements as `scan` with CHECKED true.
     unsafe fn scan_strict_ignored_padding<S: ScanSink>(
         &self,
         input: &[u8],
@@ -915,7 +910,6 @@ impl ConfiguredDecoder {
         unsafe { decoder.scan::<S, true>(input, sink, false) }
     }
 
-    // The sink must satisfy `scan`'s output contract for the accumulated symbols.
     unsafe fn finish_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         sink: S,

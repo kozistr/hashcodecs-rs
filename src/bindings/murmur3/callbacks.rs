@@ -23,7 +23,6 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
                 return std::ptr::null_mut();
             };
 
-            // The call retains input; the hash operation cannot reenter Python.
             let result =
                 with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                     murmur3_x86_32(bytes, seed)
@@ -52,7 +51,6 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
                     return std::ptr::null_mut();
                 };
 
-                // The call retains input; the hash operation cannot reenter Python.
                 let result =
                     with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                         x86_128_digest(murmur3_x86_128(bytes, seed))
@@ -79,7 +77,6 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x64_128_digest(
                     return std::ptr::null_mut();
                 };
 
-                // The call retains input; the hash operation cannot reenter Python.
                 let result =
                     with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                         x64_128_digest(murmur3_x64_128(bytes, seed))

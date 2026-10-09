@@ -32,8 +32,8 @@ pub(crate) trait Decoder {
     const CHECK_INPUT: bool = true;
 
     #[inline(always)]
-    fn accepts_errors(errors_are_zero: bool) -> bool {
-        !Self::CHECK_INPUT || errors_are_zero
+    fn rejects_input(has_errors: bool) -> bool {
+        Self::CHECK_INPUT && has_errors
     }
 
     fn decode_table() -> &'static [u8; 256];

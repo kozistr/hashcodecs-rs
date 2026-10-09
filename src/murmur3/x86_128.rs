@@ -89,7 +89,7 @@ impl Murmur3X86Hasher128 {
         self.length = self.length.wrapping_add(input.len() as u32);
         let hashes = &mut self.hashes;
         self.tail.consume(input, |blocks| {
-            mix_x86_128_body(blocks, hashes);
+            mix_body(blocks, hashes);
         });
     }
 
@@ -110,7 +110,7 @@ impl Murmur3X86Hasher128 {
     ///
     #[inline]
     pub fn digest(&self) -> [u32; 4] {
-        finish_x86_128_tail(self.tail.remaining(), self.hashes, self.length)
+        finish_tail(self.tail.remaining(), self.hashes, self.length)
     }
 }
 
@@ -150,18 +150,18 @@ impl Default for Murmur3X86Hasher128 {
 pub fn murmur3_x86_128(input: &[u8], seed: u32) -> [u32; 4] {
     let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 4];
-    mix_x86_128_body(blocks, &mut hashes);
-    finish_x86_128_tail(tail, hashes, input.len() as u32)
+    mix_body(blocks, &mut hashes);
+    finish_tail(tail, hashes, input.len() as u32)
 }
 
 #[inline]
 #[cfg(test)]
-pub(super) fn finish_x86_128(input: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
-    finish_x86_128_tail(&input[offset..], hashes, input.len() as u32)
+pub(super) fn finish(input: &[u8], hashes: [u32; 4], offset: usize) -> [u32; 4] {
+    finish_tail(&input[offset..], hashes, input.len() as u32)
 }
 
 #[inline]
-pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 4] {
+pub(super) fn finish_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     debug_assert!(tail.len() < 16);
     let mut blocks = [0u32; 4];
 
@@ -197,39 +197,39 @@ pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32
             .wrapping_mul(X86_128_C2[0]);
     }
 
-    finalize_x86_128(hashes, length)
+    finalize(hashes, length)
 }
 
 #[inline]
-pub(super) fn mix_x86_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
+pub(super) fn mix_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if blocks.byte_len() < dispatch::X86_128_AVX2_MIN {
-            mix_x86_128_body_scalar(blocks, hashes);
+            mix_body_scalar(blocks, hashes);
 
             return;
         }
 
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x86_128_backend(blocks.byte_len(), capabilities);
-        mix_x86_128_body_with_backend(blocks, hashes, selected);
+        mix_body_with_backend(blocks, hashes, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    mix_x86_128_body_scalar(blocks, hashes);
+    mix_body_scalar(blocks, hashes);
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn mix_x86_128_body_with_backend(
+pub(super) fn mix_body_with_backend(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u32; 4],
     backend: dispatch::Backend,
 ) {
-    unsafe { x86::mix_x86_128_body(blocks, hashes, backend) };
+    unsafe { x86::mix_body(blocks, hashes, backend) };
 }
 
 #[inline]
-pub(super) fn mix_x86_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
+pub(super) fn mix_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     const ROTATE_K: [u32; 4] = [15, 16, 17, 18];
 
     let input = blocks.as_bytes();
@@ -252,13 +252,13 @@ pub(super) fn mix_x86_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
             .wrapping_mul(X86_128_C1[3])
             .rotate_left(ROTATE_K[3])
             .wrapping_mul(X86_128_C2[3]);
-        mix_x86_128_hashes(hashes, block1, block2, block3, block4);
+        mix_hashes(hashes, block1, block2, block3, block4);
         offset += 16;
     }
 }
 
 #[inline(always)]
-pub(super) fn mix_x86_128_hashes(
+pub(super) fn mix_hashes(
     hashes: &mut [u32; 4],
     block1: u32,
     block2: u32,
@@ -295,7 +295,7 @@ pub(super) fn mix_x86_128_hashes(
 }
 
 #[inline]
-pub(super) fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
+pub(super) fn finalize(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     for hash in &mut hashes {
         *hash ^= length;
     }

@@ -33,7 +33,7 @@ struct EncodeAvx2Constants {
 }
 
 #[target_feature(enable = "avx2")]
-pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
+pub(in crate::base64) unsafe fn encode_with_store<const URLSAFE: bool>(
     input: &[u8],
     output: *mut u8,
     store_mode: Avx2StoreMode,
@@ -44,7 +44,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
 
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        encode_avx2_with_offsets(
+        encode_with_offsets(
             input,
             output,
             store_mode,
@@ -55,7 +55,7 @@ pub(in crate::base64) unsafe fn encode_avx2_with_store<const URLSAFE: bool>(
 
     #[cfg(target_arch = "x86")]
     unsafe {
-        encode_avx2_with_offsets(input, output, store_mode, standard_offsets_256::<URLSAFE>())
+        encode_with_offsets(input, output, store_mode, standard_offsets_256::<URLSAFE>())
     }
 }
 
@@ -74,7 +74,7 @@ pub(in crate::base64) unsafe fn encode_custom(
     let offsets = _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(offsets.as_ptr().cast()) });
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        encode_avx2_with_offsets(
+        encode_with_offsets(
             input,
             output,
             store_mode,
@@ -85,13 +85,13 @@ pub(in crate::base64) unsafe fn encode_custom(
 
     #[cfg(target_arch = "x86")]
     unsafe {
-        encode_avx2_with_offsets(input, output, store_mode, offsets)
+        encode_with_offsets(input, output, store_mode, offsets)
     }
 }
 
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn encode_avx2_with_offsets(
+unsafe fn encode_with_offsets(
     input: &[u8],
     output: *mut u8,
     store_mode: Avx2StoreMode,
@@ -188,7 +188,7 @@ unsafe fn encode_avx2_with_offsets(
     // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
     let consumed = if source + 16 <= input.len() {
         let encoded =
-            unsafe { encode_12_avx2(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
+            unsafe { encode_12(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
 
         source + 12
@@ -267,7 +267,7 @@ unsafe fn encode_wrapped_with_offsets(
 
     if source + 16 <= input.len() {
         let encoded =
-            unsafe { encode_12_avx2(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
+            unsafe { encode_12(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
         unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
         source + 12
     } else {
@@ -298,7 +298,7 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
     mut groups: usize,
     offsets: __m256i,
 ) {
-    let constants = encode_avx2_constants(offsets);
+    let constants = encode_constants(offsets);
 
     while groups >= 2 {
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
@@ -359,7 +359,7 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-fn encode_avx2_constants(translate: __m256i) -> EncodeAvx2Constants {
+fn encode_constants(translate: __m256i) -> EncodeAvx2Constants {
     EncodeAvx2Constants {
         reshuffle: _mm256_set_epi8(
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
@@ -562,23 +562,23 @@ unsafe fn encode_96_shifted_asm_inner(
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn encode_12_avx2(input: *const u8, offsets: __m128i) -> __m128i {
+unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
 
     let mut value = unsafe { _mm_loadu_si128(input.cast()) };
     value = _mm_shuffle_epi8(value, shuffle);
 
     let higher = _mm_and_si128(value, _mm_set1_epi32(0x0fc0_fc00));
-    let higher = mulhi_epu16_exact_avx2_128(higher, _mm_set1_epi32(0x0400_0040));
+    let higher = mulhi_epu16_exact_128(higher, _mm_set1_epi32(0x0400_0040));
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
-    let lower = mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010));
+    let lower = mullo_epi16_exact_128(lower, _mm_set1_epi32(0x0100_0010));
 
-    ascii_from_indices_avx2_128(_mm_or_si128(higher, lower), offsets)
+    ascii_from_indices_128(_mm_or_si128(higher, lower), offsets)
 }
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+fn mulhi_epu16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     unsafe {
         asm!(
             "vpmulhuw {value}, {value}, {multiplier}",
@@ -593,7 +593,7 @@ fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+fn mullo_epi16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     unsafe {
         asm!(
             "vpmullw {value}, {value}, {multiplier}",
@@ -637,7 +637,7 @@ fn encode_24_shifted_value(shifted: __m256i, offsets: __m256i) -> __m256i {
     let lower = _mm256_and_si256(value, _mm256_set1_epi32(0x003f_03f0));
     let lower = mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010));
 
-    ascii_from_indices_avx2(_mm256_or_si256(higher, lower), offsets)
+    ascii_from_indices(_mm256_or_si256(higher, lower), offsets)
 }
 
 // LLVM can strength-reduce these alternating word multipliers into a much
@@ -675,7 +675,7 @@ fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "avx2")]
-fn ascii_from_indices_avx2_128(indices: __m128i, offsets: __m128i) -> __m128i {
+fn ascii_from_indices_128(indices: __m128i, offsets: __m128i) -> __m128i {
     let reduced = _mm_subs_epu8(indices, _mm_set1_epi8(51));
     let lower = _mm_cmpgt_epi8(indices, _mm_set1_epi8(25));
     let reduced = _mm_sub_epi8(reduced, lower);
@@ -710,7 +710,7 @@ fn standard_offsets_256<const URLSAFE: bool>() -> __m256i {
 }
 
 #[target_feature(enable = "avx2")]
-fn ascii_from_indices_avx2(indices: __m256i, offsets: __m256i) -> __m256i {
+fn ascii_from_indices(indices: __m256i, offsets: __m256i) -> __m256i {
     let reduced = _mm256_subs_epu8(indices, _mm256_set1_epi8(51));
     let lower = _mm256_cmpgt_epi8(indices, _mm256_set1_epi8(25));
     let reduced = _mm256_sub_epi8(reduced, lower);

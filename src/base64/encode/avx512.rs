@@ -6,12 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
-use super::avx2::{Avx2StoreMode, encode_avx2_with_store};
-#[cfg(feature = "python")]
-use super::avx2::{
-    encode_custom as encode_custom_avx2, encode_wrapped as encode_wrapped_avx2,
-    encode_wrapped_custom as encode_wrapped_custom_avx2,
-};
+use super::avx2::{self, Avx2StoreMode};
 #[cfg(feature = "python")]
 use super::{CustomEncodeAlphabet, WrappedOutput};
 
@@ -43,7 +38,7 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     output: *mut u8,
 ) -> usize {
     if input.len() < 48 {
-        return unsafe { encode_avx2_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) };
+        return unsafe { avx2::encode_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) };
     }
 
     let alphabet = if URLSAFE {
@@ -65,7 +60,7 @@ pub(in crate::base64) unsafe fn encode_custom(
 ) -> usize {
     if input.len() < 48 {
         return unsafe {
-            encode_custom_avx2(input, output, alphabet.offsets(), Avx2StoreMode::Cached)
+            avx2::encode_custom(input, output, alphabet.offsets(), Avx2StoreMode::Cached)
         };
     }
 
@@ -213,7 +208,7 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
     output: &mut WrappedOutput,
 ) -> usize {
     if input.len() < 48 {
-        return unsafe { encode_wrapped_avx2::<URLSAFE>(input, output) };
+        return unsafe { avx2::encode_wrapped::<URLSAFE>(input, output) };
     }
 
     let alphabet = if URLSAFE {
@@ -234,7 +229,7 @@ pub(in crate::base64) unsafe fn encode_wrapped_custom(
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
     if input.len() < 48 {
-        return unsafe { encode_wrapped_custom_avx2(input, output, alphabet.offsets()) };
+        return unsafe { avx2::encode_wrapped_custom(input, output, alphabet.offsets()) };
     }
 
     let table = unsafe { _mm512_loadu_si512(alphabet.table().as_ptr().cast()) };

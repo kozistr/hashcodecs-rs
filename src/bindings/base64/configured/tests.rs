@@ -5,7 +5,7 @@ use super::{
 use crate::bindings::base64::{
     lenient::lenient_decode_table,
     policy::{Padding, Validation},
-    scan::{decode_byte_kernels, scalar::alphanumeric_prefix_scalar},
+    scan::{decode_byte_kernels, scalar::alphanumeric_prefix},
 };
 
 mod lenient;
@@ -38,7 +38,7 @@ fn configured_decoder(
         },
         padding: Padding::new(padded),
         canonical,
-        alphanumeric_prefix: alphanumeric_prefix_scalar,
+        alphanumeric_prefix,
         strict_specials: StrictSpecials::new(&table),
         strict_forbidden: StrictSpecials::forbidden(&table),
         translation: Translation::new(&table, None, decode_byte_kernels().translate),

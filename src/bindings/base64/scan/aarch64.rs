@@ -1,6 +1,6 @@
 use std::arch::aarch64::*;
 
-use super::scalar::{is_lenient_symbol, translate_scalar};
+use super::scalar::{self, is_lenient_symbol};
 
 #[target_feature(enable = "neon")]
 pub(super) fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
@@ -111,5 +111,5 @@ pub(super) fn translate(input: &mut [u8], source0: u8, target0: u8, source1: u8,
         offset += 16;
     }
 
-    translate_scalar(&mut input[offset..], source0, target0, source1, target1);
+    scalar::translate(&mut input[offset..], source0, target0, source1, target1);
 }

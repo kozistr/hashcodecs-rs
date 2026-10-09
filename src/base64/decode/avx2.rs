@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::ssse3::{errors_are_zero_ssse3, pack_16_indices, store_12_exact};
+use super::ssse3::{self, pack_16_indices, store_12_exact};
 use super::tables::{
     MIXED_HASH_OFFSETS, MIXED_LOW_CLASSES_COMPLEMENT, MIXED_SHIFTS, PACK_SHUFFLE,
     STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT, STANDARD_OFFSETS, URLSAFE_HIGH_CLASSES,
@@ -18,7 +18,7 @@ use super::x86_contracts::{Decoder, Store};
 // checking generated assembly for register spills. Preserve the combined error
 // reduction and the Store policy's exact output boundary for the final block.
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
+pub(crate) unsafe fn decode<A: Decoder, S: Store>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
@@ -41,7 +41,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             _mm256_or_si256(third_error, fourth_error),
         );
 
-        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
+        if A::rejects_input(_mm256_testz_si256(errors, errors) == 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
 
-        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
+        if A::rejects_input(_mm256_testz_si256(errors, errors) == 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -79,7 +79,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
+        if A::rejects_input(ssse3::has_errors(errors)) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -127,7 +127,7 @@ pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     if source + 16 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if !errors_are_zero_ssse3(errors) {
+        if ssse3::has_errors(errors) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -138,13 +138,10 @@ pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
 }
 
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
-    input: &[u8],
-    output: *mut u8,
-) -> (usize, usize) {
+pub(crate) unsafe fn decode_prefix<A: Decoder>(input: &[u8], output: *mut u8) -> (usize, usize) {
     let mut source = 0;
     let mut destination = 0;
-    // Match `decode_avx2`'s store shape after this group validates.
+    // Match `decode`'s store shape after this group validates.
     let use_wide_overlapping_stores = output.addr() & 63 == 32;
 
     while source + 128 <= input.len() {
@@ -198,7 +195,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if errors_are_zero_ssse3(errors) {
+        if !ssse3::has_errors(errors) {
             unsafe { store_12_exact(output.add(destination), pack_16_indices(indices)) };
 
             source += 16;
@@ -215,7 +212,7 @@ pub(super) unsafe fn decode_indices_32_standard(input: *const u8) -> (__m256i, _
     let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
-    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
 
     (translate_standard(value, high_nibbles), errors)
 }
@@ -248,7 +245,7 @@ pub(super) unsafe fn decode_indices_32_urlsafe(input: *const u8) -> (__m256i, __
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
-    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
 
     (translate_mixed(value, high_nibbles), errors)
 }
@@ -259,7 +256,7 @@ pub(super) unsafe fn decode_indices_32_mixed(input: *const u8) -> (__m256i, __m2
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES_COMPLEMENT.as_ptr().cast()) };
 
-    let (high_nibbles, errors) = classify_ascii_avx2(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
     (translate_mixed(value, high_nibbles), errors)
 }
 
@@ -274,7 +271,7 @@ fn translate_mixed(value: __m256i, high_nibbles: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "avx2")]
-fn classify_ascii_avx2(
+fn classify_ascii(
     value: __m256i,
     high_classes: __m128i,
     low_classes: __m128i,

@@ -1,8 +1,6 @@
 use super::block_buffer::FullBlocks;
 use super::primitives::{read_partial_u64_le, read_u16_le, read_u32_le, read_u64_le};
-use super::x64_128::mix_x64_128_body_scalar;
-use super::x86_32::mix_x86_32_body_scalar;
-use super::x86_128::mix_x86_128_body_scalar;
+use super::{x64_128, x86_32, x86_128};
 
 #[kani::proof]
 fn load_bounds() {
@@ -51,9 +49,9 @@ fn block_and_tail_bounds() {
     let _ = read_partial_u64_le(&input[..partial_length]);
 
     let mut hash32: u32 = kani::any();
-    mix_x86_32_body_scalar(FullBlocks::new(&input).unwrap(), &mut hash32);
+    x86_32::mix_body_scalar(FullBlocks::new(&input).unwrap(), &mut hash32);
     let mut hashes_x86: [u32; 4] = kani::any();
-    mix_x86_128_body_scalar(FullBlocks::new(&input).unwrap(), &mut hashes_x86);
+    x86_128::mix_body_scalar(FullBlocks::new(&input).unwrap(), &mut hashes_x86);
     let mut hashes_x64: [u64; 2] = kani::any();
-    mix_x64_128_body_scalar(FullBlocks::new(&input).unwrap(), &mut hashes_x64);
+    x64_128::mix_body_scalar(FullBlocks::new(&input).unwrap(), &mut hashes_x64);
 }

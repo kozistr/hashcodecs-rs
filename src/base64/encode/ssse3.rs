@@ -110,7 +110,7 @@ unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
     value = _mm_shuffle_epi8(value, shuffle);
 
     let higher = _mm_and_si128(value, _mm_set1_epi32(0x0fc0_fc00));
-    let higher = mulhi_epu16_exact_ssse3(higher, _mm_set1_epi32(0x0400_0040));
+    let higher = mulhi_epu16_exact(higher, _mm_set1_epi32(0x0400_0040));
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
     let lower = _mm_mullo_epi16(lower, _mm_set1_epi32(0x0100_0010));
 
@@ -121,7 +121,7 @@ unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
 // sequence. Keep the single SSE2 instruction on the SSSE3 fallback path.
 #[inline]
 #[target_feature(enable = "ssse3")]
-fn mulhi_epu16_exact_ssse3(mut value: __m128i, multiplier: __m128i) -> __m128i {
+fn mulhi_epu16_exact(mut value: __m128i, multiplier: __m128i) -> __m128i {
     unsafe {
         asm!(
             "pmulhuw {value}, {multiplier}",

@@ -502,9 +502,9 @@ fn decode_valid_prefix_x86_kernel<A: x86_contracts::Decoder>(
 ) -> Option<DecodePrefixKernel> {
     match backend {
         Backend::Avx512Vbmi => Some(decode_backend::avx512::decode_prefix::<A>),
-        Backend::Avx2 => Some(decode_backend::avx2::decode_prefix_avx2::<A>),
-        Backend::Sse41 => Some(decode_backend::sse41::decode_prefix_sse41::<A>),
-        Backend::Ssse3 => Some(decode_backend::ssse3::decode_prefix_ssse3::<A>),
+        Backend::Avx2 => Some(decode_backend::avx2::decode_prefix::<A>),
+        Backend::Sse41 => Some(decode_backend::sse41::decode_prefix::<A>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::decode_prefix::<A>),
         Backend::Scalar | Backend::Neon => None,
     }
 }
@@ -574,7 +574,7 @@ unsafe fn encode_x86<const URLSAFE: bool>(
         };
 
         return unsafe {
-            encode_backend::avx2::encode_avx2_with_store::<URLSAFE>(input, output, store_mode)
+            encode_backend::avx2::encode_with_store::<URLSAFE>(input, output, store_mode)
         };
     }
 
@@ -772,9 +772,9 @@ fn decode_x86_kernel<A: x86_contracts::Decoder, S: x86_contracts::Store>(
 ) -> Option<DecodeKernel> {
     match backend {
         Backend::Avx512Vbmi => Some(decode_backend::avx512::decode::<A, S>),
-        Backend::Avx2 => Some(decode_backend::avx2::decode_avx2::<A, S>),
-        Backend::Sse41 => Some(decode_backend::sse41::decode_sse41::<A, S>),
-        Backend::Ssse3 => Some(decode_backend::ssse3::decode_ssse3::<A, S>),
+        Backend::Avx2 => Some(decode_backend::avx2::decode::<A, S>),
+        Backend::Sse41 => Some(decode_backend::sse41::decode::<A, S>),
+        Backend::Ssse3 => Some(decode_backend::ssse3::decode::<A, S>),
         Backend::Scalar | Backend::Neon => None,
     }
 }

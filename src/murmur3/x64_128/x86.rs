@@ -3,12 +3,12 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use super::{X64_128_C1, X64_128_C2, mix_x64_128_body_scalar, mix_x64_128_hashes};
+use super::{X64_128_C1, X64_128_C2, mix_body_scalar, mix_hashes};
 use crate::murmur3::block_buffer::FullBlocks;
 use crate::murmur3::dispatch::Backend;
 use crate::murmur3::primitives::read_u64_le;
 
-macro_rules! define_x64_128_avx2_kernel {
+macro_rules! define_avx2_kernel {
     ($name:ident, $features:literal) => {
         #[target_feature(enable = $features)]
         fn $name(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
@@ -37,21 +37,21 @@ macro_rules! define_x64_128_avx2_kernel {
                     let values = unsafe {
                         _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast())
                     };
-                    let values = premix_x64_128_avx2(values, c1, c2, rotate_left, rotate_right);
+                    let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
                     unsafe {
                         _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 4).cast(), values)
                     };
                 }
 
-                mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
+                mix_blocks(&mut hash1, &mut hash2, &mixed);
                 offset += 128;
             }
 
             while offset + 32 <= input.len() {
                 let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
-                let values = premix_x64_128_avx2(values, c1, c2, rotate_left, rotate_right);
+                let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
                 unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), values) };
-                mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..4]);
+                mix_blocks(&mut hash1, &mut hash2, &mixed[..4]);
                 offset += 32;
             }
 
@@ -66,7 +66,7 @@ macro_rules! define_x64_128_avx2_kernel {
                     .wrapping_mul(X64_128_C2)
                     .rotate_left(33)
                     .wrapping_mul(X64_128_C1);
-                mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
+                mix_hashes(&mut hash1, &mut hash2, block1, block2);
             }
 
             [hash1, hash2]
@@ -74,12 +74,12 @@ macro_rules! define_x64_128_avx2_kernel {
     };
 }
 
-define_x64_128_avx2_kernel!(mix_x64_128_body_avx2, "avx2");
-define_x64_128_avx2_kernel!(mix_x64_128_body_avx2_bmi2, "avx2,bmi2");
+define_avx2_kernel!(mix_body_avx2, "avx2");
+define_avx2_kernel!(mix_body_avx2_bmi2, "avx2,bmi2");
 
 #[target_feature(enable = "avx2")]
 #[inline]
-fn premix_x64_128_avx2(
+fn premix_avx2(
     blocks: __m256i,
     c1: __m256i,
     c2: __m256i,
@@ -108,7 +108,7 @@ fn mullo_epi64_avx2(left: __m256i, right: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "sse4.1")]
-fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
+fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
     let input = blocks.as_bytes();
     let c1 = _mm_set_epi64x(X64_128_C2 as i64, X64_128_C1 as i64);
     let c2 = _mm_set_epi64x(X64_128_C1 as i64, X64_128_C2 as i64);
@@ -121,19 +121,19 @@ fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64;
         for vector in 0..4 {
             let values =
                 unsafe { _mm_loadu_si128(input.as_ptr().add(offset + vector * 16).cast()) };
-            let values = premix_x64_128_sse41(values, c1, c2);
+            let values = premix_sse41(values, c1, c2);
             unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(vector * 2).cast(), values) };
         }
 
-        mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
+        mix_blocks(&mut hash1, &mut hash2, &mixed);
         offset += 64;
     }
 
     while offset < input.len() {
         let values = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
-        let values = premix_x64_128_sse41(values, c1, c2);
+        let values = premix_sse41(values, c1, c2);
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().cast(), values) };
-        mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..2]);
+        mix_blocks(&mut hash1, &mut hash2, &mixed[..2]);
         offset += 16;
     }
 
@@ -142,7 +142,7 @@ fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64;
 
 #[target_feature(enable = "sse4.1")]
 #[inline]
-fn premix_x64_128_sse41(blocks: __m128i, c1: __m128i, c2: __m128i) -> __m128i {
+fn premix_sse41(blocks: __m128i, c1: __m128i, c2: __m128i) -> __m128i {
     let blocks = mullo_epi64_sse41(blocks, c1);
     let rotate31 = _mm_or_si128(_mm_slli_epi64::<31>(blocks), _mm_srli_epi64::<33>(blocks));
     let rotate33 = _mm_or_si128(_mm_slli_epi64::<33>(blocks), _mm_srli_epi64::<31>(blocks));
@@ -164,9 +164,9 @@ fn mullo_epi64_sse41(left: __m128i, right: __m128i) -> __m128i {
 }
 
 #[inline(always)]
-fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
+fn mix_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
     for block in blocks.as_chunks::<2>().0 {
-        mix_x64_128_hashes(hash1, hash2, block[0], block[1]);
+        mix_hashes(hash1, hash2, block[0], block[1]);
     }
 }
 
@@ -174,7 +174,7 @@ fn mix_x64_128_blocks(hash1: &mut u64, hash2: &mut u64, blocks: &[u64]) {
 /// # Safety
 /// The current CPU must support the selected backend.
 /// The BMI2 flag must match the current CPU.
-pub(in crate::murmur3) unsafe fn mix_x64_128_body(
+pub(in crate::murmur3) unsafe fn mix_body(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u64; 2],
     backend: Backend,
@@ -183,14 +183,14 @@ pub(in crate::murmur3) unsafe fn mix_x64_128_body(
     match backend {
         Backend::Avx2 => {
             *hashes = if bmi2 {
-                unsafe { mix_x64_128_body_avx2_bmi2(blocks, *hashes) }
+                unsafe { mix_body_avx2_bmi2(blocks, *hashes) }
             } else {
-                unsafe { mix_x64_128_body_avx2(blocks, *hashes) }
+                unsafe { mix_body_avx2(blocks, *hashes) }
             };
         }
         Backend::Sse41 => {
-            *hashes = unsafe { mix_x64_128_body_sse41(blocks, *hashes) };
+            *hashes = unsafe { mix_body_sse41(blocks, *hashes) };
         }
-        Backend::Scalar => mix_x64_128_body_scalar(blocks, hashes),
+        Backend::Scalar => mix_body_scalar(blocks, hashes),
     }
 }

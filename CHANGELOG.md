@@ -6,7 +6,7 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ### Changed
 
-- Raise the minimum supported Rust version from 1.89 to 1.93 for the safe `_mm_sfence` intrinsic.
+- Raise the minimum supported Rust version from 1.89 to 1.94.
 
 ## [1.4.2] - 2026-09-29
 

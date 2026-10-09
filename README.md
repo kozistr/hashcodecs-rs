@@ -93,7 +93,7 @@ assert hasher.digest() != snapshot.digest()
 
 ## Rust
 
-The Rust API exposes the same core algorithms without the Python binding layer and requires Rust 1.93 or newer.
+The Rust API exposes the same core algorithms without the Python binding layer and requires Rust 1.94 or newer.
 
 ```sh
 cargo add hashcodecs

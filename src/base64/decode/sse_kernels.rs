@@ -1,5 +1,5 @@
 macro_rules! decode_kernels {
-    ($features:literal, $errors:ident => $valid:expr) => {
+    ($features:literal, $errors:ident => $has_errors:expr) => {
         #[target_feature(enable = $features)]
         pub(crate) unsafe fn decode<A: Decoder, S: Store>(
             input: &[u8],
@@ -22,7 +22,7 @@ macro_rules! decode_kernels {
                     _mm_or_si128(third_errors, fourth_errors),
                 );
 
-                if !A::accepts_errors($valid) {
+                if A::rejects_input($has_errors) {
                     return Err(Base64Error::InvalidInput);
                 }
 
@@ -40,7 +40,7 @@ macro_rules! decode_kernels {
                 let (indices, $errors) =
                     unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-                if !A::accepts_errors($valid) {
+                if A::rejects_input($has_errors) {
                     return Err(Base64Error::InvalidInput);
                 }
 
@@ -64,7 +64,7 @@ macro_rules! decode_kernels {
                 let $errors =
                     _mm_or_si128(_mm_or_si128(first, second), _mm_or_si128(third, fourth));
 
-                if !($valid) {
+                if $has_errors {
                     return Err(Base64Error::InvalidInput);
                 }
 
@@ -74,7 +74,7 @@ macro_rules! decode_kernels {
             while source + 16 <= input.len() {
                 let (_, $errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-                if !($valid) {
+                if $has_errors {
                     return Err(Base64Error::InvalidInput);
                 }
 
@@ -106,7 +106,7 @@ macro_rules! decode_kernels {
                     _mm_or_si128(third_errors, fourth_errors),
                 );
 
-                if !($valid) {
+                if $has_errors {
                     break;
                 }
 
@@ -123,7 +123,7 @@ macro_rules! decode_kernels {
                 let (indices, $errors) =
                     unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-                if !($valid) {
+                if $has_errors {
                     break;
                 }
 

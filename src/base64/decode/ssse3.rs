@@ -15,7 +15,7 @@ use super::x86_contracts::{Decoder, Store};
 
 decode_kernels!(
     "ssse3",
-    errors => errors_are_zero(errors)
+    errors => has_errors(errors)
 );
 
 #[target_feature(enable = "ssse3")]
@@ -102,8 +102,8 @@ fn high_nibbles(value: __m128i) -> __m128i {
 }
 
 #[target_feature(enable = "ssse3")]
-pub(super) fn errors_are_zero(errors: __m128i) -> bool {
-    _mm_movemask_epi8(_mm_cmpeq_epi8(errors, _mm_setzero_si128())) == 0xffff
+pub(super) fn has_errors(errors: __m128i) -> bool {
+    _mm_movemask_epi8(_mm_cmpeq_epi8(errors, _mm_setzero_si128())) != 0xffff
 }
 
 #[target_feature(enable = "ssse3")]

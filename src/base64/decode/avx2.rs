@@ -41,7 +41,7 @@ pub(crate) unsafe fn decode<A: Decoder, S: Store>(
             _mm256_or_si256(third_error, fourth_error),
         );
 
-        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
+        if A::rejects_input(_mm256_testz_si256(errors, errors) == 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -64,7 +64,7 @@ pub(crate) unsafe fn decode<A: Decoder, S: Store>(
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
 
-        if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
+        if A::rejects_input(_mm256_testz_si256(errors, errors) == 0) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -79,7 +79,7 @@ pub(crate) unsafe fn decode<A: Decoder, S: Store>(
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if !A::accepts_errors(ssse3::errors_are_zero(errors)) {
+        if A::rejects_input(ssse3::has_errors(errors)) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -127,7 +127,7 @@ pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     if source + 16 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if !ssse3::errors_are_zero(errors) {
+        if ssse3::has_errors(errors) {
             return Err(Base64Error::InvalidInput);
         }
 
@@ -195,7 +195,7 @@ pub(crate) unsafe fn decode_prefix<A: Decoder>(input: &[u8], output: *mut u8) ->
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
 
-        if ssse3::errors_are_zero(errors) {
+        if !ssse3::has_errors(errors) {
             unsafe { store_12_exact(output.add(destination), pack_16_indices(indices)) };
 
             source += 16;

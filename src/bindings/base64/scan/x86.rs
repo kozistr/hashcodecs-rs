@@ -7,7 +7,7 @@ use super::scalar::is_lenient_symbol;
 use crate::base64::{STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT};
 
 #[target_feature(enable = "avx2")]
-pub(in crate::bindings::base64) unsafe fn symbol_count_avx2(
+pub(in crate::bindings::base64) fn symbol_count_avx2(
     input: &[u8],
     altchars: Option<[u8; 2]>,
 ) -> usize {
@@ -36,7 +36,7 @@ pub(in crate::bindings::base64) unsafe fn symbol_count_avx2(
 }
 
 #[target_feature(enable = "avx2")]
-pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_avx2(input: &[u8]) -> usize {
+pub(in crate::bindings::base64) fn alphanumeric_prefix_avx2(input: &[u8]) -> usize {
     let mut source = 0;
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
@@ -58,7 +58,7 @@ pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_avx2(input: &[u8])
 }
 
 #[target_feature(enable = "avx2")]
-pub(in crate::bindings::base64) unsafe fn symbol_prefix_avx2(
+pub(in crate::bindings::base64) fn symbol_prefix_avx2(
     input: &[u8],
     altchars: Option<[u8; 2]>,
 ) -> usize {
@@ -90,7 +90,7 @@ pub(in crate::bindings::base64) unsafe fn symbol_prefix_avx2(
 }
 
 #[target_feature(enable = "avx2")]
-pub(in crate::bindings::base64) unsafe fn translate_avx2(
+pub(in crate::bindings::base64) fn translate_avx2(
     input: &mut [u8],
     source0: u8,
     target0: u8,
@@ -160,7 +160,7 @@ fn range_avx2(bytes: __m256i, lower: u8, upper: u8) -> __m256i {
 }
 
 #[target_feature(enable = "sse2")]
-pub(in crate::bindings::base64) unsafe fn symbol_count_sse2(
+pub(in crate::bindings::base64) fn symbol_count_sse2(
     input: &[u8],
     altchars: Option<[u8; 2]>,
 ) -> usize {
@@ -183,7 +183,7 @@ pub(in crate::bindings::base64) unsafe fn symbol_count_sse2(
 }
 
 #[target_feature(enable = "sse2")]
-pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_sse2(input: &[u8]) -> usize {
+pub(in crate::bindings::base64) fn alphanumeric_prefix_sse2(input: &[u8]) -> usize {
     let mut source = 0;
     while source + 16 <= input.len() {
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
@@ -205,7 +205,7 @@ pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_sse2(input: &[u8])
 }
 
 #[target_feature(enable = "sse2")]
-pub(in crate::bindings::base64) unsafe fn symbol_prefix_sse2(
+pub(in crate::bindings::base64) fn symbol_prefix_sse2(
     input: &[u8],
     altchars: Option<[u8; 2]>,
 ) -> usize {
@@ -229,7 +229,7 @@ pub(in crate::bindings::base64) unsafe fn symbol_prefix_sse2(
 }
 
 #[target_feature(enable = "sse2")]
-pub(in crate::bindings::base64) unsafe fn translate_sse2(
+pub(in crate::bindings::base64) fn translate_sse2(
     input: &mut [u8],
     source0: u8,
     target0: u8,

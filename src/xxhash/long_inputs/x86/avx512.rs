@@ -14,7 +14,7 @@ use crate::xxhash::primitives::P32_1;
 struct AlignedAccumulator([u64; 8]);
 
 #[target_feature(enable = "avx512f")]
-pub(in crate::xxhash::long_inputs) unsafe fn accumulate(
+pub(in crate::xxhash::long_inputs) fn accumulate(
     input: LongInput<'_>,
     secret: &Secret,
 ) -> [u64; 8] {

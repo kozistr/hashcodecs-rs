@@ -4,8 +4,38 @@ run-name: CI / ${{ github.ref_name }}
 on:
   pull_request:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - pyproject.toml
+      - uv.lock
+      - codecov.yml
+      - hashcodecs/py.typed
+      - "fuzz/corpus/**"
+      - ".cargo/**"
+      - rust-toolchain
+      - rust-toolchain.toml
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - pyproject.toml
+      - uv.lock
+      - codecov.yml
+      - hashcodecs/py.typed
+      - "fuzz/corpus/**"
+      - ".cargo/**"
+      - rust-toolchain
+      - rust-toolchain.toml
   workflow_call:
     inputs:
       ref:
@@ -53,6 +83,11 @@ jobs:
 
       - name: Lint all Rust targets
         run: cargo clippy --all-targets --features python -- -D warnings
+
+      - name: Check all targets and features on MSRV
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          cargo +1.94.0 check --locked --all-targets --all-features
 
       - name: Install Rust coverage tool
         uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad # v2.85.10
@@ -120,7 +155,7 @@ jobs:
           uv pip install --python .venv --reinstall --no-index --find-links coverage-dist hashcodecs
           uv run --frozen --no-sync pytest tests
           cargo test --release --features python --lib
-          cargo llvm-cov report --release --cobertura --output-path rust-bindings-coverage.xml
+          cargo llvm-cov report --release --ignore-filename-regex 'avx512\.rs$' --cobertura --output-path rust-bindings-coverage.xml
 
       - name: Upload Rust binding coverage to Codecov
         if: ${{ !inputs.skip_coverage_upload }}
@@ -232,7 +267,6 @@ jobs:
 
   rust_sanitizers:
     name: Rust / Safety / ${{ matrix.name }}
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -262,7 +296,6 @@ jobs:
 
   rust_safety_kani:
     name: Rust / Safety / Kani
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -275,7 +308,6 @@ jobs:
 
   rust_safety_miri:
     name: Rust / Safety / Miri
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -296,7 +328,6 @@ jobs:
 
   rust_safety_fuzz:
     name: Rust / Safety / Fuzz / ${{ matrix.target }}
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true

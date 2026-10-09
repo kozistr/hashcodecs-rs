@@ -60,7 +60,7 @@ pub(crate) unsafe fn decode_sse41<A: Decoder, S: Store>(
 }
 
 #[target_feature(enable = "ssse3,sse4.1")]
-pub(crate) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
+pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     let mut source = 0;
 
     while source + 64 <= input.len() {

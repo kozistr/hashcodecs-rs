@@ -139,9 +139,9 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
 }
 
 #[target_feature(enable = "avx512vbmi,avx512bw")]
-pub(in crate::base64) unsafe fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
+pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
     if input.len() < 64 {
-        return unsafe { super::avx2::validate::<A>(input) };
+        return super::avx2::validate::<A>(input);
     }
 
     let table = A::decode_table();

@@ -13,7 +13,7 @@ static mut METHODS: [ffi::PyMethodDef; BINDING_COUNT + 1] =
 
 static METHODS_INIT: Once = Once::new();
 
-pub(crate) unsafe fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
+pub(crate) fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
     let version_info = module.py().version_info();
     let version = (version_info.major, version_info.minor);
@@ -25,11 +25,11 @@ fn return_bound<T: PyTypeInfo>(
     py: Python<'_>,
     result: PyResult<Bound<'_, T>>,
 ) -> *mut ffi::PyObject {
-    unsafe { return_function_result(py, result.map(Bound::into_ptr)) }
+    return_function_result(py, result.map(Bound::into_ptr))
 }
 
 fn return_usize(py: Python<'_>, result: PyResult<usize>) -> *mut ffi::PyObject {
-    unsafe { return_function_result(py, result.map(|value| PyInt::new(py, value).into_ptr())) }
+    return_function_result(py, result.map(|value| PyInt::new(py, value).into_ptr()))
 }
 
 macro_rules! callback {

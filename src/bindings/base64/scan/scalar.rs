@@ -14,7 +14,7 @@ pub(super) fn symbol_count_scalar(input: &[u8], altchars: Option<[u8; 2]>) -> us
         .count()
 }
 
-pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_scalar(input: &[u8]) -> usize {
+pub(in crate::bindings::base64) fn alphanumeric_prefix_scalar(input: &[u8]) -> usize {
     input
         .iter()
         .position(|byte| !byte.is_ascii_alphanumeric())
@@ -22,7 +22,7 @@ pub(in crate::bindings::base64) unsafe fn alphanumeric_prefix_scalar(input: &[u8
 }
 
 #[cfg(any(not(target_arch = "aarch64"), test))]
-pub(in crate::bindings::base64) unsafe fn symbol_prefix_scalar(
+pub(in crate::bindings::base64) fn symbol_prefix_scalar(
     input: &[u8],
     altchars: Option<[u8; 2]>,
 ) -> usize {
@@ -33,17 +33,17 @@ pub(in crate::bindings::base64) unsafe fn symbol_prefix_scalar(
 }
 
 #[cfg(test)]
-pub(in crate::bindings::base64) unsafe fn translate_bytes_scalar(
+pub(in crate::bindings::base64) fn translate_bytes_scalar(
     input: &mut [u8],
     source0: u8,
     target0: u8,
     source1: u8,
     target1: u8,
 ) {
-    unsafe { translate_scalar(input, source0, target0, source1, target1) };
+    translate_scalar(input, source0, target0, source1, target1);
 }
 
-pub(in crate::bindings::base64) unsafe fn translate_scalar(
+pub(in crate::bindings::base64) fn translate_scalar(
     input: &mut [u8],
     source0: u8,
     target0: u8,

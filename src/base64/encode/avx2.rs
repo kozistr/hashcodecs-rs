@@ -288,7 +288,6 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-#[allow(unused_unsafe)]
 unsafe fn encode_96_shifted<Store: StreamingStore>(
     mut input: *const u8,
     mut output: *mut u8,
@@ -373,7 +372,7 @@ fn encode_avx2_constants(translate: __m256i) -> EncodeAvx2Constants {
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i {
+fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i {
     let shuffled = _mm256_shuffle_epi8(input, constants.reshuffle);
     let aligned = _mm256_srli_epi16(_mm256_mullo_epi16(shuffled, constants.align_mul), 10);
     let fields = _mm256_mullo_epi16(
@@ -565,16 +564,16 @@ unsafe fn encode_12_avx2(input: *const u8, offsets: __m128i) -> __m128i {
     value = _mm_shuffle_epi8(value, shuffle);
 
     let higher = _mm_and_si128(value, _mm_set1_epi32(0x0fc0_fc00));
-    let higher = unsafe { mulhi_epu16_exact_avx2_128(higher, _mm_set1_epi32(0x0400_0040)) };
+    let higher = mulhi_epu16_exact_avx2_128(higher, _mm_set1_epi32(0x0400_0040));
     let lower = _mm_and_si128(value, _mm_set1_epi32(0x003f_03f0));
-    let lower = unsafe { mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010)) };
+    let lower = mullo_epi16_exact_avx2_128(lower, _mm_set1_epi32(0x0100_0010));
 
     ascii_from_indices_avx2_128(_mm_or_si128(higher, lower), offsets)
 }
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     unsafe {
         asm!(
             "vpmulhuw {value}, {value}, {multiplier}",
@@ -589,7 +588,7 @@ unsafe fn mulhi_epu16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) ->
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+fn mullo_epi16_exact_avx2_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     unsafe {
         asm!(
             "vpmullw {value}, {value}, {multiplier}",
@@ -629,9 +628,9 @@ fn encode_24_shifted_value(shifted: __m256i, offsets: __m256i) -> __m256i {
     let value = _mm256_shuffle_epi8(shifted, shuffle);
 
     let higher = _mm256_and_si256(value, _mm256_set1_epi32(0x0fc0_fc00));
-    let higher = unsafe { mulhi_epu16_exact(higher, _mm256_set1_epi32(0x0400_0040)) };
+    let higher = mulhi_epu16_exact(higher, _mm256_set1_epi32(0x0400_0040));
     let lower = _mm256_and_si256(value, _mm256_set1_epi32(0x003f_03f0));
-    let lower = unsafe { mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010)) };
+    let lower = mullo_epi16_exact(lower, _mm256_set1_epi32(0x0100_0010));
 
     ascii_from_indices_avx2(_mm256_or_si256(higher, lower), offsets)
 }
@@ -642,7 +641,7 @@ fn encode_24_shifted_value(shifted: __m256i, offsets: __m256i) -> __m256i {
 // 16-bit semantics.
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
     unsafe {
         asm!(
             "vpmulhuw {value}, {value}, {multiplier}",
@@ -657,7 +656,7 @@ unsafe fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i 
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
     unsafe {
         asm!(
             "vpmullw {value}, {value}, {multiplier}",

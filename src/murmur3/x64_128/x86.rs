@@ -11,7 +11,7 @@ use crate::murmur3::primitives::read_u64_le;
 macro_rules! define_x64_128_avx2_kernel {
     ($name:ident, $features:literal) => {
         #[target_feature(enable = $features)]
-        unsafe fn $name(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
+        fn $name(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
             let input = blocks.as_bytes();
             let c1 = _mm256_setr_epi64x(
                 X64_128_C1 as i64,
@@ -104,7 +104,7 @@ fn mullo_epi64_avx2(left: __m256i, right: __m256i) -> __m256i {
 }
 
 #[target_feature(enable = "sse4.1")]
-unsafe fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
+fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
     let input = blocks.as_bytes();
     let c1 = _mm_set_epi64x(X64_128_C2 as i64, X64_128_C1 as i64);
     let c2 = _mm_set_epi64x(X64_128_C1 as i64, X64_128_C2 as i64);

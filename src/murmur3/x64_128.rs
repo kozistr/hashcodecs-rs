@@ -89,7 +89,7 @@ impl Murmur3X64Hasher128 {
         self.length = self.length.wrapping_add(input.len() as u64);
         let hashes = &mut self.hashes;
         self.tail.consume(input, |blocks| {
-            mix_x64_128_body(blocks, hashes);
+            mix_body(blocks, hashes);
         });
     }
 
@@ -110,7 +110,7 @@ impl Murmur3X64Hasher128 {
     ///
     #[inline]
     pub fn digest(&self) -> [u64; 2] {
-        finish_x64_128_tail(self.tail.remaining(), self.hashes, self.length)
+        finish_tail(self.tail.remaining(), self.hashes, self.length)
     }
 }
 
@@ -148,19 +148,19 @@ impl Default for Murmur3X64Hasher128 {
 ///
 #[inline(always)]
 pub fn murmur3_x64_128(input: &[u8], seed: u32) -> [u64; 2] {
-    murmur3_x64_128_inner(input, seed as u64)
+    hash(input, seed as u64)
 }
 
 #[inline(never)]
-pub(super) fn murmur3_x64_128_inner(input: &[u8], seed: u64) -> [u64; 2] {
+pub(super) fn hash(input: &[u8], seed: u64) -> [u64; 2] {
     let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 2];
-    mix_x64_128_body(blocks, &mut hashes);
-    finish_x64_128_tail(tail, hashes, input.len() as u64)
+    mix_body(blocks, &mut hashes);
+    finish_tail(tail, hashes, input.len() as u64)
 }
 
 #[inline]
-pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
+pub(super) fn mix_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
     if blocks.byte_len() == 0 {
         return;
     }
@@ -169,7 +169,7 @@ pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]
     {
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x64_128_backend(blocks.byte_len(), capabilities);
-        mix_x64_128_body_with_backend(
+        mix_body_with_backend(
             blocks,
             hashes,
             selected,
@@ -177,31 +177,31 @@ pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]
         );
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    mix_x64_128_body_scalar(blocks, hashes);
+    mix_body_scalar(blocks, hashes);
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn mix_x64_128_body_with_backend(
+pub(super) fn mix_body_with_backend(
     blocks: FullBlocks<'_, 16>,
     hashes: &mut [u64; 2],
     backend: dispatch::Backend,
     has_bmi2: bool,
 ) {
-    unsafe { x86::mix_x64_128_body(blocks, hashes, backend, has_bmi2) };
+    unsafe { x86::mix_body(blocks, hashes, backend, has_bmi2) };
 }
 
 #[inline(never)]
 #[cfg(test)]
-pub(super) fn murmur3_x64_128_scalar_inner(input: &[u8], seed: u64) -> [u64; 2] {
+pub(super) fn hash_scalar(input: &[u8], seed: u64) -> [u64; 2] {
     let (blocks, tail) = FullBlocks::<16>::split(input);
     let mut hashes = [seed; 2];
-    mix_x64_128_body_scalar(blocks, &mut hashes);
-    finish_x64_128_tail(tail, hashes, input.len() as u64)
+    mix_body_scalar(blocks, &mut hashes);
+    finish_tail(tail, hashes, input.len() as u64)
 }
 
 #[inline]
-pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
+pub(super) fn mix_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
     let input = blocks.as_bytes();
     let mut hash1 = hashes[0];
     let mut hash2 = hashes[1];
@@ -219,7 +219,7 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
             .wrapping_mul(X64_128_C2)
             .rotate_left(33)
             .wrapping_mul(X64_128_C1);
-        mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
+        mix_hashes(&mut hash1, &mut hash2, block1, block2);
         cursor = unsafe { cursor.add(16) };
     }
 
@@ -228,12 +228,12 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
 
 #[inline]
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
-pub(super) fn finish_x64_128(input: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
-    finish_x64_128_tail(&input[offset..], hashes, input.len() as u64)
+pub(super) fn finish(input: &[u8], hashes: [u64; 2], offset: usize) -> [u64; 2] {
+    finish_tail(&input[offset..], hashes, input.len() as u64)
 }
 
 #[inline]
-pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 2] {
+pub(super) fn finish_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 2] {
     debug_assert!(tail.len() < 16);
 
     if tail.len() > 8 {
@@ -264,7 +264,7 @@ pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64
 }
 
 #[inline(always)]
-pub(super) fn mix_x64_128_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64) {
+pub(super) fn mix_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64) {
     *hash1 ^= block1;
     *hash1 = hash1
         .rotate_left(27)

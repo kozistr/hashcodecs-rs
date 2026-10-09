@@ -15,9 +15,7 @@ use super::x86_contracts::{Decoder, Store};
 
 decode_kernels!(
     "ssse3",
-    decode_ssse3,
-    decode_prefix_ssse3,
-    errors => errors_are_zero_ssse3(errors)
+    errors => errors_are_zero(errors)
 );
 
 #[target_feature(enable = "ssse3")]
@@ -25,7 +23,7 @@ pub(super) unsafe fn decode_indices_16_standard(input: *const u8) -> (__m128i, _
     let value = unsafe { _mm_loadu_si128(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(STANDARD_LOW_CLASSES.as_ptr().cast()) };
-    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
 
     (translate_standard(value, high_nibbles), errors)
 }
@@ -54,7 +52,7 @@ pub(super) unsafe fn decode_indices_16_urlsafe(input: *const u8) -> (__m128i, __
     let value = unsafe { _mm_loadu_si128(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(URLSAFE_LOW_CLASSES.as_ptr().cast()) };
-    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
     let offsets = unsafe { _mm_loadu_si128(URLSAFE_OFFSETS.as_ptr().cast()) };
     let indices = _mm_add_epi8(value, _mm_shuffle_epi8(offsets, high_nibbles));
     let underscore = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'_' as i8));
@@ -68,7 +66,7 @@ pub(super) unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m1
     let value = unsafe { _mm_loadu_si128(input.cast()) };
     let high_classes = unsafe { _mm_loadu_si128(URLSAFE_HIGH_CLASSES.as_ptr().cast()) };
     let low_classes = unsafe { _mm_loadu_si128(MIXED_LOW_CLASSES.as_ptr().cast()) };
-    let (high_nibbles, errors) = classify_ascii_ssse3(value, high_classes, low_classes);
+    let (high_nibbles, errors) = classify_ascii(value, high_classes, low_classes);
     let slash = _mm_cmpeq_epi8(value, _mm_set1_epi8(b'/' as i8));
     let offset_indices = _mm_add_epi8(high_nibbles, slash);
     let offsets = unsafe { _mm_loadu_si128(STANDARD_OFFSETS.as_ptr().cast()) };
@@ -84,7 +82,7 @@ pub(super) unsafe fn decode_indices_16_mixed(input: *const u8) -> (__m128i, __m1
 }
 
 #[target_feature(enable = "ssse3")]
-pub(super) fn classify_ascii_ssse3(
+pub(super) fn classify_ascii(
     value: __m128i,
     high_classes: __m128i,
     low_classes: __m128i,
@@ -104,7 +102,7 @@ fn high_nibbles(value: __m128i) -> __m128i {
 }
 
 #[target_feature(enable = "ssse3")]
-pub(super) fn errors_are_zero_ssse3(errors: __m128i) -> bool {
+pub(super) fn errors_are_zero(errors: __m128i) -> bool {
     _mm_movemask_epi8(_mm_cmpeq_epi8(errors, _mm_setzero_si128())) == 0xffff
 }
 

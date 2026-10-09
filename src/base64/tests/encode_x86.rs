@@ -178,13 +178,13 @@ fn match_avx2_streaming() {
 
             let consumed = unsafe {
                 if urlsafe {
-                    encode_backend::avx2::encode_avx2_with_store::<true>(
+                    encode_backend::avx2::encode_with_store::<true>(
                         &input,
                         output.as_mut_ptr(),
                         encode_backend::avx2::Avx2StoreMode::Streaming,
                     )
                 } else {
-                    encode_backend::avx2::encode_avx2_with_store::<false>(
+                    encode_backend::avx2::encode_with_store::<false>(
                         &input,
                         output.as_mut_ptr(),
                         encode_backend::avx2::Avx2StoreMode::Streaming,

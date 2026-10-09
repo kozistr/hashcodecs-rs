@@ -90,7 +90,7 @@ impl Murmur3X86Hasher32 {
         self.length = self.length.wrapping_add(input.len() as u32);
         let hash = &mut self.hash;
         self.tail.consume(input, |blocks| {
-            mix_x86_32_body(blocks, hash);
+            mix_body(blocks, hash);
         });
     }
 
@@ -113,7 +113,7 @@ impl Murmur3X86Hasher32 {
     ///
     #[inline]
     pub fn digest(&self) -> u32 {
-        finish_x86_32_tail(self.tail.remaining(), self.hash, self.length)
+        finish_tail(self.tail.remaining(), self.hash, self.length)
     }
 }
 
@@ -147,49 +147,49 @@ impl Default for Murmur3X86Hasher32 {
 pub fn murmur3_x86_32(input: &[u8], seed: u32) -> u32 {
     let (blocks, tail) = FullBlocks::<4>::split(input);
     let mut hash = seed;
-    mix_x86_32_body(blocks, &mut hash);
-    finish_x86_32_tail(tail, hash, input.len() as u32)
+    mix_body(blocks, &mut hash);
+    finish_tail(tail, hash, input.len() as u32)
 }
 
 #[inline]
-pub(super) fn mix_x86_32_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
+pub(super) fn mix_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if blocks.byte_len() < dispatch::X86_32_SSE41_MIN {
-            mix_x86_32_body_scalar(blocks, hash);
+            mix_body_scalar(blocks, hash);
 
             return;
         }
 
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x86_32_backend(blocks.byte_len(), capabilities);
-        mix_x86_32_body_with_backend(blocks, hash, selected);
+        mix_body_with_backend(blocks, hash, selected);
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    mix_x86_32_body_scalar(blocks, hash);
+    mix_body_scalar(blocks, hash);
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline]
-pub(super) fn mix_x86_32_body_with_backend(
+pub(super) fn mix_body_with_backend(
     blocks: FullBlocks<'_, 4>,
     hash: &mut u32,
     backend: dispatch::Backend,
 ) {
-    unsafe { x86::mix_x86_32_body(blocks, hash, backend) };
+    unsafe { x86::mix_body(blocks, hash, backend) };
 }
 
 #[inline]
 #[cfg(test)]
-pub(super) fn murmur3_x86_32_scalar(input: &[u8], seed: u32) -> u32 {
+pub(super) fn hash_scalar(input: &[u8], seed: u32) -> u32 {
     let (blocks, tail) = FullBlocks::<4>::split(input);
     let mut hash = seed;
-    mix_x86_32_body_scalar(blocks, &mut hash);
-    finish_x86_32_tail(tail, hash, input.len() as u32)
+    mix_body_scalar(blocks, &mut hash);
+    finish_tail(tail, hash, input.len() as u32)
 }
 
 #[inline]
-pub(super) fn mix_x86_32_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
+pub(super) fn mix_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     let input = blocks.as_bytes();
     let mut offset = 0;
 
@@ -198,13 +198,13 @@ pub(super) fn mix_x86_32_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) 
             .wrapping_mul(X86_32_C1)
             .rotate_left(15)
             .wrapping_mul(X86_32_C2);
-        *hash = mix_x86_32_hash(*hash, block);
+        *hash = mix_hash(*hash, block);
         offset += 4;
     }
 }
 
 #[inline(always)]
-pub(super) fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
+pub(super) fn mix_hash(mut hash: u32, block: u32) -> u32 {
     hash ^= block;
     hash.rotate_left(13)
         .wrapping_mul(5)
@@ -213,12 +213,12 @@ pub(super) fn mix_x86_32_hash(mut hash: u32, block: u32) -> u32 {
 
 #[inline(always)]
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
-pub(super) fn finish_x86_32(input: &[u8], hash: u32, offset: usize) -> u32 {
-    finish_x86_32_tail(&input[offset..], hash, input.len() as u32)
+pub(super) fn finish(input: &[u8], hash: u32, offset: usize) -> u32 {
+    finish_tail(&input[offset..], hash, input.len() as u32)
 }
 
 #[inline(always)]
-pub(super) fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
+pub(super) fn finish_tail(tail_bytes: &[u8], mut hash: u32, length: u32) -> u32 {
     debug_assert!(tail_bytes.len() < 4);
     let tail_len = tail_bytes.len();
     let mut tail = 0u32;

@@ -9,9 +9,6 @@ pub(super) mod scalar;
 pub(super) mod x86;
 
 pub(super) use scalar::is_lenient_symbol;
-use scalar::{alphanumeric_prefix_scalar, symbol_count_scalar};
-#[cfg(not(target_arch = "aarch64"))]
-use scalar::{symbol_prefix_scalar, translate_scalar};
 
 pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -32,7 +29,7 @@ pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> u
         }
     }
 
-    symbol_count_scalar(input, altchars)
+    scalar::symbol_count(input, altchars)
 }
 
 pub(super) type AlphanumericPrefix = unsafe fn(&[u8]) -> usize;
@@ -57,7 +54,7 @@ fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPre
         return x86::alphanumeric_prefix_sse2;
     }
 
-    alphanumeric_prefix_scalar
+    scalar::alphanumeric_prefix
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -70,7 +67,7 @@ fn select_symbol_prefix_for_x86(avx2: bool, sse2: bool) -> SymbolPrefix {
         return x86::symbol_prefix_sse2;
     }
 
-    symbol_prefix_scalar
+    scalar::symbol_prefix
 }
 
 fn select_alphanumeric_prefix() -> AlphanumericPrefix {
@@ -81,7 +78,7 @@ fn select_alphanumeric_prefix() -> AlphanumericPrefix {
     );
 
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    alphanumeric_prefix_scalar
+    scalar::alphanumeric_prefix
 }
 
 fn select_symbol_prefix() -> SymbolPrefix {
@@ -95,7 +92,7 @@ fn select_symbol_prefix() -> SymbolPrefix {
     return aarch64::symbol_prefix;
 
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
-    symbol_prefix_scalar
+    scalar::symbol_prefix
 }
 
 pub(super) type TranslateBytes = unsafe fn(&mut [u8], u8, u8, u8, u8);
@@ -110,7 +107,7 @@ fn select_translate_bytes_for_x86(avx2: bool, sse2: bool) -> TranslateBytes {
         return x86::translate_sse2;
     }
 
-    translate_scalar
+    scalar::translate
 }
 
 fn select_translate_bytes() -> TranslateBytes {
@@ -124,7 +121,7 @@ fn select_translate_bytes() -> TranslateBytes {
     return aarch64::translate;
 
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
-    translate_scalar
+    scalar::translate
 }
 
 pub(super) fn decode_byte_kernels() -> &'static DecodeByteKernels {
@@ -155,7 +152,7 @@ mod tests {
             (
                 false,
                 false,
-                alphanumeric_prefix_scalar as AlphanumericPrefix,
+                scalar::alphanumeric_prefix as AlphanumericPrefix,
             ),
         ] {
             assert!(std::ptr::fn_addr_eq(
@@ -167,7 +164,7 @@ mod tests {
         for (avx2, sse2, expected) in [
             (true, true, super::x86::symbol_prefix_avx2 as SymbolPrefix),
             (false, true, super::x86::symbol_prefix_sse2 as SymbolPrefix),
-            (false, false, symbol_prefix_scalar as SymbolPrefix),
+            (false, false, scalar::symbol_prefix as SymbolPrefix),
         ] {
             assert!(std::ptr::fn_addr_eq(
                 select_symbol_prefix_for_x86(avx2, sse2),
@@ -178,7 +175,7 @@ mod tests {
         for (avx2, sse2, expected) in [
             (true, true, super::x86::translate_avx2 as TranslateBytes),
             (false, true, super::x86::translate_sse2 as TranslateBytes),
-            (false, false, translate_scalar as TranslateBytes),
+            (false, false, scalar::translate as TranslateBytes),
         ] {
             assert!(std::ptr::fn_addr_eq(
                 select_translate_bytes_for_x86(avx2, sse2),

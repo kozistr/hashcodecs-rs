@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
-use super::avx2::{decode_avx2, decode_prefix_avx2};
+use super::avx2;
 use super::x86_contracts::{Decoder, Store};
 
 const OUTPUT_MASK_48: __mmask64 = (1_u64 << 48) - 1;
@@ -49,7 +49,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
     if input.len() < 64 {
-        return unsafe { decode_avx2::<A, S>(input, output) };
+        return unsafe { avx2::decode::<A, S>(input, output) };
     }
 
     let table = A::decode_table();
@@ -193,7 +193,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     output: *mut u8,
 ) -> (usize, usize) {
     if input.len() < 64 {
-        return unsafe { decode_prefix_avx2::<A>(input, output) };
+        return unsafe { avx2::decode_prefix::<A>(input, output) };
     }
 
     let table = A::decode_table();

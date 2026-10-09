@@ -10,7 +10,7 @@ use crate::bindings::base64::{
     policy::{Padding, PreparedPolicy, Validation, WarningScan},
     scan::{
         is_lenient_symbol, lenient_symbol_count,
-        scalar::{alphanumeric_prefix_scalar, symbol_prefix_scalar, translate_bytes_scalar},
+        scalar::{alphanumeric_prefix, symbol_prefix, translate_bytes},
     },
 };
 
@@ -34,13 +34,13 @@ fn count_symbols() {
 
 #[test]
 fn bound_scalar_scans() {
-    assert_eq!(alphanumeric_prefix_scalar(b""), 0);
-    assert_eq!(alphanumeric_prefix_scalar(b"abcXYZ09"), 8);
-    assert_eq!(alphanumeric_prefix_scalar(b"abc!XYZ"), 3);
-    assert_eq!(symbol_prefix_scalar(b"A+/9-_!", Some(*b"-_")), 6);
+    assert_eq!(alphanumeric_prefix(b""), 0);
+    assert_eq!(alphanumeric_prefix(b"abcXYZ09"), 8);
+    assert_eq!(alphanumeric_prefix(b"abc!XYZ"), 3);
+    assert_eq!(symbol_prefix(b"A+/9-_!", Some(*b"-_")), 6);
 
     let mut input = *b"@a#b@#";
-    translate_bytes_scalar(&mut input, b'@', b'+', b'#', b'/');
+    translate_bytes(&mut input, b'@', b'+', b'#', b'/');
     assert_eq!(&input, b"+a/b+/");
 }
 
@@ -83,7 +83,7 @@ fn match_x86_scans() {
 
     let original: Vec<u8> = b"@#ab".iter().copied().cycle().take(67).collect();
     let mut expected = original.clone();
-    translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
+    translate_bytes(&mut expected, b'@', b'+', b'#', b'/');
     let mut translated = original;
     unsafe { x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/') };
     assert_eq!(translated, expected);
@@ -120,7 +120,7 @@ fn match_x86_scans() {
         );
         let mut translated: Vec<u8> = b"@#ab".iter().copied().cycle().take(99).collect();
         let mut expected = translated.clone();
-        translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
+        translate_bytes(&mut expected, b'@', b'+', b'#', b'/');
         unsafe { x86::translate_avx2(&mut translated, b'@', b'+', b'#', b'/') };
         assert_eq!(translated, expected);
     }

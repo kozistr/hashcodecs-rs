@@ -1,7 +1,7 @@
 macro_rules! decode_kernels {
-    ($features:literal, $decode:ident, $prefix:ident, $errors:ident => $valid:expr) => {
+    ($features:literal, $errors:ident => $valid:expr) => {
         #[target_feature(enable = $features)]
-        pub(crate) unsafe fn $decode<A: Decoder, S: Store>(
+        pub(crate) unsafe fn decode<A: Decoder, S: Store>(
             input: &[u8],
             output: *mut u8,
         ) -> Result<(usize, usize), Base64Error> {
@@ -85,7 +85,10 @@ macro_rules! decode_kernels {
         }
 
         #[target_feature(enable = $features)]
-        pub(crate) unsafe fn $prefix<A: Decoder>(input: &[u8], output: *mut u8) -> (usize, usize) {
+        pub(crate) unsafe fn decode_prefix<A: Decoder>(
+            input: &[u8],
+            output: *mut u8,
+        ) -> (usize, usize) {
             let mut source = 0;
             let mut destination = 0;
 

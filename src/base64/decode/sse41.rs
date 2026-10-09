@@ -12,7 +12,5 @@ use super::x86_contracts::{Decoder, Store};
 
 decode_kernels!(
     "ssse3,sse4.1",
-    decode_sse41,
-    decode_prefix_sse41,
     errors => _mm_testz_si128(errors, errors) != 0
 );

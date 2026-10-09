@@ -32,11 +32,15 @@ class CustomBuildHook(BuildHookInterface):
         else:
             target_dir = root / 'target' / 'hatch' / build_tag
         env['CARGO_TARGET_DIR'] = str(target_dir)
-        env['PYO3_PYTHON'] = sys.executable
+        # Isolated builds use a new virtualenv path each time, which invalidates PyO3's cache.
+        env['PYO3_PYTHON'] = str(Path(getattr(sys, '_base_executable', None) or sys.executable).resolve())
         result = subprocess.run(
             [
                 'cargo',
-                'build',
+                'rustc',
+                '--lib',
+                '--crate-type',
+                'cdylib',
                 '--locked',
                 '--manifest-path',
                 str(root / 'Cargo.toml'),

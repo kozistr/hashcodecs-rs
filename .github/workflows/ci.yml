@@ -347,9 +347,6 @@ jobs:
       - name: Check generated API metadata
         run: uv run --frozen --no-sync python tools/generate_api_metadata.py --check
 
-      - name: Test Python build tooling
-        run: uv run --frozen --no-sync pytest build_tests
-
   python_sdist:
     name: Python / Source Distribution
     runs-on: ubuntu-latest

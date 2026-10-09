@@ -234,8 +234,10 @@ and [raw comparison results](docs/benchmarks/results.csv).
 Build the Python wheel and source distribution:
 
 ```sh
-uv build
+uv build --sdist --wheel
 ```
+
+For a wheel alone, use `uv build --wheel`.
 
 Run the primary local checks:
 

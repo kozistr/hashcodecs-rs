@@ -58,9 +58,11 @@ impl Capabilities {
     #[cfg(test)]
     pub(crate) fn from_features(features: &[CpuFeature]) -> Self {
         let mut bits = 0;
+
         for feature in features {
             bits |= feature.bit();
         }
+
         Self { features: bits }
     }
 
@@ -72,11 +74,13 @@ impl Capabilities {
     ))]
     fn from_feature_flags(flags: &[(CpuFeature, bool)]) -> Self {
         let mut features = 0;
+
         for &(feature, available) in flags {
             if available {
                 features |= feature.bit();
             }
         }
+
         Self { features }
     }
 }
@@ -151,7 +155,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn x86_detection_keeps_raw_features_independent() {
+    fn x86_raw_features() {
         let capabilities =
             x86_capabilities_from_feature_flags(true, false, true, true, true, false, true);
         assert!(capabilities.supports(CpuFeature::Avx512Vbmi));
@@ -164,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn capabilities_check_algorithm_prerequisite_sets() {
+    fn feature_prerequisites() {
         let capabilities =
             Capabilities::from_features(&[CpuFeature::Avx2, CpuFeature::Sse41, CpuFeature::Bmi2]);
         assert!(capabilities.supports_all(&[CpuFeature::Avx2, CpuFeature::Bmi2]));

@@ -63,10 +63,12 @@ macro_rules! define_python_hasher {
             #[pyo3(signature = (data=None, seed=0))]
             fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
                 let mut state = <$state>::new(seed);
+
                 if let Some(data) = data {
                     let input = bytes_like(data, "data")?;
                     with_input(py, &input, |input| state.update(input));
                 }
+
                 Ok(Self { state })
             }
 

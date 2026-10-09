@@ -103,14 +103,17 @@ impl Argument {
         if self.value.is_null() {
             return Ok(self.default_bool(py));
         }
+
         if self.value == unsafe { ffi::Py_True() } {
             return Ok(true);
         }
+
         if self.value == unsafe { ffi::Py_False() } || self.value == unsafe { ffi::Py_None() } {
             return Ok(false);
         }
 
         let truthy = unsafe { ffi::PyObject_IsTrue(self.value) };
+
         if truthy == -1 {
             Err(PyErr::fetch(py))
         } else {
@@ -206,6 +209,7 @@ impl<const N: usize> Binding<N> {
                 ) else {
                     return ptr::null_mut();
                 };
+
                 values
             };
 

@@ -16,7 +16,7 @@ use crate::base64::{
     decode_to_ptr_with_unpadded_layout, decode_unpadded_layout, validate_alphabet,
 };
 use crate::bindings::buffer::with_bytearray;
-use crate::bindings::objects::{bytearray_data, bytearray_size, bytes_data_mut};
+use crate::bindings::objects::{bytearray_data, bytearray_size, bytes_data};
 
 pub(super) const CONFIGURED_STAGING_CAPACITY: usize = 4096;
 
@@ -133,11 +133,13 @@ impl StagingWriter {
         }
 
         let mut source = 0;
+
         while source < input.len() {
             // Complete untranslated quartets need no staging copy. Preserve
             // fragments until a full staging buffer or the final flush.
             if self.staging.is_empty() {
                 let direct = (input.len() - source) / 4 * 4;
+
                 if direct != 0 {
                     self.written += unsafe {
                         decode_staging::<CHECKED>(
@@ -146,6 +148,7 @@ impl StagingWriter {
                         )?
                     };
                     source += direct;
+
                     continue;
                 }
             }
@@ -160,6 +163,7 @@ impl StagingWriter {
 
     fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
+
         while source < input.len() {
             let copied = self.staging.extend_from_slice(&input[source..]);
             source += copied;
@@ -221,6 +225,7 @@ impl StagingValidator {
 
     pub(super) fn push(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
+
         while source < input.len() {
             let copied = self.staging.extend_from_slice(&input[source..]);
             source += copied;
@@ -274,7 +279,7 @@ pub(super) unsafe fn pybytes_with_len<'py, T>(
         let raw = ffi::PyBytes_FromStringAndSize(core::ptr::null(), length);
         let bytes: Bound<'py, PyBytes> =
             Bound::from_owned_ptr_or_err(py, raw)?.cast_into_unchecked();
-        let buffer = bytes_data_mut(raw);
+        let buffer = bytes_data(raw).cast_mut();
         debug_assert!(!buffer.is_null());
 
         // CPython leaves the payload uninitialized when passed a null source.
@@ -293,9 +298,11 @@ pub(super) fn with_output_ptr<T>(
 ) -> PyResult<T> {
     with_bytearray(output, || {
         let provided = unsafe { bytearray_size(output.as_ptr()) };
+
         if provided < required {
             return Err(output_too_small(required, provided));
         }
+
         Ok(callback(unsafe { bytearray_data(output.as_ptr()) }))
     })
 }
@@ -325,6 +332,7 @@ impl BytesWriter {
             .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
 
         let writer = unsafe { ffi::compat::PyBytesWriter_Create(capacity) };
+
         if writer.is_null() {
             Err(PyErr::fetch(py))
         } else {
@@ -366,9 +374,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scratch_buffers_are_aligned_and_follow_hot_metadata() {
+    fn scratch_buffer_layout() {
         assert_eq!(std::mem::align_of::<StagingBuffer>(), 32);
         assert_eq!(std::mem::offset_of!(StagingBuffer, bytes) % 32, 0);
+
         for offset in [
             std::mem::offset_of!(StagingWriter, staging),
             std::mem::offset_of!(StagingValidator, staging),

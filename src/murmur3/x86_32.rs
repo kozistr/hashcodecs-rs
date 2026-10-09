@@ -157,8 +157,10 @@ pub(super) fn mix_x86_32_body(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     {
         if blocks.byte_len() < dispatch::X86_32_SSE41_MIN {
             mix_x86_32_body_scalar(blocks, hash);
+
             return;
         }
+
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x86_32_backend(blocks.byte_len(), capabilities);
         mix_x86_32_body_with_backend(blocks, hash, selected);
@@ -190,6 +192,7 @@ pub(super) fn murmur3_x86_32_scalar(input: &[u8], seed: u32) -> u32 {
 pub(super) fn mix_x86_32_body_scalar(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
     let input = blocks.as_bytes();
     let mut offset = 0;
+
     while offset < input.len() {
         let block = read_u32_le(input, offset)
             .wrapping_mul(X86_32_C1)
@@ -219,12 +222,15 @@ pub(super) fn finish_x86_32_tail(tail_bytes: &[u8], mut hash: u32, length: u32) 
     debug_assert!(tail_bytes.len() < 4);
     let tail_len = tail_bytes.len();
     let mut tail = 0u32;
+
     if tail_len == 3 {
         tail ^= (tail_bytes[2] as u32) << 16;
     }
+
     if tail_len >= 2 {
         tail ^= (tail_bytes[1] as u32) << 8;
     }
+
     if tail_len != 0 {
         tail ^= tail_bytes[0] as u32;
         hash ^= tail

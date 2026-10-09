@@ -57,6 +57,7 @@ fn deterministic_private_cache(leaf: u32) -> Option<usize> {
     for index in 0.. {
         let registers = __cpuid_count(leaf, index);
         let cache_type = registers.eax & 0x1f;
+
         if cache_type == 0 {
             break;
         }
@@ -69,6 +70,7 @@ fn deterministic_private_cache(leaf: u32) -> Option<usize> {
             largest = Some(largest.map_or(bytes, |current: usize| current.max(bytes)));
         }
     }
+
     largest
 }
 
@@ -86,22 +88,8 @@ fn deterministic_cache_bytes(ebx: u32, ecx: u32) -> usize {
 mod tests {
     use super::*;
 
-    fn half_mebibyte_cache(leaf: u32) -> Option<usize> {
-        assert_eq!(leaf, 4);
-        Some(512 << 10)
-    }
-
-    fn two_mebibyte_cache(leaf: u32) -> Option<usize> {
-        assert_eq!(leaf, 0x8000_001d);
-        Some(2 << 20)
-    }
-
-    fn no_cache(_: u32) -> Option<usize> {
-        None
-    }
-
     #[test]
-    fn deterministic_cache_geometry_is_decoded_without_rounding() {
+    fn exact_cache_geometry() {
         // 64-byte lines, one partition, eight ways, and 1,024 sets: 512 KiB.
         let ebx = 63 | (7 << 22);
         assert_eq!(deterministic_cache_bytes(ebx, 1023), 512 << 10);
@@ -109,20 +97,26 @@ mod tests {
     }
 
     #[test]
-    fn basic_topology_is_preferred_and_extended_is_a_fallback() {
+    fn topology_fallback() {
         assert_eq!(
-            private_cache_from_leaves(4, 0x8000_001d, half_mebibyte_cache),
+            private_cache_from_leaves(4, 0x8000_001d, |leaf| {
+                assert_eq!(leaf, 4);
+                Some(512 << 10)
+            }),
             Some(512 << 10)
         );
         assert_eq!(
-            private_cache_from_leaves(3, 0x8000_001d, two_mebibyte_cache),
+            private_cache_from_leaves(3, 0x8000_001d, |leaf| {
+                assert_eq!(leaf, 0x8000_001d);
+                Some(2 << 20)
+            }),
             Some(2 << 20)
         );
-        assert_eq!(private_cache_from_leaves(4, 0, no_cache), None);
+        assert_eq!(private_cache_from_leaves(4, 0, |_| None), None);
     }
 
     #[test]
-    fn streaming_stores_require_cache_pressure_and_alignment() {
+    fn streaming_store_requirements() {
         let mut output = [0_u8; 32];
         let offset = output.as_mut_ptr().align_offset(16);
         let aligned = unsafe { output.as_mut_ptr().add(offset) };

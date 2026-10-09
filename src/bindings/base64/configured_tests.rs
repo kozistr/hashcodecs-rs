@@ -6,7 +6,7 @@ use super::super::lenient::{
     lenient_decode_table, lenient_decoded_len,
 };
 use super::super::policy::{
-    DecodePolicy, ErrorWrites, Padding, PreparedDecoder, PreparedPolicy, Validation,
+    DecodePolicy, ErrorWrites, Padding, PreparedDecoder, PreparedPolicy, Validation, WarningScan,
 };
 use super::super::scan::scalar::{
     alphanumeric_prefix_scalar, symbol_prefix_scalar, translate_bytes_scalar,
@@ -27,13 +27,14 @@ fn configured_decoder(
     padded: bool,
     canonical: bool,
 ) -> ConfiguredDecoder {
-    let table = lenient_decode_table(None);
-    let mut table = table;
+    let mut table = lenient_decode_table(None);
+
     for &byte in ignored_bytes {
         if table[usize::from(byte)] >= 64 {
             table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
     }
+
     ConfiguredDecoder {
         table,
         preserves_alphanumeric: super::preserves_alphanumeric(&table),
@@ -77,8 +78,9 @@ fn decode_configured_strict_into(
 }
 
 #[test]
-fn simd_lenient_symbol_count_matches_scalar_for_all_bytes_and_alignments() {
+fn lenient_symbol_counts_match_scalar() {
     let input: Vec<u8> = (0_u8..=u8::MAX).cycle().take(1024).collect();
+
     for altchars in [None, Some(*b"-_"), Some(*b"@#"), Some(*b"=_")] {
         for offset in 0..32 {
             for tail in 0..32 {
@@ -94,7 +96,7 @@ fn simd_lenient_symbol_count_matches_scalar_for_all_bytes_and_alignments() {
 }
 
 #[test]
-fn scalar_prefix_and_translation_cover_boundaries() {
+fn scalar_prefix_translation_bounds() {
     assert_eq!(alphanumeric_prefix_scalar(b""), 0);
     assert_eq!(alphanumeric_prefix_scalar(b"abcXYZ09"), 8);
     assert_eq!(alphanumeric_prefix_scalar(b"abc!XYZ"), 3);
@@ -107,7 +109,7 @@ fn scalar_prefix_and_translation_cover_boundaries() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn x86_prefix_and_translation_kernels_match_scalar() {
+fn x86_prefix_translation_match_scalar() {
     if !std::is_x86_feature_detected!("sse2") {
         return;
     }
@@ -117,7 +119,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
         unsafe { super::super::scan::x86::alphanumeric_prefix_sse2(&valid) },
         97
     );
-    let mut interrupted = valid.clone();
+    let mut interrupted = valid;
     interrupted[47] = b'!';
     assert_eq!(
         unsafe { super::super::scan::x86::alphanumeric_prefix_sse2(&interrupted) },
@@ -140,7 +142,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
     let original: Vec<u8> = b"@#ab".iter().copied().cycle().take(67).collect();
     let mut expected = original.clone();
     translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
-    let mut translated = original.clone();
+    let mut translated = original;
     unsafe { super::super::scan::x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/') };
     assert_eq!(translated, expected);
 
@@ -186,7 +188,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
 }
 
 #[test]
-fn lenient_lengths_cover_padding_policies_and_invalid_tails() {
+fn lenient_length_policies() {
     assert_eq!(decoded_symbol_len(0), 0);
     assert_eq!(decoded_symbol_len(2), 1);
     assert_eq!(decoded_symbol_len(3), 2);
@@ -223,7 +225,7 @@ fn lenient_lengths_cover_padding_policies_and_invalid_tails() {
 }
 
 #[test]
-fn lenient_decoder_reports_each_output_boundary_before_writing() {
+fn lenient_output_bounds() {
     let table = lenient_decode_table(None);
     let mut output = [0xa5; 8];
     assert_eq!(
@@ -280,6 +282,7 @@ fn lenient_decoder_reports_each_output_boundary_before_writing() {
             Err(LenientDecodeError::OutputTooSmall)
         );
     }
+
     assert_eq!(
         unsafe {
             decode_lenient_to_ptr::<true>(
@@ -311,7 +314,7 @@ fn lenient_decoder_reports_each_output_boundary_before_writing() {
 }
 
 #[test]
-fn lenient_decoder_delegates_long_clean_runs_around_noise() {
+fn lenient_clean_runs_around_noise() {
     let table = lenient_decode_table(None);
     let mut input = b"YWJj".repeat(64);
     input.splice(128..128, *b"!?\r\n");
@@ -353,7 +356,7 @@ fn lenient_decoder_delegates_long_clean_runs_around_noise() {
 }
 
 #[test]
-fn configured_decoder_compacts_ignored_bytes_into_its_decode_table() {
+fn ignored_bytes_in_decode_table() {
     assert!(std::mem::size_of::<ConfiguredDecoder>() <= 320);
     let decoder = configured_decoder(b"!", true, true, false);
     assert_eq!(decoder.table[usize::from(b'!')], IGNORED_CONFIGURED_VALUE);
@@ -361,7 +364,7 @@ fn configured_decoder_compacts_ignored_bytes_into_its_decode_table() {
 }
 
 #[test]
-fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
+fn cached_alphanumeric_preservation() {
     for (altchars, expected) in [
         (None, true),
         (Some(*b"-_"), true),
@@ -372,7 +375,7 @@ fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
         let decoder = ConfiguredDecoder::new(&PreparedPolicy {
             altchars,
             warning_altchars: altchars,
-            known_warning_byte: None,
+            warning_scan: WarningScan::Pending,
             urlsafe_warning: false,
             alphabet: None,
             validation: Validation::Lenient,
@@ -390,8 +393,9 @@ fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
 }
 
 #[test]
-fn strict_special_search_covers_every_width() {
+fn strict_special_search_widths() {
     let table = lenient_decode_table(None);
+
     for (ignored_bytes, expected) in [
         (b"".as_slice(), 0),
         (b"!".as_slice(), 1),
@@ -400,9 +404,11 @@ fn strict_special_search_covers_every_width() {
         (b"!?~%".as_slice(), 4),
     ] {
         let mut table = table;
+
         for &byte in ignored_bytes {
             table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
+
         let specials = StrictSpecials::new(&table);
         assert!(matches!(
             (expected, specials),
@@ -413,6 +419,7 @@ fn strict_special_search_covers_every_width() {
                 | (4, StrictSpecials::Many)
         ));
     }
+
     assert_eq!(StrictSpecials::None.find(b"abc"), None);
     assert_eq!(StrictSpecials::One(b'!').find(b"a!c"), Some(1));
     assert_eq!(StrictSpecials::Two(b'!', b'?').find(b"a?c"), Some(1));
@@ -423,9 +430,11 @@ fn strict_special_search_covers_every_width() {
 
     for disabled in 0..=4 {
         let mut table = lenient_decode_table(None);
+
         for &byte in &STANDARD_ALPHABET[..disabled] {
             table[usize::from(byte)] = 64;
         }
+
         let forbidden = StrictSpecials::forbidden(&table);
         assert!(matches!(
             (disabled, forbidden),
@@ -440,12 +449,12 @@ fn strict_special_search_covers_every_width() {
 
 #[test]
 #[should_panic(expected = "many special bytes use the generic scanner")]
-fn many_strict_specials_cannot_use_the_specialized_search() {
+fn strict_special_search_rejects_excess() {
     StrictSpecials::Many.find(b"abc");
 }
 
 #[test]
-fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
+fn translation_and_staging_boundaries() {
     let table = lenient_decode_table(None);
     assert!(Translation::new(&table, None, decode_byte_kernels().translate).is_none());
     let mut translated_table = table;
@@ -499,10 +508,11 @@ fn translation_and_staging_helpers_cover_full_and_partial_buffers() {
 }
 
 #[test]
-fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
+fn invalid_tail_capacity_bounds() {
     Python::initialize();
     Python::attach(|py| {
         let ignored = PyBytes::new(py, b"!");
+
         for altchars in [None, Some(*b"@#"), Some(*b"=_"), Some(*b"==")] {
             for validation in [Validation::Strict, Validation::Lenient] {
                 for padded in [false, true] {
@@ -519,6 +529,7 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
                         )
                         .unwrap();
                         let decoder = prepared.configured();
+
                         for prefix in [0, 4, 128, 4096] {
                             for tail in [
                                 b"".as_slice(),
@@ -534,6 +545,7 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
                                 let mut input = vec![b'A'; prefix];
                                 input.extend_from_slice(tail);
                                 let capacity = decoded_len_upper_bound(&input, &decoder.table);
+
                                 for continue_after_padding in [false, true] {
                                     let mut output = vec![0xa5; capacity + 17];
                                     let written = unsafe {
@@ -559,10 +571,11 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
 }
 
 #[test]
-fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
+fn staging_fragment_bounds() {
     for length in [4, 16, 4092, 4096, 4100, 8192] {
         let input = vec![b'A'; length];
         let required = length / 4 * 3;
+
         for split in 0..=5.min(length) {
             let mut output = vec![0xa5; required + 17];
             let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
@@ -574,14 +587,16 @@ fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
             assert!(output[required + 1..].iter().all(|&byte| byte == 0xa5));
         }
     }
+
     let mut output = [0xa5; 3];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(writer.push_symbols::<true>(b"AA!A"), None);
 }
 
 #[test]
-fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
+fn strict_validation_and_decode_errors() {
     let decoder = configured_decoder(b"!?#$", true, true, false);
+
     for (input, expected) in [
         (b"AAAA".as_slice(), 3),
         (b"AA==".as_slice(), 1),
@@ -594,6 +609,7 @@ fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
             Some(expected)
         );
     }
+
     for input in [
         b"AA==A".as_slice(),
         b"AA~=".as_slice(),
@@ -630,7 +646,7 @@ fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
 }
 
 #[test]
-fn configured_strict_specials_cover_padding_and_staging_errors() {
+fn strict_padding_and_staging_errors() {
     let decoder = configured_decoder(b"!", true, true, false);
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY];
 
@@ -650,6 +666,7 @@ fn configured_strict_specials_cover_padding_and_staging_errors() {
     }
 
     let canonical = configured_decoder(b"!", true, true, true);
+
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.validate_strict(input), None);
         assert_eq!(
@@ -681,7 +698,7 @@ fn configured_strict_specials_cover_padding_and_staging_errors() {
 }
 
 #[test]
-fn configured_strict_into_snapshots_aliases_and_honors_error_write_policy() {
+fn strict_aliases_and_error_writes() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
@@ -827,7 +844,7 @@ fn configured_strict_into_snapshots_aliases_and_honors_error_write_policy() {
 }
 
 #[test]
-fn configured_into_snapshots_an_aliasing_bytearray() {
+fn into_snapshots_alias() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
@@ -852,7 +869,7 @@ fn configured_into_snapshots_an_aliasing_bytearray() {
 }
 
 #[test]
-fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
+fn lenient_dispatch_and_canonical_errors() {
     let decoder = configured_decoder(b"!", false, true, false);
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     assert_eq!(decoder.decoded_len(b"Y!Q==", false), Some(1));
@@ -868,6 +885,7 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
 
     let canonical = configured_decoder(b"!", false, true, true);
     assert_eq!(canonical.decoded_len(b"AAAA", true), Some(3));
+
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
         assert_eq!(
@@ -875,6 +893,7 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
             None
         );
     }
+
     assert_eq!(canonical.decoded_len(b"AB==AA", true), Some(3));
     assert_eq!(
         unsafe { canonical.decode_checked_to_ptr(b"AB==AA", output.as_mut_ptr(), true) },

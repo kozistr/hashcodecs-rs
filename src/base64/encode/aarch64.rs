@@ -83,6 +83,7 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
 
         source += 24;
     }
+
     source
 }
 
@@ -199,6 +200,7 @@ unsafe fn encode_wrapped_with_table(
             let encoded = unsafe { encode_48_value(input.as_ptr().add(source + offset), table) };
             unsafe { write_wrapped_64(output, encoded) };
         }
+
         source += 192;
     }
 

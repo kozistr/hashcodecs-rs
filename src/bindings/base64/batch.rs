@@ -94,11 +94,13 @@ fn batch_outputs<'py>(
 
     let mut parsed = batch_results(outputs.len(), BATCH_TOO_LARGE)?;
     let mut identities = (outputs.len() > LINEAR_OUTPUT_IDENTITIES_MAX).then(HashSet::new);
+
     if let Some(identities) = &mut identities {
         identities
             .try_reserve(outputs.len())
             .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
     }
+
     for (index, output) in list_items(outputs)?.into_iter().enumerate() {
         let output = output
             .cast_into::<PyByteArray>()
@@ -111,13 +113,16 @@ fn batch_outputs<'py>(
             },
             |identities| !identities.insert(output.as_ptr()),
         );
+
         if duplicate {
             return Err(PyValueError::new_err(
                 "outputs must contain distinct bytearrays",
             ));
         }
+
         parsed.push(output);
     }
+
     Ok(BatchOutputs {
         outputs: parsed,
         identities,
@@ -179,18 +184,22 @@ fn prepare_batch_inputs<'py>(
         if PyBytes::is_exact_type_of(item) {
             return None;
         }
+
         if matches!(kind, BatchInputKind::AsciiOrBytes) && item.is_instance_of::<PyString>() {
             return (!PyString::is_exact_type_of(item))
                 .then_some(SnapshotPolicy::ReleaseBeforeWrite);
         }
+
         if PyByteArray::is_exact_type_of(item) {
             return outputs
                 .contains_identity(item.as_ptr())
                 .then_some(SnapshotPolicy::AliasesOnly);
         }
+
         if PyMemoryView::is_exact_type_of(item) {
             return Some(SnapshotPolicy::AliasesOnly);
         }
+
         Some(SnapshotPolicy::ReleaseBeforeWrite)
     };
 
@@ -202,14 +211,17 @@ fn prepare_batch_inputs<'py>(
     // Python. Keep every acquired value alive until every exporter has run,
     // then stabilize those uncommon inputs before any destination write.
     let mut prepared = Vec::new();
+
     for (index, item) in items.iter().enumerate() {
         let Some(policy) = snapshot_policy(item) else {
             continue;
         };
+
         let input = match kind {
             BatchInputKind::Contiguous => contiguous_bytes_like_owned(item, "s"),
             BatchInputKind::AsciiOrBytes => ascii_or_bytes_owned(item, "s"),
         };
+
         match input {
             Ok(input) => {
                 prepared
@@ -222,6 +234,7 @@ fn prepare_batch_inputs<'py>(
                     .try_reserve(1)
                     .map_err(|_| PyMemoryError::new_err("Base64 batch is too large"))?;
                 prepared.push((index, Err(error), policy));
+
                 break;
             }
         }
@@ -288,6 +301,7 @@ pub(super) fn b64encode_batch_parsed<'py>(
             unsafe { input.with_bytes(|input| encode_small_padded(py, input, &encoder)) }
         });
     }
+
     let length = items.len();
     let mut items = items.into_iter();
     list_from_fn(py, length, |_| {
@@ -322,15 +336,18 @@ pub(super) fn b64encode_batch_into_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let items = list_items(items)?;
     let outputs = batch_outputs(items.len(), outputs)?;
+
     if items.is_empty() {
         return Ok(PyList::empty(py));
     }
+
     let mut prepared = prepare_batch_inputs(&items, &outputs, BatchInputKind::Contiguous)?
         .into_iter()
         .peekable();
     let encoder = PreparedEncoder::new(altchars, true, None);
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
+
         match prepared
             .peek()
             .is_some_and(|(prepared_index, _, _)| *prepared_index == index)
@@ -389,6 +406,7 @@ pub(super) fn b64decode_batch_parsed<'py>(
             decoder.decode_allocating(py, &input)
         });
     }
+
     let mut items = items.into_iter();
     list_from_fn(py, length, |_| {
         let item = items.next().expect("batch item count is exact");
@@ -436,6 +454,7 @@ pub(super) fn b64decode_batch_into_parsed<'py>(
 
     list_from_fn(py, items.len(), |index| {
         let output = outputs.get(index);
+
         match prepared
             .peek()
             .is_some_and(|(prepared_index, _, _)| *prepared_index == index)

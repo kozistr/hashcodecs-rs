@@ -22,12 +22,14 @@ pub(in crate::bindings::base64) fn symbol_count_avx2(
     });
     let mut source = 0;
     let mut symbols = 0;
+
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
         let valid = valid_avx2(bytes, high_classes, low_classes, extra0, extra1);
         symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
         source += 32;
     }
+
     symbols
         + input[source..]
             .iter()
@@ -38,6 +40,7 @@ pub(in crate::bindings::base64) fn symbol_count_avx2(
 #[target_feature(enable = "avx2")]
 pub(in crate::bindings::base64) fn alphanumeric_prefix_avx2(input: &[u8]) -> usize {
     let mut source = 0;
+
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
         let valid = _mm256_or_si256(
@@ -45,11 +48,14 @@ pub(in crate::bindings::base64) fn alphanumeric_prefix_avx2(input: &[u8]) -> usi
             range_avx2(bytes, b'0', b'9'),
         );
         let mask = _mm256_movemask_epi8(valid) as u32;
+
         if mask != u32::MAX {
             return source + (!mask).trailing_zeros() as usize;
         }
+
         source += 32;
     }
+
     source
         + input[source..]
             .iter()
@@ -72,16 +78,20 @@ pub(in crate::bindings::base64) fn symbol_prefix_avx2(
         _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
     });
     let mut source = 0;
+
     while source + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
         let mask =
             _mm256_movemask_epi8(valid_avx2(bytes, high_classes, low_classes, extra0, extra1))
                 as u32;
+
         if mask != u32::MAX {
             return source + (!mask).trailing_zeros() as usize;
         }
+
         source += 32;
     }
+
     source
         + input[source..]
             .iter()
@@ -102,6 +112,7 @@ pub(in crate::bindings::base64) fn translate_avx2(
     let source1_vector = _mm256_set1_epi8(source1 as i8);
     let target1_vector = _mm256_set1_epi8(target1 as i8);
     let mut offset = 0;
+
     while offset + 32 <= input.len() {
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
         let mask0 = _mm256_cmpeq_epi8(bytes, source0_vector);
@@ -117,6 +128,7 @@ pub(in crate::bindings::base64) fn translate_avx2(
         unsafe { _mm256_storeu_si256(input.as_mut_ptr().add(offset).cast(), translated1) };
         offset += 32;
     }
+
     for byte in &mut input[offset..] {
         if *byte == source0 {
             *byte = target0;
@@ -169,12 +181,14 @@ pub(in crate::bindings::base64) fn symbol_count_sse2(
     let extra1 = _mm_set1_epi8(extra1 as i8);
     let mut source = 0;
     let mut symbols = 0;
+
     while source + 16 <= input.len() {
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let valid = valid_sse2(bytes, extra0, extra1);
         symbols += _mm_movemask_epi8(valid).count_ones() as usize;
         source += 16;
     }
+
     symbols
         + input[source..]
             .iter()
@@ -185,6 +199,7 @@ pub(in crate::bindings::base64) fn symbol_count_sse2(
 #[target_feature(enable = "sse2")]
 pub(in crate::bindings::base64) fn alphanumeric_prefix_sse2(input: &[u8]) -> usize {
     let mut source = 0;
+
     while source + 16 <= input.len() {
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let valid = _mm_or_si128(
@@ -192,11 +207,14 @@ pub(in crate::bindings::base64) fn alphanumeric_prefix_sse2(input: &[u8]) -> usi
             range_sse2(bytes, b'0', b'9'),
         );
         let mask = _mm_movemask_epi8(valid) as u32;
+
         if mask != 0xffff {
             return source + ((!mask) & 0xffff).trailing_zeros() as usize;
         }
+
         source += 16;
     }
+
     source
         + input[source..]
             .iter()
@@ -213,14 +231,18 @@ pub(in crate::bindings::base64) fn symbol_prefix_sse2(
     let extra0 = _mm_set1_epi8(extra0 as i8);
     let extra1 = _mm_set1_epi8(extra1 as i8);
     let mut source = 0;
+
     while source + 16 <= input.len() {
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let mask = _mm_movemask_epi8(valid_sse2(bytes, extra0, extra1)) as u32;
+
         if mask != 0xffff {
             return source + ((!mask) & 0xffff).trailing_zeros() as usize;
         }
+
         source += 16;
     }
+
     source
         + input[source..]
             .iter()
@@ -241,6 +263,7 @@ pub(in crate::bindings::base64) fn translate_sse2(
     let source1_vector = _mm_set1_epi8(source1 as i8);
     let target1_vector = _mm_set1_epi8(target1 as i8);
     let mut offset = 0;
+
     while offset + 16 <= input.len() {
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
         let mask0 = _mm_cmpeq_epi8(bytes, source0_vector);
@@ -256,6 +279,7 @@ pub(in crate::bindings::base64) fn translate_sse2(
         unsafe { _mm_storeu_si128(input.as_mut_ptr().add(offset).cast(), translated1) };
         offset += 16;
     }
+
     for byte in &mut input[offset..] {
         if *byte == source0 {
             *byte = target0;

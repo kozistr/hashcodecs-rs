@@ -43,11 +43,13 @@ fn check_murmur(input: &[u8], seed: u32) {
     let mut x86_32 = Murmur3X86Hasher32::new(seed);
     let mut x86_128 = Murmur3X86Hasher128::new(seed);
     let mut x64_128 = Murmur3X64Hasher128::new(seed);
+
     for chunk in input.chunks(7) {
         x86_32.update(chunk);
         x86_128.update(chunk);
         x64_128.update(chunk);
     }
+
     assert_eq!(x86_32.digest(), murmur3_x86_32(input, seed));
     assert_eq!(x86_128.digest(), murmur3_x86_128(input, seed));
     assert_eq!(x64_128.digest(), murmur3_x64_128(input, seed));
@@ -67,18 +69,22 @@ fn main() {
         191, 192, 239, 240, 241, 255, 256, 511, 512, 1024, 4096,
     ];
     let inputs: Vec<Vec<u8>> = lengths.into_iter().map(payload).collect();
+
     for input in &inputs {
         check_base64(input, false);
         check_base64(input, true);
         check_murmur(input, 0x9747_b28c);
     }
+
     check_xxhash(&inputs, 0x9e37_79b1_85eb_ca87);
 
     let mut equal_long_inputs: Vec<Vec<u8>> = (0..4).map(|_| payload(4096)).collect();
+
     for (index, input) in equal_long_inputs.iter_mut().enumerate() {
         input[0] = input[0].wrapping_add(index as u8);
         input[4095] ^= (index as u8).wrapping_mul(0x5b);
     }
+
     for width in 2..=4 {
         check_xxhash(&equal_long_inputs[..width], 0x9e37_79b1_85eb_ca87);
     }

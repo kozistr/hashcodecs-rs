@@ -30,12 +30,7 @@ impl RuntimeBackend {
         {
             cache::use_streaming_stores(self.cached_input_limit, input_len, output)
         }
-        #[cfg(all(target_arch = "x86_64", any(kani, miri)))]
-        {
-            let _ = (self.cached_input_limit, input_len, output);
-            false
-        }
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(all(target_arch = "x86_64", not(any(kani, miri)))))]
         {
             let _ = (self.cached_input_limit, input_len, output);
             false
@@ -55,9 +50,7 @@ fn detect_runtime_backend() -> RuntimeBackend {
         backend: select_backend(cpu::capabilities()),
         #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
         cached_input_limit: cache::cached_input_limit(),
-        #[cfg(all(target_arch = "x86_64", any(kani, miri)))]
-        cached_input_limit: None,
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(all(target_arch = "x86_64", not(any(kani, miri)))))]
         cached_input_limit: None,
     }
 }

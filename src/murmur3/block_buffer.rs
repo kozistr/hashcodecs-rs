@@ -52,17 +52,21 @@ impl<const BLOCK_SIZE: usize> BlockBuffer<BLOCK_SIZE> {
             self.bytes[self.len..self.len + copied].copy_from_slice(&input[..copied]);
             self.len += copied;
             input = &input[copied..];
+
             if self.len != BLOCK_SIZE {
                 return;
             }
+
             consume(FullBlocks(&self.bytes));
             self.len = 0;
         }
 
         let (blocks, remaining) = FullBlocks::split(input);
+
         if blocks.byte_len() != 0 {
             consume(blocks);
         }
+
         self.bytes[..remaining.len()].copy_from_slice(remaining);
         self.len = remaining.len();
     }

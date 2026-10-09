@@ -36,7 +36,7 @@ pub(crate) use decode::{
     decode_to_slice_with_layout_and_alphabet_validated_blocks,
     decode_to_slice_with_unpadded_layout_and_alphabet,
     decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks, decode_unpadded_layout,
-    decode_valid_prefix, validate_alphabet,
+    validate_alphabet,
 };
 #[cfg(any(feature = "python", all(test, target_arch = "aarch64"), kani))]
 pub(crate) use encode::encoded_len;
@@ -45,6 +45,8 @@ pub(crate) use encode::{
     CustomEncodeAlphabet, encode_to_ptr, encode_to_ptr_cached, encode_to_ptr_with_custom_alphabet,
     encode_wrapped_to_ptr_cached, encode_wrapped_to_ptr_custom,
 };
+#[cfg(any(feature = "python", test))]
+pub(crate) use runtime_dispatch::decode_valid_prefix_with_runtime_backend as decode_valid_prefix;
 
 #[cfg(test)]
 pub(crate) use encode::encode_scalar;

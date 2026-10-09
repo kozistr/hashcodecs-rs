@@ -42,9 +42,11 @@ macro_rules! define_x64_128_avx2_kernel {
                         _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 4).cast(), values)
                     };
                 }
+
                 mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
                 offset += 128;
             }
+
             while offset + 32 <= input.len() {
                 let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
                 let values = premix_x64_128_avx2(values, c1, c2, rotate_left, rotate_right);
@@ -52,6 +54,7 @@ macro_rules! define_x64_128_avx2_kernel {
                 mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..4]);
                 offset += 32;
             }
+
             if offset < input.len() {
                 let value1 = read_u64_le(input, offset);
                 let value2 = read_u64_le(input, offset + 8);
@@ -65,6 +68,7 @@ macro_rules! define_x64_128_avx2_kernel {
                     .wrapping_mul(X64_128_C1);
                 mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
             }
+
             [hash1, hash2]
         }
     };
@@ -120,9 +124,11 @@ fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64;
             let values = premix_x64_128_sse41(values, c1, c2);
             unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(vector * 2).cast(), values) };
         }
+
         mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed);
         offset += 64;
     }
+
     while offset < input.len() {
         let values = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
         let values = premix_x64_128_sse41(values, c1, c2);
@@ -130,6 +136,7 @@ fn mix_x64_128_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64;
         mix_x64_128_blocks(&mut hash1, &mut hash2, &mixed[..2]);
         offset += 16;
     }
+
     [hash1, hash2]
 }
 

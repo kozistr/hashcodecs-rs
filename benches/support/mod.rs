@@ -4,6 +4,12 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub const SAMPLE_SIZE: usize = 50;
 
+pub fn data(size: usize, salt: u8) -> Vec<u8> {
+    (0..size)
+        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(salt))
+        .collect()
+}
+
 #[cfg(target_os = "windows")]
 pub fn pin_to_one_cpu() {
     use core::ffi::c_void;

@@ -15,7 +15,7 @@ use super::configured::{
 use super::lenient::{try_decode_lenient, try_decode_lenient_into};
 use super::policy::{
     ConfiguredShortcut, DecodeAttempt, DecodePolicy, DecodeRoute, ErrorWrites, Padding,
-    PreparedDecoder, Validation,
+    PreparedDecoder, Validation, WarningScan,
 };
 use super::scan::is_lenient_symbol;
 use super::staging::{output_too_small, with_output_ptr};
@@ -175,6 +175,7 @@ impl PreparedDecoder {
         if let Some(input) = input.snapshot_mutable()? {
             return self.decode_allocating(py, &BytesLike::OwnedVec(input));
         }
+
         let warning = self.legacy_warning_byte(input);
         self.execute(py, input, &Allocating, warning)
     }
@@ -189,14 +190,19 @@ impl PreparedDecoder {
         if let Some(input) = input.snapshot_mutable()? {
             return self.decode_into(py, &BytesLike::OwnedVec(input), output);
         }
+
         if let Some(input) = input.snapshot_for_output(output)? {
             return self.decode_into(py, &BytesLike::OwnedVec(input), output);
         }
+
         let warning = self.legacy_warning_byte(input);
+
         if warning.is_some() {
             let decoded = self.execute(py, input, &Allocating, warning)?;
+
             return copy_decoded_into(&decoded, output);
         }
+
         self.execute(py, input, output, None)
     }
 
@@ -210,6 +216,7 @@ impl PreparedDecoder {
         let (urlsafe_315, direct, strict) = match self.route {
             DecodeRoute::Configured(shortcut) => {
                 let value = self.configured_output(py, input, output, shortcut)?;
+
                 return self.finish(py, warning, value);
             }
             DecodeRoute::Strict { urlsafe_315 } => (urlsafe_315, false, true),
@@ -229,6 +236,7 @@ impl PreparedDecoder {
             {
                 return self.finish(py, warning, value);
             }
+
             if !self.policy.padding.is_padded()
                 && let Some(value) = self.try_native(
                     py,
@@ -266,6 +274,7 @@ impl PreparedDecoder {
             } else {
                 None
             };
+
             if padded.is_some() {
                 padded
             } else {
@@ -280,6 +289,7 @@ impl PreparedDecoder {
                 } else {
                     None
                 };
+
                 if unpadded.is_some() {
                     unpadded
                 } else {
@@ -289,6 +299,7 @@ impl PreparedDecoder {
                 }
             }
         };
+
         let value = match value {
             Some(value) => value,
             None => output.store_fallback(decode_with_binascii(
@@ -300,6 +311,7 @@ impl PreparedDecoder {
                 self.policy.padding,
             )?)?,
         };
+
         self.finish(py, warning, value)
     }
 
@@ -358,6 +370,7 @@ impl PreparedDecoder {
                         })
                     })
                 };
+
             if (!O::REUSABLE || canonical)
                 && let Some(value) = self.try_native(
                     py,
@@ -370,9 +383,11 @@ impl PreparedDecoder {
                 if canonical {
                     return Ok(value);
                 }
+
                 return Err(decoding_error(py, "Non-zero padding bits"));
             }
         }
+
         if shortcut == ConfiguredShortcut::CanonicalUnpadded
             && unsafe {
                 input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
@@ -387,6 +402,7 @@ impl PreparedDecoder {
         {
             return Ok(value);
         }
+
         match output.native(
             py,
             input,
@@ -414,28 +430,33 @@ impl PreparedDecoder {
         } else {
             None
         };
+
         let data = if let Some(translated) = &translated {
             PyBytes::new(py, translated)
         } else {
             unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
         };
+
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", self.policy.validation.is_strict())?;
         kwargs.set_item("padded", self.policy.padding.is_padded())?;
         kwargs.set_item("canonical", self.policy.canonical)?;
 
-        let mut constructed_alphabet = None;
-        if self.policy.alphabet.is_none()
+        let constructed_alphabet = if self.policy.alphabet.is_none()
             && self.policy.ignorechars_specified
             && let Some(altchars) = self.policy.altchars
         {
             let mut alphabet = *STANDARD_ALPHABET;
             alphabet[62..].copy_from_slice(&altchars);
-            constructed_alphabet = Some(alphabet);
-        }
+            Some(alphabet)
+        } else {
+            None
+        };
+
         if let Some(alphabet) = self.policy.alphabet.or(constructed_alphabet) {
             kwargs.set_item("alphabet", PyBytes::new(py, &alphabet))?;
         }
+
         if self.policy.ignorechars_specified {
             let ignorechars = self
                 .policy
@@ -457,9 +478,11 @@ impl PreparedDecoder {
         if self.policy.ignorechars_specified || !self.semantics.warns_legacy_altchars {
             return None;
         }
-        if let Some(badchar) = self.policy.known_warning_byte {
+
+        if let WarningScan::Complete(badchar) = self.policy.warning_scan {
             return badchar;
         }
+
         self.policy
             .warning_altchars
             .and_then(|altchars| legacy_altchar_badchar(input, altchars))
@@ -486,15 +509,19 @@ fn native_error(py: Python<'_>, error: Base64Error) -> PyErr {
 
 fn canonical_unpadded_input(input: &[u8], altchars: Option<[u8; 2]>) -> bool {
     let remainder = input.len() % 4;
+
     if !matches!(remainder, 2 | 3) {
         return remainder == 0;
     }
+
     let last = input[input.len() - 1];
+
     let value = match altchars {
         Some([_, slash]) if last == slash => Some(63),
         Some([plus, _]) if last == plus => Some(62),
         _ => STANDARD_ALPHABET.iter().position(|&byte| byte == last),
     };
+
     value.is_some_and(|value| {
         if remainder == 2 {
             value & 0x0f == 0
@@ -521,6 +548,7 @@ fn invalid_altchars(py: Python<'_>, altchars: &Bound<'_, PyAny>) -> PyErr {
         Ok(value) => value.to_string(),
         Err(error) => return error,
     };
+
     if python_at_least(py, (3, 15)) {
         PyValueError::new_err(format!("invalid altchars: {representation}"))
     } else {
@@ -533,9 +561,11 @@ fn normalized_altchars<'a, 'py>(
     altchars: &'a Bound<'py, PyAny>,
 ) -> PyResult<DecodeDataObject<'a, 'py>> {
     let altchars = decode_data_object(py, altchars, "altchars")?;
+
     if altchars.as_bound().len()? != 2 {
         return Err(invalid_altchars(py, altchars.as_bound()));
     }
+
     Ok(altchars)
 }
 
@@ -556,12 +586,14 @@ struct ParsedDecodeAlphabet {
 
 fn parse_decode_alphabet(alphabet: &Bound<'_, PyAny>) -> PyResult<ParsedDecodeAlphabet> {
     let alphabet = alphabet.cast::<PyBytes>()?;
+
     if alphabet.as_bytes().len() != STANDARD_ALPHABET.len() {
         return Err(PyValueError::new_err("alphabet must have length 64"));
     }
 
     let mut table = [0; 64];
     table.copy_from_slice(alphabet.as_bytes());
+
     if table[..62] == STANDARD_ALPHABET[..62] {
         let altchars = [table[62], table[63]];
         Ok(ParsedDecodeAlphabet {
@@ -591,9 +623,11 @@ fn prepare_translated_input<'a, 'py>(
     if PyBytes::is_exact_type_of(input.as_bound()) {
         return Ok((input, Some(altchars)));
     }
+
     if PyByteArray::is_exact_type_of(input.as_bound()) {
         let bytes = contiguous_bytes_like(input.as_bound(), "s")?;
         let input = unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).into_any()) };
+
         return Ok((DecodeDataObject::Owned(input), Some(altchars)));
     }
 
@@ -601,6 +635,7 @@ fn prepare_translated_input<'a, 'py>(
     let translated = input
         .as_bound()
         .call_method1(intern!(py, "translate"), (table,))?;
+
     let normalized = match decode_data_object(py, &translated, "s") {
         Ok(normalized) => normalized,
         Err(error) if error.is_instance_of::<pyo3::exceptions::PyTypeError>(py) => {
@@ -608,13 +643,16 @@ fn prepare_translated_input<'a, 'py>(
         }
         Err(error) => return Err(error),
     };
+
     let input = match normalized {
         DecodeDataObject::Borrowed(_) => DecodeDataObject::Owned(translated),
         DecodeDataObject::Owned(input) => DecodeDataObject::Owned(input),
     };
+
     Ok((input, None))
 }
 
+#[derive(Clone, Copy)]
 struct DecodeArguments<'a, 'py> {
     altchars: Option<&'a Bound<'py, PyAny>>,
     validate: Argument,
@@ -661,7 +699,9 @@ fn b64decode_with<'py, T>(
             ascii_or_bytes(py, s, "s")?
                 .into_stable_after_callbacks(arguments.before_output_write)?
         };
+
         let decoder = arguments.prepare(py)?;
+
         return decode(&decoder, &input);
     }
 
@@ -673,17 +713,19 @@ fn b64decode_with<'py, T>(
         // them after the existing buffer paths and preserve CPython's errors.
         let input = binascii_ascii_or_bytes_exported(s)?;
         let decoder = arguments.prepare(py)?;
+
         return decode(&decoder, &input);
     }
 
     let mut input = decode_data_object(py, s, "s")?;
     let mut parsed_altchars = None;
     let mut warning_altchars = None;
-    let mut known_warning_byte = None;
+    let mut warning_scan = WarningScan::Pending;
     let mut constructed_alphabet = None;
 
     if let Some(altchars) = arguments.altchars {
         let altchars = normalized_altchars(py, altchars)?;
+
         if python_at_least(py, (3, 15)) && arguments.ignorechars.is_some() {
             if PyBytes::is_exact_type_of(altchars.as_bound()) {
                 parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
@@ -693,18 +735,21 @@ fn b64decode_with<'py, T>(
         } else {
             parsed_altchars = parse_altchars(py, Some(altchars.as_bound()), true)?;
             warning_altchars = parsed_altchars;
+
             if arguments.ignorechars.is_none() {
                 if python_at_least(py, (3, 15)) {
-                    known_warning_byte = Some(python_legacy_altchar_badchar(
+                    warning_scan = WarningScan::Complete(python_legacy_altchar_badchar(
                         input.as_bound(),
                         parsed_altchars.unwrap_or(*b"+/"),
                     )?);
                 }
+
                 (input, parsed_altchars) =
                     prepare_translated_input(py, input, parsed_altchars.unwrap_or(*b"+/"))?;
             }
         }
     }
+
     warning_altchars = warning_altchars.or(parsed_altchars);
 
     let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
@@ -713,10 +758,12 @@ fn b64decode_with<'py, T>(
         .as_ref()
         .map(parse_decode_alphabet)
         .transpose()?;
+
     if let Some(alphabet) = &alphabet {
         parsed_altchars = alphabet.altchars;
         warning_altchars = parsed_altchars;
     }
+
     let padded = arguments.padded.truthy(py)?;
     let ignorechars = arguments
         .ignorechars
@@ -737,10 +784,13 @@ fn b64decode_with<'py, T>(
         (None, None) => None,
         _ => unreachable!("provided ignorechars has an acquired buffer"),
     };
+
     let input = input.into_stable_after_callbacks(arguments.before_output_write)?;
+
     if arguments.before_output_write {
         drop(ignorechars);
     }
+
     let copied_ignorechars = copied_ignorechars
         .as_deref()
         .map(|ignorechars| PyBytes::new(py, ignorechars));
@@ -757,9 +807,11 @@ fn b64decode_with<'py, T>(
     )
     .with_warning_altchars(warning_altchars)
     .with_alphabet(alphabet.and_then(|alphabet| alphabet.full));
-    if let Some(badchar) = known_warning_byte {
+
+    if let WarningScan::Complete(badchar) = warning_scan {
         policy = policy.with_known_warning_byte(badchar);
     }
+
     let decoder = PreparedDecoder::new(py, policy)?;
     decode(&decoder, &input)
 }
@@ -823,15 +875,18 @@ fn urlsafe_b64decode_with<'py, T>(
             DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false)
                 .with_urlsafe_warning(),
         )?;
+
         return decode(&decoder, &input);
     }
 
     let input = decode_data_object(py, s, "s")?;
+
     let known_warning_byte = if python_at_least(py, (3, 15)) {
         python_legacy_altchar_badchar(input.as_bound(), *b"-_")?
     } else {
         None
     };
+
     let (input, altchars) = prepare_translated_input(py, input, *b"-_")?;
     let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let padded = padded.truthy(py)?;
@@ -915,9 +970,11 @@ fn warn_legacy_altchars(
     let Some(altchars) = altchars else {
         return Ok(());
     };
+
     let Some(badchar) = badchar else {
         return Ok(());
     };
+
     if urlsafe {
         let message = format!(
             "invalid character '{}' in URL-safe Base64 data will be discarded in future Python versions",
@@ -925,26 +982,31 @@ fn warn_legacy_altchars(
         );
         py.import("warnings")?
             .call_method1("warn", (message, py.get_type::<PyFutureWarning>(), 1))?;
+
         return Ok(());
     }
 
     let strict_mode = validation.is_strict();
     let mode = if strict_mode { "True" } else { "False" };
+
     let outcome = if strict_mode {
         "will be an error"
     } else {
         "will be discarded"
     };
+
     let altchars = PyBytes::new(py, &altchars).repr()?.to_string();
     let message = format!(
         "invalid character '{}' in Base64 data with altchars={altchars} and validate={mode} {outcome} in future Python versions",
         char::from(badchar),
     );
+
     let category = if strict_mode {
         py.get_type::<PyDeprecationWarning>()
     } else {
         py.get_type::<PyFutureWarning>()
     };
+
     py.import("warnings")?
         .call_method1("warn", (message, category, 1))?;
     Ok(())
@@ -959,6 +1021,7 @@ fn python_legacy_altchar_badchar(
             return Ok(Some(*byte));
         }
     }
+
     Ok(None)
 }
 
@@ -992,11 +1055,13 @@ fn decode_with_binascii<'py>(
             padding,
         );
     }
+
     let translated = if let Some(altchars) = altchars {
         unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
     } else {
         None
     };
+
     let data = if let Some(translated) = translated.as_deref() {
         PyBytes::new(py, translated)
     } else if let Some(bytes) = input.python_bytes(py)? {
@@ -1004,11 +1069,13 @@ fn decode_with_binascii<'py>(
     } else {
         unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
     };
+
     let input = data.as_bytes();
     let decode = py
         .import(intern!(py, "binascii"))?
         .getattr(intern!(py, "a2b_base64"))?;
     let strict_mode = validation.is_strict();
+
     let output = if semantics.binascii_accepts_padding() {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
@@ -1018,12 +1085,14 @@ fn decode_with_binascii<'py>(
         if strict_mode && !strict_base64_310(input) {
             return Err(decoding_error(py, "Non-base64 digit found"));
         }
+
         decode.call1((data,))?
     } else {
         let kwargs = PyDict::new(py);
         kwargs.set_item("strict_mode", strict_mode)?;
         decode.call((data,), Some(&kwargs))?
     };
+
     output.cast_into::<PyBytes>().map_err(Into::into)
 }
 
@@ -1031,10 +1100,12 @@ fn canonical_padding(input: &[u8]) -> bool {
     let Some(&last) = input.last() else {
         return true;
     };
+
     let value = STANDARD_ALPHABET
         .iter()
         .position(|&byte| byte == last)
         .expect("normalized Base64 input uses the standard alphabet");
+
     match input.len() % 4 {
         2 => value & 0x0f == 0,
         3 => value & 0x03 == 0,

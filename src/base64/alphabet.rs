@@ -28,6 +28,7 @@ pub(super) const fn decode_table(urlsafe: bool, mixed: bool) -> [u8; 256] {
     }
 
     index = 0;
+
     while index < 10 {
         table[b'0' as usize + index] = index as u8 + 52;
         index += 1;

@@ -14,6 +14,7 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
             | (input[len >> 1] as u32) << 24
             | input[len - 1] as u32
             | (len as u32) << 8;
+
         return xxh64_avalanche(
             (combined as u64)
                 ^ ((read_u32_le(&SECRET, 0) ^ read_u32_le(&SECRET, 4)) as u64).wrapping_add(seed),
@@ -23,6 +24,7 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
     if len <= 8 {
         let seed = seed ^ ((seed as u32).swap_bytes() as u64) << 32;
         let input_word = read_u32_le(input, len - 4) as u64 | (read_u32_le(input, 0) as u64) << 32;
+
         return rrmxmx(
             input_word ^ (read_u64_le(&SECRET, 8) ^ read_u64_le(&SECRET, 16)).wrapping_sub(seed),
             len,
@@ -160,6 +162,7 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
         lo ^= lo >> 35;
         lo = lo.wrapping_mul(MX2);
         lo ^= lo >> 28;
+
         return [lo, xxh3_avalanche(hi)];
     }
 

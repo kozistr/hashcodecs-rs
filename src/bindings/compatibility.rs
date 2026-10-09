@@ -27,6 +27,7 @@ enum BinasciiApi {
 impl PythonSemantics {
     pub(super) fn from_version(version: (u8, u8, u8)) -> Self {
         let minor_version = (version.0, version.1);
+
         let binascii_api = if minor_version >= (3, 15) {
             BinasciiApi::Padding
         } else if minor_version >= (3, 11) {
@@ -34,7 +35,7 @@ impl PythonSemantics {
         } else {
             BinasciiApi::Legacy
         };
-        let urlsafe_315 = minor_version >= (3, 15);
+
         let continues_after_padding = match version {
             (3, 13, patch) => patch >= 13,
             (3, 14, patch) => patch >= 4,
@@ -44,7 +45,7 @@ impl PythonSemantics {
         Self {
             version,
             binascii_api,
-            urlsafe_exclusive_alphabet: urlsafe_315,
+            urlsafe_exclusive_alphabet: minor_version >= (3, 15),
             warns_legacy_altchars: minor_version >= (3, 15),
             continues_after_padding,
         }
@@ -93,6 +94,7 @@ pub(super) fn parse_altchars(
 
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
+
     if bytes.len() != 2 {
         if python_at_least(py, (3, 15)) {
             let value = if allow_text {
@@ -100,8 +102,10 @@ pub(super) fn parse_altchars(
             } else {
                 value.repr()?.to_string()
             };
-            return Err(PyValueError::new_err(format!("invalid altchars: {value}",)));
+
+            return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
         }
+
         return Err(PyAssertionError::new_err(
             "altchars must be a bytes-like object or ASCII string of length 2",
         ));

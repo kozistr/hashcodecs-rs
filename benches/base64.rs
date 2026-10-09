@@ -8,12 +8,6 @@ mod support;
 
 const SIZES: [usize; 4] = [1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
 
-fn data(size: usize) -> Vec<u8> {
-    (0..size)
-        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(17))
-        .collect()
-}
-
 macro_rules! benchmark {
     ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr) => {
         $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
@@ -43,8 +37,9 @@ fn base64(c: &mut Criterion) {
 
 fn standard_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("standard_encode");
+
     for size in SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         let expected = hashcodecs::base64::b64encode(&input);
         assert_eq!(
             base64::engine::general_purpose::STANDARD.encode(&input),
@@ -67,13 +62,15 @@ fn standard_encode(c: &mut Criterion) {
             base64_turbo::STANDARD.encode(input)
         });
     }
+
     group.finish();
 }
 
 fn urlsafe_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("urlsafe_encode");
+
     for size in SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         let expected = hashcodecs::base64::b64encode_urlsafe(&input);
         assert_eq!(
             base64::engine::general_purpose::URL_SAFE.encode(&input),
@@ -96,13 +93,15 @@ fn urlsafe_encode(c: &mut Criterion) {
             base64_turbo::URL_SAFE.encode(input)
         });
     }
+
     group.finish();
 }
 
 fn standard_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("standard_decode");
+
     for size in SIZES {
-        let expected = data(size);
+        let expected = support::data(size, 17);
         let input = hashcodecs::base64::b64encode(&expected);
         assert_eq!(
             base64::engine::general_purpose::STANDARD
@@ -133,13 +132,15 @@ fn standard_decode(c: &mut Criterion) {
             |input: &[u8]| { base64_turbo::STANDARD.decode(input).unwrap() }
         );
     }
+
     group.finish();
 }
 
 fn urlsafe_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("urlsafe_decode");
+
     for size in SIZES {
-        let expected = data(size);
+        let expected = support::data(size, 17);
         let input = hashcodecs::base64::b64encode_urlsafe(&expected);
         assert_eq!(
             base64::engine::general_purpose::URL_SAFE
@@ -170,6 +171,7 @@ fn urlsafe_decode(c: &mut Criterion) {
             |input: &[u8]| { base64_turbo::URL_SAFE.decode(input).unwrap() }
         );
     }
+
     group.finish();
 }
 

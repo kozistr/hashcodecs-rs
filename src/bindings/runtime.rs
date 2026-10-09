@@ -1,5 +1,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
+use std::sync::Once;
 
 use pyo3::ffi;
 use pyo3::panic::PanicException;
@@ -23,6 +24,7 @@ pub(super) fn with_function_bytes<T: Send>(
     if unsafe { ffi::PyBytes_CheckExact(object) } != 0 {
         let length = unsafe { bytes_size(object) };
         let bytes = unsafe { std::slice::from_raw_parts(bytes_data(object), length) };
+
         return if length >= detach_threshold {
             Ok(py.detach(|| operation(bytes)))
         } else {
@@ -72,6 +74,7 @@ pub(super) fn catch_unwind_callback(
             } else {
                 "panic from Rust code".to_owned()
             };
+
             PanicException::new_err(message).restore(py);
             ptr::null_mut()
         }
@@ -81,7 +84,14 @@ pub(super) fn catch_unwind_callback(
 pub(super) unsafe fn add_methods(
     module: &Bound<'_, PyModule>,
     methods: *mut ffi::PyMethodDef,
+    init: &Once,
+    register: unsafe fn(*mut ffi::PyMethodDef, (u8, u8)),
 ) -> PyResult<()> {
+    init.call_once(|| {
+        let version = module.py().version_info();
+        unsafe { register(methods, (version.major, version.minor)) };
+    });
+
     if unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) } == -1 {
         Err(PyErr::fetch(module.py()))
     } else {
@@ -94,7 +104,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn callback_panics_become_python_exceptions() {
+    fn callback_panic_conversion() {
         Python::initialize();
         Python::attach(|py| {
             let result = catch_unwind_callback(py, || panic!("callback panic"));

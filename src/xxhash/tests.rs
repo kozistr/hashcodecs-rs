@@ -33,13 +33,14 @@ fn empty_vectors() {
 }
 
 #[test]
-fn prepared_seeds_match_one_shot_across_length_classes() {
+fn prepared_seed_lengths() {
     let input = (0..=2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
 
     for seed in [0, 1, 0x0123_4567_89ab_cdef, u64::MAX] {
         let prepared = PreparedXxh3::new(seed);
+
         for length in [0, 16, 17, 32, 64, 128, 129, 240, 241, 1024, 2048] {
             assert_eq!(
                 prepared.hash_64(&input[..length]),
@@ -60,14 +61,14 @@ fn prepared_seeds_match_one_shot_across_length_classes() {
         PreparedXxh3::default().hash_64(b"default"),
         xxh3_64(b"default", 0)
     );
-    assert_eq!(
-        PreparedXxh3::new(42).clone().hash_128(b"clone"),
-        xxh3_128(b"clone", 42)
-    );
+    let prepared = PreparedXxh3::new(42);
+    let cloned = prepared.clone();
+    assert_eq!(cloned.hash_64(&input), prepared.hash_64(&input));
+    assert_eq!(cloned.hash_128(&input), prepared.hash_128(&input));
 }
 
 #[test]
-fn prepared_batches_match_one_shot_across_mixed_runs() {
+fn prepared_batch_runs() {
     let owned = [17, 241, 257, 258, 259, 260, 1024, 1025].map(|length| vec![length as u8; length]);
     let inputs = owned.each_ref().map(Vec::as_slice);
 
@@ -154,13 +155,14 @@ fn batches_match_one_shot() {
 }
 
 #[test]
-fn batches_consume_contiguous_equal_stripe_runs() {
+fn batch_stripe_runs() {
     let owned = [257, 258, 259, 260, 17, 1025, 1026, 1088, 1089].map(|length| {
         (0..length)
             .map(|index| (index as u8).wrapping_mul(43).wrapping_add(length as u8))
             .collect::<Vec<_>>()
     });
     let inputs = owned.each_ref().map(Vec::as_slice);
+
     for seed in [0, 0x0123_4567_89ab_cdef] {
         assert_eq!(
             xxh3_64_batch(&inputs, seed),
@@ -174,12 +176,14 @@ fn batches_consume_contiguous_equal_stripe_runs() {
 }
 
 #[test]
-fn matches_reference_at_every_length_through_two_blocks() {
+fn reference_block_lengths() {
     let input = (0..=2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
+
     for length in 0..=2048 {
         let input = &input[..length];
+
         for &seed in &[0, 0xd6e8_feb8_6659_fd93] {
             assert_eq!(
                 xxh3_64(input, seed),
@@ -198,7 +202,7 @@ fn matches_reference_at_every_length_through_two_blocks() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn avx2_tail_hashes_match_reference_at_every_length() {
+fn avx2_tail_lengths() {
     use super::long_inputs::{finalize_long_64, finalize_long_128};
 
     if !backend::capabilities().supports(CpuFeature::Avx2) {
@@ -208,9 +212,11 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
     let input = (0..1024)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
         .collect::<Vec<_>>();
+
     for length in 241..=1024 {
         let input = &input[..length];
         let long_input = LongInput::new(input).unwrap();
+
         for seed in [0, 0xd6e8_feb8_6659_fd93] {
             let secret = initialize_secret_scalar(seed);
             let acc = unsafe { accumulate_x86(long_input, &secret, X86Backend::Avx2) };
@@ -230,7 +236,7 @@ fn avx2_tail_hashes_match_reference_at_every_length() {
 }
 
 #[test]
-fn short_inputs_match_reference_with_unaligned_slices() {
+fn unaligned_short_inputs() {
     for offset in 0..16 {
         for length in 0..=240 {
             let owned = (0..offset + length)
@@ -238,6 +244,7 @@ fn short_inputs_match_reference_with_unaligned_slices() {
                 .collect::<Vec<_>>();
             // End at the allocation boundary, including for overlapping tail loads.
             let input = &owned[offset..];
+
             for seed in [0, 1, 0x0123_4567_89ab_cdef, u64::MAX] {
                 assert_eq!(
                     xxh3_64(input, seed),
@@ -255,7 +262,7 @@ fn short_inputs_match_reference_with_unaligned_slices() {
 }
 
 #[test]
-fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
+fn reference_length_boundaries() {
     const LENGTHS: &[usize] = &[
         0, 1, 2, 3, 4, 8, 9, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129, 159, 160, 191,
         192, 239, 240, 241, 255, 256, 511, 512, 1023, 1024, 1025, 4161,
@@ -266,6 +273,7 @@ fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
         let input: Vec<u8> = (0..length)
             .map(|index| (index as u8).wrapping_mul(131).wrapping_add(17))
             .collect();
+
         for &seed in SEEDS {
             assert_eq!(
                 xxh3_64(&input, seed),
@@ -284,20 +292,23 @@ fn matches_xxhash_reference_at_boundaries_and_large_lengths() {
 }
 
 #[test]
-fn randomized_inputs_match_the_official_c_implementation() {
+fn random_inputs_match_c() {
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+
     for case in 0..128 {
         state ^= state << 13;
         state ^= state >> 7;
         state ^= state << 17;
         let length = (state as usize) % (128 * 1024 + 1);
         let mut input = vec![0_u8; length];
+
         for byte in &mut input {
             state ^= state << 13;
             state ^= state >> 7;
             state ^= state << 17;
             *byte = state as u8;
         }
+
         state = state.rotate_left(29).wrapping_add(case);
         let seed = state;
         assert_eq!(xxh3_64(&input, seed), c_xxh3_64(&input, seed));
@@ -306,16 +317,18 @@ fn randomized_inputs_match_the_official_c_implementation() {
 }
 
 #[test]
-fn scalar_long_inputs_match_reference_and_native_backend() {
+fn scalar_long_inputs() {
     use super::long_inputs::{LongEngine, finalize_long_64, finalize_long_128};
 
     let input: Vec<u8> = (0..4161)
         .map(|index| (index as u8).wrapping_mul(47).wrapping_add(91))
         .collect();
     let native = LongEngine::new();
+
     for length in [241, 256, 511, 512, 1023, 1024, 1025, 2048, 4161] {
         let input = &input[..length];
         let long_input = LongInput::new(input).unwrap();
+
         for seed in [0, 1, 0xfeed_beef_cafe_babe] {
             let secret = initialize_secret_scalar(seed);
             let acc = accumulate_long_input_scalar(long_input, &secret);
@@ -334,7 +347,7 @@ fn scalar_long_inputs_match_reference_and_native_backend() {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[test]
-fn every_supported_x86_backend_matches_scalar() {
+fn x86_backends_match_scalar() {
     use crate::backend::Capabilities;
 
     let input: Vec<u8> = (0..4161)
@@ -370,9 +383,11 @@ fn every_supported_x86_backend_matches_scalar() {
         X86Backend::Avx512
     );
     assert!(select_x86_accumulation_kernel(X86Backend::Scalar).is_none());
+
     for backend in [X86Backend::Ssse3, X86Backend::Avx2, X86Backend::Avx512] {
         assert!(select_x86_accumulation_kernel(backend).is_some());
     }
+
     for &seed in &[0, 1, 0xfeed_beef_cafe_babe] {
         let secret = initialize_secret_scalar(seed);
         let long_input = LongInput::new(&input).unwrap();
@@ -396,6 +411,7 @@ fn every_supported_x86_backend_matches_scalar() {
             (X86Backend::Avx2, &[CpuFeature::Avx2][..]),
             (X86Backend::Avx512, &[CpuFeature::Avx512F][..]),
         ];
+
         for (selected, required) in supported
             .into_iter()
             .filter(|(_, required)| capabilities.supports_all(required))
@@ -404,6 +420,7 @@ fn every_supported_x86_backend_matches_scalar() {
             assert_eq!(select_x86_backend(forced), selected);
             let actual = unsafe { accumulate_x86(long_input, &secret, selected) };
             assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
+
             if selected == X86Backend::Avx2 {
                 for length in [241, 512, 768, 1024, 1536, 2048, 4096] {
                     let chain_input = &chain_input[..length];

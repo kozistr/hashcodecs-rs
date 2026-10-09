@@ -14,6 +14,7 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     required: usize,
 ) -> Option<[*mut ffi::PyObject; N]> {
     let nargs = nargs as usize;
+
     if nargs > max_positional {
         unsafe {
             ffi::PyErr_Format(
@@ -24,10 +25,12 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                 nargs,
             );
         }
+
         return None;
     }
 
     let mut values = [ptr::null_mut(); N];
+
     for (index, value) in values.iter_mut().take(nargs).enumerate() {
         *value = unsafe { *args.add(index) };
     }
@@ -35,11 +38,11 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     let keyword_count = if keywords.is_null() {
         0
     } else {
-        unsafe { tuple_size(keywords) }
+        unsafe { ffi::PyTuple_GET_SIZE(keywords) as usize }
     };
 
     for keyword_index in 0..keyword_count {
-        let keyword = unsafe { tuple_item(keywords, keyword_index) };
+        let keyword = unsafe { ffi::PyTuple_GET_ITEM(keywords, keyword_index as isize) };
         let value = unsafe { *args.add(nargs + keyword_index) };
         // Valid keywords follow the positional arguments. Search those slots
         // first, then check the filled slots to preserve duplicate diagnostics.
@@ -56,6 +59,7 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                     keyword,
                 );
             }
+
             return None;
         };
 
@@ -68,8 +72,10 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                     parameter_names[parameter_index],
                 );
             }
+
             return None;
         }
+
         values[parameter_index] = value;
     }
 
@@ -83,9 +89,11 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                     parameter_names[index],
                 );
             }
+
             return None;
         }
     }
+
     Some(values)
 }
 
@@ -95,19 +103,23 @@ pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
     }
 
     let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
-    if unsafe { ffi::PyErr_Occurred() }.is_null() && value <= u64::from(u32::MAX) {
-        Some(value as u32)
-    } else {
-        if unsafe { ffi::PyErr_Occurred() }.is_null() {
-            unsafe {
-                ffi::PyErr_SetString(
-                    ffi::PyExc_OverflowError,
-                    c"seed does not fit in uint32".as_ptr(),
-                )
-            };
-        }
-        None
+
+    if !unsafe { ffi::PyErr_Occurred() }.is_null() {
+        return None;
     }
+
+    let Ok(value) = u32::try_from(value) else {
+        unsafe {
+            ffi::PyErr_SetString(
+                ffi::PyExc_OverflowError,
+                c"seed does not fit in uint32".as_ptr(),
+            );
+        }
+
+        return None;
+    };
+
+    Some(value)
 }
 
 pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
@@ -120,18 +132,8 @@ pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
     // The conversion reports failure with ULLONG_MAX; all other values succeed.
     // Check the exception only for the sentinel, which is also a valid seed.
     if value != u64::MAX || unsafe { ffi::PyErr_Occurred() }.is_null() {
-        Some(value as u64)
+        Some(value)
     } else {
         None
     }
-}
-
-#[inline]
-unsafe fn tuple_size(tuple: *mut ffi::PyObject) -> usize {
-    unsafe { ffi::PyTuple_GET_SIZE(tuple) as usize }
-}
-
-#[inline]
-unsafe fn tuple_item(tuple: *mut ffi::PyObject, index: usize) -> *mut ffi::PyObject {
-    unsafe { ffi::PyTuple_GET_ITEM(tuple, index as isize) }
 }

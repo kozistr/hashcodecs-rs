@@ -10,26 +10,23 @@ const BASE64_DECODE_SIZES: [usize; 8] = [12, 16, 28, 32, 60, 64, 124, 128];
 const MURMUR_SIZES: [usize; 6] = [15, 16, 31, 32, 255, 256];
 const MURMUR_X64_SIZES: [usize; 12] = [15, 16, 31, 32, 64, 255, 256, 384, 511, 512, 513, 1024];
 
-fn data(size: usize) -> Vec<u8> {
-    (0..size)
-        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(17))
-        .collect()
-}
-
 fn base64_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("base64_encode_crossover");
+
     for size in BASE64_ENCODE_SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
             bench.iter(|| hashcodecs::base64::b64encode(black_box(input)));
         });
     }
+
     group.finish();
 }
 
 fn base64_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("base64_decode_crossover");
+
     for size in BASE64_DECODE_SIZES {
         let input = vec![b'A'; size];
         assert!(hashcodecs::base64::b64decode(&input).is_ok());
@@ -38,19 +35,22 @@ fn base64_decode(c: &mut Criterion) {
             bench.iter(|| hashcodecs::base64::b64decode(black_box(input)).unwrap());
         });
     }
+
     group.finish();
 }
 
 macro_rules! murmur_group {
     ($criterion:expr, $name:literal, $function:path, $sizes:expr) => {{
         let mut group = $criterion.benchmark_group($name);
+
         for size in $sizes {
-            let input = data(size);
+            let input = support::data(size, 17);
             group.throughput(Throughput::Bytes(size as u64));
             group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
                 bench.iter(|| $function(black_box(input), 42));
             });
         }
+
         group.finish();
     }};
 }

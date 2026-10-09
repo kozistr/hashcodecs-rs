@@ -40,6 +40,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
         );
+
         if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
@@ -53,6 +54,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
             unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
             unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
         }
+
         unsafe { S::store_24(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -61,6 +63,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
 
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+
         if !A::accepts_errors(_mm256_testz_si256(errors, errors) != 0) {
             return Err(Base64Error::InvalidInput);
         }
@@ -75,6 +78,7 @@ pub(crate) unsafe fn decode_avx2<A: Decoder, S: Store>(
     // This keeps the bulk SSSE3 entry point off the AVX2 hot path.
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+
         if !A::accepts_errors(errors_are_zero_ssse3(errors)) {
             return Err(Base64Error::InvalidInput);
         }
@@ -102,14 +106,17 @@ pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
             _mm256_or_si256(first, second),
             _mm256_or_si256(third, fourth),
         );
+
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
 
         source += 128;
     }
+
     while source + 32 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+
         if _mm256_testz_si256(errors, errors) == 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -119,6 +126,7 @@ pub(crate) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Base64Error> {
 
     if source + 16 <= input.len() {
         let (_, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+
         if !errors_are_zero_ssse3(errors) {
             return Err(Base64Error::InvalidInput);
         }
@@ -151,6 +159,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
             _mm256_or_si256(first_error, second_error),
             _mm256_or_si256(third_error, fourth_error),
         );
+
         if _mm256_testz_si256(errors, errors) == 0 {
             break;
         }
@@ -166,6 +175,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
             unsafe { store_24_padded(output.add(destination + 24), pack_32(second)) };
             unsafe { store_24_padded(output.add(destination + 48), pack_32(third)) };
         }
+
         unsafe { store_24_exact(output.add(destination + 72), pack_32(fourth)) };
 
         source += 128;
@@ -174,6 +184,7 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
 
     while source + 32 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
+
         if _mm256_testz_si256(errors, errors) == 0 {
             break;
         }
@@ -183,8 +194,10 @@ pub(crate) unsafe fn decode_prefix_avx2<A: Decoder>(
         source += 32;
         destination += 24;
     }
+
     if source + 16 <= input.len() {
         let (indices, errors) = unsafe { A::decode_indices_16(input.as_ptr().add(source)) };
+
         if errors_are_zero_ssse3(errors) {
             unsafe { store_12_exact(output.add(destination), pack_16_indices(indices)) };
 

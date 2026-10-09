@@ -4,7 +4,7 @@ use super::{STANDARD_DECODE, encoded_len};
 
 #[kani::proof]
 #[kani::unwind(13)]
-fn scalar_encoder_stays_within_the_exact_output_prefix() {
+fn scalar_encode_output_bounds() {
     let input: [u8; 8] = kani::any();
     let length: usize = kani::any();
     let urlsafe: bool = kani::any();
@@ -20,7 +20,7 @@ fn scalar_encoder_stays_within_the_exact_output_prefix() {
 }
 
 #[kani::proof]
-fn scalar_decoders_stay_within_exact_destinations() {
+fn scalar_decode_output_bounds() {
     let quad: [u8; 4] = kani::any();
     let padding: usize = kani::any();
     kani::assume(padding <= 2);
@@ -28,10 +28,12 @@ fn scalar_decoders_stay_within_exact_destinations() {
     let mut quad_output = [0xa5_u8; 3];
     let result =
         unsafe { decode_quad_ptr(&quad, quad_output.as_mut_ptr(), padding, &STANDARD_DECODE) };
+
     if result.is_ok() {
         if padding >= 1 {
             assert_eq!(quad_output[2], 0xa5);
         }
+
         if padding == 2 {
             assert_eq!(quad_output[1], 0xa5);
         }
@@ -53,6 +55,7 @@ fn scalar_decoders_stay_within_exact_destinations() {
             &STANDARD_DECODE,
         )
     };
+
     if result.is_ok() && tail_length == 2 {
         assert_eq!(tail_output[1], 0xa5);
     }

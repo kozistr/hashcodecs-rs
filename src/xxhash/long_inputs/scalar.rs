@@ -42,7 +42,7 @@ fn scramble(acc: &mut [u64; 8], secret: &Secret) {
     }
 }
 
-pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
+pub(in crate::xxhash) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
     let data = input.as_bytes();
     let schedule = build_long_input_schedule(input);
     let mut acc = initial_accumulator();

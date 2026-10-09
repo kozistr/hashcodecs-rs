@@ -59,6 +59,7 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
 
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
+
         for stripe in 0..16 {
             unsafe {
                 accumulate(

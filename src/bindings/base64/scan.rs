@@ -19,6 +19,7 @@ pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> u
         if input.len() >= 32 && std::is_x86_feature_detected!("avx2") {
             return unsafe { x86::symbol_count_avx2(input, altchars) };
         }
+
         if input.len() >= 16 && std::is_x86_feature_detected!("sse2") {
             return unsafe { x86::symbol_count_sse2(input, altchars) };
         }
@@ -51,9 +52,11 @@ fn select_alphanumeric_prefix_for_x86(avx2: bool, sse2: bool) -> AlphanumericPre
     if avx2 {
         return x86::alphanumeric_prefix_avx2;
     }
+
     if sse2 {
         return x86::alphanumeric_prefix_sse2;
     }
+
     alphanumeric_prefix_scalar
 }
 
@@ -62,9 +65,11 @@ fn select_symbol_prefix_for_x86(avx2: bool, sse2: bool) -> SymbolPrefix {
     if avx2 {
         return x86::symbol_prefix_avx2;
     }
+
     if sse2 {
         return x86::symbol_prefix_sse2;
     }
+
     symbol_prefix_scalar
 }
 
@@ -100,9 +105,11 @@ fn select_translate_bytes_for_x86(avx2: bool, sse2: bool) -> TranslateBytes {
     if avx2 {
         return x86::translate_avx2;
     }
+
     if sse2 {
         return x86::translate_sse2;
     }
+
     translate_scalar
 }
 
@@ -133,7 +140,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn x86_backend_selectors_cover_each_dispatch_tier() {
+    fn x86_dispatch_tiers() {
         for (avx2, sse2, expected) in [
             (
                 true,

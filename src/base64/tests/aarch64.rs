@@ -9,7 +9,7 @@ const CANARY: u8 = 0xa5;
 const GUARD: usize = 32;
 
 #[test]
-fn prefix_probe_defers_to_the_fallback_without_writing() {
+fn prefix_fallback_preserves_output() {
     for alphabet in [
         super::super::DecodeAlphabet::Standard,
         super::super::DecodeAlphabet::UrlSafe,
@@ -39,6 +39,7 @@ fn decode<const URLSAFE: bool, const MIXED: bool>(
 
 fn error_checks_are_bounded<const URLSAFE: bool, const MIXED: bool>() {
     let total = 3 * DECODE_ERROR_CHECK_INTERVAL;
+
     for invalid_index in [
         0,
         DECODE_ERROR_CHECK_INTERVAL - 1,
@@ -85,7 +86,7 @@ fn error_checks_are_bounded<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_error_checks_are_bounded() {
+fn decode_error_bounds() {
     error_checks_are_bounded::<false, false>();
     error_checks_are_bounded::<true, false>();
     error_checks_are_bounded::<false, true>();
@@ -115,6 +116,7 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
     assert_eq!(length % 4, 0);
 
     let mut input = Vec::with_capacity(length);
+
     for group in 0..length / 4 {
         let quartet = if MIXED && group % 2 == 0 {
             b"+/_-"
@@ -125,6 +127,7 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
         } else {
             b"Aa+/"
         };
+
         input.extend_from_slice(quartet);
     }
 
@@ -206,7 +209,7 @@ fn encode_misaligned_boundaries<const URLSAFE: bool>() {
 }
 
 #[test]
-fn encode_misaligned_boundaries_preserve_guards_and_suffix() {
+fn encode_misaligned_guards() {
     encode_misaligned_boundaries::<false>();
     encode_misaligned_boundaries::<true>();
 }
@@ -285,7 +288,7 @@ fn decode_misaligned_boundaries<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_misaligned_boundaries_preserve_guards_and_suffix() {
+fn decode_misaligned_guards() {
     decode_misaligned_boundaries::<false, false>();
     decode_misaligned_boundaries::<true, false>();
     decode_misaligned_boundaries::<false, true>();
@@ -339,6 +342,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
                 } else {
                     output_len
                 };
+
                 assert!(
                     guarded_output[..output_start]
                         .iter()
@@ -366,7 +370,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_rejects_every_invalid_lane_without_tail_writes() {
+fn invalid_lane_tail_guards() {
     invalid_lanes::<false, false>();
     invalid_lanes::<true, false>();
     invalid_lanes::<false, true>();
@@ -434,7 +438,7 @@ fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_checkpoint_invalids_are_bounded_and_guarded() {
+fn checkpoint_error_guards() {
     guarded_checkpoint_invalids::<false, false>();
     guarded_checkpoint_invalids::<true, false>();
     guarded_checkpoint_invalids::<false, true>();
@@ -560,7 +564,7 @@ fn invalid_scalar_checkpoint_tail<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn decode_checkpoint_scalar_and_padding_handoffs_are_exact() {
+fn checkpoint_handoffs() {
     full_decode_misaligned_handoffs::<false, false>();
     full_decode_misaligned_handoffs::<true, false>();
     full_decode_misaligned_handoffs::<false, true>();
@@ -620,7 +624,7 @@ fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
 }
 
 #[test]
-fn validated_blocks_decode_never_stores_the_failing_block() {
+fn validated_block_error_guards() {
     validated_invalid_blocks::<false, false>();
     validated_invalid_blocks::<true, false>();
     validated_invalid_blocks::<false, true>();

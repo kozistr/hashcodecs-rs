@@ -50,6 +50,7 @@ impl BorrowedBuffer<'_> {
         } else {
             self.view.buf.cast()
         };
+
         unsafe { std::slice::from_raw_parts(data, self.len()) }
     }
 
@@ -160,10 +161,9 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => {
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
-            Self::GuardedBytes { bytes, .. } => bytes.len(),
+            Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => bytes.len(),
             Self::Buffer(buffer) => buffer.len(),
             Self::Text(text) => text.len(),
-            Self::OwnedVec(bytes) => bytes.len(),
         }
     }
 
@@ -178,8 +178,6 @@ impl<'py> BytesLike<'_, 'py> {
         match self {
             Self::Bytes(bytes) => Ok(Some((*bytes).clone())),
             Self::OwnedBytes(bytes) => Ok(Some(bytes.clone())),
-            Self::OwnedBytesSlice { .. } => Ok(None),
-            Self::GuardedBytes { .. } => Ok(None),
             Self::Buffer(buffer)
                 if !buffer.memoryview_source.is_null()
                     && buffer.view.obj == buffer.memoryview_source =>
@@ -188,10 +186,13 @@ impl<'py> BytesLike<'_, 'py> {
                 // Equality proves that the exact memoryview source remains alive during access.
                 let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.memoryview_source) };
                 let owner = memoryview.getattr(intern!(py, "obj"))?;
+
                 if !PyBytes::is_exact_type_of(&owner) {
                     return Ok(None);
                 }
+
                 let owner = owner.cast_into::<PyBytes>()?;
+
                 if unsafe {
                     bytes_size(owner.as_ptr()) == buffer.len()
                         && bytes_data(owner.as_ptr()) == buffer.view.buf.cast_const().cast()
@@ -308,6 +309,7 @@ impl<'py> BytesLike<'_, 'py> {
         if cfg!(Py_GIL_DISABLED) && matches!(self, Self::Buffer(_)) {
             return self.snapshot_if(true);
         }
+
         if before_output_write {
             self.snapshot_before_output_write(false)
         } else {
@@ -326,6 +328,7 @@ impl<'py> BytesLike<'_, 'py> {
             let Self::Buffer(buffer) = self else {
                 unreachable!("delayed exported inputs retain their buffer guard")
             };
+
             return Ok(Self::GuardedBytes {
                 bytes: snapshot,
                 buffer,
@@ -367,10 +370,9 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
                 callback(unsafe { bytearray_bytes(value) })
             }),
-            Self::GuardedBytes { bytes, .. } => callback(bytes),
+            Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => callback(bytes),
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
-            Self::OwnedVec(bytes) => callback(bytes),
         }
     }
 
@@ -427,10 +429,9 @@ impl<'py> BytesLike<'_, 'py> {
             Self::OwnedBytesSlice { owner, offset, len } => {
                 &owner.as_bytes()[*offset..*offset + *len]
             }
-            Self::GuardedBytes { bytes, .. } => bytes,
+            Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => bytes,
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
-            Self::OwnedVec(bytes) => bytes,
         }
     }
 }
@@ -491,8 +492,10 @@ pub(super) fn binascii_contiguous_bytes_like<'a, 'py>(
     if let Some(bytes) = exact_bytes_like(value) {
         return Ok(bytes);
     }
+
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         let name = value.get_type().name()?;
+
         return Err(PyTypeError::new_err(format!(
             "a bytes-like object is required, not '{name}'"
         )));
@@ -507,10 +510,13 @@ pub(super) fn binascii_contiguous_bytes_like_exported<'a, 'py>(
 ) -> PyResult<BytesLike<'a, 'py>> {
     if PyBytes::is_exact_type_of(value) {
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+
         return Ok(BytesLike::Bytes(bytes));
     }
+
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         let name = value.get_type().name()?;
+
         return Err(PyTypeError::new_err(format!(
             "a bytes-like object is required, not '{name}'"
         )));
@@ -527,6 +533,7 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
 ) -> PyResult<BytesLike<'a, 'py>> {
     if PyBytes::is_exact_type_of(value) {
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+
         return Ok(BytesLike::Bytes(bytes));
     }
 
@@ -540,10 +547,12 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
         } else {
             std::ptr::null_mut()
         };
+
         let buffer = acquire_buffer(value, memoryview_source)?;
         let c_contiguous = unsafe {
             ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
         };
+
         if !c_contiguous {
             return Err(PyBufferError::new_err(
                 "memoryview: underlying buffer is not C-contiguous",
@@ -563,6 +572,7 @@ pub(super) fn binascii_ascii_or_bytes_exported<'a, 'py>(
         let text = value.cast::<PyString>()?.to_str().map_err(|_| {
             PyValueError::new_err("string argument should contain only ASCII characters")
         })?;
+
         // UTF-8 has one byte per code point exactly when every character is
         // ASCII. CPython stores the character count, so no input scan is needed.
         if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
@@ -570,6 +580,7 @@ pub(super) fn binascii_ascii_or_bytes_exported<'a, 'py>(
                 "string argument should contain only ASCII characters",
             ));
         }
+
         return Ok(BytesLike::Text(text));
     }
 
@@ -617,16 +628,19 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
         // The exact-type check above establishes the unchecked cast's invariant.
         let text = unsafe { value.cast_unchecked::<PyString>() };
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
+
         // Comparing the cached character count with UTF-8 length proves ASCII
         // without scanning the input or depending on a Unicode object layout.
         if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
             return Err(ascii_error(argument));
         }
+
         return Ok(BytesLike::Text(text));
     }
 
     if value.is_instance_of::<PyString>() {
         let encoded = encode_ascii(value)?;
+
         return buffer_bytes_like(&encoded, argument, false);
     }
 
@@ -656,16 +670,20 @@ pub(super) fn decode_data_object<'a, 'py>(
         Ok(input) => input,
         Err(error) if error.is_instance_of::<PyTypeError>(py) => {
             let name = value.get_type().name()?;
+
             return Err(PyTypeError::new_err(format!(
                 "argument should be a bytes-like object or ASCII string, not '{name}'"
             )));
         }
         Err(error) => return Err(error),
     };
+
     if let Some(bytes) = input.python_bytes(py)? {
         drop(input);
+
         return Ok(DecodeDataObject::Owned(bytes.into_any()));
     }
+
     let bytes = unsafe { input.with_bytes(|input| PyBytes::new(py, input).into_any()) };
     drop(input);
     Ok(DecodeDataObject::Owned(bytes))
@@ -685,6 +703,7 @@ pub(super) fn ascii_or_bytes_owned<'py>(
 
     if value.is_instance_of::<PyString>() {
         let encoded = encode_ascii(value)?;
+
         return buffer_bytes_like(&encoded, argument, false);
     }
 
@@ -693,6 +712,7 @@ pub(super) fn ascii_or_bytes_owned<'py>(
 
 fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py = value.py();
+
     let encoded = if PyString::is_exact_type_of(value) {
         // Exact strings cannot override encode. Use the same CPython ASCII
         // conversion without Python attribute lookup or argument handling.
@@ -700,6 +720,7 @@ fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     } else {
         value.call_method1(intern!(py, "encode"), ("ascii",))
     };
+
     encoded.map_err(|error| {
         if error.is_instance_of::<PyUnicodeEncodeError>(py) {
             PyValueError::new_err("string argument should contain only ASCII characters")
@@ -714,11 +735,13 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
     if PyBytes::is_exact_type_of(value) {
         // Exact builtins cannot override their storage behavior.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
+
         return Some(BytesLike::Bytes(bytes));
     }
 
     if PyByteArray::is_exact_type_of(value) {
         let value = unsafe { value.cast_unchecked::<PyByteArray>() };
+
         return Some(BytesLike::ByteArray(value));
     }
 
@@ -745,6 +768,7 @@ fn buffer_bytes_like<'py>(
 ) -> PyResult<BytesLike<'py, 'py>> {
     if PyMemoryView::is_exact_type_of(value) {
         let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
+
         return exact_memoryview_bytes_like(memoryview, require_contiguous);
     }
 
@@ -810,6 +834,7 @@ fn exact_memoryview_bytes_like<'py>(
             }
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
+
             if with_bytearray(&owner, || unsafe {
                 bytearray_size(owner.as_ptr()) == nbytes && bytearray_data(owner.as_ptr()) == data
             }) {
@@ -878,6 +903,7 @@ fn acquire_buffer<'py>(
 ) -> PyResult<BorrowedBuffer<'py>> {
     let py = value.py();
     let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
+
     if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) } != 0 {
         return Err(PyErr::fetch(py));
     }
@@ -936,7 +962,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn memoryview_info_reports_public_metadata() {
+    fn memoryview_metadata() {
         Python::initialize();
         Python::attach(|py| {
             let owner_data = vec![b'a'; 64 * 1024];
@@ -970,7 +996,7 @@ mod tests {
     }
 
     #[test]
-    fn contiguous_bytes_memoryview_slice_retains_owner_and_offset() {
+    fn memoryview_slice_owner_and_offset() {
         Python::initialize();
         Python::attach(|py| {
             let memoryview = py

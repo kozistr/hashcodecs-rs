@@ -213,10 +213,20 @@ pub(super) fn mix32(
     secret: usize,
     seed: u64,
 ) -> [u64; 2] {
-    acc[0] = acc[0].wrapping_add(mix16(input, first, &SECRET, secret, seed));
-    acc[0] ^= read_u64_le(input, second).wrapping_add(read_u64_le(input, second + 8));
-    acc[1] = acc[1].wrapping_add(mix16(input, second, &SECRET, secret + 16, seed));
-    acc[1] ^= read_u64_le(input, first).wrapping_add(read_u64_le(input, first + 8));
+    let first = &input[first..][..16];
+    let second = &input[second..][..16];
+    let secret = &SECRET[secret..][..32];
+
+    unsafe {
+        mix32_ptr(
+            &mut acc,
+            first.as_ptr(),
+            second.as_ptr(),
+            secret.as_ptr(),
+            seed,
+        )
+    };
+
     acc
 }
 

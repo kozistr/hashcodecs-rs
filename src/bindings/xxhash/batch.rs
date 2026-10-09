@@ -235,7 +235,7 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
     #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
     #[cfg(Py_GIL_DISABLED)]
-    let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+    let (items, exact) = unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
 
     #[cfg(Py_GIL_DISABLED)]
     if exact {
@@ -523,7 +523,7 @@ fn packed_batch_into<D: PackedDigest>(
     #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
     #[cfg(Py_GIL_DISABLED)]
-    let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+    let (items, exact) = unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
     with_bytearray(output, || packed_output_len(output, items.len(), D::SIZE))?;
 
     #[cfg(Py_GIL_DISABLED)]

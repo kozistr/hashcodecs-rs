@@ -278,14 +278,14 @@ pub(super) fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    let (items, exact_bytes_fast_path) = list_items_and_all(items, |item| {
-        // Only the length is needed while retaining the list; avoid acquiring
-        // the bytes pointer through the C API for every tiny item.
-        unsafe {
+    let (items, exact_bytes_fast_path) = unsafe {
+        list_items_and_all(items, |item| {
+            // Only the length is needed while retaining the list; avoid acquiring
+            // the bytes pointer through the C API for every tiny item.
             ffi::PyBytes_CheckExact(item.as_ptr()) != 0
                 && ffi::Py_SIZE(item.as_ptr()) as usize <= EXACT_BYTES_BATCH_MAX
-        }
-    })?;
+        })?
+    };
     #[cfg(Py_GIL_DISABLED)]
     let items = list_items(items)?;
 
@@ -386,7 +386,8 @@ pub(super) fn b64decode_batch_parsed<'py>(
     validate: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
-    let (items, exact_bytes_fast_path) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+    let (items, exact_bytes_fast_path) =
+        unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
     #[cfg(Py_GIL_DISABLED)]
     let items = list_items(items)?;
     let length = items.len();

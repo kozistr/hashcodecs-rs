@@ -27,29 +27,29 @@ fn stage_partial_blocks() {
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
-    assert_eq!(writer.push_symbols::<true>(&symbols), Some(()));
-    let written = writer.finish::<true>().unwrap();
+    assert_eq!(unsafe { writer.push_symbols::<true>(&symbols) }, Some(()));
+    let written = unsafe { writer.finish::<true>() }.unwrap();
     assert_eq!(written, CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2);
     assert!(output[..written].iter().all(|&byte| byte == 0));
 
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(
-        writer.push_symbols::<true>(&symbols[..CONFIGURED_STAGING_CAPACITY - 1]),
+        unsafe { writer.push_symbols::<true>(&symbols[..CONFIGURED_STAGING_CAPACITY - 1]) },
         Some(())
     );
-    assert_eq!(writer.push_value::<true>(0), Some(()));
+    assert_eq!(unsafe { writer.push_value::<true>(0) }, Some(()));
     assert_eq!(
-        writer.finish::<true>(),
+        unsafe { writer.finish::<true>() },
         Some(CONFIGURED_STAGING_CAPACITY / 4 * 3)
     );
 
     assert_eq!(
-        StagingWriter::new(output.as_mut_ptr(), None).finish::<true>(),
+        unsafe { StagingWriter::new(output.as_mut_ptr(), None).finish::<true>() },
         Some(0)
     );
     let mut invalid = StagingWriter::new(output.as_mut_ptr(), None);
-    assert_eq!(invalid.push_symbols::<true>(b"A"), Some(()));
-    assert_eq!(invalid.finish::<true>(), None);
+    assert_eq!(unsafe { invalid.push_symbols::<true>(b"A") }, Some(()));
+    assert_eq!(unsafe { invalid.finish::<true>() }, None);
 
     let mut validator = StagingValidator::new(None);
     assert_eq!(validator.push(b"AAA"), Some(()));
@@ -76,9 +76,9 @@ fn flush_staged_values() {
     let mut output = vec![0xa5; required + 2];
     let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
     for _ in 0..symbols {
-        assert_eq!(writer.push_value::<true>(0), Some(()));
+        assert_eq!(unsafe { writer.push_value::<true>(0) }, Some(()));
     }
-    assert_eq!(writer.finish::<true>(), Some(required));
+    assert_eq!(unsafe { writer.finish::<true>() }, Some(required));
     assert_eq!(output[0], 0xa5);
     assert!(output[1..=required].iter().all(|&byte| byte == 0));
     assert_eq!(output[required + 1], 0xa5);
@@ -156,9 +156,15 @@ fn preserve_fragment_guards() {
         for split in 0..=5.min(length) {
             let mut output = vec![0xa5; required + 17];
             let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
-            assert_eq!(writer.push_symbols::<true>(&input[..split]), Some(()));
-            assert_eq!(writer.push_symbols::<true>(&input[split..]), Some(()));
-            assert_eq!(writer.finish::<true>(), Some(required));
+            assert_eq!(
+                unsafe { writer.push_symbols::<true>(&input[..split]) },
+                Some(())
+            );
+            assert_eq!(
+                unsafe { writer.push_symbols::<true>(&input[split..]) },
+                Some(())
+            );
+            assert_eq!(unsafe { writer.finish::<true>() }, Some(required));
             assert_eq!(output[0], 0xa5);
             assert!(output[1..=required].iter().all(|&byte| byte == 0));
             assert!(output[required + 1..].iter().all(|&byte| byte == 0xa5));
@@ -167,5 +173,5 @@ fn preserve_fragment_guards() {
 
     let mut output = [0xa5; 3];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
-    assert_eq!(writer.push_symbols::<true>(b"AA!A"), None);
+    assert_eq!(unsafe { writer.push_symbols::<true>(b"AA!A") }, None);
 }

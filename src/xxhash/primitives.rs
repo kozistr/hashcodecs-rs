@@ -37,12 +37,20 @@ pub(super) fn read_u32_le(input: &[u8], offset: usize) -> u32 {
 
 #[inline(always)]
 pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
-    // The `read_u32_le` comment describes the same invariant for a four-byte word.
+    // The `read_u32_le` comment describes the same invariant for an eight-byte word.
     u64::from_le_bytes(
         input[offset..offset + 8]
             .try_into()
             .expect("eight-byte load exceeds input"),
     )
+}
+
+/// # Safety
+/// `input.add(offset)` must be valid for reading eight bytes within the same
+/// allocation, with no concurrent writes to those bytes. Alignment is not required.
+#[inline(always)]
+pub(super) unsafe fn read_u64_le_ptr(input: *const u8, offset: usize) -> u64 {
+    u64::from_le(unsafe { input.add(offset).cast::<u64>().read_unaligned() })
 }
 
 #[inline(always)]
@@ -106,11 +114,11 @@ pub(super) fn mix16(
 
 #[inline(always)]
 pub(super) unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
-    let data_lo = u64::from_le(unsafe { data.cast::<u64>().read_unaligned() });
-    let data_hi = u64::from_le(unsafe { data.add(8).cast::<u64>().read_unaligned() });
+    let data_lo = unsafe { read_u64_le_ptr(data, 0) };
+    let data_hi = unsafe { read_u64_le_ptr(data, 8) };
 
-    let secret_lo = u64::from_le(unsafe { secret.cast::<u64>().read_unaligned() });
-    let secret_hi = u64::from_le(unsafe { secret.add(8).cast::<u64>().read_unaligned() });
+    let secret_lo = unsafe { read_u64_le_ptr(secret, 0) };
+    let secret_hi = unsafe { read_u64_le_ptr(secret, 8) };
 
     let lo = data_lo ^ secret_lo.wrapping_add(seed);
     let hi = data_hi ^ secret_hi.wrapping_sub(seed);

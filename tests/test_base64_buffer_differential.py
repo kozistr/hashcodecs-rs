@@ -53,6 +53,31 @@ def test_memoryview_inputs(
     )
 
 
+@pytest.mark.skipif(sys.version_info < (3, 12), reason='requires Python buffer protocol hooks')
+@pytest.mark.parametrize('direction', ['encode', 'decode'])
+def test_buffer_request_flags_match_cpython(direction: str) -> None:
+    events: list[tuple[str, int | None]] = []
+    payload = b'abc' if direction == 'encode' else b'YWJj'
+
+    class Exporter:
+        def __buffer__(self, flags: int) -> memoryview:
+            events.append(('acquire', flags))
+            return memoryview(payload)
+
+        def __release_buffer__(self, _buffer: memoryview) -> None:
+            events.append(('release', None))
+
+    native = base64.b64encode if direction == 'encode' else base64.b64decode
+    reference = stdlib_base64.b64encode if direction == 'encode' else stdlib_base64.b64decode
+
+    result = native(Exporter())
+    native_events = events.copy()
+    events.clear()
+
+    assert reference(Exporter()) == result
+    assert events == native_events
+
+
 def _overlap_case(direction: str, native_into: bool) -> Callable[[], Invocation]:
     def factory() -> Invocation:
         sentinel = SentinelError('sentinel')

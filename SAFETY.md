@@ -19,26 +19,18 @@ Packed XXH3 batches validate and stabilize inputs before mutating the destinatio
 
 ## CPython ownership and callbacks
 
-The global interpreter lock (GIL) does not prevent callbacks from running on the same thread. Python allocation
-can trigger garbage collection and finalizers that clear an input list or resize a `bytearray`. Argument
-conversion and buffer release can also invoke user code. Bindings must preserve input ownership across these
-operations and copy mutable or overlapping data where the buffer policy requires it.
+The GIL does not prevent reentrant callbacks during allocation, argument conversion, or buffer release.
+Bindings must retain input owners and stabilize mutable or overlapping inputs before callbacks, writes,
+or interpreter detachment can invalidate a borrow.
 
-XXH3 list batches finish input reads before allocating Python result containers. They store up to 32 native
-results on the stack and use a vector with fallible allocation for larger batches. Base64 batches retain input
-owners across result allocation. Subprocess tests on CPython 3.10 and 3.11 trigger finalizers during allocation
-and reuse freed storage to check these lifetime rules.
+Acquired buffer descriptors can contain pointers into themselves. Those pointers must remain valid after
+Rust moves and before every C API access. Detached batches must recheck destination capacity after
+reattaching and before publishing results.
 
-Detached packed XXH3 batches retain immutable owners and stage digests in native memory. The path for exact
-`bytes` borrows 64 retained inputs at a time in a stack array. After reattaching, the binding rechecks destination
-capacity under synchronization before writing. The private `PackedDigest` contract requires initialized bytes
-without padding and a representation matching the packed output on hosts that use little endian order. Those
-hosts can copy the staged results in one operation. Other hosts serialize each word.
-
-Tests cover source list mutation, output resizing, overlapping buffers, and access to mutable data on CPython
-builds without the GIL. See the [XXH3 binding tests](src/bindings/xxhash/batch.rs),
-[XXH3 Python tests](tests/test_xxhash.py), [Base64 batch tests](tests/test_base64_batch.py), and
-[buffer tests](tests/test_base64_buffers.py).
+Binding tests cover finalizers, list mutation, output resizing, aliasing, buffer moves, and free-threaded
+access. See the [Rust buffer tests](src/bindings/buffer/tests.rs),
+[Python buffer tests](tests/test_base64_buffers.py), [Base64 batch tests](tests/test_base64_batch.py), and
+[XXH3 tests](tests/test_xxhash.py).
 
 ## Verification scope
 

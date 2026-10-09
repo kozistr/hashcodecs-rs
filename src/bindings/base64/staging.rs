@@ -127,9 +127,13 @@ impl StagingWriter {
         self.translation = translation;
     }
 
-    pub(super) fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
+    /// # Safety
+    /// `output` must be writable, without aliasing `input`, for all bytes
+    /// already written plus the decoded length of the pending and new symbols.
+    /// When `CHECKED` is false, symbols must be valid after translation.
+    pub(super) unsafe fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         if self.translation.is_some() {
-            return self.push_staged_symbols::<CHECKED>(input);
+            return unsafe { self.push_staged_symbols::<CHECKED>(input) };
         }
 
         let mut source = 0;
@@ -154,14 +158,14 @@ impl StagingWriter {
             }
 
             let copied = (input.len() - source).min(self.staging.remaining_capacity());
-            self.push_staged_symbols::<CHECKED>(&input[source..source + copied])?;
+            unsafe { self.push_staged_symbols::<CHECKED>(&input[source..source + copied])? };
             source += copied;
         }
 
         Some(())
     }
 
-    fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
+    unsafe fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
 
         while source < input.len() {
@@ -169,24 +173,28 @@ impl StagingWriter {
             source += copied;
 
             if self.staging.is_full() {
-                self.flush::<CHECKED>()?;
+                unsafe { self.flush::<CHECKED>()? };
             }
         }
 
         Some(())
     }
 
-    pub(super) fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
+    /// # Safety
+    /// `output` must be writable for the bytes already written plus the decoded
+    /// length of the pending symbols and this value, without aliasing staging.
+    /// When `CHECKED` is false, pending symbols must be valid after translation.
+    pub(super) unsafe fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
         self.staging.push(STANDARD_ALPHABET[usize::from(value)]);
 
         if self.staging.is_full() {
-            self.flush::<CHECKED>()?;
+            unsafe { self.flush::<CHECKED>()? };
         }
 
         Some(())
     }
 
-    fn flush<const CHECKED: bool>(&mut self) -> Option<()> {
+    unsafe fn flush<const CHECKED: bool>(&mut self) -> Option<()> {
         let staging = self.staging.initialized_mut();
 
         if let Some(translation) = self.translation {
@@ -200,9 +208,13 @@ impl StagingWriter {
         Some(())
     }
 
-    pub(super) fn finish<const CHECKED: bool>(&mut self) -> Option<usize> {
+    /// # Safety
+    /// `output` must be writable for the bytes already written plus the decoded
+    /// length of the pending symbols, without aliasing staging. When `CHECKED`
+    /// is false, pending symbols must form valid unpadded Base64 after translation.
+    pub(super) unsafe fn finish<const CHECKED: bool>(&mut self) -> Option<usize> {
         if !self.staging.is_empty() {
-            self.flush::<CHECKED>()?;
+            unsafe { self.flush::<CHECKED>()? };
         }
 
         Some(self.written)

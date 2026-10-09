@@ -17,6 +17,10 @@ const MEMORYVIEW_OWNER_THRESHOLD: usize = 64 * 1024;
 #[cfg(all(Py_GIL_DISABLED, any(Py_LIMITED_API, PyPy, GraalPy)))]
 const MEMORYVIEW_OWNER_THRESHOLD: usize = 4 * 1024;
 
+const INLINE_SHAPE: u8 = 1;
+const INLINE_STRIDES: u8 = 2;
+const C_CONTIGUOUS: u8 = 4;
+
 struct MemoryViewInfo<'py> {
     nbytes: usize,
     c_contiguous: bool,
@@ -34,10 +38,31 @@ pub(super) struct BorrowedBuffer<'py> {
     view: ffi::Py_buffer,
     memoryview_source: *mut ffi::PyObject,
     release_may_reenter: bool,
+    // A flag byte keeps the guard's size and existing enum niche unchanged.
+    metadata: u8,
     _python: std::marker::PhantomData<Python<'py>>,
 }
 
 impl BorrowedBuffer<'_> {
+    fn with_view<T>(&mut self, operation: impl FnOnce(&mut ffi::Py_buffer) -> T) -> T {
+        let view = &mut self.view;
+
+        // PyBuffer_FillInfo can point shape and strides into the Py_buffer
+        // itself. Rebase those pointers under an exclusive borrow after any
+        // moves of the owning Rust value, including before buffer release.
+        if self.metadata & (INLINE_SHAPE | INLINE_STRIDES) != 0 {
+            if self.metadata & INLINE_SHAPE != 0 {
+                view.shape = &raw mut view.len;
+            }
+
+            if self.metadata & INLINE_STRIDES != 0 {
+                view.strides = &raw mut view.itemsize;
+            }
+        }
+
+        operation(view)
+    }
+
     #[inline]
     fn len(&self) -> usize {
         self.view.len as usize
@@ -65,7 +90,7 @@ impl BorrowedBuffer<'_> {
 
 impl Drop for BorrowedBuffer<'_> {
     fn drop(&mut self) {
-        unsafe { ffi::PyBuffer_Release(&mut self.view) };
+        self.with_view(|view| unsafe { ffi::PyBuffer_Release(view) });
     }
 }
 
@@ -548,16 +573,9 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
             std::ptr::null_mut()
         };
 
-        let buffer = acquire_buffer(value, memoryview_source)?;
-        let c_contiguous = unsafe {
-            ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
-        };
-
-        if !c_contiguous {
-            return Err(PyBufferError::new_err(
-                "memoryview: underlying buffer is not C-contiguous",
-            ));
-        }
+        // Match binascii's request: GetBuffer enforces C-contiguity and need
+        // not supply shape/stride metadata for this byte-oriented input.
+        let buffer = acquire_buffer(value, memoryview_source, ffi::PyBUF_SIMPLE)?;
 
         Ok(BytesLike::Buffer(buffer))
     })
@@ -777,10 +795,8 @@ fn buffer_bytes_like<'py>(
     }
 
     with_critical_section(value, || {
-        let buffer = acquire_buffer(value, std::ptr::null_mut())?;
-        let c_contiguous = unsafe {
-            ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
-        };
+        let mut buffer = acquire_buffer(value, std::ptr::null_mut(), ffi::PyBUF_FULL_RO)?;
+        let c_contiguous = buffer.metadata & C_CONTIGUOUS != 0;
 
         if require_contiguous && !c_contiguous {
             return Err(PyBufferError::new_err(
@@ -793,7 +809,7 @@ fn buffer_bytes_like<'py>(
             return Ok(BytesLike::Buffer(buffer));
         }
 
-        copy_buffer(value.py(), &buffer).map(BytesLike::OwnedBytes)
+        copy_buffer(value.py(), &mut buffer).map(BytesLike::OwnedBytes)
     })
 }
 
@@ -868,12 +884,10 @@ fn subslice_offset(
 
 fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<MemoryViewInfo<'py>> {
     let py = memoryview.py();
-    let buffer = acquire_buffer(memoryview.as_any(), memoryview.as_ptr())?;
+    let buffer = acquire_buffer(memoryview.as_any(), memoryview.as_ptr(), ffi::PyBUF_FULL_RO)?;
     let nbytes = buffer.len();
     let data = buffer.view.buf.cast();
-    let c_contiguous = unsafe {
-        ffi::PyBuffer_IsContiguous(&raw const buffer.view, b'C' as std::ffi::c_char) != 0
-    };
+    let c_contiguous = buffer.metadata & C_CONTIGUOUS != 0;
 
     #[cfg(not(Py_GIL_DISABLED))]
     let try_owner = c_contiguous && nbytes >= MEMORYVIEW_OWNER_THRESHOLD;
@@ -900,37 +914,48 @@ fn memoryview_info<'py>(memoryview: &Bound<'py, PyMemoryView>) -> PyResult<Memor
 fn acquire_buffer<'py>(
     value: &Bound<'py, PyAny>,
     memoryview_source: *mut ffi::PyObject,
+    flags: std::ffi::c_int,
 ) -> PyResult<BorrowedBuffer<'py>> {
     let py = value.py();
     let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
 
-    if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &raw mut view, ffi::PyBUF_FULL_RO) } != 0 {
+    if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &raw mut view, flags) } != 0 {
         return Err(PyErr::fetch(py));
     }
 
     let release_may_reenter = !PyByteArray::is_exact_type_of(value)
         && (memoryview_source.is_null() || view.obj != memoryview_source);
+    let c_contiguous =
+        flags == ffi::PyBUF_SIMPLE || unsafe { ffi::PyBuffer_IsContiguous(&view, b'C' as _) != 0 };
+    let metadata = if flags == ffi::PyBUF_SIMPLE {
+        C_CONTIGUOUS
+    } else {
+        (u8::from(view.shape == &raw mut view.len) * INLINE_SHAPE)
+            | (u8::from(view.strides == &raw mut view.itemsize) * INLINE_STRIDES)
+            | (u8::from(c_contiguous) * C_CONTIGUOUS)
+    };
     Ok(BorrowedBuffer {
         view,
         memoryview_source,
         release_may_reenter,
+        metadata,
         _python: std::marker::PhantomData,
     })
 }
 
-fn copy_buffer<'py>(py: Python<'py>, buffer: &BorrowedBuffer<'_>) -> PyResult<Bound<'py, PyBytes>> {
+fn copy_buffer<'py>(
+    py: Python<'py>,
+    buffer: &mut BorrowedBuffer<'_>,
+) -> PyResult<Bound<'py, PyBytes>> {
     PyBytes::new_with(py, buffer.len(), |bytes| {
-        let result = unsafe {
+        let result = buffer.with_view(|view| unsafe {
             ffi::PyBuffer_ToContiguous(
                 bytes.as_mut_ptr().cast(),
-                #[cfg(Py_3_11)]
-                &raw const buffer.view,
-                #[cfg(not(Py_3_11))]
-                (&raw const buffer.view).cast_mut(),
-                buffer.view.len,
+                view,
+                view.len,
                 b'C' as std::ffi::c_char,
             )
-        };
+        });
 
         if result != 0 {
             return Err(PyErr::fetch(py));

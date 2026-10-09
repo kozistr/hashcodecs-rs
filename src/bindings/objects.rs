@@ -67,7 +67,10 @@ pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usi
     }
 }
 
-pub(super) fn list_items_and_all<'py>(
+/// # Safety
+/// `predicate` must not execute Python code, detach from Python, or mutate
+/// `items`. On GIL builds, list slots are accessed unchecked between calls.
+pub(super) unsafe fn list_items_and_all<'py>(
     items: &Bound<'py, PyList>,
     mut predicate: impl FnMut(&Bound<'py, PyAny>) -> bool,
 ) -> PyResult<(Vec<Bound<'py, PyAny>>, bool)> {
@@ -102,7 +105,7 @@ pub(super) fn list_items_and_all<'py>(
 }
 
 pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
-    let (items, all) = list_items_and_all(items, |_| true)?;
+    let (items, all) = unsafe { list_items_and_all(items, |_| true)? };
     debug_assert!(all);
     Ok(items)
 }

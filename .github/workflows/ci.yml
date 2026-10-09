@@ -76,18 +76,19 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Check Rust formatting
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Lint Rust library
         run: cargo clippy -- -D warnings
 
-      - name: Lint all Rust targets
-        run: cargo clippy --all-targets --features python -- -D warnings
+      - name: Lint all Rust workspace targets
+        run: cargo clippy --workspace --all-targets --features python -- -D warnings
 
-      - name: Check all targets and features on MSRV
+      - name: Check library features and workspace targets on MSRV
         run: |
           rustup toolchain install 1.94.0 --profile minimal
           cargo +1.94.0 check --locked --all-targets --all-features
+          cargo +1.94.0 check --locked --workspace --all-targets --features python
 
       - name: Install Rust coverage tool
         uses: taiki-e/install-action@6c6fd71fe4fb72c3697d269963d0e15df8adedad # v2.85.10
@@ -208,8 +209,8 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Lint all Rust targets
-        run: cargo clippy --all-targets --features python -- -D warnings
+      - name: Lint all Rust workspace targets
+        run: cargo clippy --workspace --all-targets --features python -- -D warnings
 
   rust_release_test:
     name: Rust / Release Test

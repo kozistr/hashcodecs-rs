@@ -15,7 +15,12 @@ pub(super) const MURMUR3_DETACH_THRESHOLD: usize = 64 * 1024;
 pub(super) const XXH3_DETACH_THRESHOLD: usize = 256 * 1024;
 pub(super) const METHOD_FLAGS: i32 = ffi::METH_FASTCALL | ffi::METH_KEYWORDS;
 
-pub(super) fn with_function_bytes<T: Send>(
+/// # Safety
+/// `object` must be a non-null, live Python object retained for this call,
+/// including while detached. `operation` must not execute Python code or
+/// detach from Python itself: mutable inputs rely on continuous attachment
+/// (and, on free-threaded Python, their critical section) while borrowed.
+pub(super) unsafe fn with_function_bytes<T: Send>(
     py: Python<'_>,
     object: *mut ffi::PyObject,
     detach_threshold: usize,
@@ -147,7 +152,9 @@ mod tests {
             let view = py
                 .eval(c"memoryview(b'x' + b'a' * 65536 + b'y')[1:-1]", None, None)
                 .unwrap();
-            let result = with_function_bytes(py, view.as_ptr(), 1, |input| input.to_vec()).unwrap();
+            let result = unsafe {
+                with_function_bytes(py, view.as_ptr(), 1, |input| input.to_vec()).unwrap()
+            };
             assert_eq!(result, vec![b'a'; 65536]);
         });
     }

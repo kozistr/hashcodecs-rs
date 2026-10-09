@@ -209,8 +209,9 @@ pub(super) fn mix_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2])
     let end = unsafe { cursor.add(input.len()) };
 
     while cursor < end {
-        let value1 = u64::from_le(unsafe { cursor.cast::<u64>().read_unaligned() });
-        let value2 = u64::from_le(unsafe { cursor.add(8).cast::<u64>().read_unaligned() });
+        let [first, second] = unsafe { cursor.cast::<[[u8; 8]; 2]>().read() };
+        let value1 = u64::from_le_bytes(first);
+        let value2 = u64::from_le_bytes(second);
         let block1 = value1
             .wrapping_mul(X64_128_C1)
             .rotate_left(31)

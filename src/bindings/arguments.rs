@@ -1,15 +1,52 @@
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use pyo3::ffi;
 
-#[inline]
+#[inline(always)]
+unsafe fn keyword_matches(keyword: *mut ffi::PyObject, parameter: &CStr) -> bool {
+    #[cfg(all(Py_3_12, not(any(Py_LIMITED_API, PyPy, GraalPy))))]
+    unsafe {
+        let name = parameter.to_bytes();
+
+        // Keyword strings are immutable, including on free-threaded CPython.
+        // Reject different lengths before comparing the schema's ASCII names.
+        if ffi::PyUnicode_GET_LENGTH(keyword) as usize != name.len() {
+            return false;
+        }
+
+        #[cfg(not(Py_3_14))]
+        {
+            if ffi::PyUnicode_IS_ASCII(keyword) != 0 {
+                std::slice::from_raw_parts(ffi::PyUnicode_1BYTE_DATA(keyword), name.len()) == name
+            } else {
+                // C extensions can store ASCII text in a wider Unicode allocation.
+                ffi::PyUnicode_CompareWithASCIIString(keyword, parameter.as_ptr()) == 0
+            }
+        }
+
+        #[cfg(Py_3_14)]
+        {
+            // PyO3 leaves the Unicode state bitfield opaque from 3.14 onward.
+            // Use the public length-aware equality API on these interpreters.
+            ffi::PyUnicode_EqualToUTF8AndSize(keyword, parameter.as_ptr(), name.len() as isize) != 0
+                || ffi::PyUnicode_CompareWithASCIIString(keyword, parameter.as_ptr()) == 0
+        }
+    }
+
+    #[cfg(not(all(Py_3_12, not(any(Py_LIMITED_API, PyPy, GraalPy)))))]
+    unsafe {
+        ffi::PyUnicode_CompareWithASCIIString(keyword, parameter.as_ptr()) == 0
+    }
+}
+
+#[inline(always)]
 pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
     function_name: *const c_char,
-    parameter_names: [*const c_char; N],
+    parameter_names: [&CStr; N],
     max_positional: usize,
     required: usize,
 ) -> Option<[*mut ffi::PyObject; N]> {
@@ -46,9 +83,9 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
         let value = unsafe { *args.add(nargs + keyword_index) };
         // Valid keywords follow the positional arguments. Search those slots
         // first, then check the filled slots to preserve duplicate diagnostics.
-        let parameter_index = (nargs..N).chain(0..nargs).find(|&index| {
-            (unsafe { ffi::PyUnicode_CompareWithASCIIString(keyword, parameter_names[index]) }) == 0
-        });
+        let parameter_index = (nargs..N)
+            .chain(0..nargs)
+            .find(|&index| unsafe { keyword_matches(keyword, parameter_names[index]) });
 
         let Some(parameter_index) = parameter_index else {
             unsafe {
@@ -69,7 +106,7 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                     ffi::PyExc_TypeError,
                     c"%s() got multiple values for argument '%s'".as_ptr(),
                     function_name,
-                    parameter_names[parameter_index],
+                    parameter_names[parameter_index].as_ptr(),
                 );
             }
 
@@ -86,7 +123,7 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
                     ffi::PyExc_TypeError,
                     c"%s() missing required argument '%s'".as_ptr(),
                     function_name,
-                    parameter_names[index],
+                    parameter_names[index].as_ptr(),
                 );
             }
 
@@ -97,16 +134,9 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     Some(values)
 }
 
+#[inline]
 pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
-    if seed.is_null() {
-        return Some(0);
-    }
-
-    let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
-
-    if !unsafe { ffi::PyErr_Occurred() }.is_null() {
-        return None;
-    }
+    let value = unsafe { seed_u64(seed) }?;
 
     let Ok(value) = u32::try_from(value) else {
         unsafe {
@@ -122,6 +152,7 @@ pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
     Some(value)
 }
 
+#[inline]
 pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
     if seed.is_null() {
         return Some(0);
@@ -135,5 +166,38 @@ pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
         Some(value)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::prelude::*;
+
+    #[test]
+    fn keyword_storage_widths() {
+        Python::initialize();
+        Python::attach(|py| unsafe {
+            for max_char in [0x7f, 0xff, 0xffff, 0x10ffff] {
+                let keyword =
+                    Bound::<PyAny>::from_owned_ptr_or_err(py, ffi::PyUnicode_New(4, max_char))
+                        .unwrap();
+
+                for (index, character) in b"seed".iter().enumerate() {
+                    assert_eq!(
+                        ffi::PyUnicode_WriteChar(
+                            keyword.as_ptr(),
+                            index as isize,
+                            (*character).into()
+                        ),
+                        0
+                    );
+                }
+
+                assert!(keyword_matches(keyword.as_ptr(), c"seed"));
+                assert!(!keyword_matches(keyword.as_ptr(), c"s"));
+                assert!(!keyword_matches(keyword.as_ptr(), c"sead"));
+            }
+        });
     }
 }

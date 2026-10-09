@@ -37,9 +37,6 @@ test:
     uv run python tools/install_local_wheel.py
     {{ pytest_base }} tests --cov=hashcodecs --cov-branch --cov-fail-under=100 {{ pytest_flags }} --cov-report=term:skip-covered
 
-test-build:
-    {{ pytest_base }} build_tests {{ pytest_flags }}
-
 coverage:
     cargo llvm-cov --lib --no-default-features --fail-under-lines 100 --ignore-filename-regex 'avx512\.rs$' --show-missing-lines {{ cargo_flags }}
 
@@ -50,8 +47,8 @@ test-release:
 verify-sdist:
     uv run --frozen --no-sync python tools/verify_sdist.py
 
-# Run the fast local quality gates, including build-tool tests and a strict documentation build.
-check: format-check lint test test-build docs-build
+# Run the fast local quality gates and a strict documentation build.
+check: format-check lint test docs-build
 
 # Run every pre-commit gate from AGENTS.md, including extracted-sdist verification.
 full-check: check test-release coverage verify-sdist

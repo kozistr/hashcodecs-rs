@@ -37,12 +37,6 @@ const MIXED_BATCHES: [(&str, [usize; 4]); 4] = [
     ("long_then_short_boundary", [241, 241, 240, 240]),
 ];
 
-fn data(size: usize, salt: u8) -> Vec<u8> {
-    (0..size)
-        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(salt))
-        .collect()
-}
-
 fn c_xxh3_64(input: &[u8], seed: u64) -> u64 {
     unsafe {
         xxhash_c_sys::XXH3_64bits_withSeed(input.as_ptr().cast::<c_void>(), input.len(), seed)
@@ -58,7 +52,7 @@ fn c_xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
 
 fn one_shot(c: &mut Criterion) {
     for size in SIZES {
-        let input = data(size, 17);
+        let input = support::data(size, 17);
         let mut group = c.benchmark_group(format!("xxh3_64/{size}"));
         group.throughput(Throughput::Bytes(size as u64));
         assert_eq!(
@@ -150,7 +144,7 @@ fn batch(c: &mut Criterion) {
     for items in [2, 3, 32] {
         for size in [64, 241, 1024, 4 * 1024, 1024 * 1024] {
             let owned = (0..items)
-                .map(|index| data(size, index as u8))
+                .map(|index| support::data(size, index as u8))
                 .collect::<Vec<_>>();
             benchmark_batch(c, &format!("xxh3_batch/{items}_items/{size}"), &owned);
         }
@@ -160,7 +154,7 @@ fn batch(c: &mut Criterion) {
         let owned = sizes
             .into_iter()
             .enumerate()
-            .map(|(index, size)| data(size, index as u8))
+            .map(|(index, size)| support::data(size, index as u8))
             .collect::<Vec<_>>();
         benchmark_batch(c, &format!("xxh3_batch/mixed/{name}"), &owned);
     }
@@ -168,7 +162,7 @@ fn batch(c: &mut Criterion) {
 
 fn prepared_seed(c: &mut Criterion) {
     for size in [241, 1024] {
-        let input = data(size, 17);
+        let input = support::data(size, 17);
         let prepared = hashcodecs::xxhash::PreparedXxh3::new(42);
         assert_eq!(
             prepared.hash_64(&input),
@@ -201,7 +195,7 @@ fn prepared_batch(c: &mut Criterion) {
     for items in [2, 4] {
         for size in [241, 1024] {
             let owned = (0..items)
-                .map(|index| data(size, index as u8))
+                .map(|index| support::data(size, index as u8))
                 .collect::<Vec<_>>();
             let inputs = owned.iter().map(Vec::as_slice).collect::<Vec<_>>();
             let prepared = hashcodecs::xxhash::PreparedXxh3::new(42);

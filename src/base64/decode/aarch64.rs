@@ -170,6 +170,7 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     let input = unsafe { vld1q_u8(input) };
 
     let (indices, errors) = decode_indices::<URLSAFE, MIXED>(input, tables);
+
     if vmaxvq_u8(errors) != 0 {
         return Err(Base64Error::InvalidInput);
     }

@@ -164,27 +164,32 @@ pub(super) fn finish_x86_128(input: &[u8], hashes: [u32; 4], offset: usize) -> [
 pub(super) fn finish_x86_128_tail(tail: &[u8], mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     debug_assert!(tail.len() < 16);
     let mut blocks = [0u32; 4];
+
     for (index, byte) in tail.iter().copied().enumerate() {
         blocks[index / 4] |= (byte as u32) << ((index % 4) * 8);
     }
+
     if tail.len() > 12 {
         hashes[3] ^= blocks[3]
             .wrapping_mul(X86_128_C1[3])
             .rotate_left(18)
             .wrapping_mul(X86_128_C2[3]);
     }
+
     if tail.len() > 8 {
         hashes[2] ^= blocks[2]
             .wrapping_mul(X86_128_C1[2])
             .rotate_left(17)
             .wrapping_mul(X86_128_C2[2]);
     }
+
     if tail.len() > 4 {
         hashes[1] ^= blocks[1]
             .wrapping_mul(X86_128_C1[1])
             .rotate_left(16)
             .wrapping_mul(X86_128_C2[1]);
     }
+
     if !tail.is_empty() {
         hashes[0] ^= blocks[0]
             .wrapping_mul(X86_128_C1[0])
@@ -201,8 +206,10 @@ pub(super) fn mix_x86_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]
     {
         if blocks.byte_len() < dispatch::X86_128_AVX2_MIN {
             mix_x86_128_body_scalar(blocks, hashes);
+
             return;
         }
+
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x86_128_backend(blocks.byte_len(), capabilities);
         mix_x86_128_body_with_backend(blocks, hashes, selected);
@@ -227,6 +234,7 @@ pub(super) fn mix_x86_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
 
     let input = blocks.as_bytes();
     let mut offset = 0;
+
     while offset < input.len() {
         let block1 = read_u32_le(input, offset)
             .wrapping_mul(X86_128_C1[0])
@@ -291,6 +299,7 @@ pub(super) fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     for hash in &mut hashes {
         *hash ^= length;
     }
+
     hashes[0] = hashes[0]
         .wrapping_add(hashes[1])
         .wrapping_add(hashes[2])
@@ -298,9 +307,11 @@ pub(super) fn finalize_x86_128(mut hashes: [u32; 4], length: u32) -> [u32; 4] {
     hashes[1] = hashes[1].wrapping_add(hashes[0]);
     hashes[2] = hashes[2].wrapping_add(hashes[0]);
     hashes[3] = hashes[3].wrapping_add(hashes[0]);
+
     for hash in &mut hashes {
         *hash = fmix32(*hash);
     }
+
     hashes[0] = hashes[0]
         .wrapping_add(hashes[1])
         .wrapping_add(hashes[2])

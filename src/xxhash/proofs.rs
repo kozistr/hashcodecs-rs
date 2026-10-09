@@ -46,20 +46,24 @@ fn long_schedule_keeps_vector_loads_in_bounds() {
         block < schedule.full_blocks() && block + 2 <= schedule.full_blocks(),
         "two-block prefetch bound is reachable"
     );
+
     if block < schedule.full_blocks() {
         let block_offset = block * 1024 + block_stripe * 64;
         assert!(block_offset <= length - 64);
+
         if block + 2 <= schedule.full_blocks() {
             assert!((block + 2) * 1024 < length);
         }
     }
 
     let tail_stripe: usize = kani::any();
+
     if tail_stripe < schedule.tail_stripes() {
         let tail_offset = schedule.tail_offset() + tail_stripe * 64;
         assert!(tail_offset <= length - 64);
         assert!(tail_stripe * 8 <= SECRET.len() - 64);
     }
+
     assert!(schedule.last_offset() <= length - 64);
 
     assert!(block_stripe * 8 <= SECRET.len() - 64);

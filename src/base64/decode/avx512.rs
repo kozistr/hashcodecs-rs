@@ -115,6 +115,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     }
 
     let complete_input = (input.len() - source) / 4 * 4;
+
     if complete_input != 0 {
         let (decoded, invalid) = unsafe {
             decode_tail::<A>(
@@ -125,6 +126,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 decode_shuffle,
             )
         };
+
         if invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
@@ -135,6 +137,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
         source += complete_input;
         destination += complete_output;
     }
+
     Ok((source, destination))
 }
 
@@ -148,15 +151,20 @@ pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Bas
     let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
     let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
     let mut source = 0;
+
     while source + 64 <= input.len() {
         let invalid =
             unsafe { classify_64(input.as_ptr().add(source), lower_table, upper_table).1 };
+
         if invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         source += 64;
     }
+
     let remaining = input.len() - source;
+
     if remaining != 0 {
         let input_mask = (1_u64 << remaining) - 1;
         let invalid = unsafe {
@@ -168,11 +176,14 @@ pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Bas
             )
             .1
         };
+
         if invalid != 0 {
             return Err(Base64Error::InvalidInput);
         }
+
         source += remaining;
     }
+
     Ok(source)
 }
 
@@ -191,6 +202,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     let decode_shuffle = unsafe { _mm512_loadu_si512(DECODE_SHUFFLE.as_ptr().cast()) };
     let mut source = 0;
     let mut destination = 0;
+
     while source + 128 <= input.len() {
         let (first, first_invalid) = unsafe {
             decode_64(
@@ -210,9 +222,11 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 A::CHECK_INPUT,
             )
         };
+
         if first_invalid | second_invalid != 0 {
             break;
         }
+
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, first) };
         unsafe {
             _mm512_mask_storeu_epi8(output.add(destination + 48).cast(), OUTPUT_MASK_48, second)
@@ -220,6 +234,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
         source += 128;
         destination += 96;
     }
+
     while source + 64 <= input.len() {
         let (decoded, invalid) = unsafe {
             decode_64(
@@ -230,17 +245,21 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 A::CHECK_INPUT,
             )
         };
+
         if invalid != 0 {
             break;
         }
+
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, decoded) };
         source += 64;
         destination += 48;
     }
+
     // The full-width loop stopped on this vector when it found an invalid
     // lane. Decode that vector again with a mask so complete quartets before
     // the invalid byte can still be returned as a valid prefix.
     let complete_input = (input.len() - source).min(64) / 4 * 4;
+
     if complete_input != 0 {
         let (decoded, invalid) = unsafe {
             decode_tail::<A>(
@@ -251,11 +270,13 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 decode_shuffle,
             )
         };
+
         let valid_input = if invalid == 0 {
             complete_input
         } else {
             ((invalid.trailing_zeros() as usize) / 4 * 4).min(complete_input)
         };
+
         if valid_input != 0 {
             let valid_output = valid_input / 4 * 3;
             let output_mask = (1_u64 << valid_output) - 1;
@@ -266,6 +287,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
             destination += valid_output;
         }
     }
+
     (source, destination)
 }
 
@@ -280,11 +302,13 @@ unsafe fn decode_64(
 ) -> (__m512i, __mmask64) {
     let ascii = unsafe { _mm512_loadu_si512(input.cast()) };
     let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
+
     let invalid = if check_input {
         _mm512_movepi8_mask(_mm512_or_si512(indices, ascii))
     } else {
         0
     };
+
     let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
     let packed = _mm512_madd_epi16(merged, _mm512_set1_epi32(0x0001_1000));
     (_mm512_permutexvar_epi8(decode_shuffle, packed), invalid)

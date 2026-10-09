@@ -44,10 +44,12 @@ const COMPLEMENTED_LOW_CLASSES: [[u8; 16]; 3] = {
 
     while alphabet < classes.len() {
         let mut index = 0;
+
         while index < classes[alphabet].len() {
             complemented[alphabet][index] = !classes[alphabet][index];
             index += 1;
         }
+
         alphabet += 1;
     }
 

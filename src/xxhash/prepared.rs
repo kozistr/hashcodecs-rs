@@ -39,11 +39,12 @@ impl PreparedXxh3 {
         let Some(input) = LongInput::new(input) else {
             return xxh3_64(input, self.seed);
         };
+
         let engine = LongEngine::cached();
         engine.hash(
             input,
-            engine.secret(&self.secret),
-            super::long_inputs::finalize_long_64,
+            LongEngine::secret(self.secret.as_ref()),
+            finalize_long_64,
         )
     }
 
@@ -53,11 +54,12 @@ impl PreparedXxh3 {
         let Some(input) = LongInput::new(input) else {
             return xxh3_128(input, self.seed);
         };
+
         let engine = LongEngine::cached();
         engine.hash(
             input,
-            engine.secret(&self.secret),
-            super::long_inputs::finalize_long_128,
+            LongEngine::secret(self.secret.as_ref()),
+            finalize_long_128,
         )
     }
 
@@ -85,7 +87,7 @@ impl PreparedXxh3 {
             xxh3_64,
             finalize_long_64,
             engine,
-            engine.secret(&self.secret),
+            LongEngine::secret(self.secret.as_ref()),
             output,
         );
     }
@@ -114,7 +116,7 @@ impl PreparedXxh3 {
             xxh3_128,
             finalize_long_128,
             engine,
-            engine.secret(&self.secret),
+            LongEngine::secret(self.secret.as_ref()),
             output,
         );
     }

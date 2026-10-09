@@ -15,10 +15,7 @@ static METHODS_INIT: Once = Once::new();
 
 pub(crate) fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    let version_info = module.py().version_info();
-    let version = (version_info.major, version_info.minor);
-    METHODS_INIT.call_once(|| unsafe { register_all(methods, version) });
-    unsafe { add_methods(module, methods) }
+    unsafe { add_methods(module, methods, &METHODS_INIT, register_all) }
 }
 
 fn return_bound<T: PyTypeInfo>(

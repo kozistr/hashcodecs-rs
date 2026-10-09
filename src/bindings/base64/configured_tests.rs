@@ -6,7 +6,7 @@ use super::super::lenient::{
     lenient_decode_table, lenient_decoded_len,
 };
 use super::super::policy::{
-    DecodePolicy, ErrorWrites, Padding, PreparedDecoder, PreparedPolicy, Validation,
+    DecodePolicy, ErrorWrites, Padding, PreparedDecoder, PreparedPolicy, Validation, WarningScan,
 };
 use super::super::scan::scalar::{
     alphanumeric_prefix_scalar, symbol_prefix_scalar, translate_bytes_scalar,
@@ -27,13 +27,14 @@ fn configured_decoder(
     padded: bool,
     canonical: bool,
 ) -> ConfiguredDecoder {
-    let table = lenient_decode_table(None);
-    let mut table = table;
+    let mut table = lenient_decode_table(None);
+
     for &byte in ignored_bytes {
         if table[usize::from(byte)] >= 64 {
             table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
     }
+
     ConfiguredDecoder {
         table,
         preserves_alphanumeric: super::preserves_alphanumeric(&table),
@@ -79,6 +80,7 @@ fn decode_configured_strict_into(
 #[test]
 fn simd_lenient_symbol_count_matches_scalar_for_all_bytes_and_alignments() {
     let input: Vec<u8> = (0_u8..=u8::MAX).cycle().take(1024).collect();
+
     for altchars in [None, Some(*b"-_"), Some(*b"@#"), Some(*b"=_")] {
         for offset in 0..32 {
             for tail in 0..32 {
@@ -117,7 +119,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
         unsafe { super::super::scan::x86::alphanumeric_prefix_sse2(&valid) },
         97
     );
-    let mut interrupted = valid.clone();
+    let mut interrupted = valid;
     interrupted[47] = b'!';
     assert_eq!(
         unsafe { super::super::scan::x86::alphanumeric_prefix_sse2(&interrupted) },
@@ -140,7 +142,7 @@ fn x86_prefix_and_translation_kernels_match_scalar() {
     let original: Vec<u8> = b"@#ab".iter().copied().cycle().take(67).collect();
     let mut expected = original.clone();
     translate_bytes_scalar(&mut expected, b'@', b'+', b'#', b'/');
-    let mut translated = original.clone();
+    let mut translated = original;
     unsafe { super::super::scan::x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/') };
     assert_eq!(translated, expected);
 
@@ -280,6 +282,7 @@ fn lenient_decoder_reports_each_output_boundary_before_writing() {
             Err(LenientDecodeError::OutputTooSmall)
         );
     }
+
     assert_eq!(
         unsafe {
             decode_lenient_to_ptr::<true>(
@@ -372,7 +375,7 @@ fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
         let decoder = ConfiguredDecoder::new(&PreparedPolicy {
             altchars,
             warning_altchars: altchars,
-            known_warning_byte: None,
+            warning_scan: WarningScan::Pending,
             urlsafe_warning: false,
             alphabet: None,
             validation: Validation::Lenient,
@@ -392,6 +395,7 @@ fn configured_decoder_caches_alphanumeric_preservation_from_altchars() {
 #[test]
 fn strict_special_search_covers_every_width() {
     let table = lenient_decode_table(None);
+
     for (ignored_bytes, expected) in [
         (b"".as_slice(), 0),
         (b"!".as_slice(), 1),
@@ -400,9 +404,11 @@ fn strict_special_search_covers_every_width() {
         (b"!?~%".as_slice(), 4),
     ] {
         let mut table = table;
+
         for &byte in ignored_bytes {
             table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
         }
+
         let specials = StrictSpecials::new(&table);
         assert!(matches!(
             (expected, specials),
@@ -413,6 +419,7 @@ fn strict_special_search_covers_every_width() {
                 | (4, StrictSpecials::Many)
         ));
     }
+
     assert_eq!(StrictSpecials::None.find(b"abc"), None);
     assert_eq!(StrictSpecials::One(b'!').find(b"a!c"), Some(1));
     assert_eq!(StrictSpecials::Two(b'!', b'?').find(b"a?c"), Some(1));
@@ -423,9 +430,11 @@ fn strict_special_search_covers_every_width() {
 
     for disabled in 0..=4 {
         let mut table = lenient_decode_table(None);
+
         for &byte in &STANDARD_ALPHABET[..disabled] {
             table[usize::from(byte)] = 64;
         }
+
         let forbidden = StrictSpecials::forbidden(&table);
         assert!(matches!(
             (disabled, forbidden),
@@ -503,6 +512,7 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
     Python::initialize();
     Python::attach(|py| {
         let ignored = PyBytes::new(py, b"!");
+
         for altchars in [None, Some(*b"@#"), Some(*b"=_"), Some(*b"==")] {
             for validation in [Validation::Strict, Validation::Lenient] {
                 for padded in [false, true] {
@@ -519,6 +529,7 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
                         )
                         .unwrap();
                         let decoder = prepared.configured();
+
                         for prefix in [0, 4, 128, 4096] {
                             for tail in [
                                 b"".as_slice(),
@@ -534,6 +545,7 @@ fn configured_writes_stay_inside_the_capacity_bound_even_on_invalid_tails() {
                                 let mut input = vec![b'A'; prefix];
                                 input.extend_from_slice(tail);
                                 let capacity = decoded_len_upper_bound(&input, &decoder.table);
+
                                 for continue_after_padding in [false, true] {
                                     let mut output = vec![0xa5; capacity + 17];
                                     let written = unsafe {
@@ -563,6 +575,7 @@ fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
     for length in [4, 16, 4092, 4096, 4100, 8192] {
         let input = vec![b'A'; length];
         let required = length / 4 * 3;
+
         for split in 0..=5.min(length) {
             let mut output = vec![0xa5; required + 17];
             let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
@@ -574,6 +587,7 @@ fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
             assert!(output[required + 1..].iter().all(|&byte| byte == 0xa5));
         }
     }
+
     let mut output = [0xa5; 3];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(writer.push_symbols::<true>(b"AA!A"), None);
@@ -582,6 +596,7 @@ fn staging_runs_preserve_fragments_and_exact_output_boundaries() {
 #[test]
 fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
     let decoder = configured_decoder(b"!?#$", true, true, false);
+
     for (input, expected) in [
         (b"AAAA".as_slice(), 3),
         (b"AA==".as_slice(), 1),
@@ -594,6 +609,7 @@ fn configured_strict_decoder_covers_generic_validation_and_decode_errors() {
             Some(expected)
         );
     }
+
     for input in [
         b"AA==A".as_slice(),
         b"AA~=".as_slice(),
@@ -650,6 +666,7 @@ fn configured_strict_specials_cover_padding_and_staging_errors() {
     }
 
     let canonical = configured_decoder(b"!", true, true, true);
+
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.validate_strict(input), None);
         assert_eq!(
@@ -868,6 +885,7 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
 
     let canonical = configured_decoder(b"!", false, true, true);
     assert_eq!(canonical.decoded_len(b"AAAA", true), Some(3));
+
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
         assert_eq!(
@@ -875,6 +893,7 @@ fn configured_lenient_decoder_covers_dispatch_and_canonical_errors() {
             None
         );
     }
+
     assert_eq!(canonical.decoded_len(b"AB==AA", true), Some(3));
     assert_eq!(
         unsafe { canonical.decode_checked_to_ptr(b"AB==AA", output.as_mut_ptr(), true) },

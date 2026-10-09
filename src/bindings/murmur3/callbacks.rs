@@ -22,6 +22,7 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
             let Some(seed) = seed_u32(seed.as_ptr()) else {
                 return std::ptr::null_mut();
             };
+
             let result =
                 with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                     murmur3_x86_32(bytes, seed)
@@ -49,6 +50,7 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
                 let Some(seed) = seed_u32(seed.as_ptr()) else {
                     return std::ptr::null_mut();
                 };
+
                 let result =
                     with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                         x86_128_digest(murmur3_x86_128(bytes, seed))
@@ -74,6 +76,7 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x64_128_digest(
                 let Some(seed) = seed_u32(seed.as_ptr()) else {
                     return std::ptr::null_mut();
                 };
+
                 let result =
                     with_function_bytes(py, input.as_ptr(), MURMUR3_DETACH_THRESHOLD, |bytes| {
                         x64_128_digest(murmur3_x64_128(bytes, seed))

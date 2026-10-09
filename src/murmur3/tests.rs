@@ -18,9 +18,11 @@ use std::io::Cursor;
 
 fn x86_words_as_u128(words: [u32; 4]) -> u128 {
     let mut bytes = [0; 16];
+
     for (index, word) in words.iter().enumerate() {
         bytes[index * 4..index * 4 + 4].copy_from_slice(&word.to_le_bytes());
     }
+
     u128::from_le_bytes(bytes)
 }
 
@@ -89,6 +91,7 @@ fn x64_dispatch_keeps_small_inputs_scalar_with_any_features() {
         (&[Feature::Sse41, Feature::Avx2][..], Avx2),
     ] {
         let capabilities = Capabilities::from_features(features);
+
         for length in 0..512 {
             assert_eq!(
                 dispatch::select_x64_128_backend(length, capabilities),
@@ -96,6 +99,7 @@ fn x64_dispatch_keeps_small_inputs_scalar_with_any_features() {
                 "length={length} features={features:?}"
             );
         }
+
         for length in [512, 513, 1024, 8 * 1024 * 1024] {
             assert_eq!(
                 dispatch::select_x64_128_backend(length, capabilities),
@@ -132,15 +136,19 @@ fn x64_incremental_updates_match_reference_across_simd_threshold() {
     let input: Vec<u8> = (0..2048)
         .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
         .collect();
+
     for seed in [0, 1, 0xfeed_beef, u32::MAX] {
         let expected = murmur3::murmur3_x64_128(&mut Cursor::new(&input), seed).unwrap();
+
         for chunk_size in [496, 511, 512, 513, 528, 1024] {
             for prefix_length in 0..16 {
                 let mut hasher = Murmur3X64Hasher128::new(seed);
                 hasher.update(&input[..prefix_length]);
+
                 for chunk in input[prefix_length..].chunks(chunk_size) {
                     hasher.update(chunk);
                 }
+
                 assert_eq!(
                     x64_words_as_u128(hasher.digest()),
                     expected,
@@ -155,20 +163,24 @@ fn x64_incremental_updates_match_reference_across_simd_threshold() {
 fn incremental_hashers_match_one_shot_for_all_tail_lengths() {
     let seeds = [0, 1, u32::MAX];
     let chunk_sizes = [1, 2, 3, 4, 7, 16, 31, 64];
+
     for length in 0..=128 {
         let input: Vec<u8> = (0..length)
             .map(|index| (index as u8).wrapping_mul(29).wrapping_add(7))
             .collect();
+
         for seed in seeds {
             for chunk_size in chunk_sizes {
                 let mut x86_32 = Murmur3X86Hasher32::new(seed);
                 let mut x86_128 = Murmur3X86Hasher128::new(seed);
                 let mut x64_128 = Murmur3X64Hasher128::new(seed);
+
                 for chunk in input.chunks(chunk_size) {
                     x86_32.update(chunk);
                     x86_128.update(chunk);
                     x64_128.update(chunk);
                 }
+
                 assert_eq!(x86_32.digest(), murmur3_x86_32(&input, seed));
                 assert_eq!(x86_128.digest(), murmur3_x86_128(&input, seed));
                 assert_eq!(x64_128.digest(), murmur3_x64_128(&input, seed));
@@ -229,6 +241,7 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
             .supports(CpuFeature::Avx2)
             .then_some(dispatch::Backend::Avx2),
     ];
+
     for selected in supported.into_iter().flatten() {
         let mut hashes = [seed; 4];
         let blocks = FullBlocks::new(&input[..block_end]).unwrap();
@@ -254,6 +267,7 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
         (capabilities.supports(CpuFeature::Avx2) && capabilities.supports(CpuFeature::Bmi2))
             .then_some((dispatch::Backend::Avx2, true)),
     ];
+
     for (selected, bmi2) in supported.into_iter().flatten() {
         let mut hashes = [seed as u64; 2];
         unsafe {
@@ -327,10 +341,12 @@ fn scalar_dispatch_fallbacks_process_full_blocks() {
 #[test]
 fn matches_the_reference_implementation_for_every_tail_length() {
     let seeds = [0, 1, 0xfeed_beef, u32::MAX];
+
     for length in 0..=543 {
         let input: Vec<u8> = (0..length)
             .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
             .collect();
+
         for seed in seeds {
             let expected_x86_32 = murmur3::murmur3_32(&mut Cursor::new(&input), seed).unwrap();
             assert_eq!(
@@ -355,6 +371,7 @@ fn matches_the_reference_implementation_for_every_tail_length() {
                         .supports(CpuFeature::Avx2)
                         .then_some(dispatch::Backend::Avx2),
                 ];
+
                 for selected in supported.into_iter().flatten() {
                     let mut hash = seed;
                     unsafe {

@@ -51,6 +51,7 @@ pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
 #[inline(always)]
 pub(super) fn read_partial_u64_le(input: &[u8]) -> u64 {
     debug_assert!(input.len() <= 8);
+
     match input.len() {
         0 => 0,
         1 => input[0] as u64,

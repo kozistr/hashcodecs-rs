@@ -101,6 +101,7 @@ unsafe fn encode_custom_with_backend_inner(
         if backend == Backend::Neon {
             return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
         }
+
         let _ = (input, output, backend, alphabet, streaming_stores);
         0
     }
@@ -117,6 +118,7 @@ pub(super) unsafe fn encode_custom_with_backend(
     if !backend::is_supported(backend) {
         return 0;
     }
+
     unsafe { encode_custom_with_backend_inner(input, output, backend, alphabet, false) }
 }
 
@@ -153,6 +155,7 @@ pub(super) unsafe fn encode_wrapped_custom_with_backend(
     if !backend::is_supported(backend) {
         return 0;
     }
+
     unsafe { encode_wrapped_custom_with_backend_inner(input, output, backend, alphabet) }
 }
 
@@ -192,6 +195,7 @@ unsafe fn encode_wrapped_custom_with_backend_inner(
                 encode_aarch64::encode_wrapped_custom(input, output, alphabet.table())
             };
         }
+
         let _ = (input, output, alphabet, backend);
         0
     }
@@ -208,6 +212,7 @@ pub(super) unsafe fn encode_wrapped_with_backend(
     if !backend::is_supported(backend) {
         return 0;
     }
+
     unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
 }
 
@@ -252,6 +257,7 @@ unsafe fn encode_wrapped_with_backend_inner(
                 }
             };
         }
+
         let _ = (input, output, urlsafe, backend);
         0
     }
@@ -328,6 +334,7 @@ unsafe fn decode_standard_validated_with_backend_inner(
         if backend == Backend::Neon {
             return unsafe { decode_aarch64::decode_standard_validated(input, output) };
         }
+
         let _ = (input, output, backend);
         (0, 0)
     }
@@ -341,8 +348,14 @@ pub(super) fn validate_with_runtime_backend(
     validate_with_backend_inner(input, backend::selected_backend().backend, alphabet)
 }
 
+/// Decode complete SIMD blocks until the first block containing a non-alphabet byte.
+///
+/// # Safety
+///
+/// `output` must be valid for the decoded size of `input` and must not overlap it.
 #[inline]
-pub(super) unsafe fn decode_valid_prefix_with_runtime_backend(
+#[cfg_attr(not(feature = "python"), allow(dead_code))]
+pub(crate) unsafe fn decode_valid_prefix_with_runtime_backend(
     input: &[u8],
     output: *mut u8,
     alphabet: DecodeAlphabet,
@@ -413,6 +426,7 @@ fn validate_with_backend_inner(
                 }
             };
         }
+
         let _ = (input, backend, alphabet);
         Ok(0)
     }
@@ -538,6 +552,7 @@ unsafe fn encode_with_backend_ptr(
                 }
             };
         }
+
         let _ = (input, output, backend, urlsafe, streaming_stores);
         0
     }
@@ -557,6 +572,7 @@ unsafe fn encode_x86<const URLSAFE: bool>(
         } else {
             encode_backend::avx2::Avx2StoreMode::Cached
         };
+
         return unsafe {
             encode_backend::avx2::encode_avx2_with_store::<URLSAFE>(input, output, store_mode)
         };
@@ -641,6 +657,7 @@ unsafe fn decode_with_backend_ptr_mode(
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
             let _ = output_has_store_slack;
+
             return unsafe {
                 if error_write_policy == ErrorWritePolicy::ValidatedBlocksOnly {
                     match alphabet {
@@ -669,6 +686,7 @@ unsafe fn decode_with_backend_ptr_mode(
                 }
             };
         }
+
         let _ = (
             input,
             output,
@@ -779,9 +797,11 @@ mod tests {
             if !backend::is_supported(backend) {
                 continue;
             }
+
             for symbols in [32, 128] {
                 let mut input = vec![b'A'; symbols];
                 input.extend_from_slice(&[b'!'; 32]);
+
                 for alphabet in [
                     DecodeAlphabet::Standard,
                     DecodeAlphabet::UrlSafe,
@@ -836,6 +856,7 @@ mod tests {
                 decode_valid_prefix_x86_kernel::<x86_contracts::StandardDecoder>(backend).is_some()
             );
         }
+
         assert!(encode_x86_kernel::<true>(Backend::Scalar).is_none());
         assert!(
             decode_x86_kernel::<x86_contracts::UrlSafeDecoder, x86_contracts::PaddedStore>(
@@ -887,6 +908,7 @@ mod tests {
             .collect::<Vec<_>>();
         let alphabet = CustomEncodeAlphabet::new(*b"@#");
         let mut expected = b64encode(&input).into_bytes();
+
         for byte in &mut expected {
             match *byte {
                 b'+' => *byte = b'@',

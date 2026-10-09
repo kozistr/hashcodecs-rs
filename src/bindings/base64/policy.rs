@@ -72,6 +72,7 @@ impl DecodeAttempt {
         result: Result<T, crate::base64::Base64Error>,
     ) -> Result<Option<T>, crate::base64::Base64Error> {
         use crate::base64::Base64Error;
+
         match result {
             Ok(value) => Ok(Some(value)),
             Err(error @ Base64Error::OutputTooSmall { .. }) if self == Self::Strict => Err(error),
@@ -81,10 +82,16 @@ impl DecodeAttempt {
 }
 
 #[derive(Clone, Copy)]
+pub(super) enum WarningScan {
+    Pending,
+    Complete(Option<u8>),
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct DecodePolicy<'a, 'py> {
     pub(super) altchars: Option<[u8; 2]>,
     warning_altchars: Option<[u8; 2]>,
-    known_warning_byte: Option<Option<u8>>,
+    warning_scan: WarningScan,
     urlsafe_warning: bool,
     pub(super) alphabet: Option<[u8; 64]>,
     validate: Option<bool>,
@@ -104,7 +111,7 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
         Self {
             altchars,
             warning_altchars: altchars,
-            known_warning_byte: None,
+            warning_scan: WarningScan::Pending,
             urlsafe_warning: false,
             alphabet: None,
             validate,
@@ -125,7 +132,7 @@ impl<'a, 'py> DecodePolicy<'a, 'py> {
     }
 
     pub(super) fn with_known_warning_byte(mut self, badchar: Option<u8>) -> Self {
-        self.known_warning_byte = Some(badchar);
+        self.warning_scan = WarningScan::Complete(badchar);
         self
     }
 
@@ -185,6 +192,7 @@ impl IgnoredBytes {
                     if word == 0 {
                         return None;
                     }
+
                     let byte = index * 64 + word.trailing_zeros() as usize;
                     word &= word - 1;
                     Some(byte as u8)
@@ -196,7 +204,7 @@ impl IgnoredBytes {
 pub(super) struct PreparedPolicy {
     pub(super) altchars: Option<[u8; 2]>,
     pub(super) warning_altchars: Option<[u8; 2]>,
-    pub(super) known_warning_byte: Option<Option<u8>>,
+    pub(super) warning_scan: WarningScan,
     pub(super) urlsafe_warning: bool,
     pub(super) alphabet: Option<[u8; 64]>,
     pub(super) validation: Validation,
@@ -217,6 +225,7 @@ impl PreparedPolicy {
                 .cast::<PyBytes>()
                 .is_ok_and(|bytes| bytes.as_bytes().is_empty())
         });
+
         let ignored = if let Some(ignorechars) = policy.ignorechars {
             let mut ignored = IgnoredBytes::default();
             let ignorechars = contiguous_bytes_like(ignorechars, "ignorechars")?;
@@ -231,11 +240,12 @@ impl PreparedPolicy {
         } else {
             None
         };
+
         Ok((
             Self {
                 altchars: policy.altchars,
                 warning_altchars: policy.warning_altchars,
-                known_warning_byte: policy.known_warning_byte,
+                warning_scan: policy.warning_scan,
                 urlsafe_warning: policy.urlsafe_warning,
                 alphabet: policy.alphabet,
                 validation: policy.validation(),
@@ -256,7 +266,7 @@ impl PreparedPolicy {
         Self {
             altchars: self.altchars,
             warning_altchars: self.warning_altchars,
-            known_warning_byte: self.known_warning_byte,
+            warning_scan: self.warning_scan,
             urlsafe_warning: self.urlsafe_warning,
             alphabet: self.alphabet,
             validation: Validation::Strict,
@@ -353,6 +363,7 @@ fn select_route(
         && policy.padding.is_padded()
         && (!policy.ignorechars_specified || empty_exact_ignorechars)
         && (policy.canonical || empty_exact_ignorechars);
+
     if policy.ignorechars_specified || policy.canonical {
         let shortcut = if standard_strict {
             ConfiguredShortcut::StandardStrict
@@ -361,13 +372,16 @@ fn select_route(
         } else {
             ConfiguredShortcut::None
         };
+
         return DecodeRoute::Configured(shortcut);
     }
 
     let urlsafe_315 = semantics.urlsafe_exclusive_alphabet && policy.altchars == Some(*b"-_");
+
     if policy.strict_mode() {
         return DecodeRoute::Strict { urlsafe_315 };
     }
+
     if matches!(policy.altchars, None | Some([b'-', b'_'])) {
         DecodeRoute::LenientDirect { urlsafe_315 }
     } else {
@@ -389,7 +403,7 @@ mod tests {
         PreparedPolicy {
             altchars,
             warning_altchars: altchars,
-            known_warning_byte: None,
+            warning_scan: WarningScan::Pending,
             urlsafe_warning: false,
             alphabet: None,
             validation,
@@ -497,6 +511,7 @@ mod tests {
             DecodeAttempt::Strict.accept::<usize>(Err(small)),
             Err(small)
         );
+
         for attempt in [DecodeAttempt::Probe, DecodeAttempt::Strict] {
             assert_eq!(
                 attempt.accept::<usize>(Err(Base64Error::InvalidInput)),

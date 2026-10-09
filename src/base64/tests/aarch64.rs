@@ -39,6 +39,7 @@ fn decode<const URLSAFE: bool, const MIXED: bool>(
 
 fn error_checks_are_bounded<const URLSAFE: bool, const MIXED: bool>() {
     let total = 3 * DECODE_ERROR_CHECK_INTERVAL;
+
     for invalid_index in [
         0,
         DECODE_ERROR_CHECK_INTERVAL - 1,
@@ -115,6 +116,7 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
     assert_eq!(length % 4, 0);
 
     let mut input = Vec::with_capacity(length);
+
     for group in 0..length / 4 {
         let quartet = if MIXED && group % 2 == 0 {
             b"+/_-"
@@ -125,6 +127,7 @@ fn encoded_input<const URLSAFE: bool, const MIXED: bool>(length: usize) -> Vec<u
         } else {
             b"Aa+/"
         };
+
         input.extend_from_slice(quartet);
     }
 
@@ -339,6 +342,7 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
                 } else {
                     output_len
                 };
+
                 assert!(
                     guarded_output[..output_start]
                         .iter()

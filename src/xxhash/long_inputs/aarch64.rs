@@ -93,6 +93,7 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
 
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
+
         for stripe in 0..16 {
             unsafe {
                 accumulate_stripe(
@@ -102,6 +103,7 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
                 )
             };
         }
+
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
 

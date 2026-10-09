@@ -146,8 +146,7 @@ pub fn b64encode_urlsafe(input: &[u8]) -> String {
 ///
 #[inline]
 pub const fn b64encoded_len(input_len: usize) -> Option<usize> {
-    let groups = input_len / 3 + if input_len.is_multiple_of(3) { 0 } else { 1 };
-    groups.checked_mul(4)
+    input_len.div_ceil(3).checked_mul(4)
 }
 
 /// Encodes input into caller-provided storage with the standard alphabet.
@@ -222,12 +221,14 @@ fn b64encode_into_with_alphabet(
     urlsafe: bool,
 ) -> Result<usize, Base64Error> {
     let required = encoded_len(input.len());
+
     if output.len() < required {
         return Err(Base64Error::OutputTooSmall {
             required,
             provided: output.len(),
         });
     }
+
     encode_to_slice(input, &mut output[..required], urlsafe);
     Ok(required)
 }
@@ -267,6 +268,7 @@ pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
 pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
     if input.len() < 16 {
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
+
         return;
     }
 
@@ -285,6 +287,7 @@ pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool)
 pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe: bool) {
     if input.len() < 16 {
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
+
         return;
     }
 
@@ -308,6 +311,7 @@ pub(crate) unsafe fn encode_to_ptr_with_custom_alphabet(
 ) {
     if input.len() < 16 {
         unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet.table()) };
+
         return;
     }
 
@@ -362,6 +366,7 @@ impl WrappedOutput {
     #[inline(always)]
     pub(super) unsafe fn write_16(&mut self, block: [u8; 16]) {
         unsafe { self.start_line() };
+
         if self.width - self.column >= block.len() {
             unsafe {
                 self.output
@@ -369,6 +374,7 @@ impl WrappedOutput {
             };
             self.output = unsafe { self.output.add(block.len()) };
             self.column += block.len();
+
             return;
         }
 
@@ -380,6 +386,7 @@ impl WrappedOutput {
     #[inline]
     unsafe fn write_bytes(&mut self, input: &[u8]) {
         let complete = input.len() / 4 * 4;
+
         for offset in (0..complete).step_by(4) {
             unsafe { self.write_quad_ptr(input.as_ptr().add(offset)) };
         }
@@ -409,6 +416,7 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_cached(
     width: usize,
 ) {
     let mut output = WrappedOutput::new(output, width);
+
     let consumed = if input.len() < 16 {
         0
     } else {
@@ -429,6 +437,7 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_custom(
     width: usize,
 ) {
     let mut output = WrappedOutput::new(output, width);
+
     let consumed = if input.len() < 16 {
         0
     } else {
@@ -474,6 +483,7 @@ unsafe fn encode_scalar_wrapped(
     } else {
         STANDARD_ALPHABET
     };
+
     unsafe { encode_scalar_wrapped_with_alphabet(input, output, alphabet, padded) };
 }
 
@@ -486,6 +496,7 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
     padded: bool,
 ) {
     let mut source = 0;
+
     while source + 6 <= input.len() {
         let mut encoded = [0; 8];
         unsafe {
@@ -504,11 +515,13 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
         let mut encoded = [0; 8];
         unsafe { encode_scalar_ptr_with_alphabet(tail, encoded.as_mut_ptr(), alphabet) };
         let padded_len = encoded_len(tail.len());
+
         let written = if padded {
             padded_len
         } else {
             padded_len - usize::from(!tail.len().is_multiple_of(3)) * (3 - tail.len() % 3)
         };
+
         unsafe { output.write_bytes(&encoded[..written]) };
     }
 }
@@ -527,6 +540,7 @@ pub(crate) unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: b
     } else {
         STANDARD_ALPHABET
     };
+
     unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet) };
 }
 
@@ -536,6 +550,7 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
     let input_ptr = input.as_ptr();
     let mut source = 0;
     let mut destination = 0;
+
     // `input_ptr` comes from the live slice above. The loop or tail length check guards each raw read.
     // This structure avoids a separate slice bounds check for each byte.
     while source + 6 <= input_len {
@@ -568,6 +583,7 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
         source += 6;
         destination += 8;
     }
+
     while source + 3 <= input_len {
         let block = unsafe {
             let input = input_ptr.add(source);
@@ -594,6 +610,7 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
     }
 
     let remaining = input_len - source;
+
     if remaining == 1 {
         let block = (unsafe { input_ptr.add(source).read() } as u32) << 16;
         unsafe {

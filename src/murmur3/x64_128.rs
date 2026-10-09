@@ -164,6 +164,7 @@ pub(super) fn mix_x64_128_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]
     if blocks.byte_len() == 0 {
         return;
     }
+
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let capabilities = crate::backend::capabilities();
@@ -206,6 +207,7 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
     let mut hash2 = hashes[1];
     let mut cursor = input.as_ptr();
     let end = unsafe { cursor.add(input.len()) };
+
     while cursor < end {
         let value1 = u64::from_le(unsafe { cursor.cast::<u64>().read_unaligned() });
         let value2 = u64::from_le(unsafe { cursor.add(8).cast::<u64>().read_unaligned() });
@@ -220,6 +222,7 @@ pub(super) fn mix_x64_128_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &mut [
         mix_x64_128_hashes(&mut hash1, &mut hash2, block1, block2);
         cursor = unsafe { cursor.add(16) };
     }
+
     *hashes = [hash1, hash2];
 }
 
@@ -232,6 +235,7 @@ pub(super) fn finish_x64_128(input: &[u8], hashes: [u64; 2], offset: usize) -> [
 #[inline]
 pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u64; 2] {
     debug_assert!(tail.len() < 16);
+
     if tail.len() > 8 {
         let block2 = read_partial_u64_le(&tail[8..]);
         hashes[1] ^= block2
@@ -239,6 +243,7 @@ pub(super) fn finish_x64_128_tail(tail: &[u8], mut hashes: [u64; 2], length: u64
             .rotate_left(33)
             .wrapping_mul(X64_128_C1);
     }
+
     if !tail.is_empty() {
         let block1 = read_partial_u64_le(&tail[..tail.len().min(8)]);
         hashes[0] ^= block1

@@ -28,20 +28,26 @@ fn mix_x86_32_body_avx2(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(8).cast(), second) };
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(16).cast(), third) };
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().add(24).cast(), fourth) };
+
         for &block in &mixed {
             value = mix_x86_32_hash(value, block);
         }
+
         offset += 128;
     }
+
     while offset + 32 <= input.len() {
         let blocks = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
         let blocks = premix_avx2(blocks);
         unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), blocks) };
+
         for &block in &mixed[..8] {
             value = mix_x86_32_hash(value, block);
         }
+
         offset += 32;
     }
+
     while offset < input.len() {
         let block = read_u32_le(input, offset)
             .wrapping_mul(X86_32_C1)
@@ -50,6 +56,7 @@ fn mix_x86_32_body_avx2(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
         value = mix_x86_32_hash(value, block);
         offset += 4;
     }
+
     *hash = value;
 }
 
@@ -84,20 +91,26 @@ fn mix_x86_32_body_sse41(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(4).cast(), second) };
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(8).cast(), third) };
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(12).cast(), fourth) };
+
         for &block in &mixed {
             value = mix_x86_32_hash(value, block);
         }
+
         offset += 64;
     }
+
     while offset + 16 <= input.len() {
         let blocks = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
         let blocks = premix_sse41(blocks);
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().cast(), blocks) };
+
         for &block in &mixed[..4] {
             value = mix_x86_32_hash(value, block);
         }
+
         offset += 16;
     }
+
     while offset < input.len() {
         let block = read_u32_le(input, offset)
             .wrapping_mul(X86_32_C1)
@@ -106,6 +119,7 @@ fn mix_x86_32_body_sse41(blocks: FullBlocks<'_, 4>, hash: &mut u32) {
         value = mix_x86_32_hash(value, block);
         offset += 4;
     }
+
     *hash = value;
 }
 

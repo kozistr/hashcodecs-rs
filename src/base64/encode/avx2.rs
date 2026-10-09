@@ -117,6 +117,7 @@ unsafe fn encode_avx2_with_offsets(
     #[cfg(target_arch = "x86_64")]
     {
         let groups = (input.len() - load_offset - 8) / 96;
+
         // Amortize the helper's fixed call and register-save costs across at
         // least two groups. Shorter prefixes use the inline 24-byte loop.
         if groups >= 2 {
@@ -245,12 +246,14 @@ unsafe fn encode_wrapped_with_offsets(
     unsafe { write_wrapped_32(output, first) };
 
     let mut load_offset = 20;
+
     while load_offset + 104 <= input.len() {
         for offset in [0, 24, 48, 72] {
             let encoded =
                 unsafe { encode_24_shifted(input.as_ptr().add(load_offset + offset), offsets) };
             unsafe { write_wrapped_32(output, encoded) };
         }
+
         load_offset += 96;
     }
 
@@ -261,6 +264,7 @@ unsafe fn encode_wrapped_with_offsets(
     }
 
     let source = load_offset + 4;
+
     if source + 16 <= input.len() {
         let encoded =
             unsafe { encode_12_avx2(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
@@ -295,6 +299,7 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
     offsets: __m256i,
 ) {
     let constants = encode_avx2_constants(offsets);
+
     while groups >= 2 {
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =

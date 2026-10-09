@@ -109,6 +109,7 @@ impl PreparedEncoder {
 
     fn output_len(&self, input_len: usize) -> usize {
         let data_len = self.data_len(input_len);
+
         match (data_len, self.wrapping) {
             (0, _) | (_, LineWrapping::None) => data_len,
             (_, LineWrapping::Columns(width)) => data_len + (data_len - 1) / width,
@@ -119,10 +120,10 @@ impl PreparedEncoder {
         if input_len <= DIRECT_WRAPPED_INPUT_THRESHOLD {
             return None;
         }
+
         match self.wrapping {
             LineWrapping::None => None,
-            LineWrapping::Columns(width) if self.data_len(input_len) > width => Some(width),
-            LineWrapping::Columns(_) => None,
+            LineWrapping::Columns(width) => (self.data_len(input_len) > width).then_some(width),
         }
     }
 
@@ -200,6 +201,7 @@ pub(super) fn encode_with_prepared<'py>(
     if let Some(input) = input.snapshot_mutable()? {
         return encode_with_prepared(py, &BytesLike::OwnedVec(input), encoder);
     }
+
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let output_len = encoder.output_len(input.len());
     let (output, ()) = unsafe {
@@ -208,12 +210,14 @@ pub(super) fn encode_with_prepared<'py>(
                 let output_address = output as usize;
                 let encode = move || {
                     let output = output_address as *mut u8;
+
                     if let Some(width) = encoder.direct_wrap_width(input.len()) {
                         encoder.encode_direct_to_ptr(input, output, width);
                     } else {
                         encoder.encode_to_ptr(input, output);
                     }
                 };
+
                 if detach { py.detach(encode) } else { encode() }
             })
         })
@@ -229,6 +233,7 @@ pub(super) fn encode_into(
     if let Some(input) = input.snapshot_for_output(output)? {
         return encode_slice_into(&input, output, encoder);
     }
+
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             encode_slice_to_ptr(input, output, provided, encoder)
@@ -240,8 +245,10 @@ pub(super) fn normalize_wrapcol(wrapcol: i128) -> PyResult<Option<usize>> {
     if wrapcol < 0 {
         return Err(PyValueError::new_err("Cannot convert negative int"));
     }
+
     let wrapcol = usize::try_from(wrapcol)
         .map_err(|_| PyOverflowError::new_err("Python int too large for C size_t"))?;
+
     if wrapcol == 0 {
         Ok(None)
     } else {
@@ -253,6 +260,7 @@ fn parse_wrapcol(py: Python<'_>, wrapcol: Argument) -> PyResult<Option<usize>> {
     if wrapcol.as_ptr().is_null() {
         return Ok(None);
     }
+
     let indexed =
         unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Index(wrapcol.raw(py).as_ptr())) }?;
     let value = indexed
@@ -289,14 +297,17 @@ fn encode_slice_to_ptr(
     encoder: &PreparedEncoder,
 ) -> PyResult<usize> {
     let required = encoder.output_len(input.len());
+
     if provided < required {
         return Err(super::staging::output_too_small(required, provided));
     }
+
     if let Some(width) = encoder.direct_wrap_width(input.len()) {
         unsafe { encoder.encode_direct_to_ptr(input, output, width) };
     } else {
         unsafe { encoder.encode_to_ptr(input, output) };
     }
+
     Ok(required)
 }
 
@@ -309,12 +320,14 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
 ) {
     if matches!(padding, EncodePadding::Padded) {
         unsafe { encode_ptr::<CACHED>(input, output, alphabet) };
+
         return;
     }
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
     unsafe { encode_ptr::<CACHED>(&input[..complete_input_len], output, alphabet) };
+
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
@@ -350,8 +363,10 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
     if data_len <= width {
         return;
     }
+
     let mut source = data_len;
     let mut destination = data_len + (data_len - 1) / width;
+
     while source != 0 {
         let remainder = source % width;
         let line_len = if remainder == 0 { width } else { remainder };
@@ -362,11 +377,13 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
                 .add(source)
                 .copy_to(output.add(destination), line_len)
         };
+
         if source != 0 {
             destination -= 1;
             unsafe { output.add(destination).write(b'\n') };
         }
     }
+
     debug_assert_eq!(destination, 0);
 }
 
@@ -377,8 +394,10 @@ fn construct_b64encode_alphabet<'py>(
     value: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let length = value.len()?;
+
     if length != 2 {
         let value = value.repr()?.to_string();
+
         return Err(PyValueError::new_err(format!("invalid altchars: {value}")));
     }
 
@@ -395,6 +414,7 @@ fn parse_b64encode_alphabet<'a, 'py>(
     let bytes = crate::bindings::buffer::binascii_contiguous_bytes_like(value)?;
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable_after_callbacks(false)?;
+
     if bytes.len() != STANDARD_ALPHABET.len() {
         return Err(PyValueError::new_err("alphabet must have length 64"));
     }
@@ -412,6 +432,7 @@ fn parse_b64encode_alphabet<'a, 'py>(
 
 fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<[u8; 2]>> {
     let length = value.len()?;
+
     if length != 2 {
         return Err(PyAssertionError::new_err(value.repr()?.to_string()));
     }
@@ -419,6 +440,7 @@ fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<
     let bytes = contiguous_bytes_like(value, "altchars")?;
     #[cfg(Py_GIL_DISABLED)]
     let bytes = bytes.into_stable()?;
+
     if bytes.len() != 2 {
         return Err(PyValueError::new_err(
             "maketrans arguments must have same length",
@@ -439,6 +461,7 @@ pub(super) fn standard_b64encode<'py>(
     } else {
         crate::bindings::buffer::binascii_contiguous_bytes_like(s)?
     };
+
     encode(py, &input, None, true, None)
 }
 
@@ -461,6 +484,7 @@ pub(super) fn urlsafe_b64encode<'py>(
     if PyBytes::is_exact_type_of(s) {
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
+
         return encode(py, &input, Some(*b"-_"), padded, None);
     }
 
@@ -498,6 +522,7 @@ pub(super) fn b64encode<'py>(
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
         let wrapcol = parse_wrapcol(py, wrapcol)?;
+
         return encode_with_prepared(
             py,
             &input,
@@ -506,6 +531,7 @@ pub(super) fn b64encode<'py>(
     }
 
     let python_315 = python_at_least(py, (3, 15));
+
     let constructed_alphabet = if python_315 {
         altchars
             .map(|altchars| construct_b64encode_alphabet(py, altchars))
@@ -518,6 +544,7 @@ pub(super) fn b64encode<'py>(
     let legacy_callbacks_follow_input = !python_315
         && (altchars.is_some() || !padded.as_ptr().is_null() || !wrapcol.as_ptr().is_null());
     let input = input.into_stable_before_callbacks(legacy_callbacks_follow_input)?;
+
     let legacy_altchars = if python_315 {
         None
     } else {
@@ -526,6 +553,7 @@ pub(super) fn b64encode<'py>(
             .transpose()?
             .flatten()
     };
+
     let padded = padded.truthy(py)?;
     let wrapcol = parse_wrapcol(py, wrapcol)?;
     let parsed_alphabet = constructed_alphabet
@@ -586,11 +614,13 @@ mod tests {
                     unsafe { encoder.encode_to_ptr(&input[..length], actual.as_mut_ptr()) };
 
                     let mut expected = crate::base64::b64encode(&input[..length]).into_bytes();
+
                     if !padded {
                         while expected.last() == Some(&b'=') {
                             expected.pop();
                         }
                     }
+
                     for byte in &mut expected {
                         if *byte == b'+' {
                             *byte = altchars[0];
@@ -616,9 +646,11 @@ mod tests {
         unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
 
         let mut contiguous = crate::base64::b64encode(&input).into_bytes();
+
         while contiguous.last() == Some(&b'=') {
             contiguous.pop();
         }
+
         for byte in &mut contiguous {
             if *byte == b'+' {
                 *byte = b'@';
@@ -628,10 +660,12 @@ mod tests {
         }
 
         let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+
         for (line, chunk) in contiguous.chunks(76).enumerate() {
             if line != 0 {
                 expected.push(b'\n');
             }
+
             expected.extend_from_slice(chunk);
         }
 
@@ -651,10 +685,12 @@ mod tests {
 
         let data_len = unpadded_encoded_len(input.len());
         let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+
         for (line, length) in (0..data_len).step_by(76).enumerate() {
             if line != 0 {
                 expected.push(b'\n');
             }
+
             expected.extend(std::iter::repeat_n(b'Z', (data_len - length).min(76)));
         }
 
@@ -673,10 +709,12 @@ mod tests {
 
         let contiguous = crate::base64::b64encode(&input).into_bytes();
         let mut expected = Vec::with_capacity(encoder.output_len(input.len()));
+
         for (line, chunk) in contiguous.chunks(76).enumerate() {
             if line != 0 {
                 expected.push(b'\n');
             }
+
             expected.extend_from_slice(chunk);
         }
 
@@ -692,6 +730,7 @@ mod tests {
         unsafe { encode_wrapped_to_ptr_custom(&input, actual.as_mut_ptr(), &alphabet, true, 4) };
 
         let mut contiguous = crate::base64::b64encode(&input).into_bytes();
+
         for byte in &mut contiguous {
             match *byte {
                 b'+' => *byte = b'@',
@@ -699,11 +738,14 @@ mod tests {
                 _ => {}
             }
         }
+
         let mut expected = Vec::new();
+
         for (line, chunk) in contiguous.chunks(4).enumerate() {
             if line != 0 {
                 expected.push(b'\n');
             }
+
             expected.extend_from_slice(chunk);
         }
 

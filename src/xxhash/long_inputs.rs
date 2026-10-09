@@ -16,9 +16,7 @@ mod x86;
 use super::primitives::*;
 
 #[cfg(test)]
-pub(super) fn accumulate_long_input_scalar(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
-    scalar::accumulate(input, secret)
-}
+pub(super) use scalar::accumulate as accumulate_long_input_scalar;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(super) const X86_BACKEND_PREFERENCE: [X86Backend; 4] = [
@@ -174,12 +172,14 @@ static DEFAULT_SECRET: Secret = Secret(SECRET);
 #[inline]
 pub(super) fn initialize_secret_scalar(seed: u64) -> Secret {
     let mut secret = SECRET;
+
     for offset in (0..192).step_by(16) {
         let lo = read_u64_le(&SECRET, offset).wrapping_add(seed);
         let hi = read_u64_le(&SECRET, offset + 8).wrapping_sub(seed);
         secret[offset..offset + 8].copy_from_slice(&lo.to_le_bytes());
         secret[offset + 8..offset + 16].copy_from_slice(&hi.to_le_bytes());
     }
+
     Secret(secret)
 }
 
@@ -348,6 +348,7 @@ impl LongEngine {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             let selected = select_x86_backend(capabilities);
+
             let backend = match select_x86_accumulation_kernel(selected) {
                 Some(kernel) => LongBackend::X86(kernel),
                 None => LongBackend::Scalar,
@@ -398,8 +399,8 @@ impl LongEngine {
     }
 
     #[inline(always)]
-    pub(super) fn secret<'a>(&self, derived: &'a Option<Secret>) -> &'a Secret {
-        derived.as_ref().unwrap_or(&DEFAULT_SECRET)
+    pub(super) fn secret(derived: Option<&Secret>) -> &Secret {
+        derived.unwrap_or(&DEFAULT_SECRET)
     }
 
     #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
@@ -502,12 +503,20 @@ pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
     let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
 
-    engine.hash(input, engine.secret(&derived), finalize_long_64)
+    engine.hash(
+        input,
+        LongEngine::secret(derived.as_ref()),
+        finalize_long_64,
+    )
 }
 
 pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 2] {
     let engine = LongEngine::cached();
     let derived = engine.derive_secret(seed);
 
-    engine.hash(input, engine.secret(&derived), finalize_long_128)
+    engine.hash(
+        input,
+        LongEngine::secret(derived.as_ref()),
+        finalize_long_128,
+    )
 }

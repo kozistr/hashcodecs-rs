@@ -134,29 +134,29 @@ fn reduce_chains(
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_group(
-    acc: [&mut Accumulator; 4],
+    [acc0, acc1, acc2, acc3]: [&mut Accumulator; 4],
     data: *const u8,
     secret: *const u8,
     first_stripe: usize,
 ) {
     unsafe {
         accumulate_registers(
-            acc[0],
+            acc0,
             data.add(first_stripe * 64),
             secret.add(first_stripe * 8),
         );
         accumulate_registers(
-            acc[1],
+            acc1,
             data.add((first_stripe + 1) * 64),
             secret.add((first_stripe + 1) * 8),
         );
         accumulate_registers(
-            acc[2],
+            acc2,
             data.add((first_stripe + 2) * 64),
             secret.add((first_stripe + 2) * 8),
         );
         accumulate_registers(
-            acc[3],
+            acc3,
             data.add((first_stripe + 3) * 64),
             secret.add((first_stripe + 3) * 8),
         );
@@ -214,6 +214,7 @@ unsafe fn accumulate_tail_chains(
     let mut acc3 = acc1;
 
     let mut stripe = 0;
+
     while stripe + 4 <= stripes {
         unsafe {
             accumulate_group(

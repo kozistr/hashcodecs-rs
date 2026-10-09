@@ -6,10 +6,12 @@ fn every_length_class_and_batch_are_defined() {
         0, 1, 3, 4, 8, 9, 16, 17, 32, 33, 64, 65, 96, 97, 128, 129, 160, 191, 224, 239, 240, 241,
         1023, 1024, 1025, 2049,
     ];
+
     for &length in LENGTHS {
         let input = (0..length)
             .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
             .collect::<Vec<_>>();
+
         for &seed in &[0, 1, u64::MAX] {
             let _ = xxh3_64(&input, seed);
             let _ = xxh3_128(&input, seed);

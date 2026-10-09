@@ -58,9 +58,11 @@ impl Capabilities {
     #[cfg(test)]
     pub(crate) fn from_features(features: &[CpuFeature]) -> Self {
         let mut bits = 0;
+
         for feature in features {
             bits |= feature.bit();
         }
+
         Self { features: bits }
     }
 
@@ -72,11 +74,13 @@ impl Capabilities {
     ))]
     fn from_feature_flags(flags: &[(CpuFeature, bool)]) -> Self {
         let mut features = 0;
+
         for &(feature, available) in flags {
             if available {
                 features |= feature.bit();
             }
         }
+
         Self { features }
     }
 }

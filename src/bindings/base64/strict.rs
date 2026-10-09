@@ -25,6 +25,7 @@ pub(super) fn decode_strict<'py>(
     if let Some(input) = input.snapshot_mutable()? {
         return decode_strict(py, &BytesLike::OwnedVec(input), alphabet);
     }
+
     let detach_safe = input.detach_safe();
     unsafe {
         input.with_bytes(|input| {
@@ -34,6 +35,7 @@ pub(super) fn decode_strict<'py>(
                     return Ok(Err(Base64Error::InvalidInput));
                 }
             };
+
             let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
             // bytes allocation is not GC-tracked and cannot invoke Python
             // finalizers. Keep one input borrow through layout and decoding.
@@ -48,6 +50,7 @@ pub(super) fn decode_strict<'py>(
                         false,
                     )
                 };
+
                 if detach { py.detach(decode) } else { decode() }
             })?;
             Ok(match result {
@@ -74,13 +77,16 @@ pub(super) unsafe fn decode_strict_into(
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             let layout = decode_layout(input)?;
+
             if provided < layout.output_len() {
                 return Err(Base64Error::OutputTooSmall {
                     required: layout.output_len(),
                     provided,
                 });
             }
+
             let output = slice::from_raw_parts_mut(output, layout.output_len());
+
             if error_writes.validated_prefix_only() {
                 decode_to_slice_with_layout_and_alphabet_validated_blocks(
                     input, output, layout, alphabet,
@@ -88,6 +94,7 @@ pub(super) unsafe fn decode_strict_into(
             } else {
                 decode_to_slice_with_layout_and_alphabet(input, output, layout, alphabet)?;
             }
+
             Ok(layout.output_len())
         })
     }
@@ -102,10 +109,12 @@ pub(super) fn decode_unpadded<'py>(
     if let Some(input) = input.snapshot_mutable()? {
         return decode_unpadded(py, &BytesLike::OwnedVec(input), alphabet);
     }
+
     let layout = match unsafe { input.with_bytes(decode_unpadded_layout) } {
         Ok(layout) => layout,
         Err(error) => return Ok(Err(error)),
     };
+
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len(), |output| {
@@ -119,6 +128,7 @@ pub(super) fn decode_unpadded<'py>(
                         alphabet,
                     )
                 };
+
                 if detach { py.detach(decode) } else { decode() }
             })
         })
@@ -142,14 +152,18 @@ pub(super) unsafe fn decode_unpadded_into(
             if input.contains(&b'=') {
                 return Err(Base64Error::InvalidInput);
             }
+
             let layout = decode_unpadded_layout(input)?;
+
             if provided < layout.output_len() {
                 return Err(Base64Error::OutputTooSmall {
                     required: layout.output_len(),
                     provided,
                 });
             }
+
             let output = slice::from_raw_parts_mut(output, layout.output_len());
+
             if error_writes.validated_prefix_only() {
                 decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks(
                     input, output, layout, alphabet,
@@ -157,6 +171,7 @@ pub(super) unsafe fn decode_unpadded_into(
             } else {
                 decode_to_slice_with_unpadded_layout_and_alphabet(input, output, layout, alphabet)?;
             }
+
             Ok(layout.output_len())
         })
     }
@@ -169,6 +184,7 @@ pub(super) fn translate_altchars(
     let Some(first) = memchr::memchr2(plus, slash, input) else {
         return Ok(None);
     };
+
     let mut translated = Vec::new();
     translated
         .try_reserve_exact(input.len())

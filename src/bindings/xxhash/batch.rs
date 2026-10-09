@@ -68,9 +68,11 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
 
         let mut inputs = [&[][..]; CAPACITY];
         let inputs = &mut inputs[..self.len()];
+
         for (index, input) in inputs.iter_mut().enumerate() {
             *input = self.get(index);
         }
+
         Some(operation(inputs))
     }
 
@@ -82,6 +84,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
 
     fn retain(&self) -> PyResult<Vec<Py<PyBytes>>> {
         let mut retained = batch_results(self.len(), BATCH_TOO_LARGE)?;
+
         for index in 0..self.len() {
             unsafe {
                 let item = ffi::PyList_GET_ITEM(self.items.as_ptr(), index as ffi::Py_ssize_t);
@@ -92,6 +95,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
                 );
             }
         }
+
         Ok(retained)
     }
 }
@@ -105,12 +109,14 @@ fn borrow_retained<'a>(py: Python<'a>, retained: &'a [Py<PyBytes>]) -> PyResult<
 
 fn parse_batch<'a, 'py>(items: &'a [Bound<'py, PyAny>]) -> PyResult<Vec<BytesLike<'a, 'py>>> {
     let mut inputs = batch_results(items.len(), BATCH_TOO_LARGE)?;
+
     for item in items {
         let input = bytes_like(item, "items element")?;
         #[cfg(Py_GIL_DISABLED)]
         let input = input.into_stable()?;
         inputs.push(input);
     }
+
     Ok(inputs)
 }
 
@@ -167,6 +173,7 @@ unsafe fn hash_into_scratch<'a, T: Copy>(
         let destinations =
             unsafe { std::slice::from_raw_parts_mut(hashes.as_mut_ptr().cast(), hashes.len()) };
         hash(inputs, seed, destinations);
+
         return Ok(Cow::Borrowed(hashes));
     }
 
@@ -199,13 +206,17 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
         if exact.len() <= scratch.len() && !should_detach(exact.len(), exact.total) {
             let mut inputs = [&[][..]; STACK_BATCH_RESULTS];
             let inputs = &mut inputs[..exact.len()];
+
             for (index, input) in inputs.iter_mut().enumerate() {
                 *input = exact.get(index);
             }
+
             return unsafe { hash_into_scratch(inputs, seed, scratch, hash) };
         }
+
         if !should_detach(exact.len(), exact.total) {
             let inputs = exact.borrow()?;
+
             return unsafe { hash_into_scratch(&inputs, seed, scratch, hash) };
         }
 
@@ -213,9 +224,11 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
         let inputs = borrow_retained(py, &retained)?;
         let hashes = py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) });
         drop(inputs);
+
         for item in retained {
             drop(item.into_bound(py));
         }
+
         return hashes;
     }
 
@@ -223,21 +236,25 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
     let items = list_items(items)?;
     #[cfg(Py_GIL_DISABLED)]
     let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
+
     #[cfg(Py_GIL_DISABLED)]
     if exact {
         let inputs = borrow_exact(&items)?;
         let total = inputs
             .iter()
             .fold(0_usize, |total, input| total.saturating_add(input.len()));
+
         return if should_detach(inputs.len(), total) {
             py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) })
         } else {
             unsafe { hash_into_scratch(&inputs, seed, scratch, hash) }
         };
     }
+
     let parsed = parse_batch(&items)?;
     let detach = batch_detach_safe(&parsed);
     let inputs = borrow_batch(&parsed)?;
+
     if detach {
         py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) })
     } else {
@@ -254,11 +271,13 @@ fn packed_output_len(
         .checked_mul(digest_size)
         .ok_or_else(|| PyMemoryError::new_err("XXH3 batch output is too large"))?;
     let provided = unsafe { bytearray_size(output.as_ptr()) };
+
     if provided < required {
         return Err(PyValueError::new_err(format!(
             "XXH3 batch output requires {required} bytes but the destination has {provided}"
         )));
     }
+
     Ok(required)
 }
 
@@ -301,8 +320,10 @@ unsafe trait PackedDigest: Copy + Send + Sync {
         // Borrow a bounded block while detached instead of allocating another
         // full-batch vector of slice pairs. The block size preserves SIMD groups.
         let mut inputs = [&[][..]; PACKED_STACK_INPUTS];
+
         for chunk in retained.chunks(PACKED_STACK_INPUTS) {
             let inputs = &mut inputs[..chunk.len()];
+
             for (input, item) in inputs.iter_mut().zip(chunk) {
                 // Exact bytes are immutable; each owned reference outlives the
                 // detached call even if another thread clears the source list.
@@ -310,8 +331,10 @@ unsafe trait PackedDigest: Copy + Send + Sync {
                     std::slice::from_raw_parts(bytes_data(item.as_ptr()), bytes_size(item.as_ptr()))
                 };
             }
+
             Self::for_each(inputs, seed, |hash| hashes.push(hash));
         }
+
         Ok(hashes)
     }
 
@@ -348,10 +371,12 @@ unsafe trait PackedDigest: Copy + Send + Sync {
                 debug_assert_eq!(std::mem::size_of::<Self>(), Self::SIZE);
                 std::ptr::copy_nonoverlapping(hashes.as_ptr().cast::<u8>(), output, written);
             }
+
             #[cfg(target_endian = "big")]
             for (index, hash) in hashes.iter().copied().enumerate() {
                 Self::write_at(output, index, hash);
             }
+
             Ok(written)
         })
     }
@@ -473,8 +498,10 @@ fn packed_batch_into<D: PackedDigest>(
                 })
                 .expect("stack exact-byte conditions were checked");
         }
+
         if !should_detach(exact.len(), exact.total) {
             let inputs = exact.borrow()?;
+
             return D::write_direct(output, &inputs, seed);
         }
 
@@ -483,11 +510,13 @@ fn packed_batch_into<D: PackedDigest>(
             packed_output_len(output, retained.len(), D::SIZE)
         })?;
         let hashes = py.detach(|| D::collect_retained(&retained, seed));
+
         // We are attached again: use Bound's direct decref instead of asking
         // Py's destructor to check interpreter attachment for every item.
         for item in retained {
             drop(item.into_bound(py));
         }
+
         return D::write_results(output, &hashes?);
     }
 
@@ -496,30 +525,38 @@ fn packed_batch_into<D: PackedDigest>(
     #[cfg(Py_GIL_DISABLED)]
     let (items, exact) = list_items_and_all(items, PyBytes::is_exact_type_of)?;
     with_bytearray(output, || packed_output_len(output, items.len(), D::SIZE))?;
+
     #[cfg(Py_GIL_DISABLED)]
     if exact {
         let inputs = borrow_exact(&items)?;
         let total = inputs
             .iter()
             .fold(0_usize, |total, input| total.saturating_add(input.len()));
+
         if !should_detach(inputs.len(), total) {
             return D::write_direct(output, &inputs, seed);
         }
+
         let hashes = py.detach(|| D::collect(&inputs, seed))?;
+
         return D::write_results(output, &hashes);
     }
+
     let parsed = parse_batch(&items)?;
     let detach = batch_detach_safe(&parsed);
     let direct = direct_output_safe(&parsed, output, detach);
     let inputs = borrow_batch(&parsed)?;
+
     if direct {
         return D::write_direct(output, &inputs, seed);
     }
+
     let hashes = if detach {
         py.detach(|| D::collect(&inputs, seed))?
     } else {
         D::collect(&inputs, seed)?
     };
+
     drop(inputs);
     drop(parsed);
     D::write_results(output, &hashes)

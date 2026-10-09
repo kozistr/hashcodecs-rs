@@ -24,6 +24,7 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_64(
             let Some(seed) = seed_u64(seed.as_ptr()) else {
                 return std::ptr::null_mut();
             };
+
             let result = with_function_bytes(py, input.as_ptr(), XXH3_DETACH_THRESHOLD, |bytes| {
                 hash_64(bytes, seed)
             });
@@ -46,9 +47,11 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_128(
             let Some(seed) = seed_u64(seed.as_ptr()) else {
                 return std::ptr::null_mut();
             };
+
             let result = with_function_bytes(py, input.as_ptr(), XXH3_DETACH_THRESHOLD, |bytes| {
                 hash_128(bytes, seed)
             });
+
             match result {
                 Ok([low, high]) => {
                     PyInt::new(py, (u128::from(high) << 64) | u128::from(low)).into_ptr()

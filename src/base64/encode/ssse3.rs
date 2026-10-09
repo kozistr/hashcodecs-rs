@@ -89,6 +89,7 @@ unsafe fn encode_wrapped_with_offsets(
             let encoded = unsafe { encode_12(input.as_ptr().add(source + offset), offsets) };
             unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
         }
+
         source += 48;
     }
 

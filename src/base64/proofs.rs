@@ -28,10 +28,12 @@ fn scalar_decoders_stay_within_exact_destinations() {
     let mut quad_output = [0xa5_u8; 3];
     let result =
         unsafe { decode_quad_ptr(&quad, quad_output.as_mut_ptr(), padding, &STANDARD_DECODE) };
+
     if result.is_ok() {
         if padding >= 1 {
             assert_eq!(quad_output[2], 0xa5);
         }
+
         if padding == 2 {
             assert_eq!(quad_output[1], 0xa5);
         }
@@ -53,6 +55,7 @@ fn scalar_decoders_stay_within_exact_destinations() {
             &STANDARD_DECODE,
         )
     };
+
     if result.is_ok() && tail_length == 2 {
         assert_eq!(tail_output[1], 0xa5);
     }

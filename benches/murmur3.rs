@@ -8,12 +8,6 @@ mod support;
 
 const SIZES: [usize; 4] = [1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
 
-fn data(size: usize) -> Vec<u8> {
-    (0..size)
-        .map(|index| (index as u8).wrapping_mul(31).wrapping_add(17))
-        .collect()
-}
-
 fn x86_128_as_u128(words: [u32; 4]) -> u128 {
     (words[0] as u128)
         | ((words[1] as u128) << 32)
@@ -42,8 +36,9 @@ fn murmur3(c: &mut Criterion) {
 
 fn x86_32(c: &mut Criterion) {
     let mut group = c.benchmark_group("x86_32");
+
     for size in SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         let expected = hashcodecs::murmur3::murmur3_x86_32(&input, 42);
         assert_eq!(
             murmur3::murmur3_32(&mut Cursor::new(&input), 42).unwrap(),
@@ -65,13 +60,15 @@ fn x86_32(c: &mut Criterion) {
             mm3h::murmurhash3_32_with_seed(input, 42)
         });
     }
+
     group.finish();
 }
 
 fn x86_128(c: &mut Criterion) {
     let mut group = c.benchmark_group("x86_128");
+
     for size in SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         let expected = hashcodecs::murmur3::murmur3_x86_128(&input, 42);
         assert_eq!(
             murmur3::murmur3_x86_128(&mut Cursor::new(&input), 42).unwrap(),
@@ -89,13 +86,15 @@ fn x86_128(c: &mut Criterion) {
             murmurs::murmur3_x86_128(input, 42)
         });
     }
+
     group.finish();
 }
 
 fn x64_128(c: &mut Criterion) {
     let mut group = c.benchmark_group("x64_128");
+
     for size in SIZES {
-        let input = data(size);
+        let input = support::data(size, 17);
         let expected = hashcodecs::murmur3::murmur3_x64_128(&input, 42);
         let expected_u128 = x64_128_as_u128(expected);
         assert_eq!(
@@ -122,6 +121,7 @@ fn x64_128(c: &mut Criterion) {
             mm3h::murmurhash3_128_with_seed(input, 42)
         });
     }
+
     group.finish();
 }
 

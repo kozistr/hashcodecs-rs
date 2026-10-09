@@ -43,13 +43,17 @@ pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
         let mut total = 0_usize;
+
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index);
+
             if ffi::PyBytes_CheckExact(item) == 0 {
                 return None;
             }
+
             total = total.saturating_add(ffi::Py_SIZE(item) as usize);
         }
+
         Some(total)
     }
 }
@@ -121,6 +125,7 @@ pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
 pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
     #[cfg(Py_GIL_DISABLED)]
     return unsafe { ffi::PyByteArray_Size(value) as usize };
+
     #[cfg(not(Py_GIL_DISABLED))]
     unsafe {
         ffi::PyByteArray_GET_SIZE(value) as usize
@@ -130,11 +135,6 @@ pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
 #[inline]
 pub(super) unsafe fn bytes_data(value: *mut ffi::PyObject) -> *const u8 {
     unsafe { ffi::PyBytes_AS_STRING(value).cast() }
-}
-
-#[inline]
-pub(super) unsafe fn bytes_data_mut(value: *mut ffi::PyObject) -> *mut u8 {
-    unsafe { bytes_data(value).cast_mut() }
 }
 
 #[inline]

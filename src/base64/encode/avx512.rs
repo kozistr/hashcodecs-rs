@@ -141,6 +141,7 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
 
     let remaining = input.len() - source;
     let complete_input = remaining / 3 * 3;
+
     if complete_input != 0 {
         let encoded = unsafe {
             encode_tail_value(
@@ -155,6 +156,7 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
         let output_mask = (1_u64 << complete_output) - 1;
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), output_mask, encoded) };
     }
+
     source + complete_input
 }
 
@@ -219,6 +221,7 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
     } else {
         STANDARD_ALPHABET
     };
+
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
     unsafe { encode_wrapped_with_table(input, output, table) }
 }
@@ -257,6 +260,7 @@ unsafe fn encode_wrapped_with_table(
             };
             unsafe { write_wrapped_64(output, encoded) };
         }
+
         source += 192;
     }
 
@@ -269,6 +273,7 @@ unsafe fn encode_wrapped_with_table(
 
     let remaining = input.len() - source;
     let complete_input = remaining / 3 * 3;
+
     if complete_input != 0 {
         let encoded = unsafe {
             encode_tail_value(
@@ -285,6 +290,7 @@ unsafe fn encode_wrapped_with_table(
         unsafe { _mm512_mask_storeu_epi8(bytes.as_mut_ptr().cast(), output_mask, encoded) };
         unsafe { output.write_bytes(&bytes[..complete_output]) };
     }
+
     source + complete_input
 }
 

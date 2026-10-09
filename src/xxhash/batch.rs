@@ -61,7 +61,7 @@ where
         short,
         finalize,
         engine,
-        engine.secret(&derived_secret),
+        LongEngine::secret(derived_secret.as_ref()),
         &mut output,
     );
 }
@@ -104,6 +104,7 @@ pub(super) fn hash_each_input_with_secret<T, S, F, O>(
             secret,
             output,
         );
+
         return;
     }
 
@@ -113,6 +114,7 @@ pub(super) fn hash_each_input_with_secret<T, S, F, O>(
         } else {
             output(short(inputs[index], seed));
         }
+
         index += 1;
     }
 }
@@ -133,10 +135,12 @@ fn hash_input_runs<T, S, F, O>(
     O: FnMut(T),
 {
     let mut index = 0;
+
     while index < inputs.len() {
         let Some(run) = LongRun::new(&inputs[index..]) else {
             output(short(inputs[index], seed));
             index += 1;
+
             continue;
         };
 
@@ -293,7 +297,7 @@ mod tests {
             xxh3_64,
             finalize_long_64,
             engine,
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             &mut |hash| hashes.push(hash),
         );
 
@@ -310,7 +314,7 @@ mod tests {
             xxh3_128,
             finalize_long_128,
             engine,
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             &mut |hash| hashes.push(hash),
         );
 
@@ -377,12 +381,13 @@ mod tests {
         ]
         .map(|length| vec![length as u8; length]);
         let inputs = owned.each_ref().map(Vec::as_slice);
+
         for engine in [
             LongEngine::new_with_capabilities(Capabilities::from_features(&[])),
             LongEngine::new(),
         ] {
             let derived = engine.derive_secret(17);
-            let secret = engine.secret(&derived);
+            let secret = LongEngine::secret(derived.as_ref());
             let mut hashes_64 = Vec::new();
             hash_input_runs(
                 &inputs,
@@ -435,9 +440,9 @@ mod tests {
         let mut actual = Vec::new();
 
         emit_long_group2(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             inputs,
-            engine.accumulate_batch2(inputs, engine.secret(&derived)),
+            engine.accumulate_batch2(inputs, LongEngine::secret(derived.as_ref())),
             finalize_long_64,
             &mut |hash| {
                 actual.push(hash);
@@ -455,9 +460,9 @@ mod tests {
         let derived = engine.derive_secret(17);
         let mut actual = Vec::new();
         emit_long_group2(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             inputs,
-            engine.accumulate_batch2(inputs, engine.secret(&derived)),
+            engine.accumulate_batch2(inputs, LongEngine::secret(derived.as_ref())),
             finalize_long_128,
             &mut |hash| {
                 actual.push(hash);
@@ -478,9 +483,9 @@ mod tests {
         let group4 = run.batch4(0);
         let mut actual = Vec::new();
         emit_long_group3(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             group3,
-            engine.accumulate_batch3(group3, engine.secret(&derived)),
+            engine.accumulate_batch3(group3, LongEngine::secret(derived.as_ref())),
             finalize_long_64,
             &mut |hash| actual.push(hash),
         );
@@ -494,9 +499,9 @@ mod tests {
 
         let mut actual = Vec::new();
         emit_long_group4(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             group4,
-            engine.accumulate_batch4(group4, engine.secret(&derived)),
+            engine.accumulate_batch4(group4, LongEngine::secret(derived.as_ref())),
             finalize_long_64,
             &mut |hash| actual.push(hash),
         );
@@ -510,9 +515,9 @@ mod tests {
 
         let mut actual = Vec::new();
         emit_long_group3(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             group3,
-            engine.accumulate_batch3(group3, engine.secret(&derived)),
+            engine.accumulate_batch3(group3, LongEngine::secret(derived.as_ref())),
             finalize_long_128,
             &mut |hash| actual.push(hash),
         );
@@ -526,9 +531,9 @@ mod tests {
 
         let mut actual = Vec::new();
         emit_long_group4(
-            engine.secret(&derived),
+            LongEngine::secret(derived.as_ref()),
             group4,
-            engine.accumulate_batch4(group4, engine.secret(&derived)),
+            engine.accumulate_batch4(group4, LongEngine::secret(derived.as_ref())),
             finalize_long_128,
             &mut |hash| actual.push(hash),
         );

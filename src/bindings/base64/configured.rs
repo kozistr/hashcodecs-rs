@@ -35,24 +35,30 @@ impl Translation {
         let mut sources = [0_u8; 2];
         let mut targets = [0_u8; 2];
         let mut count = 0;
+
         for byte in altchars {
             if sources[..count].contains(&byte) {
                 continue;
             }
+
             let value = table[usize::from(byte)];
+
             if value < 64 && STANDARD_ALPHABET[usize::from(value)] != byte {
                 sources[count] = byte;
                 targets[count] = STANDARD_ALPHABET[usize::from(value)];
                 count += 1;
             }
         }
+
         if count == 0 {
             return None;
         }
+
         if count == 1 {
             sources[1] = sources[0];
             targets[1] = targets[0];
         }
+
         Some(Self {
             source0: sources[0],
             target0: targets[0],
@@ -107,21 +113,26 @@ impl ConfiguredDecoder {
         } else {
             lenient_decode_table(None)
         };
+
         if let Some(alphabet) = policy.alphabet {
             for (value, byte) in alphabet.into_iter().enumerate() {
                 table[usize::from(byte)] = value as u8;
             }
         }
+
         for byte in ignored.iter() {
             if table[usize::from(byte)] >= 64 {
                 table[usize::from(byte)] = IGNORED_CONFIGURED_VALUE;
             }
         }
+
         if policy.alphabet.is_some() {
             table[usize::from(b'=')] = INVALID_CONFIGURED_VALUE;
         }
+
         let custom_alphabet =
             (altchars.is_some() || policy.alphabet.is_some()) && policy.ignorechars_specified;
+
         if custom_alphabet && policy.alphabet.is_none() {
             for byte in b"+/" {
                 table[usize::from(*byte)] = if ignored.contains(*byte) {
@@ -138,6 +149,7 @@ impl ConfiguredDecoder {
             if !custom_alphabet || plus != b'=' {
                 table[usize::from(plus)] = 62;
             }
+
             if !custom_alphabet || slash != b'=' {
                 table[usize::from(slash)] = 63;
             }
@@ -162,6 +174,7 @@ impl ConfiguredDecoder {
         } else {
             None
         };
+
         let preserves_alphanumeric = if policy.alphabet.is_none() {
             altchars.is_none_or(|bytes| bytes.iter().all(|byte| !byte.is_ascii_alphanumeric()))
         } else {
@@ -202,16 +215,20 @@ impl StrictSpecials {
     pub(super) fn new(table: &[u8; 256]) -> Self {
         let mut bytes = [0_u8; 3];
         let mut count = 0;
+
         for byte in u8::MIN..=u8::MAX {
             let value = table[usize::from(byte)];
+
             if is_ignored_value(value) {
                 if count == bytes.len() {
                     return Self::Many;
                 }
+
                 bytes[count] = byte;
                 count += 1;
             }
         }
+
         match (count, bytes) {
             (0, _) => Self::None,
             (1, [first, ..]) => Self::One(first),
@@ -234,15 +251,18 @@ impl StrictSpecials {
     pub(super) fn forbidden(table: &[u8; 256]) -> Self {
         let mut bytes = [0_u8; 3];
         let mut count = 0;
+
         for &byte in STANDARD_ALPHABET {
             if table[usize::from(byte)] == INVALID_CONFIGURED_VALUE {
                 if count == bytes.len() {
                     return Self::Many;
                 }
+
                 bytes[count] = byte;
                 count += 1;
             }
         }
+
         match (count, bytes) {
             (0, _) => Self::None,
             (1, [first, ..]) => Self::One(first),
@@ -264,11 +284,14 @@ fn translated_strict_decoded_len(
                 .then(|| input.len() / 4 * 3)
                 .ok_or(Base64Error::InvalidInput);
         }
+
         return decode_layout(input).map(|layout| layout.output_len());
     }
+
     if !altchars.contains(&b'=') && input.contains(&b'=') {
         return Err(Base64Error::InvalidInput);
     }
+
     decode_unpadded_layout(input).map(|layout| layout.output_len())
 }
 
@@ -288,25 +311,31 @@ pub(super) fn decode_configured_strict_into(
             error_writes,
         );
     }
+
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             if error_writes.validated_prefix_only() {
                 let Some(required) = decoder.decoded_len(input, false) else {
                     return Err(Base64Error::InvalidInput);
                 };
+
                 if provided < required {
                     return Err(Base64Error::OutputTooSmall { required, provided });
                 }
+
                 let written = decoder.decode_validated_to_ptr(input, output, false);
                 debug_assert_eq!(written, required);
+
                 return Ok(written);
             }
 
             let required =
                 translated_strict_decoded_len(input, altchars, decoder.padding.is_padded())?;
+
             if provided < required {
                 return Err(Base64Error::OutputTooSmall { required, provided });
             }
+
             decoder
                 .decode_checked_to_ptr(input, output, false)
                 .ok_or(Base64Error::InvalidInput)
@@ -324,6 +353,7 @@ pub(super) fn decode_configured<'py>(
     if let Some(input) = input.snapshot_mutable()? {
         return decode_configured(py, &BytesLike::OwnedVec(input), decoder, semantics);
     }
+
     let continue_after_padding = semantics.continues_after_padding;
     let detach_safe = input.detach_safe();
 
@@ -332,6 +362,7 @@ pub(super) fn decode_configured<'py>(
     unsafe {
         input.with_bytes(|input| {
             let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
+
             let start = if input.len() < BASE64_DETACH_THRESHOLD {
                 0
             } else {
@@ -374,9 +405,11 @@ unsafe fn decode_configured_slice_into(
     let Some(required) = decoder.decoded_len(input, continue_after_padding) else {
         return Err(Base64Error::InvalidInput);
     };
+
     if provided < required {
         return Err(Base64Error::OutputTooSmall { required, provided });
     }
+
     let written = unsafe { decoder.decode_validated_to_ptr(input, output, continue_after_padding) };
     debug_assert_eq!(written, required);
     Ok(written)
@@ -401,6 +434,7 @@ pub(super) fn decode_configured_into(
     }
 
     let continue_after_padding = semantics.continues_after_padding;
+
     if let Some(input) = input.snapshot_for_output(output)? {
         return Ok(with_bytearray(output, || unsafe {
             decode_configured_slice_into(
@@ -448,6 +482,7 @@ impl ScanSink for CountSink {
 
     fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8], validate: bool) -> Option<()> {
         let _ = CHECKED;
+
         if validate {
             if self.translation.is_none() {
                 validate_alphabet(input, DecodeAlphabet::Standard).ok()?;
@@ -457,6 +492,7 @@ impl ScanSink for CountSink {
                     .push(input)?;
             }
         }
+
         Some(())
     }
 
@@ -467,9 +503,11 @@ impl ScanSink for CountSink {
 
     fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
         let _ = CHECKED;
+
         if let Some(validator) = self.validator {
             validator.finish()?;
         }
+
         Some(expected)
     }
 }
@@ -499,9 +537,11 @@ impl ScanSink for WriteSink<'_> {
 
     fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
         let written = self.writer.finish::<CHECKED>()?;
+
         if CHECKED {
             debug_assert_eq!(written, expected);
         }
+
         Some(written)
     }
 }
@@ -578,6 +618,7 @@ impl ConfiguredDecoder {
         {
             return self.scan_strict_specials::<S, CHECKED>(input, sink);
         }
+
         match self.validation {
             Validation::Strict => self.scan_strict::<S, CHECKED>(input, sink),
             Validation::Lenient => {
@@ -600,13 +641,17 @@ impl ConfiguredDecoder {
         while source < input.len() {
             if self.preserves_alphanumeric && !saw_padding {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
+
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
+
                     if CHECKED {
                         symbols += run;
                         last_value = self.table[usize::from(input[source + run - 1])];
                     }
+
                     source += run;
+
                     continue;
                 }
             }
@@ -615,12 +660,14 @@ impl ConfiguredDecoder {
             source += 1;
 
             let value = self.table[usize::from(byte)];
+
             if value < 64 {
                 if CHECKED && saw_padding {
                     return None;
                 }
 
                 sink.push_value::<CHECKED>(value)?;
+
                 if CHECKED {
                     symbols += 1;
                     last_value = value;
@@ -631,6 +678,7 @@ impl ConfiguredDecoder {
                 }
 
                 saw_padding = true;
+
                 if CHECKED {
                     padding += 1;
                 }
@@ -658,14 +706,17 @@ impl ConfiguredDecoder {
         while source < input.len() {
             if self.preserves_alphanumeric {
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
+
                 if run != 0 {
                     sink.push_symbols::<CHECKED>(&input[source..source + run], false)?;
+
                     if CHECKED {
                         symbols += run;
                     }
 
                     padding = 0;
                     quad_pos = (quad_pos + run) & 3;
+
                     if CHECKED && self.canonical {
                         let value = self.table[usize::from(input[source + run - 1])];
                         leftchar = partial_value(quad_pos, value);
@@ -684,10 +735,12 @@ impl ConfiguredDecoder {
 
             if self.padding.is_padded() && byte == b'=' && !equals_is_data {
                 padding += 1;
+
                 if !continue_after_padding && quad_pos >= 2 && quad_pos + padding >= 4 {
                     if CHECKED && self.canonical && leftchar != 0 {
                         return None;
                     }
+
                     return sink.finish::<CHECKED>(decoded_symbol_len(symbols));
                 }
 
@@ -699,6 +752,7 @@ impl ConfiguredDecoder {
             }
 
             sink.push_value::<CHECKED>(value)?;
+
             if CHECKED {
                 symbols += 1;
             }
@@ -730,6 +784,7 @@ impl ConfiguredDecoder {
         sink.set_translation(self.translation);
         let equals_is_padding =
             self.padding.is_padded() && self.table[usize::from(b'=')] == INVALID_CONFIGURED_VALUE;
+
         let data_end = if equals_is_padding {
             memchr::memchr(b'=', input).unwrap_or(input.len())
         } else {
@@ -757,6 +812,7 @@ impl ConfiguredDecoder {
             }
 
             source = run_end;
+
             if source != data_end {
                 let byte = input[source];
                 debug_assert!(
@@ -769,12 +825,14 @@ impl ConfiguredDecoder {
         }
 
         let mut padding = 0;
+
         if CHECKED {
             for &byte in &input[data_end..] {
                 if byte == b'=' {
                     padding += 1;
                 } else {
                     let value = self.table[usize::from(byte)];
+
                     if value < 64 || !is_ignored_value(value) {
                         return None;
                     }
@@ -790,6 +848,7 @@ impl ConfiguredDecoder {
     fn scan_strict_ignored_padding<S: ScanSink>(&self, input: &[u8], sink: S) -> Option<usize> {
         let mut symbols = 0;
         let mut padding = 0;
+
         for &byte in input {
             if self.table[usize::from(byte)] < 64 {
                 symbols += 1;
@@ -805,6 +864,7 @@ impl ConfiguredDecoder {
             3 => 1,
             _ => return None,
         };
+
         if padding < expected_padding {
             return None;
         }
@@ -823,6 +883,7 @@ impl ConfiguredDecoder {
     ) -> Option<usize> {
         if CHECKED {
             let remainder = symbols & 3;
+
             let expected_padding = match remainder {
                 0 => 0,
                 2 => 2,

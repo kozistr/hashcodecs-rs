@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import math
-import os
-import sys
 import threading
 from collections.abc import Callable
 from statistics import median
 from time import perf_counter
+
+from cpu import pin_to_one_cpu as pin_to_one_cpu
 
 SIZES = (1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024)
 DEFAULT_SAMPLES = 15
 DEFAULT_MINIMUM_SAMPLE_SECONDS = 0.2
 SAMPLES = DEFAULT_SAMPLES
 MINIMUM_SAMPLE_SECONDS = DEFAULT_MINIMUM_SAMPLE_SECONDS
+_MISSING = object()
 
 
 def positive_int(value: str) -> int:
@@ -65,45 +65,6 @@ def configure_timing(arguments: argparse.Namespace) -> None:
     MINIMUM_SAMPLE_SECONDS = arguments.minimum_sample_seconds
 
 
-def pin_to_one_cpu(cpu: int | None = None) -> None:
-    if sys.platform == 'win32':
-        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        get_current_process = kernel32.GetCurrentProcess
-        get_current_process.restype = ctypes.c_void_p
-        get_process_affinity = kernel32.GetProcessAffinityMask
-        get_process_affinity.argtypes = (
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.c_size_t),
-        )
-        get_process_affinity.restype = ctypes.c_int
-        set_process_affinity = kernel32.SetProcessAffinityMask
-        set_process_affinity.argtypes = (ctypes.c_void_p, ctypes.c_size_t)
-        set_process_affinity.restype = ctypes.c_int
-        process = get_current_process()
-        process_mask = ctypes.c_size_t()
-        system_mask = ctypes.c_size_t()
-        if get_process_affinity(process, ctypes.byref(process_mask), ctypes.byref(system_mask)) == 0:
-            raise ctypes.WinError(ctypes.get_last_error())
-        selected = process_mask.value & -process_mask.value if cpu is None else 1 << cpu
-        if selected & process_mask.value != selected:
-            raise ValueError(f'CPU {cpu} is outside the process affinity mask')
-        if set_process_affinity(process, selected) == 0:
-            raise ctypes.WinError(ctypes.get_last_error())
-        return
-
-    get_affinity = getattr(os, 'sched_getaffinity', None)
-    set_affinity = getattr(os, 'sched_setaffinity', None)
-    if get_affinity is not None and set_affinity is not None:
-        available = get_affinity(0)
-        selected = min(available) if cpu is None else cpu
-        if selected not in available:
-            raise ValueError(f'CPU {selected} is outside the process affinity mask')
-        set_affinity(0, {selected})
-    elif cpu is not None:
-        raise RuntimeError('explicit CPU affinity is unavailable on this platform')
-
-
 def data(size: int) -> bytes:
     period = bytes((index * 31 + 17) & 0xFF for index in range(256))
     return period * (size // len(period)) + period[: size % len(period)]
@@ -125,6 +86,38 @@ def calibrate(function: Callable[[], object], minimum_seconds: float) -> int:
 def throughput(function: Callable[[], object], input_size: int) -> float:
     nanoseconds = latency(function)
     return input_size * 1_000_000_000 / nanoseconds
+
+
+def measure(
+    operation: Callable[[], object],
+    input_size: int,
+    references: tuple[tuple[str, Callable[[], object]], ...] = (),
+    *,
+    hashcodecs_only: bool = False,
+    expected: object = _MISSING,
+) -> tuple[float, list[tuple[str, float]]]:
+    result = operation()
+    if expected is not _MISSING:
+        assert result == expected
+    for _, reference in references:
+        assert result == reference()
+    rate = throughput(operation, input_size)
+    rates = [] if hashcodecs_only else [(label, throughput(reference, input_size)) for label, reference in references]
+    return rate, rates
+
+
+def format_rates(
+    rate: float, references: list[tuple[str, float]], *, label: str = 'hashcodecs', item_size: int | None = None
+) -> str:
+    measurements = []
+    for index, (name, value) in enumerate([(label, rate), *references]):
+        text = f'{name}={value / 1024**3:6.2f} GiB/s'
+        if item_size is not None:
+            text += f' {value / item_size:10.0f} items/s'
+        if index:
+            text += f' ({rate / value:4.2f}x)'
+        measurements.append(text)
+    return '  '.join(measurements)
 
 
 def latency(function: Callable[[], object]) -> float:

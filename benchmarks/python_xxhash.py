@@ -3,10 +3,24 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import gc
+import sys
 from collections.abc import Callable
+from pathlib import Path
 
-from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, positive_int, throughput
+from _support import (
+    SIZES,
+    add_timing_arguments,
+    configure_timing,
+    data,
+    format_rates,
+    latency,
+    measure,
+    pin_to_one_cpu,
+    positive_int,
+    throughput,
+)
 
 import hashcodecs.xxhash as hashcodecs_xxhash
 import xxhash
@@ -19,24 +33,42 @@ def report(
     upstream: Callable[[], object],
     hashcodecs_only: bool,
 ) -> None:
-    assert ours() == upstream()
     size = f'{input_size // 1024} KiB' if input_size % 1024 == 0 else f'{input_size} B'
-    ours_rate = throughput(ours, input_size)
-    if hashcodecs_only:
-        print(f'{name:20} {size:>10}  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
-        return
-    upstream_rate = throughput(upstream, input_size)
-    print(
-        f'{name:20} {size:>10}  '
-        f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  '
-        f'xxhash={upstream_rate / 1024**3:6.2f} GiB/s  '
-        f'({ours_rate / upstream_rate:4.2f}x)'
-    )
+    ours_rate, rates = measure(ours, input_size, (('xxhash', upstream),), hashcodecs_only=hashcodecs_only)
+    print(f'{name:20} {size:>10}  {format_rates(ours_rate, rates)}')
 
 
 def report_hashcodecs(name: str, input_size: int, operation: Callable[[], object]) -> None:
     rate = throughput(operation, input_size)
     print(f'{name:20} {input_size // 1024:>6} KiB  hashcodecs={rate / 1024**3:6.2f} GiB/s')
+
+
+def benchmark_thresholds(item_sizes: list[int], thresholds_kib: list[int], csv_path: Path | None) -> None:
+    rows = []
+    for size in item_sizes:
+        counts = sorted(
+            {max(1, threshold * 1024 // size + delta) for threshold in thresholds_kib for delta in (-1, 0, 1)}
+        )
+        for count in counts:
+            # Independent allocations with distinct contents avoid the repeated-object cache shortcut.
+            items = [index.to_bytes(8, 'little')[:size] + data(max(0, size - 8)) for index in range(count)]
+            for bits in (64, 128):
+                one_shot = getattr(hashcodecs_xxhash, f'xxh3_{bits}')
+                batch_into = getattr(hashcodecs_xxhash, f'xxh3_{bits}_batch_into')
+                output = bytearray(count * bits // 8)
+                assert batch_into(items, output, 42) == len(output)
+                assert output == b''.join(one_shot(item, 42).to_bytes(bits // 8, 'little') for item in items)
+                nanoseconds = latency(
+                    lambda batch_into=batch_into, items=items, output=output: batch_into(items, output, 42)
+                )
+                rows.append((bits, size, count, size * count, f'{nanoseconds / 1000:.3f}'))
+                print(f'XXH3-{bits} {size:6} bytes x {count:5}: {nanoseconds / 1000:9.3f} us', flush=True)
+    if csv_path:
+        with csv_path.open('w', newline='') as destination:
+            writer = csv.writer(destination)
+            writer.writerow(('bits', 'item_bytes', 'items', 'total_bytes', 'latency_us'))
+            writer.writerows(rows)
+    print(sys.version)
 
 
 def main() -> None:
@@ -69,13 +101,26 @@ def main() -> None:
         metavar='COUNT',
         help='batch item counts to time (default: 32)',
     )
+    mode.add_argument('--thresholds', action='store_true', help='measure packed XXH3 detachment boundaries')
+    parser.add_argument('--item-sizes', nargs='+', type=positive_int)
+    parser.add_argument('--thresholds-kib', nargs='+', type=positive_int)
+    parser.add_argument('--output', type=Path, help='threshold CSV output')
     add_timing_arguments(parser)
     arguments = parser.parse_args()
+    if not arguments.thresholds and (arguments.item_sizes or arguments.thresholds_kib or arguments.output):
+        parser.error('--item-sizes, --thresholds-kib, and --output require --thresholds')
     configure_timing(arguments)
 
     pin_to_one_cpu(arguments.cpu)
     gc.disable()
     try:
+        if arguments.thresholds:
+            benchmark_thresholds(
+                arguments.item_sizes or [64, 1024, 65536],
+                arguments.thresholds_kib or [256, 512, 1024],
+                arguments.output,
+            )
+            return
         for size in () if arguments.batches_only else arguments.sizes:
             payload = data(size)
             report(

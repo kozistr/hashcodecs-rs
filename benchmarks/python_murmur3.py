@@ -8,7 +8,16 @@ from collections.abc import Callable
 from typing import Protocol
 
 import mmh3
-from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, positive_int, throughput
+from _support import (
+    SIZES,
+    add_timing_arguments,
+    configure_timing,
+    data,
+    format_rates,
+    measure,
+    pin_to_one_cpu,
+    positive_int,
+)
 
 import hashcodecs.murmur3 as hashcodecs_murmur3
 
@@ -24,26 +33,11 @@ def benchmark(
     input_size: int,
     ours: Callable[[], object],
     reference: Callable[[], object],
+    *,
+    hashcodecs_only: bool = False,
 ) -> None:
-    assert ours() == reference()
-    ours_rate = throughput(ours, input_size)
-    reference_rate = throughput(reference, input_size)
-    print(
-        f'{name:12} {input_size // 1024:>6} KiB  '
-        f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s  '
-        f'mmh3={reference_rate / 1024**3:6.2f} GiB/s ({ours_rate / reference_rate:4.2f}x)'
-    )
-
-
-def benchmark_ours(
-    name: str,
-    input_size: int,
-    ours: Callable[[], object],
-    reference: Callable[[], object],
-) -> None:
-    assert ours() == reference()
-    ours_rate = throughput(ours, input_size)
-    print(f'{name:12} {input_size // 1024:>6} KiB  hashcodecs={ours_rate / 1024**3:6.2f} GiB/s')
+    ours_rate, rates = measure(ours, input_size, (('mmh3', reference),), hashcodecs_only=hashcodecs_only)
+    print(f'{name:12} {input_size // 1024:>6} KiB  {format_rates(ours_rate, rates)}')
 
 
 def incremental(constructor: Callable[[], _IncrementalHasher], payload: bytes | bytearray) -> bytes:
@@ -118,10 +112,7 @@ def main() -> None:
                     ),
                 )
             for name, ours, reference in cases:
-                if args.hashcodecs_only:
-                    benchmark_ours(name, size, ours, reference)
-                else:
-                    benchmark(name, size, ours, reference)
+                benchmark(name, size, ours, reference, hashcodecs_only=args.hashcodecs_only)
     finally:
         gc.enable()
 

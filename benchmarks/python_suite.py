@@ -11,7 +11,8 @@ from pathlib import Path
 from queue import Queue
 from time import perf_counter
 
-from _support import add_timing_arguments, configure_timing, nonnegative_int
+from _support import add_timing_arguments, configure_timing, nonnegative_int, positive_int
+from cpu import select_cpus
 
 JOBS = {
     'base64': [
@@ -49,19 +50,42 @@ JOBS = {
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--groups', choices=JOBS, nargs='+', default=list(JOBS))
-    parser.add_argument('--cpus', type=nonnegative_int, nargs='+', help='parallel exploration on these logical CPUs')
+    parallel = parser.add_mutually_exclusive_group()
+    parallel.add_argument('--cpus', type=nonnegative_int, nargs='+', help='parallel exploration on these logical CPUs')
+    parallel.add_argument(
+        '--workers',
+        type=positive_int,
+        nargs='?',
+        const=4,
+        help='auto-select up to N idle physical cores for quick runs (default with flag: 4)',
+    )
+    parser.add_argument('--hashcodecs-only', action='store_true', help='skip competitor timing in every group')
     parser.add_argument('--output', type=Path, help='log directory (default: target/python-benchmarks/<mode>)')
     parser.add_argument('--list', action='store_true', help='list workloads without running them')
     add_timing_arguments(parser)
     arguments = parser.parse_args()
-    if arguments.cpus is not None and not arguments.quick:
-        parser.error('--cpus requires --quick; publish measurements from serial runs')
-    if arguments.cpus is not None and arguments.cpu is not None:
-        parser.error('choose --cpu or --cpus')
+    if (arguments.cpus is not None or arguments.workers is not None) and not arguments.quick:
+        parser.error('--cpus and --workers require --quick; publish measurements from serial runs')
+    if (arguments.cpus is not None or arguments.workers is not None) and arguments.cpu is not None:
+        parser.error('choose --cpu, --cpus, or --workers')
     if arguments.cpus is not None and len(set(arguments.cpus)) != len(arguments.cpus):
         parser.error('--cpus must contain distinct CPUs')
     configure_timing(arguments)
     jobs = [job for group in dict.fromkeys(arguments.groups) for job in JOBS[group]]
+    if arguments.hashcodecs_only:
+        jobs = [
+            (name, script, flags if '--hashcodecs-only' in flags else [*flags, '--hashcodecs-only'])
+            for name, script, flags in jobs
+        ]
+    selected = arguments.cpus or [arguments.cpu]
+    if arguments.workers is not None:
+        try:
+            selected = select_cpus(arguments.workers)
+        except (OSError, RuntimeError) as error:
+            parser.error(str(error))
+        if not selected:
+            parser.error('no recently idle physical cores of the preferred type; retry later or choose --cpu')
+        print(f'Auto-selected CPUs: {selected}', flush=True)
     if arguments.list:
         for name, script, flags in jobs:
             print(f'{name}: {script} {" ".join(flags)}'.rstrip())
@@ -71,7 +95,7 @@ def main() -> None:
     output = arguments.output or Path('target/python-benchmarks') / mode
     output.mkdir(parents=True, exist_ok=True)
     cpus: Queue[int | None] = Queue()
-    for cpu in arguments.cpus or [arguments.cpu]:
+    for cpu in selected:
         cpus.put(cpu)
     workers = cpus.qsize()
     print(f'{len(jobs)} runs, {workers} worker(s), {mode} timing; logs: {output}', flush=True)
@@ -108,7 +132,18 @@ def main() -> None:
         results = list(executor.map(run, jobs))
     elapsed = perf_counter() - started
     (output / 'manifest.json').write_text(
-        json.dumps({'mode': mode, 'workers': workers, 'seconds': elapsed, 'runs': results}, indent=2), encoding='utf-8'
+        json.dumps(
+            {
+                'mode': mode,
+                'workers': workers,
+                'cpus': selected,
+                'hashcodecs_only': arguments.hashcodecs_only,
+                'seconds': elapsed,
+                'runs': results,
+            },
+            indent=2,
+        ),
+        encoding='utf-8',
     )
     print(f'Completed in {elapsed / 60:.1f} minutes.', flush=True)
     if any(result['returncode'] for result in results):

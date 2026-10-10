@@ -15,6 +15,8 @@ from _support import (
     add_timing_arguments,
     configure_timing,
     data,
+    format_rates,
+    measure,
     pin_to_one_cpu,
     positive_float,
     positive_int,
@@ -37,21 +39,11 @@ def benchmark(
     expected: list[bytes],
     references: tuple[tuple[str, Callable[[], list[bytes]]], ...],
 ) -> float:
-    ours_result = ours()
-    assert ours_result == expected
-    for _, reference in references:
-        assert ours_result == reference()
-
     total_size = item_size * batch_size
-    ours_rate = throughput(ours, total_size)
-    measurements = [f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s {ours_rate / item_size:10.0f} items/s']
-    for label, reference in references:
-        reference_rate = throughput(reference, total_size)
-        measurements.append(
-            f'{label}={reference_rate / 1024**3:6.2f} GiB/s '
-            f'{reference_rate / item_size:10.0f} items/s ({ours_rate / reference_rate:4.2f}x)'
-        )
-    print(f'{name:6} item={item_size:4} B  batch={batch_size:4}  {"  ".join(measurements)}')
+    ours_rate, rates = measure(ours, total_size, references, expected=expected)
+    print(
+        f'{name:6} item={item_size:4} B  batch={batch_size:4}  {format_rates(ours_rate, rates, item_size=item_size)}'
+    )
     return ours_rate
 
 
@@ -69,13 +61,9 @@ def benchmark_into(
 
     total_size = item_size * batch_size
     ours_rate = throughput(ours, total_size)
-    measurements = [f'batch-into={ours_rate / 1024**3:6.2f} GiB/s {ours_rate / item_size:10.0f} items/s']
-    if returned_rate is not None:
-        measurements.append(
-            f'returned={returned_rate / 1024**3:6.2f} GiB/s '
-            f'{returned_rate / item_size:10.0f} items/s ({ours_rate / returned_rate:4.2f}x)'
-        )
-    print(f'{name:6} item={item_size:7} B  batch={batch_size:4}  {"  ".join(measurements)}')
+    rates = [('returned', returned_rate)] if returned_rate is not None else []
+    formatted = format_rates(ours_rate, rates, label='batch-into', item_size=item_size)
+    print(f'{name:6} item={item_size:7} B  batch={batch_size:4}  {formatted}')
 
 
 def run_matrix(

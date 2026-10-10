@@ -11,10 +11,12 @@ import tracemalloc
 from collections.abc import Callable
 
 import pybase64
-from _support import (
+from support import (
     add_timing_arguments,
     configure_timing,
     data,
+    format_rates,
+    measure,
     pin_to_one_cpu,
     positive_float,
     positive_int,
@@ -34,22 +36,15 @@ def benchmark(
     item_size: int,
     batch_size: int,
     ours: Callable[[], list[bytes]],
+    expected: list[bytes],
     references: tuple[tuple[str, Callable[[], list[bytes]]], ...],
-) -> None:
-    ours_result = ours()
-    for _, reference in references:
-        assert ours_result == reference()
-
+) -> float:
     total_size = item_size * batch_size
-    ours_rate = throughput(ours, total_size)
-    measurements = [f'hashcodecs={ours_rate / 1024**3:6.2f} GiB/s {ours_rate / item_size:10.0f} items/s']
-    for label, reference in references:
-        reference_rate = throughput(reference, total_size)
-        measurements.append(
-            f'{label}={reference_rate / 1024**3:6.2f} GiB/s '
-            f'{reference_rate / item_size:10.0f} items/s ({ours_rate / reference_rate:4.2f}x)'
-        )
-    print(f'{name:6} item={item_size:4} B  batch={batch_size:4}  {"  ".join(measurements)}')
+    ours_rate, rates = measure(ours, total_size, references, expected=expected)
+    print(
+        f'{name:6} item={item_size:4} B  batch={batch_size:4}  {format_rates(ours_rate, rates, item_size=item_size)}'
+    )
+    return ours_rate
 
 
 def benchmark_into(
@@ -59,21 +54,16 @@ def benchmark_into(
     ours: Callable[[], list[int]],
     outputs: list[bytearray],
     expected: list[bytes],
-    references: tuple[tuple[str, Callable[[], object]], ...],
+    returned_rate: float | None = None,
 ) -> None:
     written = ours()
     assert [bytes(output[:length]) for output, length in zip(outputs, written, strict=True)] == expected
 
     total_size = item_size * batch_size
     ours_rate = throughput(ours, total_size)
-    measurements = [f'batch-into={ours_rate / 1024**3:6.2f} GiB/s {ours_rate / item_size:10.0f} items/s']
-    for label, reference in references:
-        reference_rate = throughput(reference, total_size)
-        measurements.append(
-            f'{label}={reference_rate / 1024**3:6.2f} GiB/s '
-            f'{reference_rate / item_size:10.0f} items/s ({ours_rate / reference_rate:4.2f}x)'
-        )
-    print(f'{name:6} item={item_size:7} B  batch={batch_size:4}  {"  ".join(measurements)}')
+    rates = [('returned', returned_rate)] if returned_rate is not None else []
+    formatted = format_rates(ours_rate, rates, label='batch-into', item_size=item_size)
+    print(f'{name:6} item={item_size:7} B  batch={batch_size:4}  {formatted}')
 
 
 def run_matrix(
@@ -94,11 +84,12 @@ def run_matrix(
             expected_batch = payloads[:batch_size]
             expected_encoded = encoded[:batch_size]
             if not decode_only:
-                benchmark(
+                encoded_rate = benchmark(
                     'encode',
                     item_size,
                     batch_size,
                     lambda batch=batch: hashcodecs_base64.b64encode_batch(batch),
+                    expected_encoded,
                     ()
                     if hashcodecs_only
                     else (
@@ -117,24 +108,14 @@ def run_matrix(
                     ),
                     encoded_outputs,
                     expected_encoded,
-                    ()
-                    if hashcodecs_only
-                    else (
-                        (
-                            'into-loop',
-                            lambda batch=batch, outputs=encoded_outputs: [
-                                hashcodecs_base64.b64encode_into(item, output)
-                                for item, output in zip(batch, outputs, strict=True)
-                            ],
-                        ),
-                        ('returned', lambda batch=batch: hashcodecs_base64.b64encode_batch(batch)),
-                    ),
+                    returned_rate=None if hashcodecs_only else encoded_rate,
                 )
-            benchmark(
+            decoded_rate = benchmark(
                 'decode',
                 item_size,
                 batch_size,
                 lambda encoded_batch=encoded_batch: hashcodecs_base64.b64decode_batch(encoded_batch, validate=True),
+                expected_batch,
                 ()
                 if hashcodecs_only
                 else (
@@ -168,21 +149,7 @@ def run_matrix(
                 ),
                 decoded_outputs,
                 expected_batch,
-                ()
-                if hashcodecs_only
-                else (
-                    (
-                        'into-loop',
-                        lambda inputs=encoded_batch, outputs=decoded_outputs: [
-                            hashcodecs_base64.b64decode_into(item, output, validate=True)
-                            for item, output in zip(inputs, outputs, strict=True)
-                        ],
-                    ),
-                    (
-                        'returned',
-                        lambda inputs=encoded_batch: hashcodecs_base64.b64decode_batch(inputs, validate=True),
-                    ),
-                ),
+                returned_rate=None if hashcodecs_only else decoded_rate,
             )
 
 
@@ -343,9 +310,9 @@ def main() -> None:
         parser.error('--discard-profile-result requires --profile-operation')
     if arguments.memoryview_input and (arguments.profile_operation or arguments.allocation_profile):
         parser.error('--memoryview-input supports matrix benchmarks only')
-    configure_timing(arguments.samples, arguments.minimum_sample_seconds)
+    configure_timing(arguments)
 
-    pin_to_one_cpu()
+    pin_to_one_cpu(arguments.cpu)
     gc.disable()
     try:
         if arguments.profile_operation:

@@ -10,11 +10,12 @@ from collections.abc import Callable
 from typing import Any
 
 import mmh3
-from _support import (
+from support import (
     add_timing_arguments,
     configure_timing,
     data,
     latency,
+    nonnegative_int,
     pin_to_one_cpu,
     threaded_throughput,
 )
@@ -134,6 +135,7 @@ def report_threads(name: str, size: int, operation: Callable[[], object], expect
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--sizes', nargs='+', type=nonnegative_int, help='input sizes in bytes')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         '--thresholds',
@@ -157,10 +159,14 @@ def main() -> None:
     )
     add_timing_arguments(parser)
     arguments = parser.parse_args()
-    configure_timing(arguments.samples, arguments.minimum_sample_seconds)
+    if arguments.thread_scaling and arguments.cpu is not None:
+        parser.error('--cpu cannot be combined with --thread-scaling')
+    if arguments.sizes is not None and (arguments.keywords or arguments.buffer_inputs or arguments.thread_scaling):
+        parser.error('--sizes applies only to positional and threshold calls')
+    configure_timing(arguments)
 
     if not arguments.thread_scaling:
-        pin_to_one_cpu()
+        pin_to_one_cpu(arguments.cpu)
     gc.disable()
     try:
         if arguments.buffer_inputs:
@@ -185,7 +191,7 @@ def main() -> None:
                         report_threads(name, size, operation, expected)
             return
 
-        sizes = THRESHOLD_SIZES if arguments.thresholds else SMALL_SIZES
+        sizes = arguments.sizes or (THRESHOLD_SIZES if arguments.thresholds else SMALL_SIZES)
         call_shape = 'threshold' if arguments.thresholds else 'positional'
         for requested_size in sizes:
             for name, size, operation, expected in cases(requested_size):

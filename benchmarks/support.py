@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import math
-import os
-import sys
 import threading
 from collections.abc import Callable
 from statistics import median
 from time import perf_counter
+
+from cpu import pin_to_one_cpu as pin_to_one_cpu
 
 SIZES = (1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024)
 DEFAULT_SAMPLES = 15
 DEFAULT_MINIMUM_SAMPLE_SECONDS = 0.2
 SAMPLES = DEFAULT_SAMPLES
 MINIMUM_SAMPLE_SECONDS = DEFAULT_MINIMUM_SAMPLE_SECONDS
+_MISSING = object()
 
 
 def positive_int(value: str) -> int:
@@ -33,57 +33,36 @@ def positive_float(value: str) -> float:
     return parsed
 
 
+def nonnegative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError('must be nonnegative')
+    return parsed
+
+
 def add_timing_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--quick', action='store_true', help='explore with 5 samples of 0.03 seconds; do not publish')
+    parser.add_argument('--cpu', type=nonnegative_int, help='logical CPU to pin (default: first allowed CPU)')
     parser.add_argument(
         '--samples',
         type=positive_int,
-        default=DEFAULT_SAMPLES,
         help=f'median sample count (default: {DEFAULT_SAMPLES})',
     )
     parser.add_argument(
         '--minimum-sample-seconds',
         type=positive_float,
-        default=DEFAULT_MINIMUM_SAMPLE_SECONDS,
         help=f'minimum duration of each sample (default: {DEFAULT_MINIMUM_SAMPLE_SECONDS})',
     )
 
 
-def configure_timing(samples: int, minimum_sample_seconds: float) -> None:
+def configure_timing(arguments: argparse.Namespace) -> None:
     global SAMPLES, MINIMUM_SAMPLE_SECONDS
-    SAMPLES = samples
-    MINIMUM_SAMPLE_SECONDS = minimum_sample_seconds
-
-
-def pin_to_one_cpu() -> None:
-    if sys.platform == 'win32':
-        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        get_current_process = kernel32.GetCurrentProcess
-        get_current_process.restype = ctypes.c_void_p
-        get_process_affinity = kernel32.GetProcessAffinityMask
-        get_process_affinity.argtypes = (
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(ctypes.c_size_t),
-        )
-        get_process_affinity.restype = ctypes.c_int
-        set_process_affinity = kernel32.SetProcessAffinityMask
-        set_process_affinity.argtypes = (ctypes.c_void_p, ctypes.c_size_t)
-        set_process_affinity.restype = ctypes.c_int
-        process = get_current_process()
-        process_mask = ctypes.c_size_t()
-        system_mask = ctypes.c_size_t()
-        if get_process_affinity(process, ctypes.byref(process_mask), ctypes.byref(system_mask)) == 0:
-            raise ctypes.WinError(ctypes.get_last_error())
-        first_available_cpu = process_mask.value & -process_mask.value
-        if set_process_affinity(process, first_available_cpu) == 0:
-            raise ctypes.WinError(ctypes.get_last_error())
-        return
-
-    get_affinity = getattr(os, 'sched_getaffinity', None)
-    set_affinity = getattr(os, 'sched_setaffinity', None)
-    if get_affinity is not None and set_affinity is not None:
-        available = get_affinity(0)
-        set_affinity(0, {min(available)})
+    arguments.samples = arguments.samples or (5 if arguments.quick else DEFAULT_SAMPLES)
+    arguments.minimum_sample_seconds = arguments.minimum_sample_seconds or (
+        0.03 if arguments.quick else DEFAULT_MINIMUM_SAMPLE_SECONDS
+    )
+    SAMPLES = arguments.samples
+    MINIMUM_SAMPLE_SECONDS = arguments.minimum_sample_seconds
 
 
 def data(size: int) -> bytes:
@@ -91,37 +70,59 @@ def data(size: int) -> bytes:
     return period * (size // len(period)) + period[: size % len(period)]
 
 
-def throughput(function: Callable[[], object], input_size: int) -> float:
+def calibrate(function: Callable[[], object], minimum_seconds: float) -> int:
     iterations = 1
     while True:
         start = perf_counter()
         for _ in range(iterations):
             function()
         elapsed = perf_counter() - start
-        if elapsed >= MINIMUM_SAMPLE_SECONDS:
-            break
-        iterations *= 2
+        if elapsed >= minimum_seconds:
+            return iterations
+        estimate = math.ceil(iterations * minimum_seconds / max(elapsed, 1e-9) * 1.05)
+        iterations = max(iterations + 1, min(iterations * 10, estimate))
 
-    samples = []
-    for _ in range(SAMPLES):
-        start = perf_counter()
-        for _ in range(iterations):
-            function()
-        samples.append(input_size * iterations / (perf_counter() - start))
-    return median(samples)
+
+def throughput(function: Callable[[], object], input_size: int) -> float:
+    nanoseconds = latency(function)
+    return input_size * 1_000_000_000 / nanoseconds
+
+
+def measure(
+    operation: Callable[[], object],
+    input_size: int,
+    references: tuple[tuple[str, Callable[[], object]], ...] = (),
+    *,
+    hashcodecs_only: bool = False,
+    expected: object = _MISSING,
+) -> tuple[float, list[tuple[str, float]]]:
+    result = operation()
+    if expected is not _MISSING:
+        assert result == expected
+    for _, reference in references:
+        assert result == reference()
+    rate = throughput(operation, input_size)
+    rates = [] if hashcodecs_only else [(label, throughput(reference, input_size)) for label, reference in references]
+    return rate, rates
+
+
+def format_rates(
+    rate: float, references: list[tuple[str, float]], *, label: str = 'hashcodecs', item_size: int | None = None
+) -> str:
+    measurements = []
+    for index, (name, value) in enumerate([(label, rate), *references]):
+        text = f'{name}={value / 1024**3:6.2f} GiB/s'
+        if item_size is not None:
+            text += f' {value / item_size:10.0f} items/s'
+        if index:
+            text += f' ({rate / value:4.2f}x)'
+        measurements.append(text)
+    return '  '.join(measurements)
 
 
 def latency(function: Callable[[], object]) -> float:
     """Return median nanoseconds per call after calibrating the sample size."""
-    iterations = 1
-    while True:
-        start = perf_counter()
-        for _ in range(iterations):
-            function()
-        elapsed = perf_counter() - start
-        if elapsed >= MINIMUM_SAMPLE_SECONDS:
-            break
-        iterations *= 2
+    iterations = calibrate(function, MINIMUM_SAMPLE_SECONDS)
 
     samples = []
     for _ in range(SAMPLES):
@@ -134,15 +135,7 @@ def latency(function: Callable[[], object]) -> float:
 
 def threaded_throughput(function: Callable[[], object], input_size: int, workers: int) -> float:
     """Return aggregate bytes per second from equal work in Python threads."""
-    iterations = 1
-    while True:
-        start = perf_counter()
-        for _ in range(iterations):
-            function()
-        elapsed = perf_counter() - start
-        if elapsed >= MINIMUM_SAMPLE_SECONDS:
-            break
-        iterations *= 2
+    iterations = calibrate(function, MINIMUM_SAMPLE_SECONDS)
 
     samples = []
     for _ in range(SAMPLES):

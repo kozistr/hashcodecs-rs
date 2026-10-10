@@ -32,6 +32,45 @@ fn count_symbols() {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn match_popcnt_symbols() {
+    if !std::is_x86_feature_detected!("avx2") || !std::is_x86_feature_detected!("popcnt") {
+        return;
+    }
+
+    let data: Vec<u8> = (0_u8..=u8::MAX).cycle().take(1088).collect();
+
+    for altchars in [None, Some(*b"-_"), Some(*b"=="), Some([0, 255])] {
+        for offset in 0..32 {
+            for length in [
+                0, 1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 95, 96, 97, 1023, 1024,
+            ] {
+                let input = &data[offset..offset + length];
+                let expected = input
+                    .iter()
+                    .filter(|&&byte| is_lenient_symbol(byte, altchars))
+                    .count();
+                assert_eq!(
+                    unsafe { x86::symbol_count_avx2_popcnt(input, altchars) },
+                    expected,
+                    "offset={offset} length={length} altchars={altchars:?}",
+                );
+                assert_eq!(unsafe { x86::symbol_count_avx2(input, altchars) }, expected);
+            }
+        }
+
+        for byte in 0..=u8::MAX {
+            let input = [byte; 65];
+            assert_eq!(
+                unsafe { x86::symbol_count_avx2_popcnt(&input, altchars) },
+                usize::from(is_lenient_symbol(byte, altchars)) * input.len(),
+                "byte={byte:#04x} altchars={altchars:?}",
+            );
+        }
+    }
+}
+
 #[test]
 fn bound_scalar_scans() {
     assert_eq!(alphanumeric_prefix(b""), 0);

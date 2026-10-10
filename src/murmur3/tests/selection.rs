@@ -46,7 +46,10 @@ fn select_x86_128() {
         dispatch::select_x86_128_backend,
         &[
             (0, [Scalar; 4]),
-            (255, [Scalar; 4]),
+            (127, [Scalar; 4]),
+            (128, [Scalar, Scalar, Avx2, Avx2]),
+            (129, [Scalar, Scalar, Avx2, Avx2]),
+            (255, [Scalar, Scalar, Avx2, Avx2]),
             (256, [Scalar, Scalar, Avx2, Avx2]),
             (257, [Scalar, Scalar, Avx2, Avx2]),
             (16 * 1024 * 1024 - 1, [Scalar, Scalar, Avx2, Avx2]),

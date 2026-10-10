@@ -11,7 +11,7 @@ pub(super) enum Backend {
 
 pub(super) const X86_32_SSE41_MIN: usize = 16;
 const X86_32_AVX2_MIN: usize = 32;
-pub(super) const X86_128_AVX2_MIN: usize = 256;
+pub(super) const X86_128_AVX2_MIN: usize = 128;
 const X86_128_SSE41_MIN: usize = 16 * 1024 * 1024;
 // Core Ultra 7 265K measurements put the AVX2 crossover near 512 bytes.
 // Keep both SIMD paths above the small-input scalar range; SSE4.1 is a fallback.

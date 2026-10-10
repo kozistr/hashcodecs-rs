@@ -158,6 +158,32 @@ fn match_tail_lengths() {
 }
 
 #[test]
+fn match_x86_128_unaligned_blocks() {
+    let data: Vec<u8> = (0..4160)
+        .map(|index| (index as u8).wrapping_mul(137).wrapping_add(251))
+        .collect();
+
+    for offset in 0..32 {
+        for length in [
+            16, 31, 63, 64, 127, 128, 129, 159, 160, 255, 256, 257, 511, 512, 513, 4095, 4096, 4097,
+        ] {
+            let input = &data[offset..offset + length];
+
+            for seed in [0, 0x8000_0000, u32::MAX] {
+                let expected = murmur3::murmur3_x86_128(&mut Cursor::new(input), seed).unwrap();
+                assert_eq!(
+                    x86_words_as_u128(murmur3_x86_128(input, seed)),
+                    expected,
+                    "offset={offset} length={length} seed={seed}"
+                );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                assert_x86_128_simd_backends(input, seed, expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn match_x64_unaligned_blocks() {
     let data: Vec<u8> = (0..4160)
         .map(|index| (index as u8).wrapping_mul(137).wrapping_add(251))

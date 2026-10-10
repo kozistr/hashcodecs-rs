@@ -8,6 +8,7 @@ mod support;
 const BASE64_ENCODE_SIZES: [usize; 10] = [15, 16, 31, 32, 47, 48, 51, 52, 103, 104];
 const BASE64_DECODE_SIZES: [usize; 8] = [12, 16, 28, 32, 60, 64, 124, 128];
 const MURMUR_SIZES: [usize; 6] = [15, 16, 31, 32, 255, 256];
+const MURMUR_X86_128_SIZES: [usize; 12] = [15, 16, 31, 32, 63, 64, 127, 128, 129, 255, 256, 257];
 const MURMUR_X64_SIZES: [usize; 12] = [15, 16, 31, 32, 64, 255, 256, 384, 511, 512, 513, 1024];
 
 fn base64_encode(c: &mut Criterion) {
@@ -66,7 +67,7 @@ fn murmur3(c: &mut Criterion) {
         c,
         "murmur_x86_128_crossover",
         hashcodecs::murmur3::murmur3_x86_128,
-        MURMUR_SIZES
+        MURMUR_X86_128_SIZES
     );
     murmur_group!(
         c,

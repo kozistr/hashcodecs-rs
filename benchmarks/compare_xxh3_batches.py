@@ -11,7 +11,7 @@ from statistics import median
 from time import perf_counter
 from types import ModuleType
 
-from _support import add_timing_arguments, data, pin_to_one_cpu, positive_int
+from _support import add_timing_arguments, calibrate, configure_timing, data, pin_to_one_cpu, positive_int
 
 
 def load_extension(name: str, path: Path) -> ModuleType:
@@ -36,12 +36,7 @@ def compare(
     minimum_seconds: float,
 ) -> tuple[float, float]:
     assert operations[0]() == operations[1]()
-    iterations = []
-    for operation in operations:
-        count = 1
-        while elapsed(operation, count) < minimum_seconds:
-            count *= 2
-        iterations.append(count)
+    iterations = [calibrate(operation, minimum_seconds) for operation in operations]
     rates: tuple[list[float], list[float]] = ([], [])
     for sample in range(samples):
         for index in (0, 1) if sample % 2 == 0 else (1, 0):
@@ -63,9 +58,10 @@ def main() -> None:
     )
     add_timing_arguments(parser)
     arguments = parser.parse_args()
+    configure_timing(arguments)
     baseline = load_extension('baseline', arguments.baseline)
     candidate = load_extension('candidate', arguments.candidate)
-    pin_to_one_cpu()
+    pin_to_one_cpu(arguments.cpu)
     gc.disable()
     try:
         print('kind,count,bytes,bits,baseline_gib_s,candidate_gib_s,change_percent', flush=True)

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 import mmh3
-from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
+from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, positive_int, throughput
 
 import hashcodecs.murmur3 as hashcodecs_murmur3
 
@@ -54,6 +54,7 @@ def incremental(constructor: Callable[[], _IncrementalHasher], payload: bytes | 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--sizes', nargs='+', type=positive_int, default=SIZES, metavar='BYTES')
     parser.add_argument(
         '--hashcodecs-only',
         action='store_true',
@@ -71,12 +72,12 @@ def main() -> None:
     )
     add_timing_arguments(parser)
     args = parser.parse_args()
-    configure_timing(args.samples, args.minimum_sample_seconds)
+    configure_timing(args)
 
-    pin_to_one_cpu()
+    pin_to_one_cpu(args.cpu)
     gc.disable()
     try:
-        for size in SIZES:
+        for size in args.sizes:
             payload = data(size)
             if args.bytearray_input:
                 payload = bytearray(payload)

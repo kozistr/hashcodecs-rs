@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 
 import pybase64
-from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, throughput
+from _support import SIZES, add_timing_arguments, configure_timing, data, pin_to_one_cpu, positive_int, throughput
 
 import hashcodecs.base64 as hashcodecs_base64
 
@@ -55,6 +55,7 @@ def benchmark_into(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--sizes', nargs='+', type=positive_int, default=SIZES, metavar='BYTES')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         '--hashcodecs-only',
@@ -112,12 +113,12 @@ def main() -> None:
         parser.error('--configured requires Python 3.15 or newer')
     if args.wrapped and sys.version_info < (3, 15):
         parser.error('--wrapped requires Python 3.15 or newer')
-    configure_timing(args.samples, args.minimum_sample_seconds)
+    configure_timing(args)
 
-    pin_to_one_cpu()
+    pin_to_one_cpu(args.cpu)
     gc.disable()
     try:
-        for size in SIZES:
+        for size in args.sizes:
             payload = data(size)
             standard = stdlib_base64.b64encode(payload)
             urlsafe = stdlib_base64.urlsafe_b64encode(payload)

@@ -71,9 +71,9 @@ def main() -> None:
     )
     add_timing_arguments(parser)
     arguments = parser.parse_args()
-    configure_timing(arguments.samples, arguments.minimum_sample_seconds)
+    configure_timing(arguments)
 
-    pin_to_one_cpu()
+    pin_to_one_cpu(arguments.cpu)
     gc.disable()
     try:
         for size in () if arguments.batches_only else arguments.sizes:

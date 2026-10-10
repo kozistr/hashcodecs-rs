@@ -12,7 +12,7 @@ from statistics import median
 from time import perf_counter
 from types import ModuleType
 
-from _support import add_timing_arguments, data, pin_to_one_cpu
+from _support import add_timing_arguments, calibrate, configure_timing, data, pin_to_one_cpu
 
 
 def load_extension(name: str, path: Path) -> ModuleType:
@@ -34,12 +34,7 @@ def elapsed(operation: Callable[[], object], iterations: int) -> float:
 def compare(
     operations: tuple[Callable[[], object], Callable[[], object]], samples: int, minimum_seconds: float
 ) -> tuple[float, float]:
-    iterations = []
-    for operation in operations:
-        count = 1
-        while elapsed(operation, count) < minimum_seconds:
-            count *= 2
-        iterations.append(count)
+    iterations = [calibrate(operation, minimum_seconds) for operation in operations]
     times: tuple[list[float], list[float]] = ([], [])
     for sample in range(samples):
         for index in (0, 1) if sample % 2 == 0 else (1, 0):
@@ -62,12 +57,13 @@ def main() -> None:
     parser.add_argument('--outputs', nargs='+', choices=['returned', 'into'], default=['returned', 'into'])
     add_timing_arguments(parser)
     args = parser.parse_args()
+    configure_timing(args)
     if any(size < 0 for size in args.sizes):
         parser.error('sizes must be nonnegative')
     if 'str' in args.kinds and 'encode' in args.operations:
         parser.error('str inputs require decoding operations')
     modules = (load_extension('baseline', args.baseline), load_extension('candidate', args.candidate))
-    pin_to_one_cpu()
+    pin_to_one_cpu(args.cpu)
     gc.disable()
     try:
         print(

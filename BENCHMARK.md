@@ -125,14 +125,23 @@ uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_murmur3.py
 uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_xxhash.py
 ```
 
+For a complete chart refresh, use `benchmarks/python_suite.py`. It selects the 17 runs needed for all 502 Python
+measurements, skips unpublished diagnostics and unused competitor comparisons, and writes progress, logs, and
+a command manifest under `target/python-benchmarks/publication`. Select groups or preview commands before running:
+
+```sh
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_suite.py --list
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_suite.py --groups base64
+```
+
 The scripts check outputs before timing and print GiB/s. Append a mode from the table to select a workload. Use
 `--help` for the full option list.
 
 | Script | Focused modes |
 | --- | --- |
-| `python_base64.py` | `--into`, `--lenient`, `--custom-lenient`, `--bytearray-input`, `--memoryview-input`, `--sliced-memoryview-input`, `--str-input` |
+| `python_base64.py` | `--into`, `--lenient`, `--custom-lenient`, `--bytearray-input`, `--memoryview-input`, `--sliced-memoryview-input`, `--str-input`, `--sizes BYTES ...` |
 | `python_base64_batch.py` | `--large`, `--memoryview-input`, `--decode-only`. Select sizes with `--item-sizes` and `--batch-sizes`. |
-| `python_murmur3.py` | `--incremental`, `--bytearray-input` |
+| `python_murmur3.py` | `--incremental`, `--bytearray-input`, `--sizes BYTES ...` |
 | `python_xxhash.py` | `--one-shot-only`, `--sizes 17 33 65 97 240`, `--batches-only`, `--batch-counts 2 3` |
 
 `python_base64.py` accepts one mode per run. Its `--configured` and `--wrapped` modes require CPython 3.15 or newer.
@@ -141,11 +150,29 @@ encoding with newlines after 76 output characters.
 
 The four scripts accept `--hashcodecs-only` to skip competitor timing. The Base64 script treats that flag as a
 mode, so run it apart from `--into`, `--lenient`, and the other Base64 modes. All four accept `--samples` and
-`--minimum-sample-seconds`. Keep the defaults for published comparisons. Lower them for local exploration.
+`--minimum-sample-seconds`. Keep the defaults for published comparisons: 15 samples of at least 0.2 seconds.
+That is at least 25 minutes of sampling for a complete chart refresh, before calibration and setup. Calibration
+estimates the iteration count from elapsed time instead of rounding to the next power of two. Batch comparisons
+reuse the returned-output measurement from the same case instead of timing it again beside reusable output.
+
+Use `--quick` for local exploration: 5 samples of 0.03 seconds. Explicit timing arguments override that preset.
+Quick output belongs in `target/python-benchmarks/quick` and must not replace published chart measurements.
+
+```sh
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_suite.py --quick
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_base64.py --into --sizes 1048576 --quick
+```
+
+The scripts accept `--cpu N` to pin a chosen logical CPU on Windows or Linux. The suite also accepts
+`--quick --cpus 0 1` for parallel exploration, with each worker pinned to a distinct supplied CPU. Choose CPUs
+on separate physical cores of the same type; do not assume adjacent CPU numbers identify equivalent cores.
+Publication runs remain serial. Idle cores still share cache, memory bandwidth, power limits, and turbo
+frequency, so parallel timing can change results even with affinity. Validate serially before publishing.
 
 For call overhead, run `benchmarks/python_calls.py` with the same `uv run` prefix. It reports nanoseconds per call
 and supports `--keywords`, `--thresholds`, and `--buffer-inputs`. Its `--thread-scaling` mode measures aggregate
-throughput without pinning to one CPU. Keep those results separate from the charts above.
+throughput without pinning to one CPU. Use `--sizes BYTES ...` to narrow positional or threshold measurements.
+Keep those results separate from the charts above.
 
 ## Update the charts
 

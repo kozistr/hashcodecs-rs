@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument('--output', type=Path)
     add_timing_arguments(parser)
     arguments = parser.parse_args()
-    configure_timing(arguments.samples, arguments.minimum_sample_seconds)
-    pin_to_one_cpu()
+    configure_timing(arguments)
+    pin_to_one_cpu(arguments.cpu)
     rows = []
     gc.disable()
     try:

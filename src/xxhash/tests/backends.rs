@@ -50,7 +50,12 @@ fn match_avx2_tails() {
 fn match_medium_hash_128() {
     let capabilities = backend::capabilities();
 
-    for required in [&[][..], &[CpuFeature::Ssse3][..], &[CpuFeature::Avx2][..]] {
+    for required in [
+        &[][..],
+        &[CpuFeature::Ssse3][..],
+        &[CpuFeature::Avx2][..],
+        &[CpuFeature::Avx2, CpuFeature::Avx512F][..],
+    ] {
         if !capabilities.supports_all(required) {
             continue;
         }
@@ -66,10 +71,17 @@ fn match_medium_hash_128() {
                     .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
                     .collect::<Vec<_>>();
                 let input = &data[offset..];
+                let long_input = LongInput::new(input).unwrap();
+                let expected = c_xxh3_128(input, seed);
                 assert_eq!(
-                    engine.hash_128(LongInput::new(input).unwrap(), &secret),
-                    c_xxh3_128(input, seed),
+                    engine.hash_128(long_input, &secret),
+                    expected,
                     "length {length}, offset {offset}, seed {seed:#x}, features {required:?}",
+                );
+                assert_eq!(
+                    engine.hash_128_seeded(long_input, seed),
+                    expected,
+                    "seeded length {length}, offset {offset}, seed {seed:#x}, features {required:?}",
                 );
             }
         }

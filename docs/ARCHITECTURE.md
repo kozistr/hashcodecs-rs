@@ -128,9 +128,10 @@ assume transactional output on failure. Malformed cases that need CPython's exac
 
 MurmurHash3 combines independent multiplication and rotation for each block with an ordered update to the hash state.
 The SIMD kernels prepare several blocks together, then feed those values through the canonical state sequence.
-For example, the x64-128 AVX2 loop prepares 128 bytes at a time in stack storage. AVX2 cannot multiply packed
+For example, the x64-128 AVX2 loop prepares 128 bytes at a time. AVX2 cannot multiply packed
 integers of 64 bits in one instruction. The kernel multiplies their 32 bit halves and combines the products.
-It preserves the scalar algorithm's state update order.
+It preserves the scalar algorithm's state update order. On x86-64, each state update uses a single `LEA` for the
+multiplication by five and the additive constant. Other architectures use wrapping integer arithmetic.
 
 Vector preparation has a setup cost. The [dispatcher][murmur-dispatch] applies these thresholds to complete blocks:
 

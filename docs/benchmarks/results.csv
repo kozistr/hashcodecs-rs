@@ -87,26 +87,26 @@ Rust MurmurHash3 throughput,x86 128-bit,1 KiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,4 KiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,1 MiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,8 MiB,mm3h,
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,hashcodecs,9.85
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,hashcodecs,10.09
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,hashcodecs,10.13
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,hashcodecs,10.14
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmur3,5.60
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmur3,6.01
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmur3,6.04
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmur3,5.95
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmurs,8.18
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmurs,8.11
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmurs,8.22
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmurs,8.19
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,fastmurmur3,8.70
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,fastmurmur3,8.66
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,fastmurmur3,8.68
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,fastmurmur3,8.68
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,7.99
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,8.01
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,8.19
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,7.91
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,hashcodecs,12.18
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,hashcodecs,12.34
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,hashcodecs,12.38
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,hashcodecs,12.40
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmur3,6.23
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmur3,6.50
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmur3,6.54
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmur3,6.44
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmurs,8.82
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmurs,8.82
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmurs,8.90
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmurs,8.87
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,fastmurmur3,9.39
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,fastmurmur3,9.40
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,fastmurmur3,9.41
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,fastmurmur3,9.35
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,9.01
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,9.01
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,9.01
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,8.99
 Rust XXH3 throughput,XXH3-64 small inputs,17 B,hashcodecs,11.60
 Rust XXH3 throughput,XXH3-64 small inputs,33 B,hashcodecs,13.94
 Rust XXH3 throughput,XXH3-64 small inputs,65 B,hashcodecs,19.87

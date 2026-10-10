@@ -95,6 +95,8 @@ After validating all four blocks, the SSE decoder can overlap the first three st
 overwrites the four extra bytes. For exact outputs, two final stores write the last 12 bytes within the boundary.
 This uses five stores for 48 decoded bytes and preserves the unwritten suffix when a prefix decoder stops at
 invalid input. AVX2 also validates groups before writing and selects a store layout from output alignment.
+Its wide overlapping stores duplicate payload in the eight padding bytes to avoid zero-fill blends. Following
+stores replace this padding within the validated group before either decoder returns.
 
 Scalar code handles the remaining groups and padding. Rust allocating APIs reserve uninitialized storage and
 expose the result after initializing its returned prefix. `*_into` APIs validate capacity and write to the

@@ -107,10 +107,10 @@ Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,9.01
 Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,9.01
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,9.01
 Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,8.99
-Rust XXH3 throughput,XXH3-64 small inputs,17 B,hashcodecs,11.60
-Rust XXH3 throughput,XXH3-64 small inputs,33 B,hashcodecs,13.94
-Rust XXH3 throughput,XXH3-64 small inputs,65 B,hashcodecs,19.87
-Rust XXH3 throughput,XXH3-64 small inputs,97 B,hashcodecs,22.68
+Rust XXH3 throughput,XXH3-64 small inputs,17 B,hashcodecs,14.97
+Rust XXH3 throughput,XXH3-64 small inputs,33 B,hashcodecs,17.98
+Rust XXH3 throughput,XXH3-64 small inputs,65 B,hashcodecs,25.45
+Rust XXH3 throughput,XXH3-64 small inputs,97 B,hashcodecs,29.44
 Rust XXH3 throughput,XXH3-64 small inputs,129 B,hashcodecs,27.81
 Rust XXH3 throughput,XXH3-64 small inputs,240 B,hashcodecs,31.81
 Rust XXH3 throughput,XXH3-64 small inputs,17 B,upstream C,10.90
@@ -131,7 +131,7 @@ Rust XXH3 throughput,XXH3-128 small inputs,65 B,upstream C,7.39
 Rust XXH3 throughput,XXH3-128 small inputs,97 B,upstream C,10.56
 Rust XXH3 throughput,XXH3-128 small inputs,129 B,upstream C,12.18
 Rust XXH3 throughput,XXH3-128 small inputs,240 B,upstream C,16.66
-Rust XXH3 throughput,XXH3-64 one-shot,64 B,hashcodecs,27.23
+Rust XXH3 throughput,XXH3-64 one-shot,64 B,hashcodecs,35.80
 Rust XXH3 throughput,XXH3-64 one-shot,1 KiB,hashcodecs,46.97
 Rust XXH3 throughput,XXH3-64 one-shot,4 KiB,hashcodecs,74.30
 Rust XXH3 throughput,XXH3-64 one-shot,1 MiB,hashcodecs,92.44
@@ -151,7 +151,7 @@ Rust XXH3 throughput,XXH3-128 one-shot,1 KiB,upstream C,21.85
 Rust XXH3 throughput,XXH3-128 one-shot,4 KiB,upstream C,37.36
 Rust XXH3 throughput,XXH3-128 one-shot,1 MiB,upstream C,48.45
 Rust XXH3 throughput,XXH3-128 one-shot,8 MiB,upstream C,38.61
-Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs,21.30
+Rust XXH3 throughput,XXH3-64 batch (32 items),64 B,hashcodecs,20.80
 Rust XXH3 throughput,XXH3-64 batch (32 items),1 KiB,hashcodecs,73.83
 Rust XXH3 throughput,XXH3-64 batch (32 items),4 KiB,hashcodecs,89.63
 Rust XXH3 throughput,XXH3-64 batch (32 items),1 MiB,hashcodecs,33.31

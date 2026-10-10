@@ -44,6 +44,7 @@ pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
     )
 }
 
+#[inline(always)]
 pub(super) fn xxh3_64_len_17_to_128(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
     let mut acc = (len as u64).wrapping_mul(P64_1);
@@ -118,6 +119,7 @@ pub(super) fn xxh3_128_len_128(input: &[u8], seed: u64) -> [u64; 2] {
     final128(mix32(acc, input, 0, 112, 0, seed), 128, seed)
 }
 
+#[inline(always)]
 pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
     let len = input.len();
 

@@ -1,270 +1,193 @@
 # Architecture
 
-`hashcodecs` implements Base64 and the noncryptographic MurmurHash3 and XXH3 hashes in Rust, with a CPython
-extension and typed Python exports. Use this explanation when changing a kernel or binding: it describes the
-work each layer avoids and the invariants an optimization must preserve. For measured throughput and reproduction
-commands, see [Benchmarks][benchmarks].
+`hashcodecs` implements Base64, MurmurHash3, and XXH3 in Rust. It exposes the same core algorithms through a Rust
+library and a CPython extension. MurmurHash3 and XXH3 provide noncryptographic hashes.
 
-## Layers and ownership
+The design separates algorithm code from CPU selection, memory ownership, and Python compatibility. Rust callers
+use the core without Python dependencies. Python callers use native bindings that manage objects and buffers
+before calling the core.
 
-```text
-Python exports                          Rust public API
-      |                                       |
-      v                                       |
-CPython arguments, buffer ownership,           |
-output allocation, interpreter attachment      |
-      |                                       |
-      +-------------------+-------------------+
-                          v
-             Dispatch by algorithm and input size
-                          |
-                          v
-                 SIMD or scalar kernel
-                          |
-                          v
-                Tail handling and result
+## System structure
+
+```mermaid
+flowchart TD
+    Python[Typed Python exports] --> Bindings[CPython bindings: borrow or stabilize buffers]
+    Rust[Public Rust API] --> Algorithms[Shared codec and hash implementations]
+    Bindings --> Algorithms
+    Algorithms --> Dispatch[Algorithm-specific dispatch]
+    CPU[Cached CPU capabilities] --> Dispatch
+    Dispatch --> SIMD[SIMD kernels]
+    Dispatch --> Scalar[Scalar kernels]
+    SIMD --> Result[Output buffer or hash digest]
+    Scalar --> Result
 ```
 
-SIMD (single instruction, multiple data) kernels process several bytes or words per instruction. The Python
-layer adds argument and ownership checks around the same Rust algorithms. Kernels have no dependency on Python.
+SIMD means single instruction, multiple data. SIMD kernels process several bytes or words per instruction.
+Scalar kernels provide the portable implementation and handle work that does not suit a vector kernel.
 
-| Source | Responsibility |
+| Component | Responsibility |
 | --- | --- |
 | [`src/backend.rs`][cpu] | Detect and cache CPU capabilities. |
-| [`src/base64/`][base64] | Encode and decode flows, alphabets, output sizing, and kernels for each instruction set. |
-| [`src/murmur3/`][murmur3] | Canonical variants, incremental state, block buffering, and dispatch. |
-| [`src/xxhash/`][xxhash] | Formulas by input length, accumulation for long inputs, prepared seeds, and batches. |
-| [`src/bindings/`][bindings] | CPython arguments, buffers, compatibility rules, and native callbacks. |
-| [`hashcodecs/`][python] | Generated Python exports, type stubs, and the `py.typed` marker. |
+| [`src/base64/`][base64] | Encode, decode, calculate output sizes, and select Base64 kernels. |
+| [`src/murmur3/`][murmur3] | Implement hash variants, incremental state, block buffering, and kernel selection. |
+| [`src/xxhash/`][xxhash] | Implement XXH3 length classes, long-input accumulation, prepared seeds, and batches. |
+| [`src/bindings/`][bindings] | Parse Python arguments, manage buffers, and apply interpreter compatibility rules. |
+| [`hashcodecs/`][python] | Export native functions and provide type stubs and the `py.typed` marker. |
 
-Each algorithm exposes its public Rust API through `src/<algorithm>.rs`. Internal modules own validation and
-state. Modules for each instruction set own the vector operations. Optional bindings share the crate with the
-core so they can use private APIs that write through output pointers without an intermediate result copy.
+Each algorithm exposes its Rust API through `src/<algorithm>.rs`. Internal modules contain shared logic and
+architecture-specific kernels. The optional bindings share the crate with the core and can use private buffer
+interfaces without allocating an intermediate Rust result.
 
-Keep shared binding policy in `arguments.rs`, `buffer.rs`, `objects.rs`, and `runtime.rs`. Algorithm adapters
-compose those policies. `bindings.rs` registers the extension. The repository's `_hashcodecs.pyi` declaration drives
-Python exports, stubs, native signatures, and API reference lists through `tools/generate_api_metadata.py`.
-Generated Python modules reexport native functions without a Python wrapper call.
+Borrowed input and direct output avoid intermediate copies. Cached CPU detection avoids repeated hardware probes.
+Batch calls share argument parsing across inputs. XXH3 batches also reuse seed setup. These choices reduce work
+around the kernels.
 
-## Runtime dispatch
+## Public APIs and result storage
 
-[`backend.rs`][cpu] detects CPU features once through `OnceLock`. Each algorithm selects kernels from that cached
-capability set and checks the features its kernels and fallback paths require.
+The Rust Base64 API accepts byte slices. Allocating functions create the result, while `*_into` functions write to
+a mutable slice from the caller. The core checks output capacity and exposes the initialized result prefix.
+Bytes beyond that prefix remain unchanged on success.
 
-| Operation | x86 and x86-64 preference | AArch64 |
+MurmurHash3 offers one-shot functions and incremental hashers. XXH3 offers one-shot functions, prepared seeds,
+and batch functions. Rust batch callbacks receive digests without a result vector. Batch APIs preserve input order.
+
+Python functions return Python objects or write into caller-managed storage through `*_into` APIs. Packed XXH3
+batches store each digest in little-endian byte order. Rust XXH3-128 functions return numeric words as
+`[low64, high64]`, so Rust callers choose a byte order when serializing a digest.
+
+Output bounds and error handling form separate contracts. A failed Base64 operation can leave partial writes in
+a reusable destination. Packed XXH3 batches check and stabilize their inputs before writing to the destination.
+The API documentation defines the behavior of each operation.
+
+## Algorithm design
+
+```mermaid
+flowchart LR
+    subgraph Base64
+        B1[Complete byte groups] --> B2[SIMD conversion] --> B3[Output bytes]
+    end
+    subgraph MurmurHash3
+        M1[Parallel block mixing] --> M2[Ordered state updates] --> M3[Digest]
+    end
+    subgraph XXH3[XXH3 long inputs]
+        X1[Independent accumulator lanes] --> X2[Scramble and merge] --> X3[Digest]
+    end
+```
+
+Vector kernels share instruction and loop overhead across several input groups. Independent mixing and accumulator
+operations let the CPU overlap arithmetic. Each algorithm retains its required order for dependent operations.
+
+### Base64
+
+Base64 separates alphabet handling, output sizing, and block conversion. SIMD kernels convert complete blocks
+and check character classes during decoding. Smaller kernels or scalar code handle the remaining bytes and padding.
+Encoding selects cached or streaming stores according to input size, alignment, and detected cache capacity.
+
+The Rust API supports padded standard and URL-safe Base64. The Python binding adds custom alphabets, wrapping,
+configurable validation, and lenient decoding. It applies Python compatibility rules around the shared core and
+uses `binascii` for malformed cases that require CPython's exact exception behavior.
+
+### MurmurHash3
+
+MurmurHash3 implements the x86-32, x86-128, and x64-128 variants. SIMD kernels prepare independent input blocks
+together, then apply state updates in the order that the algorithm requires.
+
+Incremental hashers retain the hash state, total length, and incomplete block between updates. Complete blocks
+pass to the selected kernel without a copy of the whole update. Finalization combines the pending bytes with
+the accumulated state to produce the same digest as a one-shot call.
+
+### XXH3
+
+XXH3 selects formulas for short and midsize inputs. Long inputs use accumulator lanes, repeated input stripes,
+and a final merge into a 64-bit or 128-bit digest. SIMD kernels implement this accumulation while preserving
+the algorithm's scramble and merge rules.
+
+`PreparedXxh3` reuses the secret derived from a seed across long-input calls. Batch APIs share seed setup and
+group eligible long inputs for SIMD processing. Each input retains its own state and digest. Other inputs use
+the one-shot path, with results in the original input order.
+
+## CPU dispatch and portability
+
+The shared backend module detects CPU features once and caches them. Each algorithm owns its selection policy
+because kernel requirements and setup costs differ. Selectors check the features that both a kernel and its
+fallback paths require before calling architecture-specific code.
+
+| Operation | x86 and x86-64 preference | AArch64 preference |
 | --- | --- | --- |
 | Base64 | AVX-512 VBMI, AVX2, SSE4.1, SSSE3, scalar | NEON, scalar |
-| MurmurHash3 | AVX2, SSE4.1, scalar, subject to variant and size thresholds | Scalar |
-| XXH3 above 240 bytes | AVX-512F, AVX2, SSSE3, scalar | NEON, scalar |
+| MurmurHash3 | AVX2, SSE4.1, scalar, according to variant and input size | Scalar |
+| XXH3 long inputs | AVX-512F, AVX2, SSSE3, scalar | NEON, scalar |
 
-Base64 caches its selected backend and cache policy. XXH3 caches its engine for long inputs. MurmurHash3 selects a
-backend for each batch of complete blocks. Small inputs and tails use narrower kernels or scalar code to avoid
-vector setup that exceeds the work. Unsupported architectures, Miri, and Kani use scalar implementations.
+Base64 caches its selected backend and cache policy. XXH3 caches its engine for long inputs. MurmurHash3 selects
+a backend for each group of complete blocks, including groups from incremental updates.
 
-Runtime checks allow one build to run on Intel, AMD, and hosts without the required SIMD extensions. Backend
-priority is a dispatch policy. Input size, cache state, and CPU design still affect throughput.
+Runtime dispatch supports Intel and AMD CPUs with different instruction sets. Other architectures use scalar
+code. Miri and Kani also use scalar code because their checks do not execute hardware intrinsics. Kernel selection
+can depend on input size, so a call can use several kernel widths for its blocks and tail.
 
-## Base64: vector conversion and bounded stores
+## Python ownership and concurrency
 
-### Convert and validate blocks
+The bindings separate shared argument, buffer, object, and runtime policies from algorithm adapters. Native call
+parsers accept positional and keyword arguments without an intermediate Python wrapper. Batch calls share this
+entry cost across several inputs.
 
-Base64 maps three binary bytes to four alphabet indices of six bits each. The encoders use vector shuffles, shifts, and
-arithmetic to form several groups at once, then translate indices to ASCII. The AVX2 encoder produces 32 output
-bytes per 24 input bytes. Its x86-64 bulk loop groups 96 input bytes into 128 output bytes to share loop overhead.
+Immutable `bytes` inputs can share their storage with the Rust core. Eligible contiguous memoryviews over
+immutable `bytes` retain the owner and slice bounds without an input copy. Mutable inputs require synchronization
+or a snapshot, according to callbacks, overlapping output, and interpreter attachment.
 
-The decoders combine character classification and translation in vectors. The SSE kernels use lookup tables
-indexed by the high and low four bits of each character to detect invalid alphabet entries. They pack valid
-indices into bytes. The SSSE3 and SSE4.1 loops validate 64 input characters per group. AVX2 validates 128.
-Combining the error masks gives one validity decision per group.
+Hashing and Base64 decoding flatten views that are not contiguous in C order. Base64 encoding requires input
+contiguous in C order. Standard Base64 decoding can borrow an exact ASCII string's UTF-8 storage. String
+subclasses retain their Python conversion behavior.
 
-```text
-SSE decode group with exact output: 64 characters -> 48 bytes
+The buffer layer retains owners and stabilizes input before callbacks or output writes can invalidate a pointer.
+A view that prohibits writes still follows the synchronization policy of its owner if that owner is mutable.
 
-Input blocks       [16 chars] [16 chars] [16 chars] [16 chars]
-                        \        |          |        /
-                         Combined alphabet validation
-                                      |
-Output ranges      Data bytes        Overlap with the next block
-Store 1            [0, 12)            [12, 16)
-Store 2            [12, 24)           [24, 28)
-Store 3            [24, 36)           [36, 40)
-Final stores       [36, 44), [44, 48) None
-```
+Short calls remain attached to the interpreter. Eligible large calls detach after securing immutable input or a
+snapshot. On CPython builds with the global interpreter lock (GIL), detachment releases the GIL so other Python
+threads can run. Free-threaded builds use object synchronization to protect mutable storage.
 
-After validating all four blocks, the SSE decoder can overlap the first three stores of 16 bytes each. The next store
-overwrites the four extra bytes. For exact outputs, two final stores write the last 12 bytes within the boundary.
-This uses five stores for 48 decoded bytes and preserves the unwritten suffix when a prefix decoder stops at
-invalid input. AVX2 also validates groups before writing and selects a store layout from output alignment.
-Its wide overlapping stores duplicate payload in the eight padding bytes to avoid zero-fill blends. Following
-stores replace this padding within the validated group before either decoder returns.
+Detached packed batches stage results, then reacquire synchronization and check destination capacity before
+writing those results. Native batches execute within the caller's thread. SIMD processing does not require worker
+threads.
 
-Scalar code handles the remaining groups and padding. Rust allocating APIs reserve uninitialized storage and
-expose the result after initializing its returned prefix. `*_into` APIs validate capacity and write to the
-caller's output. See the [encoding kernels][base64-encode], [decoding kernels][base64-decode], and
-[`output_buffer.rs`][base64-output] for these contracts.
+## Builds and API metadata
 
-### Limit memory traffic
+The Rust crate contains the production codec and hash implementations. Reference implementations and benchmark
+competitors remain development dependencies. The optional `python` feature enables the bindings, and
+`extension-module` adds the CPython extension configuration.
 
-For large x86-64 encoding, the [cache policy][cache] estimates whether input plus output fits in private cache.
-Encoding reads three bytes for each four bytes it writes, so the input limit is about `3/7` of detected cache
-capacity. Above that limit, eligible aligned paths can use streaming stores to reduce cache pollution.
-Smaller inputs, unknown cache topology, and unsuitable alignment keep cached stores.
+Hatchling builds the Python package and invokes the Rust extension build. CPython wheels contain the native
+extension, Python exports, and type information. The source distribution includes the files needed to rebuild
+the package.
 
-The Python binding writes allocating results into memory that CPython owns. Reusable output avoids allocating a
-new result object. For wrapped encoding above 4 MiB, the output cursor accepts SIMD blocks and splits them at
-newline boundaries, avoiding a separate wrapping pass over the full output.
+[`_hashcodecs.pyi`][declarations] defines the Python declarations. The metadata generator derives Python exports,
+public stubs, native signatures, and API reference lists from those declarations. Generated exports refer to native
+functions without adding a Python wrapper call.
 
-### Preserve Python decoding semantics
+The extension and Rust benchmarks use `mimalloc` for Rust allocations. CPython manages Python object allocations.
+Rust library consumers retain their allocator choice. Release and benchmark profiles use optimization level 3,
+one code generation unit, and full link-time optimization.
 
-The [Base64 binding][base64-bindings] shares one attempt policy between allocating and reusable outputs. Clean
-input can reach the SIMD core without constructing a Python exception. Lenient decoding scans alphabet runs and
-handles ignored bytes and padding through a state machine that follows CPython semantics. Configured decoding uses
-a 4 KiB staging buffer for translated runs. Complete untranslated groups can bypass that copy.
+## Correctness and verification
 
-Direct prefix probes write complete validated blocks and keep the remaining suffix for a retry. Probes for custom
-alphabets validate the input before decoding. Strict attempts can write within a failing block, so callers must not
-assume transactional output on failure. Malformed cases that need CPython's exact exception fall back to
-`binascii`. Compatibility policy includes padding rules for each interpreter and the order of argument conversion.
+Kernel implementations must preserve reference outputs, CPU feature requirements, and input and output bounds.
+The core initializes the returned output prefix before exposing a result. The bindings keep Python owners alive
+for each borrow and prevent callbacks or concurrent mutation from invalidating that borrow.
 
-## MurmurHash3: parallel block preparation
+Differential tests compare codec and hash results with reference implementations. Boundary tests exercise malformed
+input, available SIMD backends, exact output slices, and incremental updates. Python tests also check conversion
+order, interpreter-specific errors, overlapping buffers, and concurrency behavior.
 
-MurmurHash3 combines independent multiplication and rotation for each block with an ordered update to the hash state.
-The SIMD kernels prepare several blocks together, then feed those values through the canonical state sequence.
-For example, the x64-128 AVX2 loop prepares 128 bytes at a time. AVX2 cannot multiply packed
-integers of 64 bits in one instruction. The kernel multiplies their 32 bit halves and combines the products.
-It preserves the scalar algorithm's state update order. On x86-64, each state update uses a single `LEA` for the
-multiplication by five and the additive constant. Other architectures use wrapping integer arithmetic.
-
-Vector preparation has a setup cost. The [dispatcher][murmur-dispatch] applies these thresholds to complete blocks:
-
-| Variant | AVX2 minimum | SSE4.1 fallback range |
-| --- | ---: | ---: |
-| x86-32 | 32 B | At least 16 B |
-| x86-128 | 256 B | At least 16 MiB |
-| x64-128 | 512 B | 512 B through 8 MiB |
-
-Below an eligible range, the dispatcher selects scalar code. Incremental updates apply the thresholds to each
-batch of full blocks. `block_buffer.rs` keeps pending bytes and their length together, processes complete input
-blocks without copying the whole update, and retains the incomplete tail for the next call.
-
-## XXH3: independent accumulator chains
-
-[`one_shot.rs`][xxhash-one-shot] selects formulas for 0–16, 17–128, and 129–240 bytes, with additional XXH3-128 paths
-for fixed sizes. Inputs above 240 bytes use stripes of 64 bytes and an accumulator with eight lanes. The flow for
-long inputs processes blocks of 1,024 bytes, scrambles the accumulator between blocks, and merges it into a digest
-of 64 or 128 bits.
-
-The [AVX2 kernel][xxhash-avx2] distributes a block's 16 stripes across four accumulator chains. Each chain depends
-on its own previous value, so the CPU can overlap arithmetic across chains instead of waiting on one long
-dependency sequence. Stripe accumulation is additive, which permits a reduction before the required scramble.
-
-```text
-One XXH3 block of 1,024 bytes: 16 stripes of 64 bytes
-
-Chain 0:  stripe 0  -> stripe 4 -> stripe 8  -> stripe 12 --+
-Chain 1:  stripe 1  -> stripe 5 -> stripe 9  -> stripe 13 --+
-Chain 2:  stripe 2  -> stripe 6 -> stripe 10 -> stripe 14 --+--> add chains
-Chain 3:  stripe 3  -> stripe 7 -> stripe 11 -> stripe 15 --+       |
-                                                                v
-                                                        canonical scramble
-```
-
-The tail uses four chains when it contains at least three regular stripes plus the final overlapping stripe.
-The kernel reduces those chains before the final merge. This schedules independent instructions within one
-thread. It does not start worker threads.
-
-Native batches reuse seed setup and inspect up to four adjacent inputs. Groups of two to four long inputs with
-the same number of regular stripes use an AVX2 batch kernel when available. Each input keeps its own final stripe.
-Equal stripe counts permit different byte lengths. Other items use the paths for individual inputs, preserving input order.
-
-`PreparedXxh3` derives a secret of 192 bytes once per nonzero seed for repeated calls with long inputs. Short inputs
-use formulas for their lengths. The Rust `*_batch_for_each` APIs deliver digests to a callback without allocating a
-result vector. Python list batches allocate integers. Packed `*_batch_into` calls write 8 or 16 bytes per digest
-in little endian order into one destination.
-
-## CPython: avoid copies and calls for each item
-
-The extension uses APIs for each CPython version and `METH_FASTCALL | METH_KEYWORDS` callbacks. Native parsers
-read arguments without a Python wrapper or an argument tuple on that call path. A batch call shares that entry
-cost across its items. Buffer ownership then determines whether the binding can borrow data or needs a snapshot.
-
-| Input or output | Handling and constraint |
-| --- | --- |
-| Exact `bytes` | Borrow immutable data without an input copy. |
-| Contiguous memoryview of exact `bytes` | Borrow a small view while attached, or retain its immutable owner and slice offset. Full and sliced views can avoid copies, including on builds without the global interpreter lock (GIL). |
-| Exact `bytearray` or a view over mutable storage | Borrow under interpreter or object synchronization. Take a snapshot where callbacks, overlap, or access without the GIL require stable data. |
-| View not contiguous in C order | Hashing and Base64 decoding flatten the view. Base64 encoding requires input contiguous in C order. |
-| Exact ASCII `str` for standard Base64 decoding | Borrow the string's UTF-8 representation without an intermediate ASCII `bytes` object. String subclasses retain their `encode` behavior. |
-| Base64 `*_into` output | Check capacity, stabilize overlapping input, and preserve bytes beyond the returned length. |
-
-[`buffer.rs`][buffers] owns these rules. Arbitrary buffer exporters and Python callbacks can run user code, release
-views, or resize mutable storage. The binding must stabilize affected inputs before retaining raw pointers across
-those operations. A view that prohibits writes still needs the owner's synchronization policy if the owner is mutable.
-
-### Interpreter detachment
-
-On CPython builds with the GIL, detaching releases that lock so other Python threads can run.
-The [runtime policy][runtime] keeps short calls attached to avoid release and reacquisition overhead. Eligible
-immutable or snapshotted inputs use these thresholds:
-
-| Workload | Detachment threshold |
-| --- | --- |
-| Single Base64 and XXH3 calls | 256 KiB of input |
-| Single MurmurHash3 calls | 64 KiB of input |
-| XXH3 batches | 1 MiB of total input or 16,384 items |
-
-The binding does not borrow mutable input across detached regions. For detached packed XXH3 batches, it retains input
-owners and stages digests, then reacquires synchronization and rechecks destination capacity before publishing
-the output. The path for exact `bytes` borrows 64 retained inputs at a time in a stack array, avoiding an array of
-slice descriptors for the whole batch. Small stable batches can write packed digests without staging results.
-
-The item threshold accounts for work on each item even with empty inputs. These thresholds trade call latency
-against interpreter availability. They do not bound how long another thread waits. See the
-[XXH3 batch binding][xxhash-batches] for detachment and output publication.
-
-## Allocation and build policy
-
-Release and benchmark profiles use optimization level 3, one code generation unit, and full optimization during
-linking. The Python extension and Rust benchmarks select `mimalloc` for Rust allocations. CPython owns its
-Python object allocations. Rust crate consumers retain their allocator choice.
-
-Production codec and hash implementations live in this repository. Competitor crates serve tests and benchmarks
-through development dependencies. The Python wheel build uses Hatchling and a Rust build with the
-`extension-module` feature.
-
-## Correctness constraints
-
-Kernel changes must preserve canonical outputs, supported CPU checks, and input and output bounds. Validation
-covers malformed data, lengths around vector boundaries, available backends, and exact output slices.
-
-- Rust and Python differential tests compare outputs with reference implementations. CPython tests also check
-  errors for each interpreter version, conversion order, aliasing, and interpreter progress.
-- Allocating Base64 batches discard partial result lists on failure. Reusable Base64 batches retain prior
-  destination writes. Packed XXH3 batches validate and stabilize inputs before mutating the destination.
-- Miri, Kani, fuzzing, and sanitizer checks cover pointer and buffer invariants. See [SAFETY.md][safety] for scope.
-- Core coverage runs without default features and requires 100% line coverage, excluding the AVX-512 files that
-  require supported hardware. Python facade branch coverage requires 100%. The Python suite tests binding behavior.
-
-Measure kernel and API costs separately when assessing an optimization. Rust benchmarks exercise the core.
-Python benchmarks include parsing, ownership, object allocation, and detachment. Compare allocating and reusable
-outputs with the corresponding [benchmark workloads][benchmarks].
+[Memory safety verification][safety] describes the scope of Miri, Kani, fuzzing, and sanitizer checks.
+[Benchmarks][benchmarks] contains measurements and reproduction commands. Algorithm guides and API references
+describe call signatures and operation-specific behavior.
 
 [benchmarks]: https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md
 [cpu]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/backend.rs
 [base64]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/base64
-[base64-encode]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/base64/encode
-[base64-decode]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/base64/decode
-[base64-output]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/base64/output_buffer.rs
-[cache]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/base64/encode/cache.rs
-[base64-bindings]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/bindings/base64
 [murmur3]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/murmur3
-[murmur-dispatch]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/murmur3/dispatch.rs
 [xxhash]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/xxhash
-[xxhash-one-shot]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/xxhash/one_shot.rs
-[xxhash-avx2]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/xxhash/long_inputs/x86/avx2.rs
 [bindings]: https://github.com/kozistr/hashcodecs-rs/tree/main/src/bindings
-[buffers]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/bindings/buffer.rs
-[runtime]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/bindings/runtime.rs
-[xxhash-batches]: https://github.com/kozistr/hashcodecs-rs/blob/main/src/bindings/xxhash/batch.rs
 [python]: https://github.com/kozistr/hashcodecs-rs/tree/main/hashcodecs
+[declarations]: https://github.com/kozistr/hashcodecs-rs/blob/main/hashcodecs/_hashcodecs.pyi
 [safety]: https://github.com/kozistr/hashcodecs-rs/blob/main/SAFETY.md

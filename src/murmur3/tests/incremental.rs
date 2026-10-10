@@ -34,6 +34,35 @@ fn match_simd_updates() {
 }
 
 #[test]
+fn match_x86_128_simd_updates() {
+    let input: Vec<u8> = (0..2048)
+        .map(|index| (index as u8).wrapping_mul(73).wrapping_add(19))
+        .collect();
+
+    for seed in [0, 1, 0xfeed_beef, u32::MAX] {
+        let expected = murmur3::murmur3_x86_128(&mut Cursor::new(&input), seed).unwrap();
+
+        for chunk_size in [112, 127, 128, 129, 144, 255, 256, 257, 384] {
+            for prefix_length in 0..16 {
+                let mut hasher = Murmur3X86Hasher128::new(seed);
+                hasher.update(&input[..prefix_length]);
+
+                for chunk in input[prefix_length..].chunks(chunk_size) {
+                    hasher.update(chunk);
+                }
+
+                let bytes = hasher.digest().map(u32::to_le_bytes);
+                let actual = u128::from_le_bytes(bytes.as_flattened().try_into().unwrap());
+                assert_eq!(
+                    actual, expected,
+                    "seed={seed} chunk_size={chunk_size} prefix_length={prefix_length}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn match_chunked_updates() {
     let seeds = [0, u32::MAX];
     let chunk_sizes = [1, 2, 3, 4, 7, 16, 31, 64];

@@ -33,23 +33,12 @@ fn mix_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     );
     let rotate_left = _mm256_setr_epi32(15, 16, 17, 18, 15, 16, 17, 18);
     let rotate_right = _mm256_setr_epi32(17, 16, 15, 14, 17, 16, 15, 14);
-    let mut mixed = MaybeUninit::<[u32; 64]>::uninit();
+    let mut mixed = MaybeUninit::<[u32; 32]>::uninit();
     let mixed = mixed.as_mut_ptr().cast::<u32>();
     let mut offset = 0;
 
-    while offset + 256 <= input.len() {
-        for vector in 0..8 {
-            let values =
-                unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
-            let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
-            unsafe { _mm256_storeu_si256(mixed.add(vector * 8).cast(), values) };
-        }
-
-        // All 64 words are initialized by the eight stores above.
-        mix_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 64) });
-        offset += 256;
-    }
-
+    // Four vectors keep premixing independent while allowing LLVM to unroll
+    // the state updates and eliminate the staging buffer's stores and reloads.
     while offset + 128 <= input.len() {
         for vector in 0..4 {
             let values =

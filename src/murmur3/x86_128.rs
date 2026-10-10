@@ -265,33 +265,39 @@ pub(super) fn mix_hashes(
     block3: u32,
     block4: u32,
 ) {
-    const ROTATE_H: [u32; 4] = [19, 17, 15, 13];
-    const ADD: [u32; 4] = [0x561c_cd1b, 0x0bca_a747, 0x96cd_1c35, 0x32ac_3b17];
+    hashes[0] =
+        scale_hash::<0x561c_cd1b>((hashes[0] ^ block1).rotate_left(19).wrapping_add(hashes[1]));
+    hashes[1] =
+        scale_hash::<0x0bca_a747>((hashes[1] ^ block2).rotate_left(17).wrapping_add(hashes[2]));
+    hashes[2] =
+        scale_hash::<0x96cd_1c35>((hashes[2] ^ block3).rotate_left(15).wrapping_add(hashes[3]));
+    hashes[3] =
+        scale_hash::<0x32ac_3b17>((hashes[3] ^ block4).rotate_left(13).wrapping_add(hashes[0]));
+}
 
-    hashes[0] ^= block1;
-    hashes[0] = hashes[0]
-        .rotate_left(ROTATE_H[0])
-        .wrapping_add(hashes[1])
-        .wrapping_mul(5)
-        .wrapping_add(ADD[0]);
-    hashes[1] ^= block2;
-    hashes[1] = hashes[1]
-        .rotate_left(ROTATE_H[1])
-        .wrapping_add(hashes[2])
-        .wrapping_mul(5)
-        .wrapping_add(ADD[1]);
-    hashes[2] ^= block3;
-    hashes[2] = hashes[2]
-        .rotate_left(ROTATE_H[2])
-        .wrapping_add(hashes[3])
-        .wrapping_mul(5)
-        .wrapping_add(ADD[2]);
-    hashes[3] ^= block4;
-    hashes[3] = hashes[3]
-        .rotate_left(ROTATE_H[3])
-        .wrapping_add(hashes[0])
-        .wrapping_mul(5)
-        .wrapping_add(ADD[3]);
+#[inline(always)]
+fn scale_hash<const ADDEND: u32>(hash: u32) -> u32 {
+    // Keep the multiply and add in one LEA. LLVM otherwise duplicates the first
+    // lane's multiply and distributes its addend into the dependent fourth lane.
+    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(any(kani, miri))))]
+    {
+        let mut value = hash as usize;
+        unsafe {
+            core::arch::asm!(
+                "lea {value:e}, [{value} + {value} * 4 + {addend}]",
+                value = inout(reg) value,
+                addend = const ADDEND as i32,
+                options(pure, nomem, nostack, preserves_flags),
+            );
+        }
+
+        value as u32
+    }
+
+    #[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), not(any(kani, miri)))))]
+    {
+        hash.wrapping_mul(5).wrapping_add(ADDEND)
+    }
 }
 
 #[inline]

@@ -83,8 +83,8 @@ impl BorrowedBuffer<'_> {
     fn try_snapshot(&self) -> PyResult<Vec<u8>> {
         debug_assert!(!self.view.obj.is_null());
         let py = unsafe { Python::assume_attached() };
-        let exporter = unsafe { Bound::from_borrowed_ptr(py, self.view.obj) };
-        with_critical_section(&exporter, || unsafe { try_copy_bytes(self.bytes()) })
+        let exporter = unsafe { Bound::ref_from_ptr(py, &self.view.obj) };
+        with_critical_section(exporter, || unsafe { try_copy_bytes(self.bytes()) })
     }
 }
 
@@ -209,7 +209,7 @@ impl<'py> BytesLike<'_, 'py> {
             {
                 // The active export owns `view.obj`.
                 // Equality proves that the exact memoryview source remains alive during access.
-                let memoryview = unsafe { Bound::from_borrowed_ptr(py, buffer.memoryview_source) };
+                let memoryview = unsafe { Bound::ref_from_ptr(py, &buffer.memoryview_source) };
                 let owner = memoryview.getattr(intern!(py, "obj"))?;
 
                 if !PyBytes::is_exact_type_of(&owner) {

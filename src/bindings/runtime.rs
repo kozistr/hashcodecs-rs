@@ -37,8 +37,8 @@ pub(super) unsafe fn with_function_bytes<T: Send>(
         };
     }
 
-    let object = unsafe { Bound::from_borrowed_ptr(py, object) };
-    let input = bytes_like(&object, "s")?;
+    let object = unsafe { Bound::ref_from_ptr(py, &object) };
+    let input = bytes_like(object, "s")?;
     let detach = input.detach_safe() && input.len() >= detach_threshold;
 
     Ok(unsafe {

@@ -266,16 +266,28 @@ pub(super) fn finish_tail(tail: &[u8], mut hashes: [u64; 2], length: u64) -> [u6
 
 #[inline(always)]
 pub(super) fn mix_hashes(hash1: &mut u64, hash2: &mut u64, block1: u64, block2: u64) {
-    *hash1 ^= block1;
-    *hash1 = hash1
-        .rotate_left(27)
-        .wrapping_add(*hash2)
-        .wrapping_mul(5)
-        .wrapping_add(0x52dc_e729);
-    *hash2 ^= block2;
-    *hash2 = hash2
-        .rotate_left(31)
-        .wrapping_add(*hash1)
-        .wrapping_mul(5)
-        .wrapping_add(0x3849_5ab5);
+    *hash1 = scale_hash::<0x52dc_e729>((*hash1 ^ block1).rotate_left(27).wrapping_add(*hash2));
+    *hash2 = scale_hash::<0x3849_5ab5>((*hash2 ^ block2).rotate_left(31).wrapping_add(*hash1));
+}
+
+#[inline(always)]
+fn scale_hash<const ADDEND: i32>(mut hash: u64) -> u64 {
+    // Keep each state update in one LEA instead of distributing its constant
+    // across the dependent updates that follow.
+    #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
+    unsafe {
+        core::arch::asm!(
+            "lea {hash}, [{hash} + {hash} * 4 + {addend}]",
+            hash = inout(reg) hash,
+            addend = const ADDEND,
+            options(pure, nomem, nostack, preserves_flags),
+        );
+    }
+
+    #[cfg(not(all(target_arch = "x86_64", not(any(kani, miri)))))]
+    {
+        hash = hash.wrapping_mul(5).wrapping_add(ADDEND as u64);
+    }
+
+    hash
 }

@@ -1,6 +1,6 @@
 //! Select an XXH3 formula from the input length and compute one hash.
 
-use super::long_inputs::{LongInput, xxh3_64_over_240_bytes, xxh3_128_over_240_bytes};
+use super::long_inputs::{LongEngine, LongInput, xxh3_64_over_240_bytes};
 use super::short_inputs::{
     xxh3_64_len_0_to_16, xxh3_64_len_17_to_128, xxh3_64_len_129_to_240, xxh3_128_len_0_to_16,
     xxh3_128_len_17_to_128, xxh3_128_len_32, xxh3_128_len_64, xxh3_128_len_128,
@@ -71,6 +71,6 @@ pub fn xxh3_128(input: &[u8], seed: u64) -> [u64; 2] {
         128 => xxh3_128_len_128(input, seed),
         17..=128 => xxh3_128_len_17_to_128(input, seed),
         129..=240 => xxh3_128_len_129_to_240(input, seed),
-        _ => xxh3_128_over_240_bytes(LongInput::new(input).unwrap(), seed),
+        _ => LongEngine::cached().hash_128_seeded(LongInput::new(input).unwrap(), seed),
     }
 }

@@ -313,6 +313,8 @@ pub(super) struct LongEngine {
     backend: LongBackend,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     avx2_available: bool,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2_selected: bool,
 }
 
 #[cfg(not(any(kani, miri)))]
@@ -323,6 +325,8 @@ static LONG_ENGINE: LongEngine = LongEngine {
     backend: LongBackend::Scalar,
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     avx2_available: false,
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    avx2_selected: false,
 };
 
 impl LongEngine {
@@ -357,6 +361,7 @@ impl LongEngine {
             Self {
                 backend,
                 avx2_available: capabilities.supports(CpuFeature::Avx2),
+                avx2_selected: selected == X86Backend::Avx2,
             }
         }
 
@@ -487,6 +492,27 @@ impl LongEngine {
         ]
     }
 
+    #[inline]
+    pub(super) fn hash_128(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 2] {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if self.avx2_selected && input.len() <= 1024 {
+            return unsafe { x86::avx2::hash_128_medium(input, secret) };
+        }
+
+        self.hash(input, secret, finalize_long_128)
+    }
+
+    pub(super) fn hash_128_seeded(&self, input: LongInput<'_>, seed: u64) -> [u64; 2] {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if seed == 0 && self.avx2_selected && input.len() <= 1024 {
+            return unsafe { x86::avx2::hash_128_medium(input, &DEFAULT_SECRET) };
+        }
+
+        let derived = self.derive_secret(seed);
+
+        self.hash(input, Self::secret(derived.as_ref()), finalize_long_128)
+    }
+
     #[inline(always)]
     pub(super) fn hash<T>(
         &self,
@@ -507,16 +533,5 @@ pub(super) fn xxh3_64_over_240_bytes(input: LongInput<'_>, seed: u64) -> u64 {
         input,
         LongEngine::secret(derived.as_ref()),
         finalize_long_64,
-    )
-}
-
-pub(super) fn xxh3_128_over_240_bytes(input: LongInput<'_>, seed: u64) -> [u64; 2] {
-    let engine = LongEngine::cached();
-    let derived = engine.derive_secret(seed);
-
-    engine.hash(
-        input,
-        LongEngine::secret(derived.as_ref()),
-        finalize_long_128,
     )
 }

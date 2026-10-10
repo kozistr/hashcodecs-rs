@@ -56,11 +56,7 @@ impl PreparedXxh3 {
         };
 
         let engine = LongEngine::cached();
-        engine.hash(
-            input,
-            LongEngine::secret(self.secret.as_ref()),
-            finalize_long_128,
-        )
+        engine.hash_128(input, LongEngine::secret(self.secret.as_ref()))
     }
 
     /// Computes canonical XXH3 64-bit hashes with the prepared seed.

@@ -14,6 +14,10 @@ pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> u
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if input.len() >= 32 && std::is_x86_feature_detected!("avx2") {
+            if std::is_x86_feature_detected!("popcnt") {
+                return unsafe { x86::symbol_count_avx2_popcnt(input, altchars) };
+            }
+
             return unsafe { x86::symbol_count_avx2(input, altchars) };
         }
 

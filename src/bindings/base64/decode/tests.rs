@@ -59,7 +59,12 @@ fn propagate_storage_errors() {
                 attempts: Cell::new(0),
             };
             let error = decoder
-                .execute(py, &BytesLike::OwnedVec(encoded.to_vec()), &output, None)
+                .execute(
+                    py,
+                    &BytesLike::OwnedVec(encoded.to_vec()),
+                    &output,
+                    WarningScan::Complete(None),
+                )
                 .unwrap_err();
             assert!(error.is_instance_of::<PyMemoryError>(py));
             assert_eq!(error.to_string(), "MemoryError: storage failed");

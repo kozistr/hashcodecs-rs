@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / 'docs' / 'benchmarks'
-PYTHON_RUNTIME = 'CPython 3.14.6 free-threaded'
+PYTHON_RUNTIME = 'CPython 3.15.0 free-threaded'
 
 COLORS = {
     'hashcodecs': '#007f73',

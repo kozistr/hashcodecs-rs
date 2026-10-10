@@ -11,7 +11,7 @@ behind the results, read [Architecture](docs/ARCHITECTURE.md).
 | Execution | One thread, pinned to one logical CPU |
 | Rust | Criterion, 50 samples per case, release optimization |
 | Python timing | Median of 15 samples, calibrated to at least 0.2 seconds per sample |
-| Python | Free-threaded CPython 3.14.6 (`3.14t`), GIL disabled |
+| Python | Free-threaded CPython 3.15.0 (`3.15t`), GIL disabled |
 | Python baselines | pybase64 1.5.0, mmh3 5.3.0, xxhash 4.0.1 |
 | Allocation | `mimalloc` for Rust benchmark allocations and Rust allocations in the Python extension |
 | XXH3 C baseline | xxHash 0.8.3 through `xxhash-c-sys`, compiled with AVX2 to match this host's selected backend |
@@ -73,7 +73,7 @@ dispatch starts at 241 bytes.
 ## Reproduce a benchmark
 
 Run commands from the repository root. Install Rust 1.89 or newer, a C/C++ compiler and linker for your platform,
-and `uv`. Use free-threaded CPython 3.14 for the Python charts. The Python setup below builds and installs the
+and `uv`. Use free-threaded CPython 3.15.0 for the Python charts. The Python setup below builds and installs the
 current checkout as a CPython wheel through Hatchling.
 
 Run the group affected by your change. Reserve a complete run for changes that can affect all groups. Keep
@@ -107,21 +107,22 @@ cargo bench --manifest-path benches/Cargo.toml --bench murmur3 -- x64_128/hashco
 
 ### Python
 
-Prepare the free-threaded interpreter (`3.14t`) and pinned benchmark dependencies. Repeat the wheel installation
-after changing native code or switching interpreters:
+Prepare the free-threaded interpreter (`3.15.0t`) and pinned benchmark dependencies. If your `uv` release does not
+provide this interpreter yet, pass the path to an installed CPython 3.15.0t executable with `--python`. Repeat the
+wheel installation after changing native code or switching interpreters:
 
 ```sh
-uv sync --python 3.14t --frozen --group benchmark --no-install-project
-uv run --python 3.14t --frozen --no-sync python tools/install_local_wheel.py
+uv sync --python 3.15.0t --frozen --group benchmark --no-install-project
+uv run --python 3.15.0t --frozen --no-sync python tools/install_local_wheel.py
 ```
 
 Choose the relevant script:
 
 ```sh
-uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64.py
-uv run --python 3.14t --frozen --no-sync python benchmarks/python_base64_batch.py
-uv run --python 3.14t --frozen --no-sync python benchmarks/python_murmur3.py
-uv run --python 3.14t --frozen --no-sync python benchmarks/python_xxhash.py
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_base64.py
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_base64_batch.py
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_murmur3.py
+uv run --python 3.15.0t --frozen --no-sync python benchmarks/python_xxhash.py
 ```
 
 The scripts check outputs before timing and print GiB/s. Append a mode from the table to select a workload. Use
@@ -155,7 +156,7 @@ throughput without pinning to one CPU. Keep those results separate from the char
 3. Render the SVG files:
 
    ```sh
-   uv run --python 3.14t --no-project python benchmarks/render_charts.py
+   uv run --python 3.15.0t --no-project python benchmarks/render_charts.py
    ```
 
 4. Review the CSV and SVG diff. A focused update should change the corresponding charts, including any README

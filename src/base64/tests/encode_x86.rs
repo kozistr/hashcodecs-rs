@@ -158,11 +158,13 @@ fn match_avx2_streaming() {
         return;
     }
 
-    for (input_len, urlsafe) in [(64 << 10) + 96, (64 << 10) + 192]
-        .into_iter()
+    for (input_len, urlsafe) in (0..=256)
+        .chain([(64 << 10) + 96, (64 << 10) + 192])
         .flat_map(|length| [(length, false), (length, true)])
     {
-        let input = vec![0x5a_u8; input_len];
+        let input: Vec<u8> = (0..input_len)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
 
         let expected = if urlsafe {
             base64::engine::general_purpose::URL_SAFE.encode(&input)
@@ -170,10 +172,10 @@ fn match_avx2_streaming() {
             base64::engine::general_purpose::STANDARD.encode(&input)
         };
 
-        for wide_stores in [false, true] {
+        for alignment in [0, 16] {
             let mut guarded_output = vec![0xa5_u8; expected.len() + 64];
             let aligned_offset = guarded_output.as_mut_ptr().align_offset(32);
-            let output_offset = aligned_offset + usize::from(!wide_stores) * 16;
+            let output_offset = aligned_offset + alignment;
             let output = &mut guarded_output[output_offset..output_offset + expected.len()];
 
             let consumed = unsafe {
@@ -194,6 +196,16 @@ fn match_avx2_streaming() {
             encode_scalar(&input[consumed..], &mut output[consumed / 3 * 4..], urlsafe);
 
             assert_eq!(output, expected.as_bytes());
+            assert!(
+                guarded_output[..output_offset]
+                    .iter()
+                    .all(|&byte| byte == 0xa5)
+            );
+            assert!(
+                guarded_output[output_offset + expected.len()..]
+                    .iter()
+                    .all(|&byte| byte == 0xa5)
+            );
         }
     }
 }

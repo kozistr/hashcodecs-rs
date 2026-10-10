@@ -176,7 +176,10 @@ impl PreparedDecoder {
             return self.decode_allocating(py, &BytesLike::OwnedVec(input));
         }
 
-        let warning = self.legacy_warning_byte(input);
+        let warning = match self.policy.warning_scan {
+            WarningScan::Pending => WarningScan::Pending,
+            WarningScan::Complete(_) => WarningScan::Complete(self.legacy_warning_byte(input)),
+        };
         self.execute(py, input, &Allocating, warning)
     }
 
@@ -198,12 +201,12 @@ impl PreparedDecoder {
         let warning = self.legacy_warning_byte(input);
 
         if warning.is_some() {
-            let decoded = self.execute(py, input, &Allocating, warning)?;
+            let decoded = self.execute(py, input, &Allocating, WarningScan::Complete(warning))?;
 
             return copy_decoded_into(&decoded, output);
         }
 
-        self.execute(py, input, output, None)
+        self.execute(py, input, output, WarningScan::Complete(None))
     }
 
     fn execute<'py, O: DecodeOutput<'py>>(
@@ -211,10 +214,19 @@ impl PreparedDecoder {
         py: Python<'py>,
         input: &BytesLike<'_, 'py>,
         output: &O,
-        warning: Option<u8>,
+        warning: WarningScan,
     ) -> PyResult<O::Value> {
+        let scan_warning = || match warning {
+            WarningScan::Pending => self.legacy_warning_byte(input),
+            WarningScan::Complete(warning) => warning,
+        };
+        let known_warning = match warning {
+            WarningScan::Pending => None,
+            WarningScan::Complete(warning) => warning,
+        };
         let (urlsafe_315, direct, strict) = match self.route {
             DecodeRoute::Configured(shortcut) => {
+                let warning = scan_warning();
                 let value = self.configured_output(py, input, output, shortcut)?;
 
                 return self.finish(py, warning, value);
@@ -225,6 +237,7 @@ impl PreparedDecoder {
         };
 
         if urlsafe_315 {
+            // Successful URL-safe validation also excludes legacy warning bytes.
             if (self.policy.padding.is_padded() || !strict)
                 && let Some(value) = self.try_native(
                     py,
@@ -234,7 +247,7 @@ impl PreparedDecoder {
                     self.attempt,
                 )?
             {
-                return self.finish(py, warning, value);
+                return self.finish(py, known_warning, value);
             }
 
             if !self.policy.padding.is_padded()
@@ -246,10 +259,11 @@ impl PreparedDecoder {
                     self.attempt,
                 )?
             {
-                return self.finish(py, warning, value);
+                return self.finish(py, known_warning, value);
             }
         }
 
+        let warning = scan_warning();
         let value = if strict {
             self.try_native(
                 py,
@@ -1028,10 +1042,23 @@ fn python_legacy_altchar_badchar(
 fn legacy_altchar_badchar(input: &BytesLike<'_, '_>, altchars: [u8; 2]) -> Option<u8> {
     unsafe {
         input.with_bytes(|input| {
-            b"+/"
-                .iter()
-                .copied()
-                .find(|byte| !altchars.contains(byte) && input.contains(byte))
+            let plus = !altchars.contains(&b'+');
+            let slash = !altchars.contains(&b'/');
+            let index = match (plus, slash) {
+                (true, true) => memchr::memchr2(b'+', b'/', input),
+                (true, false) => memchr::memchr(b'+', input),
+                (false, true) => memchr::memchr(b'/', input),
+                (false, false) => None,
+            }?;
+            let byte = input[index];
+
+            Some(
+                if plus && byte == b'/' && memchr::memchr(b'+', &input[index + 1..]).is_some() {
+                    b'+'
+                } else {
+                    byte
+                },
+            )
         })
     }
 }

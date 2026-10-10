@@ -116,29 +116,29 @@ unsafe fn encode_with_offsets(
     // final-load bound `load_offset + 104 <= input.len()`.
     #[cfg(target_arch = "x86_64")]
     {
-        let groups = (input.len() - load_offset - 8) / 96;
+        let mut groups = (input.len() - load_offset - 8) / 96;
 
         // Amortize the helper's fixed call and register-save costs across at
         // least two groups. Shorter prefixes use the inline 24-byte loop.
         if groups >= 2 {
+            if output.align_offset(32) == 16 {
+                let encoded =
+                    unsafe { encode_12(input.as_ptr().add(24), _mm256_castsi256_si128(offsets)) };
+                unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
+                load_offset += 12;
+                destination += 16;
+                groups = (input.len() - load_offset - 8) / 96;
+            }
+
             if store_mode == Avx2StoreMode::Streaming {
                 used_streaming_stores = true;
                 unsafe {
-                    if output.align_offset(32) == 0 {
-                        encode_96_shifted::<StreamingStore256>(
-                            input.as_ptr().add(load_offset),
-                            output.add(destination),
-                            groups,
-                            offsets,
-                        )
-                    } else {
-                        encode_96_shifted::<StreamingStore128>(
-                            input.as_ptr().add(load_offset),
-                            output.add(destination),
-                            groups,
-                            offsets,
-                        )
-                    }
+                    encode_96_shifted_streaming(
+                        input.as_ptr().add(load_offset),
+                        output.add(destination),
+                        groups,
+                        offsets,
+                    )
                 };
             } else {
                 unsafe {
@@ -292,7 +292,7 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
-unsafe fn encode_96_shifted<Store: StreamingStore>(
+unsafe fn encode_96_shifted_streaming(
     mut input: *const u8,
     mut output: *mut u8,
     mut groups: usize,
@@ -310,10 +310,10 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
 
         unsafe {
-            Store::store(output, first);
-            Store::store(output.add(32), second);
-            Store::store(output.add(64), third);
-            Store::store(output.add(96), fourth);
+            _mm256_stream_si256(output.cast(), first);
+            _mm256_stream_si256(output.add(32).cast(), second);
+            _mm256_stream_si256(output.add(64).cast(), third);
+            _mm256_stream_si256(output.add(96).cast(), fourth);
         }
 
         let fifth =
@@ -326,10 +326,10 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
 
         unsafe {
-            Store::store(output.add(128), fifth);
-            Store::store(output.add(160), sixth);
-            Store::store(output.add(192), seventh);
-            Store::store(output.add(224), eighth);
+            _mm256_stream_si256(output.add(128).cast(), fifth);
+            _mm256_stream_si256(output.add(160).cast(), sixth);
+            _mm256_stream_si256(output.add(192).cast(), seventh);
+            _mm256_stream_si256(output.add(224).cast(), eighth);
         }
 
         input = unsafe { input.add(192) };
@@ -348,10 +348,10 @@ unsafe fn encode_96_shifted<Store: StreamingStore>(
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
 
         unsafe {
-            Store::store(output, first);
-            Store::store(output.add(32), second);
-            Store::store(output.add(64), third);
-            Store::store(output.add(96), fourth);
+            _mm256_stream_si256(output.cast(), first);
+            _mm256_stream_si256(output.add(32).cast(), second);
+            _mm256_stream_si256(output.add(64).cast(), third);
+            _mm256_stream_si256(output.add(96).cast(), fourth);
         }
     }
 }
@@ -392,38 +392,6 @@ fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i 
     );
 
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
-}
-
-#[cfg(target_arch = "x86_64")]
-trait StreamingStore {
-    unsafe fn store(output: *mut u8, value: __m256i);
-}
-
-#[cfg(target_arch = "x86_64")]
-struct StreamingStore128;
-
-#[cfg(target_arch = "x86_64")]
-impl StreamingStore for StreamingStore128 {
-    #[inline]
-    #[target_feature(enable = "avx2")]
-    unsafe fn store(output: *mut u8, value: __m256i) {
-        unsafe {
-            _mm_stream_si128(output.cast(), _mm256_castsi256_si128(value));
-            _mm_stream_si128(output.add(16).cast(), _mm256_extracti128_si256(value, 1));
-        }
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-struct StreamingStore256;
-
-#[cfg(target_arch = "x86_64")]
-impl StreamingStore for StreamingStore256 {
-    #[inline]
-    #[target_feature(enable = "avx2")]
-    unsafe fn store(output: *mut u8, value: __m256i) {
-        unsafe { _mm256_stream_si256(output.cast(), value) };
-    }
 }
 
 #[cfg(target_arch = "x86_64")]

@@ -97,7 +97,7 @@ def test_decode_symbol_runs(altchars: bytes | None, length: int) -> None:
 
 @pytest.mark.skipif(not PYTHON_315, reason='requires the CPython 3.15 Base64 API')
 def test_altchar_byte_classes_match_cpython() -> None:
-    inputs = (b'', b'AA==', b'+/8=', b'++8=', b'//8=', b'=w==')
+    inputs = (b'', b'AA==', b'+/8=', b'/+8=', b'++8=', b'//8=', b'=w==')
     payloads = (b'', b'\x00', b'\xfb', b'\xff', b'\xfb\xff')
     # Every byte is tested in either slot. Cross only the classes where
     # translation can collide with padding, whitespace, or alphabet symbols.

@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 
 import pybase64
-from _support import (
+from support import (
     SIZES,
     add_timing_arguments,
     configure_timing,

@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 import mmh3
-from _support import (
+from support import (
     add_timing_arguments,
     configure_timing,
     data,

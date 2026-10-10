@@ -12,7 +12,7 @@ from statistics import median
 from time import perf_counter
 from types import ModuleType
 
-from _support import add_timing_arguments, calibrate, configure_timing, data, pin_to_one_cpu, positive_int
+from support import add_timing_arguments, calibrate, configure_timing, data, pin_to_one_cpu, positive_int
 
 
 def load_extension(name: str, path: Path) -> ModuleType:

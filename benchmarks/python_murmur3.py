@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 import mmh3
-from _support import (
+from support import (
     SIZES,
     add_timing_arguments,
     configure_timing,

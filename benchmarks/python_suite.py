@@ -11,8 +11,8 @@ from pathlib import Path
 from queue import Queue
 from time import perf_counter
 
-from _support import add_timing_arguments, configure_timing, nonnegative_int, positive_int
 from cpu import select_cpus
+from support import add_timing_arguments, configure_timing, nonnegative_int, positive_int
 
 JOBS = {
     'base64': [

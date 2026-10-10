@@ -171,52 +171,81 @@ fn preserve_avx2_overlaps() {
 
     const GUARD: usize = 64;
     const CANARY: u8 = 0xa5;
-    const LENGTH: usize = 96;
 
-    let input: Vec<u8> = (0..LENGTH)
-        .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
-        .collect();
+    for length in [96, 192, 204] {
+        let input: Vec<u8> = (0..length)
+            .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+            .collect();
 
-    for (encoded, alphabet) in [
-        (
-            base64::engine::general_purpose::STANDARD.encode(&input),
-            DecodeAlphabet::Standard,
-        ),
-        (
-            base64::engine::general_purpose::URL_SAFE.encode(&input),
-            DecodeAlphabet::UrlSafe,
-        ),
-    ] {
-        for cache_line_offset in [0, 32] {
-            let mut output = vec![CANARY; GUARD + 64 + LENGTH + GUARD];
-            let aligned = output.as_mut_ptr().align_offset(64);
-            let start = aligned + cache_line_offset;
-            let decoded = &mut output[start..start + LENGTH];
+        for (encoded, alphabet) in [
+            (
+                base64::engine::general_purpose::STANDARD.encode(&input),
+                DecodeAlphabet::Standard,
+            ),
+            (
+                base64::engine::general_purpose::URL_SAFE.encode(&input),
+                DecodeAlphabet::UrlSafe,
+            ),
+            (
+                base64::engine::general_purpose::STANDARD.encode(&input),
+                DecodeAlphabet::Mixed,
+            ),
+        ] {
+            for cache_line_offset in 0..64 {
+                let mut output = vec![CANARY; GUARD + 64 + length + GUARD];
+                let aligned = output.as_mut_ptr().align_offset(64);
+                let start = aligned + cache_line_offset;
+                let decoded = &mut output[start..start + length];
 
-            assert_eq!(decoded.as_ptr().addr() & 63, cache_line_offset);
-            assert_eq!(
-                decode_with_backend(encoded.as_bytes(), decoded, Backend::Avx2, alphabet),
-                Ok((encoded.len(), LENGTH))
-            );
-            assert_eq!(decoded, input);
-            assert!(output[..start].iter().all(|&byte| byte == CANARY));
-            assert!(output[start + LENGTH..].iter().all(|&byte| byte == CANARY));
+                assert_eq!(decoded.as_ptr().addr() & 63, cache_line_offset);
+                assert_eq!(
+                    decode_with_backend(encoded.as_bytes(), decoded, Backend::Avx2, alphabet),
+                    Ok((encoded.len(), length))
+                );
+                assert_eq!(decoded, input);
+                assert!(output[..start].iter().all(|&byte| byte == CANARY));
+                assert!(output[start + length..].iter().all(|&byte| byte == CANARY));
 
-            output.fill(CANARY);
-            assert_eq!(
-                unsafe {
-                    decode_valid_prefix_with_backend(
-                        encoded.as_bytes(),
-                        output.as_mut_ptr().add(start),
-                        Backend::Avx2,
-                        alphabet,
-                    )
-                },
-                (encoded.len(), LENGTH)
-            );
-            assert_eq!(&output[start..start + LENGTH], input);
-            assert!(output[..start].iter().all(|&byte| byte == CANARY));
-            assert!(output[start + LENGTH..].iter().all(|&byte| byte == CANARY));
+                output.fill(CANARY);
+                assert_eq!(
+                    unsafe {
+                        decode_valid_prefix_with_backend(
+                            encoded.as_bytes(),
+                            output.as_mut_ptr().add(start),
+                            Backend::Avx2,
+                            alphabet,
+                        )
+                    },
+                    (encoded.len(), length)
+                );
+                assert_eq!(&output[start..start + length], input);
+                assert!(output[..start].iter().all(|&byte| byte == CANARY));
+                assert!(output[start + length..].iter().all(|&byte| byte == CANARY));
+
+                for invalid_at in 0..encoded.len() {
+                    let mut invalid = encoded.as_bytes().to_vec();
+                    invalid[invalid_at] = 0xff;
+                    output.fill(CANARY);
+
+                    let consumed = invalid_at / 16 * 16;
+                    let written = consumed / 4 * 3;
+                    assert_eq!(
+                        unsafe {
+                            decode_valid_prefix_with_backend(
+                                &invalid,
+                                output.as_mut_ptr().add(start),
+                                Backend::Avx2,
+                                alphabet,
+                            )
+                        },
+                        (consumed, written),
+                        "length={length} offset={cache_line_offset} invalid_at={invalid_at}"
+                    );
+                    assert_eq!(&output[start..start + written], &input[..written]);
+                    assert!(output[..start].iter().all(|&byte| byte == CANARY));
+                    assert!(output[start + written..].iter().all(|&byte| byte == CANARY));
+                }
+            }
         }
     }
 }

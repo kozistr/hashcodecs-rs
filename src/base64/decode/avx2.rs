@@ -14,9 +14,6 @@ use super::tables::{
 };
 use super::x86_contracts::{Decoder, Store};
 
-// Optimization candidate: compare two-block and four-block unrolling after
-// checking generated assembly for register spills. Preserve the combined error
-// reduction and the Store policy's exact output boundary for the final block.
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn decode<A: Decoder, S: Store>(
     input: &[u8],
@@ -326,9 +323,9 @@ pub(super) unsafe fn store_24_padded(output: *mut u8, value: __m256i) {
 
 #[inline(always)]
 unsafe fn store_24_padded_wide(output: *mut u8, value: __m256i) {
-    // Close the four-byte gap between 128-bit lanes, then let the following
-    // store replace the eight padding bytes at the end.
+    // Duplicate payload in the padding to avoid a zero-fill blend after the
+    // lane permutation. The following store replaces all eight padding bytes.
     let packed =
-        unsafe { _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 1, 2, 4, 5, 6, 7, 7)) };
+        unsafe { _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 1, 2, 4, 5, 6, 0, 1)) };
     unsafe { _mm256_storeu_si256(output.cast(), packed) };
 }

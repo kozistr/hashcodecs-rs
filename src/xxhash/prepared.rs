@@ -81,7 +81,7 @@ impl PreparedXxh3 {
             inputs,
             self.seed,
             xxh3_64,
-            finalize_long_64,
+            (|_, _, _| None, finalize_long_64),
             engine,
             LongEngine::secret(self.secret.as_ref()),
             output,
@@ -95,7 +95,22 @@ impl PreparedXxh3 {
     #[inline]
     pub fn hash_128_batch(&self, inputs: &[&[u8]]) -> Vec<[u64; 2]> {
         let mut hashes = Vec::with_capacity(inputs.len());
-        self.hash_128_batch_for_each(inputs, |hash| hashes.push(hash));
+        let engine = LongEngine::cached();
+        hash_each_input_with_secret(
+            inputs,
+            self.seed,
+            xxh3_128,
+            (
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                LongEngine::try_hash_128_medium,
+                #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+                |_, _, _| None,
+                finalize_long_128,
+            ),
+            engine,
+            LongEngine::secret(self.secret.as_ref()),
+            |hash| hashes.push(hash),
+        );
         hashes
     }
 
@@ -110,7 +125,7 @@ impl PreparedXxh3 {
             inputs,
             self.seed,
             xxh3_128,
-            finalize_long_128,
+            (|_, _, _| None, finalize_long_128),
             engine,
             LongEngine::secret(self.secret.as_ref()),
             output,

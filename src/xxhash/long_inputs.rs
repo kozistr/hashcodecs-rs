@@ -492,11 +492,25 @@ impl LongEngine {
         ]
     }
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[inline(always)]
+    pub(super) fn try_hash_128_medium(
+        &self,
+        input: LongInput<'_>,
+        secret: &Secret,
+    ) -> Option<[u64; 2]> {
+        if self.avx2_selected && input.len() <= 1024 {
+            return Some(unsafe { x86::avx2::hash_128_medium(input, secret) });
+        }
+
+        None
+    }
+
     #[inline]
     pub(super) fn hash_128(&self, input: LongInput<'_>, secret: &Secret) -> [u64; 2] {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        if self.avx2_selected && input.len() <= 1024 {
-            return unsafe { x86::avx2::hash_128_medium(input, secret) };
+        if let Some(hash) = self.try_hash_128_medium(input, secret) {
+            return hash;
         }
 
         self.hash(input, secret, finalize_long_128)

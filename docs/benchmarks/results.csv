@@ -1,16 +1,16 @@
 chart,panel,input,implementation,gib_per_second
-Rust Base64 throughput,Standard encode,1 KiB,hashcodecs,25.19
-Rust Base64 throughput,Standard encode,4 KiB,hashcodecs,35.02
-Rust Base64 throughput,Standard encode,1 MiB,hashcodecs,38.27
-Rust Base64 throughput,Standard encode,8 MiB,hashcodecs,29.24
-Rust Base64 throughput,Standard encode,1 KiB,base64,4.77
-Rust Base64 throughput,Standard encode,4 KiB,base64,5.40
-Rust Base64 throughput,Standard encode,1 MiB,base64,4.83
-Rust Base64 throughput,Standard encode,8 MiB,base64,4.06
-Rust Base64 throughput,Standard encode,1 KiB,base64 turbo,25.11
-Rust Base64 throughput,Standard encode,4 KiB,base64 turbo,33.92
-Rust Base64 throughput,Standard encode,1 MiB,base64 turbo,37.81
-Rust Base64 throughput,Standard encode,8 MiB,base64 turbo,30.99
+Rust Base64 throughput,Standard encode,1 KiB,hashcodecs,26.46
+Rust Base64 throughput,Standard encode,4 KiB,hashcodecs,34.67
+Rust Base64 throughput,Standard encode,1 MiB,hashcodecs,39.03
+Rust Base64 throughput,Standard encode,8 MiB,hashcodecs,31.48
+Rust Base64 throughput,Standard encode,1 KiB,base64,4.82
+Rust Base64 throughput,Standard encode,4 KiB,base64,5.42
+Rust Base64 throughput,Standard encode,1 MiB,base64,4.82
+Rust Base64 throughput,Standard encode,8 MiB,base64,4.07
+Rust Base64 throughput,Standard encode,1 KiB,base64 turbo,25.63
+Rust Base64 throughput,Standard encode,4 KiB,base64 turbo,33.44
+Rust Base64 throughput,Standard encode,1 MiB,base64 turbo,37.90
+Rust Base64 throughput,Standard encode,8 MiB,base64 turbo,31.01
 Rust Base64 throughput,Standard decode,1 KiB,hashcodecs,18.238
 Rust Base64 throughput,Standard decode,4 KiB,hashcodecs,26.133
 Rust Base64 throughput,Standard decode,1 MiB,hashcodecs,30.243
@@ -23,18 +23,18 @@ Rust Base64 throughput,Standard decode,1 KiB,base64 turbo,17.37
 Rust Base64 throughput,Standard decode,4 KiB,base64 turbo,23.28
 Rust Base64 throughput,Standard decode,1 MiB,base64 turbo,20.50
 Rust Base64 throughput,Standard decode,8 MiB,base64 turbo,16.87
-Rust Base64 throughput,URL-safe encode,1 KiB,hashcodecs,25.87
-Rust Base64 throughput,URL-safe encode,4 KiB,hashcodecs,34.95
-Rust Base64 throughput,URL-safe encode,1 MiB,hashcodecs,39.68
-Rust Base64 throughput,URL-safe encode,8 MiB,hashcodecs,29.86
-Rust Base64 throughput,URL-safe encode,1 KiB,base64,4.79
+Rust Base64 throughput,URL-safe encode,1 KiB,hashcodecs,26.68
+Rust Base64 throughput,URL-safe encode,4 KiB,hashcodecs,34.04
+Rust Base64 throughput,URL-safe encode,1 MiB,hashcodecs,39.25
+Rust Base64 throughput,URL-safe encode,8 MiB,hashcodecs,31.50
+Rust Base64 throughput,URL-safe encode,1 KiB,base64,4.83
 Rust Base64 throughput,URL-safe encode,4 KiB,base64,5.41
-Rust Base64 throughput,URL-safe encode,1 MiB,base64,4.82
-Rust Base64 throughput,URL-safe encode,8 MiB,base64,4.08
-Rust Base64 throughput,URL-safe encode,1 KiB,base64 turbo,25.41
-Rust Base64 throughput,URL-safe encode,4 KiB,base64 turbo,33.95
-Rust Base64 throughput,URL-safe encode,1 MiB,base64 turbo,38.29
-Rust Base64 throughput,URL-safe encode,8 MiB,base64 turbo,31.16
+Rust Base64 throughput,URL-safe encode,1 MiB,base64,4.84
+Rust Base64 throughput,URL-safe encode,8 MiB,base64,4.07
+Rust Base64 throughput,URL-safe encode,1 KiB,base64 turbo,25.59
+Rust Base64 throughput,URL-safe encode,4 KiB,base64 turbo,33.83
+Rust Base64 throughput,URL-safe encode,1 MiB,base64 turbo,37.99
+Rust Base64 throughput,URL-safe encode,8 MiB,base64 turbo,31.05
 Rust Base64 throughput,URL-safe decode,1 KiB,hashcodecs,18.798
 Rust Base64 throughput,URL-safe decode,4 KiB,hashcodecs,26.354
 Rust Base64 throughput,URL-safe decode,1 MiB,hashcodecs,30.728
@@ -87,26 +87,26 @@ Rust MurmurHash3 throughput,x86 128-bit,1 KiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,4 KiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,1 MiB,mm3h,
 Rust MurmurHash3 throughput,x86 128-bit,8 MiB,mm3h,
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,hashcodecs,12.13
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,hashcodecs,12.24
 Rust MurmurHash3 throughput,x64 128-bit,4 KiB,hashcodecs,12.18
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,hashcodecs,12.31
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,hashcodecs,12.27
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmur3,6.23
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmur3,6.50
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmur3,6.54
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmur3,6.44
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmurs,8.82
-Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmurs,8.82
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,hashcodecs,12.30
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmur3,6.24
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmur3,6.49
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmur3,6.50
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmur3,6.43
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,murmurs,8.80
+Rust MurmurHash3 throughput,x64 128-bit,4 KiB,murmurs,8.88
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,murmurs,8.90
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmurs,8.87
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,murmurs,8.84
 Rust MurmurHash3 throughput,x64 128-bit,1 KiB,fastmurmur3,9.39
 Rust MurmurHash3 throughput,x64 128-bit,4 KiB,fastmurmur3,9.40
-Rust MurmurHash3 throughput,x64 128-bit,1 MiB,fastmurmur3,9.41
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,fastmurmur3,9.35
-Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,9.01
+Rust MurmurHash3 throughput,x64 128-bit,1 MiB,fastmurmur3,9.40
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,fastmurmur3,9.39
+Rust MurmurHash3 throughput,x64 128-bit,1 KiB,mm3h,9.08
 Rust MurmurHash3 throughput,x64 128-bit,4 KiB,mm3h,9.01
 Rust MurmurHash3 throughput,x64 128-bit,1 MiB,mm3h,9.01
-Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,8.99
+Rust MurmurHash3 throughput,x64 128-bit,8 MiB,mm3h,8.98
 Rust XXH3 throughput,XXH3-64 small inputs,17 B,hashcodecs,14.97
 Rust XXH3 throughput,XXH3-64 small inputs,33 B,hashcodecs,17.98
 Rust XXH3 throughput,XXH3-64 small inputs,65 B,hashcodecs,25.45

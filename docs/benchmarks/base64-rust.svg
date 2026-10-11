@@ -26,33 +26,33 @@
 <text x="272.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="404" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,247.8 272.0,196.1 436.0,179.1 600.0,226.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="247.8" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 25.19 GiB/s</title></circle>
-<text x="155.9" y="237.8" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.19 (5.28x)</text>
-<circle cx="272.0" cy="196.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 35.02 GiB/s</title></circle>
-<text x="272.0" y="186.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">35.02 (6.49x)</text>
-<circle cx="436.0" cy="179.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 38.27 GiB/s</title></circle>
-<text x="436.0" y="196.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">38.27 (7.92x)</text>
-<circle cx="600.0" cy="226.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 29.24 GiB/s</title></circle>
-<text x="552.1" y="216.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.24 (7.20x)</text>
-<polyline points="108.0,355.0 272.0,351.6 436.0,354.6 600.0,358.7" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="355.0" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 KiB, 4.77 GiB/s</title></circle>
-<text x="126.2" y="372.0" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.77</text>
-<circle cx="272.0" cy="351.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 4 KiB, 5.40 GiB/s</title></circle>
-<text x="272.0" y="368.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.40</text>
-<circle cx="436.0" cy="354.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 MiB, 4.83 GiB/s</title></circle>
-<text x="436.0" y="371.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.83</text>
-<circle cx="600.0" cy="358.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 8 MiB, 4.06 GiB/s</title></circle>
-<text x="581.8" y="375.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.06</text>
-<polyline points="108.0,248.2 272.0,201.9 436.0,181.5 600.0,217.3" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="248.2" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 KiB, 25.11 GiB/s</title></circle>
-<text x="129.5" y="265.2" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.11</text>
-<circle cx="272.0" cy="201.9" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 4 KiB, 33.92 GiB/s</title></circle>
-<text x="272.0" y="218.9" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">33.92</text>
-<circle cx="436.0" cy="181.5" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 MiB, 37.81 GiB/s</title></circle>
-<text x="436.0" y="214.5" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">37.81</text>
-<circle cx="600.0" cy="217.3" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 8 MiB, 30.99 GiB/s</title></circle>
-<text x="578.5" y="234.3" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">30.99</text>
+<polyline points="108.0,241.1 272.0,198.0 436.0,175.1 600.0,214.7" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="241.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 KiB, 26.46 GiB/s</title></circle>
+<text x="155.9" y="231.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">26.46 (5.49x)</text>
+<circle cx="272.0" cy="198.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 4 KiB, 34.67 GiB/s</title></circle>
+<text x="272.0" y="188.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">34.67 (6.40x)</text>
+<circle cx="436.0" cy="175.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 1 MiB, 39.03 GiB/s</title></circle>
+<text x="436.0" y="192.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">39.03 (8.10x)</text>
+<circle cx="600.0" cy="214.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>Standard encode: hashcodecs, 8 MiB, 31.48 GiB/s</title></circle>
+<text x="552.1" y="204.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.48 (7.73x)</text>
+<polyline points="108.0,354.7 272.0,351.5 436.0,354.7 600.0,358.6" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="354.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 KiB, 4.82 GiB/s</title></circle>
+<text x="126.2" y="371.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.82</text>
+<circle cx="272.0" cy="351.5" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 4 KiB, 5.42 GiB/s</title></circle>
+<text x="272.0" y="368.5" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.42</text>
+<circle cx="436.0" cy="354.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 1 MiB, 4.82 GiB/s</title></circle>
+<text x="436.0" y="371.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.82</text>
+<circle cx="600.0" cy="358.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64, 8 MiB, 4.07 GiB/s</title></circle>
+<text x="581.8" y="375.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.07</text>
+<polyline points="108.0,245.4 272.0,204.4 436.0,181.0 600.0,217.2" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="245.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 KiB, 25.63 GiB/s</title></circle>
+<text x="129.5" y="262.4" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.63</text>
+<circle cx="272.0" cy="204.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 4 KiB, 33.44 GiB/s</title></circle>
+<text x="272.0" y="221.4" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">33.44</text>
+<circle cx="436.0" cy="181.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 1 MiB, 37.90 GiB/s</title></circle>
+<text x="436.0" y="214.0" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">37.90</text>
+<circle cx="600.0" cy="217.2" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>Standard encode: base64 turbo, 8 MiB, 31.01 GiB/s</title></circle>
+<text x="578.5" y="234.2" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.01</text>
 <text x="660" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">Standard decode</text>
 <line x1="718" y1="380" x2="1210" y2="380" stroke="#9aa5b4"/>
 <line x1="660" y1="148" x2="680" y2="148" stroke="#007f73" stroke-width="3"/>
@@ -124,33 +124,33 @@
 <text x="272.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="436.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="600.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="108.0,574.2 272.0,526.5 436.0,501.7 600.0,553.2" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="574.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 25.87 GiB/s</title></circle>
-<text x="155.9" y="564.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.87 (5.40x)</text>
-<circle cx="272.0" cy="526.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 34.95 GiB/s</title></circle>
-<text x="272.0" y="516.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">34.95 (6.46x)</text>
-<circle cx="436.0" cy="501.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 39.68 GiB/s</title></circle>
-<text x="436.0" y="518.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">39.68 (8.23x)</text>
-<circle cx="600.0" cy="553.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 29.86 GiB/s</title></circle>
-<text x="552.1" y="543.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">29.86 (7.32x)</text>
-<polyline points="108.0,684.9 272.0,681.6 436.0,684.7 600.0,688.6" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="684.9" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 KiB, 4.79 GiB/s</title></circle>
-<text x="126.2" y="701.9" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.79</text>
+<polyline points="108.0,569.9 272.0,531.3 436.0,503.9 600.0,544.6" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="569.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 KiB, 26.68 GiB/s</title></circle>
+<text x="155.9" y="559.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">26.68 (5.52x)</text>
+<circle cx="272.0" cy="531.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 4 KiB, 34.04 GiB/s</title></circle>
+<text x="272.0" y="521.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">34.04 (6.29x)</text>
+<circle cx="436.0" cy="503.9" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 1 MiB, 39.25 GiB/s</title></circle>
+<text x="436.0" y="520.9" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">39.25 (8.11x)</text>
+<circle cx="600.0" cy="544.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: hashcodecs, 8 MiB, 31.50 GiB/s</title></circle>
+<text x="552.1" y="534.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.50 (7.74x)</text>
+<polyline points="108.0,684.6 272.0,681.6 436.0,684.6 600.0,688.6" fill="none" stroke="#356ac3" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="684.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 KiB, 4.83 GiB/s</title></circle>
+<text x="126.2" y="701.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.83</text>
 <circle cx="272.0" cy="681.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 4 KiB, 5.41 GiB/s</title></circle>
 <text x="272.0" y="698.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">5.41</text>
-<circle cx="436.0" cy="684.7" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 MiB, 4.82 GiB/s</title></circle>
-<text x="436.0" y="701.7" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.82</text>
-<circle cx="600.0" cy="688.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 8 MiB, 4.08 GiB/s</title></circle>
-<text x="581.8" y="705.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.08</text>
-<polyline points="108.0,576.6 272.0,531.8 436.0,509.0 600.0,546.4" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="108.0" cy="576.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 KiB, 25.41 GiB/s</title></circle>
-<text x="129.5" y="593.6" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.41</text>
-<circle cx="272.0" cy="531.8" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 4 KiB, 33.95 GiB/s</title></circle>
-<text x="272.0" y="548.8" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">33.95</text>
-<circle cx="436.0" cy="509.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 MiB, 38.29 GiB/s</title></circle>
-<text x="436.0" y="542.0" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">38.29</text>
-<circle cx="600.0" cy="546.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 8 MiB, 31.16 GiB/s</title></circle>
-<text x="578.5" y="563.4" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.16</text>
+<circle cx="436.0" cy="684.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 1 MiB, 4.84 GiB/s</title></circle>
+<text x="436.0" y="701.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.84</text>
+<circle cx="600.0" cy="688.6" r="4.5" fill="#356ac3" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64, 8 MiB, 4.07 GiB/s</title></circle>
+<text x="581.8" y="705.6" text-anchor="middle" fill="#356ac3" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">4.07</text>
+<polyline points="108.0,575.7 272.0,532.4 436.0,510.6 600.0,547.0" fill="none" stroke="#a86f00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="108.0" cy="575.7" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 KiB, 25.59 GiB/s</title></circle>
+<text x="129.5" y="592.7" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">25.59</text>
+<circle cx="272.0" cy="532.4" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 4 KiB, 33.83 GiB/s</title></circle>
+<text x="272.0" y="549.4" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">33.83</text>
+<circle cx="436.0" cy="510.6" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 1 MiB, 37.99 GiB/s</title></circle>
+<text x="436.0" y="543.6" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">37.99</text>
+<circle cx="600.0" cy="547.0" r="4.5" fill="#a86f00" stroke="#ffffff" stroke-width="2"><title>URL-safe encode: base64 turbo, 8 MiB, 31.05 GiB/s</title></circle>
+<text x="578.5" y="564.0" text-anchor="middle" fill="#a86f00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">31.05</text>
 <text x="660" y="454" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">URL-safe decode</text>
 <line x1="718" y1="710" x2="1210" y2="710" stroke="#9aa5b4"/>
 <line x1="660" y1="478" x2="680" y2="478" stroke="#007f73" stroke-width="3"/>

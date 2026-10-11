@@ -29,14 +29,12 @@ pub(crate) unsafe fn decode<A: Decoder, S: Store>(
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
         let (second, second_error) =
             unsafe { A::decode_indices_32(input.as_ptr().add(source + 32)) };
+        let errors = _mm256_or_si256(first_error, second_error);
         let (third, third_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 64)) };
+        let errors = _mm256_or_si256(errors, third_error);
         let (fourth, fourth_error) =
             unsafe { A::decode_indices_32(input.as_ptr().add(source + 96)) };
-
-        let errors = _mm256_or_si256(
-            _mm256_or_si256(first_error, second_error),
-            _mm256_or_si256(third_error, fourth_error),
-        );
+        let errors = _mm256_or_si256(errors, fourth_error);
 
         if A::rejects_input(_mm256_testz_si256(errors, errors) == 0) {
             return Err(Base64Error::InvalidInput);
@@ -145,14 +143,12 @@ pub(crate) unsafe fn decode_prefix<A: Decoder>(input: &[u8], output: *mut u8) ->
         let (first, first_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source)) };
         let (second, second_error) =
             unsafe { A::decode_indices_32(input.as_ptr().add(source + 32)) };
+        let errors = _mm256_or_si256(first_error, second_error);
         let (third, third_error) = unsafe { A::decode_indices_32(input.as_ptr().add(source + 64)) };
+        let errors = _mm256_or_si256(errors, third_error);
         let (fourth, fourth_error) =
             unsafe { A::decode_indices_32(input.as_ptr().add(source + 96)) };
-
-        let errors = _mm256_or_si256(
-            _mm256_or_si256(first_error, second_error),
-            _mm256_or_si256(third_error, fourth_error),
-        );
+        let errors = _mm256_or_si256(errors, fourth_error);
 
         if _mm256_testz_si256(errors, errors) == 0 {
             break;

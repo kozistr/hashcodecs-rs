@@ -165,12 +165,10 @@ Use free-threaded CPython 3.15.0 with the GIL disabled for all Python charts.
 
 ### XXH3: Rust
 
-Link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2. The C comparison uses
-32 equal-size inputs per batch and includes result-vector allocation.
+Link hashcodecs with xxHash 0.8.3 through `xxhash-c-sys`. Build the C baseline with AVX2. Batch cases pass 32
+equal-size inputs and include result-vector allocation.
 
 [![Rust XXH3 throughput](docs/benchmarks/xxh3-rust.svg)](docs/benchmarks/xxh3-rust.svg)
-
-[![Rust prepared XXH3-128 batch throughput](docs/benchmarks/xxh3-rust-prepared-batch.svg)](docs/benchmarks/xxh3-rust-prepared-batch.svg)
 
 ### Base64: Python
 

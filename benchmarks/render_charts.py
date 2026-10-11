@@ -60,7 +60,6 @@ CHART_FILES = {
     'Rust MurmurHash3 throughput': 'murmur3-rust.svg',
     'Rust XXH3 throughput': 'xxh3-rust.svg',
     'Rust XXH3 batch remainder throughput': 'xxh3-rust-batch-remainders.svg',
-    'Rust prepared XXH3-128 batch throughput': 'xxh3-rust-prepared-batch.svg',
     'Python Base64 throughput': 'base64-python.svg',
     'Python Base64 ASCII string throughput': 'base64-python-str.svg',
     'Lenient Python Base64 throughput': 'base64-python-lenient.svg',

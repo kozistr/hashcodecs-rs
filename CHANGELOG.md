@@ -4,6 +4,34 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-11
+
+### What's Changed
+* perf: Reduce Python Base64 and XXH3 overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/132
+* build: Speed up Python wheel builds by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/133
+* chore: Filter CI and adopt safe Rust 1.94 APIs by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/134
+* refactor: Clean up Rust redundancy and control-flow spacing by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/135
+* perf: Reduce Python keyword call overhead by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/136
+* refactor: Organize Rust and Python test suites by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/137
+* fix: Preserve Python buffer metadata across Rust moves by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/138
+* refactor: Share SSE decode loops and simplify helper names by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/139
+* refactor: Share XXH3 32-byte mixing logic by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/140
+* refactor: Read scalar MurmurHash3 blocks as byte arrays by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/141
+* perf: Avoid redundant Python hash argument references by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/142
+* perf: Avoid redundant Python buffer references by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/143
+* perf: Optimize Base64 and refresh Python 3.15t benchmarks by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/144
+* perf: Compact benchmark runs and select idle CPU workers by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/145
+* perf: Fuse MurmurHash3 x64 state updates with LEA by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/146
+* perf: Eliminate AVX2 Base64 padding blends by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/147
+* perf: Inline XXH3 short hashes and refine architecture by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/148
+* perf: Reduce MurmurHash3 x86-128 latency and stack usage by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/149
+* perf: Optimize Base64 counting and 128-bit hash paths by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/150
+* perf: Reduce AVX2 register pressure and short-hash dispatch by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/151
+* perf: Speed up allocating prepared XXH3-128 batches by @kozistr in https://github.com/kozistr/hashcodecs-rs/pull/152
+
+
+**Full Changelog**: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.2...v1.5.0
+
 ## [1.4.2] - 2026-09-29
 
 ### What's Changed
@@ -225,7 +253,8 @@ This file records notable user-facing changes to `hashcodecs`. Version 1.0.0 sta
 - Initial Python and Rust APIs for Base64 and MurmurHash3.
 - Runtime SIMD dispatch and platform-specific CPython wheels.
 
-[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/kozistr/hashcodecs-rs/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.2...v1.5.0
 [1.4.2]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/kozistr/hashcodecs-rs/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/kozistr/hashcodecs-rs/compare/v1.3.0...v1.4.0

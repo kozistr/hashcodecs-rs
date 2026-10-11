@@ -440,10 +440,8 @@ unsafe fn encode_96_shifted_asm_inner(
     let reduction_base = _mm256_set1_epi8(51);
     let lower_bound = _mm256_set1_epi8(25);
 
-    // Keep the actual branch target aligned, rather than placing an alignment
-    // directive in a Rust loop where LLVM's backedge label precedes the NOPs.
-    // Seven input constants plus eight early-clobber outputs leave one YMM
-    // register free while preventing accidental input/output register aliasing.
+    // Align the branch target itself. Reuse two scratch registers across all
+    // four vectors to reduce the Windows nonvolatile register-save area.
     unsafe {
         asm!(
             ".p2align 5",
@@ -458,46 +456,44 @@ unsafe fn encode_96_shifted_asm_inner(
             "vpshufb {value3}, {value3}, {shuffle}",
             "vpmullw {temporary0}, {value0}, {align_multiplier}",
             "vpmullw {temporary1}, {value1}, {align_multiplier}",
-            "vpmullw {temporary2}, {value2}, {align_multiplier}",
-            "vpmullw {temporary3}, {value3}, {align_multiplier}",
             "vpsrlw {temporary0}, {temporary0}, 10",
             "vpsrlw {temporary1}, {temporary1}, 10",
-            "vpsrlw {temporary2}, {temporary2}, 10",
-            "vpsrlw {temporary3}, {temporary3}, 10",
             "vpand {value0}, {value0}, {lower_mask}",
             "vpand {value1}, {value1}, {lower_mask}",
-            "vpand {value2}, {value2}, {lower_mask}",
-            "vpand {value3}, {value3}, {lower_mask}",
             "vpmullw {value0}, {value0}, {lower_multiplier}",
             "vpmullw {value1}, {value1}, {lower_multiplier}",
-            "vpmullw {value2}, {value2}, {lower_multiplier}",
-            "vpmullw {value3}, {value3}, {lower_multiplier}",
             "vpor {value0}, {value0}, {temporary0}",
             "vpor {value1}, {value1}, {temporary1}",
-            "vpor {value2}, {value2}, {temporary2}",
-            "vpor {value3}, {value3}, {temporary3}",
-            // Translate two independent vectors at a time so both dependency
-            // chains remain available to the scheduler.
+            "vpmullw {temporary0}, {value2}, {align_multiplier}",
+            "vpmullw {temporary1}, {value3}, {align_multiplier}",
+            "vpsrlw {temporary0}, {temporary0}, 10",
+            "vpsrlw {temporary1}, {temporary1}, 10",
+            "vpand {value2}, {value2}, {lower_mask}",
+            "vpand {value3}, {value3}, {lower_mask}",
+            "vpmullw {value2}, {value2}, {lower_multiplier}",
+            "vpmullw {value3}, {value3}, {lower_multiplier}",
+            "vpor {value2}, {value2}, {temporary0}",
+            "vpor {value3}, {value3}, {temporary1}",
             "vpsubusb {temporary0}, {value0}, {reduction_base}",
-            "vpsubusb {temporary1}, {value1}, {reduction_base}",
-            "vpcmpgtb {temporary2}, {value0}, {lower_bound}",
-            "vpcmpgtb {temporary3}, {value1}, {lower_bound}",
-            "vpsubb {temporary0}, {temporary0}, {temporary2}",
-            "vpsubb {temporary1}, {temporary1}, {temporary3}",
+            "vpcmpgtb {temporary1}, {value0}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary1}",
             "vpshufb {temporary0}, {offsets}, {temporary0}",
-            "vpshufb {temporary1}, {offsets}, {temporary1}",
             "vpaddb {value0}, {value0}, {temporary0}",
-            "vpaddb {value1}, {value1}, {temporary1}",
-            "vpsubusb {temporary0}, {value2}, {reduction_base}",
-            "vpsubusb {temporary1}, {value3}, {reduction_base}",
-            "vpcmpgtb {temporary2}, {value2}, {lower_bound}",
-            "vpcmpgtb {temporary3}, {value3}, {lower_bound}",
-            "vpsubb {temporary0}, {temporary0}, {temporary2}",
-            "vpsubb {temporary1}, {temporary1}, {temporary3}",
+            "vpsubusb {temporary0}, {value1}, {reduction_base}",
+            "vpcmpgtb {temporary1}, {value1}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary1}",
             "vpshufb {temporary0}, {offsets}, {temporary0}",
-            "vpshufb {temporary1}, {offsets}, {temporary1}",
+            "vpaddb {value1}, {value1}, {temporary0}",
+            "vpsubusb {temporary0}, {value2}, {reduction_base}",
+            "vpcmpgtb {temporary1}, {value2}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary1}",
+            "vpshufb {temporary0}, {offsets}, {temporary0}",
             "vpaddb {value2}, {value2}, {temporary0}",
-            "vpaddb {value3}, {value3}, {temporary1}",
+            "vpsubusb {temporary0}, {value3}, {reduction_base}",
+            "vpcmpgtb {temporary1}, {value3}, {lower_bound}",
+            "vpsubb {temporary0}, {temporary0}, {temporary1}",
+            "vpshufb {temporary0}, {offsets}, {temporary0}",
+            "vpaddb {value3}, {value3}, {temporary0}",
             "vmovdqu [{output}], {value0}",
             "vmovdqu [{output} + 32], {value1}",
             "vmovdqu [{output} + 64], {value2}",
@@ -522,8 +518,6 @@ unsafe fn encode_96_shifted_asm_inner(
             value3 = out(ymm_reg) _,
             temporary0 = out(ymm_reg) _,
             temporary1 = out(ymm_reg) _,
-            temporary2 = out(ymm_reg) _,
-            temporary3 = out(ymm_reg) _,
             options(nostack)
         );
     }

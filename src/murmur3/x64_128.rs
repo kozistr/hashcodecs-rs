@@ -167,6 +167,12 @@ pub(super) fn mix_body(blocks: FullBlocks<'_, 16>, hashes: &mut [u64; 2]) {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
+        if blocks.byte_len() < dispatch::X64_128_SIMD_MIN {
+            mix_body_scalar(blocks, hashes);
+
+            return;
+        }
+
         let capabilities = crate::backend::capabilities();
         let selected = dispatch::select_x64_128_backend(blocks.byte_len(), capabilities);
         mix_body_with_backend(

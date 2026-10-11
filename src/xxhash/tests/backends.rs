@@ -45,6 +45,49 @@ fn match_avx2_tails() {
     }
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn match_medium_hash_128() {
+    let capabilities = backend::capabilities();
+
+    for required in [
+        &[][..],
+        &[CpuFeature::Ssse3][..],
+        &[CpuFeature::Avx2][..],
+        &[CpuFeature::Avx2, CpuFeature::Avx512F][..],
+    ] {
+        if !capabilities.supports_all(required) {
+            continue;
+        }
+
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_features(required));
+
+        for seed in [0, 42, u64::MAX] {
+            let secret = initialize_secret_scalar(seed);
+
+            for length in 241..=1025 {
+                let offset = length % 32;
+                let data = (0..length + offset)
+                    .map(|index| (index as u8).wrapping_mul(73).wrapping_add(29))
+                    .collect::<Vec<_>>();
+                let input = &data[offset..];
+                let long_input = LongInput::new(input).unwrap();
+                let expected = c_xxh3_128(input, seed);
+                assert_eq!(
+                    engine.hash_128(long_input, &secret),
+                    expected,
+                    "length {length}, offset {offset}, seed {seed:#x}, features {required:?}",
+                );
+                assert_eq!(
+                    engine.hash_128_seeded(long_input, seed),
+                    expected,
+                    "seeded length {length}, offset {offset}, seed {seed:#x}, features {required:?}",
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn match_scalar_accumulation() {
     let input: Vec<u8> = (0..4161)

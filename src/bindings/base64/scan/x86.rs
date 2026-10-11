@@ -6,36 +6,40 @@ use std::arch::x86_64::*;
 use super::scalar::is_lenient_symbol;
 use crate::base64::{STANDARD_HIGH_CLASSES, STANDARD_LOW_CLASSES_COMPLEMENT};
 
-#[target_feature(enable = "avx2")]
-pub(in crate::bindings::base64) fn symbol_count_avx2(
-    input: &[u8],
-    altchars: Option<[u8; 2]>,
-) -> usize {
-    let [extra0, extra1] = altchars.unwrap_or(*b"AA");
-    let extra0 = _mm256_set1_epi8(extra0 as i8);
-    let extra1 = _mm256_set1_epi8(extra1 as i8);
-    let high_classes = _mm256_broadcastsi128_si256(unsafe {
-        _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
-    });
-    let low_classes = _mm256_broadcastsi128_si256(unsafe {
-        _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
-    });
-    let mut source = 0;
-    let mut symbols = 0;
+macro_rules! define_symbol_count_avx2 {
+    ($name:ident, $features:literal) => {
+        #[target_feature(enable = $features)]
+        pub(in crate::bindings::base64) fn $name(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
+            let [extra0, extra1] = altchars.unwrap_or(*b"AA");
+            let extra0 = _mm256_set1_epi8(extra0 as i8);
+            let extra1 = _mm256_set1_epi8(extra1 as i8);
+            let high_classes = _mm256_broadcastsi128_si256(unsafe {
+                _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
+            });
+            let low_classes = _mm256_broadcastsi128_si256(unsafe {
+                _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
+            });
+            let mut source = 0;
+            let mut symbols = 0;
 
-    while source + 32 <= input.len() {
-        let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
-        let valid = valid_avx2(bytes, high_classes, low_classes, extra0, extra1);
-        symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
-        source += 32;
-    }
+            while source + 32 <= input.len() {
+                let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
+                let valid = valid_avx2(bytes, high_classes, low_classes, extra0, extra1);
+                symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
+                source += 32;
+            }
 
-    symbols
-        + input[source..]
-            .iter()
-            .filter(|&&byte| is_lenient_symbol(byte, altchars))
-            .count()
+            symbols
+                + input[source..]
+                    .iter()
+                    .filter(|&&byte| is_lenient_symbol(byte, altchars))
+                    .count()
+        }
+    };
 }
+
+define_symbol_count_avx2!(symbol_count_avx2, "avx2");
+define_symbol_count_avx2!(symbol_count_avx2_popcnt, "avx2,popcnt");
 
 #[target_feature(enable = "avx2")]
 pub(in crate::bindings::base64) fn alphanumeric_prefix_avx2(input: &[u8]) -> usize {

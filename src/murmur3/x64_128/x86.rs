@@ -87,10 +87,20 @@ fn premix_avx2(
     rotate_right: __m256i,
 ) -> __m256i {
     let blocks = mullo_epi64_avx2(blocks, c1);
-    let blocks = _mm256_or_si256(
-        _mm256_sllv_epi64(blocks, rotate_left),
-        _mm256_srlv_epi64(blocks, rotate_right),
-    );
+    let mut shifted = blocks;
+
+    // Keep LLVM from distributing this shift into the preceding multiply and
+    // computing three extra partial products for every vector.
+    unsafe {
+        core::arch::asm!(
+            "vpsllvq {shifted}, {shifted}, {counts}",
+            shifted = inout(ymm_reg) shifted,
+            counts = in(ymm_reg) rotate_left,
+            options(pure, nomem, nostack, preserves_flags),
+        );
+    }
+
+    let blocks = _mm256_or_si256(shifted, _mm256_srlv_epi64(blocks, rotate_right));
     mullo_epi64_avx2(blocks, c2)
 }
 

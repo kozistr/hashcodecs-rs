@@ -6,7 +6,7 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use crate::xxhash::long_inputs::{
-    LongInput, Secret, build_long_input_schedule, initial_accumulator,
+    LongInput, Secret, build_long_input_schedule, finalize_long_128, initial_accumulator,
 };
 use crate::xxhash::primitives::{P32_1, SECRET};
 
@@ -300,4 +300,57 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
     }
 
     finish(acc)
+}
+
+#[target_feature(enable = "avx2")]
+pub(in crate::xxhash::long_inputs) fn hash_128_medium(
+    input: LongInput<'_>,
+    secret: &Secret,
+) -> [u64; 2] {
+    debug_assert!(input.len() <= 1024);
+
+    // Two chains keep medium-input accumulation and finalization in one frame
+    // without the register pressure of the four-chain bulk kernel.
+    let data = input.as_bytes();
+    let mut acc0 = initial();
+    let zero = _mm256_setzero_si256();
+    let mut acc1 = Accumulator {
+        low: zero,
+        high: zero,
+    };
+    let mut stripe = 0;
+
+    unsafe {
+        while stripe + 2 <= input.regular_stripes() {
+            accumulate_registers(
+                &mut acc0,
+                data.as_ptr().add(stripe * 64),
+                secret.as_bytes().as_ptr().add(stripe * 8),
+            );
+            accumulate_registers(
+                &mut acc1,
+                data.as_ptr().add((stripe + 1) * 64),
+                secret.as_bytes().as_ptr().add((stripe + 1) * 8),
+            );
+            stripe += 2;
+        }
+
+        if stripe < input.regular_stripes() {
+            accumulate_registers(
+                &mut acc0,
+                data.as_ptr().add(stripe * 64),
+                secret.as_bytes().as_ptr().add(stripe * 8),
+            );
+        }
+
+        accumulate_registers(
+            &mut acc1,
+            data.as_ptr().add(data.len() - 64),
+            secret.as_bytes().as_ptr().add(121),
+        );
+    }
+
+    acc0.low = _mm256_add_epi64(acc0.low, acc1.low);
+    acc0.high = _mm256_add_epi64(acc0.high, acc1.high);
+    finalize_long_128(input.len(), secret, finish(acc0))
 }

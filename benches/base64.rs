@@ -17,11 +17,13 @@ macro_rules! benchmark {
 }
 
 macro_rules! benchmark_encode {
-    ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr) => {
+    ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr, $consume:expr) => {
         $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
             bench.iter(|| {
                 let output = black_box(($function)(black_box(input)));
-                black_box(output.bytes().fold(0_u8, u8::wrapping_add))
+                if $consume {
+                    black_box(output.bytes().fold(0_u8, u8::wrapping_add));
+                }
             });
         });
     };
@@ -29,14 +31,21 @@ macro_rules! benchmark_encode {
 
 fn base64(c: &mut Criterion) {
     support::pin_to_one_cpu();
-    standard_encode(c);
-    urlsafe_encode(c);
+    standard_encode::<false>(c);
+    urlsafe_encode::<false>(c);
     standard_decode(c);
     urlsafe_decode(c);
+    standard_encode::<true>(c);
+    urlsafe_encode::<true>(c);
 }
 
-fn standard_encode(c: &mut Criterion) {
-    let mut group = c.benchmark_group("standard_encode");
+fn standard_encode<const CONSUME: bool>(c: &mut Criterion) {
+    let name = if CONSUME {
+        "standard_encode_consumed"
+    } else {
+        "standard_encode"
+    };
+    let mut group = c.benchmark_group(name);
 
     for size in SIZES {
         let input = support::data(size, 17);
@@ -53,21 +62,37 @@ fn standard_encode(c: &mut Criterion) {
             size,
             &input,
             "hashcodecs",
-            hashcodecs::base64::b64encode
+            hashcodecs::base64::b64encode,
+            CONSUME
         );
-        benchmark_encode!(group, size, &input, "base64", |input: &[u8]| {
-            base64::engine::general_purpose::STANDARD.encode(input)
-        });
-        benchmark_encode!(group, size, &input, "base64-turbo", |input: &[u8]| {
-            base64_turbo::STANDARD.encode(input)
-        });
+        benchmark_encode!(
+            group,
+            size,
+            &input,
+            "base64",
+            |input: &[u8]| base64::engine::general_purpose::STANDARD.encode(input),
+            CONSUME
+        );
+        benchmark_encode!(
+            group,
+            size,
+            &input,
+            "base64-turbo",
+            |input: &[u8]| base64_turbo::STANDARD.encode(input),
+            CONSUME
+        );
     }
 
     group.finish();
 }
 
-fn urlsafe_encode(c: &mut Criterion) {
-    let mut group = c.benchmark_group("urlsafe_encode");
+fn urlsafe_encode<const CONSUME: bool>(c: &mut Criterion) {
+    let name = if CONSUME {
+        "urlsafe_encode_consumed"
+    } else {
+        "urlsafe_encode"
+    };
+    let mut group = c.benchmark_group(name);
 
     for size in SIZES {
         let input = support::data(size, 17);
@@ -84,14 +109,25 @@ fn urlsafe_encode(c: &mut Criterion) {
             size,
             &input,
             "hashcodecs",
-            hashcodecs::base64::b64encode_urlsafe
+            hashcodecs::base64::b64encode_urlsafe,
+            CONSUME
         );
-        benchmark_encode!(group, size, &input, "base64", |input: &[u8]| {
-            base64::engine::general_purpose::URL_SAFE.encode(input)
-        });
-        benchmark_encode!(group, size, &input, "base64-turbo", |input: &[u8]| {
-            base64_turbo::URL_SAFE.encode(input)
-        });
+        benchmark_encode!(
+            group,
+            size,
+            &input,
+            "base64",
+            |input: &[u8]| base64::engine::general_purpose::URL_SAFE.encode(input),
+            CONSUME
+        );
+        benchmark_encode!(
+            group,
+            size,
+            &input,
+            "base64-turbo",
+            |input: &[u8]| base64_turbo::URL_SAFE.encode(input),
+            CONSUME
+        );
     }
 
     group.finish();

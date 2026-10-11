@@ -49,6 +49,8 @@ Maintain 100% Rust core line coverage and 100% Python facade branch coverage. Th
 
 - Keep Rust Base64, Rust MurmurHash3, and Python Base64 results grouped by functionality.
 - Pin benchmark processes to one logical CPU and do not run benchmarks in CI.
+- Time only the requested API operation. Include result allocation and deallocation for allocating APIs; prepare reusable buffers before timing.
+- Run correctness checks outside the timed loop. Keep extra output processing in separately named diagnostic benchmarks.
 - Benchmark only the functionality changed by the branch and refresh only its corresponding README or BENCHMARK charts.
 - Use a complete clean benchmark run only for changes that can affect every benchmark group.
 - Don't need to add as-is/to-be comparison or experiment results to the documentations.

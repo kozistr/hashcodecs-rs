@@ -9,7 +9,7 @@ fn hashes_64_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<u64> {
         inputs,
         17,
         xxh3_64,
-        finalize_long_64,
+        (|_, _, _| None, finalize_long_64),
         engine,
         LongEngine::secret(derived.as_ref()),
         &mut |hash| hashes.push(hash),
@@ -26,7 +26,7 @@ fn hashes_128_with_engine(inputs: &[&[u8]], engine: &LongEngine) -> Vec<[u64; 2]
         inputs,
         17,
         xxh3_128,
-        finalize_long_128,
+        (|_, _, _| None, finalize_long_128),
         engine,
         LongEngine::secret(derived.as_ref()),
         &mut |hash| hashes.push(hash),
@@ -107,7 +107,7 @@ fn match_grouped_runs() {
             &inputs,
             17,
             xxh3_64,
-            finalize_long_64,
+            (|_, _, _| None, finalize_long_64),
             &engine,
             secret,
             |hash| hashes_64.push(hash),
@@ -118,12 +118,67 @@ fn match_grouped_runs() {
             &inputs,
             17,
             xxh3_128,
-            finalize_long_128,
+            (|_, _, _| None, finalize_long_128),
             &engine,
             secret,
             |hash| hashes_128.push(hash),
         );
         assert_eq!(hashes_128, inputs.map(|input| xxh3_128(input, 17)));
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn match_medium_singletons() {
+    use crate::backend::{self, CpuFeature};
+
+    let capabilities = backend::capabilities();
+
+    for features in [
+        &[][..],
+        &[CpuFeature::Ssse3][..],
+        &[CpuFeature::Avx2][..],
+        &[CpuFeature::Avx2, CpuFeature::Avx512F][..],
+    ] {
+        if !capabilities.supports_all(features) {
+            continue;
+        }
+
+        let engine = LongEngine::new_with_capabilities(Capabilities::from_features(features));
+
+        for seed in [0, 42, u64::MAX] {
+            let derived = engine.derive_secret(seed);
+            let secret = LongEngine::secret(derived.as_ref());
+
+            for length in [241, 256, 511, 512, 1023, 1024, 1025] {
+                for offset in [0, 1, 15, 31] {
+                    let owned = [240, length, 17, 1024, length + 64].map(|length| {
+                        (0..length + offset)
+                            .map(|index| (index as u8).wrapping_mul(73).wrapping_add(length as u8))
+                            .collect::<Vec<_>>()
+                    });
+                    let inputs = owned.each_ref().map(|input| &input[offset..]);
+                    let expected = inputs.map(|input| {
+                        let hash = xxhash_rust::xxh3::xxh3_128_with_seed(input, seed);
+                        [hash as u64, (hash >> 64) as u64]
+                    });
+                    let mut actual = Vec::new();
+                    hash_each_input_with_secret(
+                        &inputs,
+                        seed,
+                        xxh3_128,
+                        (LongEngine::try_hash_128_medium, finalize_long_128),
+                        &engine,
+                        secret,
+                        |hash| actual.push(hash),
+                    );
+                    assert_eq!(
+                        actual, expected,
+                        "length {length}, offset {offset}, seed {seed}, features {features:?}"
+                    );
+                }
+            }
+        }
     }
 }
 

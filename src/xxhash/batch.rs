@@ -36,9 +36,15 @@ emit_long_group!(
 
 /// Runs one batch loop for vector outputs and callback outputs.
 #[inline(always)]
-fn hash_each_input<T, S, F, O>(inputs: &[&[u8]], seed: u64, short: S, finalize: F, mut output: O)
-where
+fn hash_each_input<T, S, H, F, O>(
+    inputs: &[&[u8]],
+    seed: u64,
+    short: S,
+    long: (H, F),
+    mut output: O,
+) where
     S: Copy + Fn(&[u8], u64) -> T,
+    H: Copy + Fn(&LongEngine, LongInput<'_>, &Secret) -> Option<T>,
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
@@ -59,7 +65,7 @@ where
         &inputs[index..],
         seed,
         short,
-        finalize,
+        long,
         engine,
         LongEngine::secret(derived_secret.as_ref()),
         &mut output,
@@ -67,16 +73,17 @@ where
 }
 
 #[inline(always)]
-pub(super) fn hash_each_input_with_secret<T, S, F, O>(
+pub(super) fn hash_each_input_with_secret<T, S, H, F, O>(
     inputs: &[&[u8]],
     seed: u64,
     short: S,
-    finalize: F,
+    (_medium, finalize): (H, F),
     engine: &LongEngine,
     secret: &Secret,
     mut output: O,
 ) where
     S: Copy + Fn(&[u8], u64) -> T,
+    H: Copy + Fn(&LongEngine, LongInput<'_>, &Secret) -> Option<T>,
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
@@ -99,7 +106,7 @@ pub(super) fn hash_each_input_with_secret<T, S, F, O>(
             &inputs[index..],
             seed,
             short,
-            finalize,
+            (_medium, finalize),
             engine,
             secret,
             output,
@@ -121,16 +128,17 @@ pub(super) fn hash_each_input_with_secret<T, S, F, O>(
 
 #[cfg(any(test, target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
-fn hash_input_runs<T, S, F, O>(
+fn hash_input_runs<T, S, H, F, O>(
     inputs: &[&[u8]],
     seed: u64,
     short: S,
-    finalize: F,
+    (medium, finalize): (H, F),
     engine: &LongEngine,
     secret: &Secret,
     mut output: O,
 ) where
     S: Copy + Fn(&[u8], u64) -> T,
+    H: Copy + Fn(&LongEngine, LongInput<'_>, &Secret) -> Option<T>,
     F: Copy + Fn(usize, &Secret, [u64; 8]) -> T,
     O: FnMut(T),
 {
@@ -158,7 +166,10 @@ fn hash_input_runs<T, S, F, O>(
             emit_long_group2(secret, group, accumulators, finalize, &mut output);
         } else {
             let input = run.input(0);
-            output(engine.hash(input, secret, finalize));
+            output(
+                medium(engine, input, secret)
+                    .unwrap_or_else(|| engine.hash(input, secret, finalize)),
+            );
         }
 
         index += run.len();
@@ -193,9 +204,13 @@ fn hash_input_runs<T, S, F, O>(
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let mut hashes = Vec::with_capacity(inputs.len());
 
-    hash_each_input(inputs, seed, xxh3_64, finalize_long_64, |hash| {
-        hashes.push(hash)
-    });
+    hash_each_input(
+        inputs,
+        seed,
+        xxh3_64,
+        (|_, _, _| None, finalize_long_64),
+        |hash| hashes.push(hash),
+    );
 
     hashes
 }
@@ -220,7 +235,13 @@ pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
 ///
 #[inline]
 pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u64)) {
-    hash_each_input(inputs, seed, xxh3_64, finalize_long_64, output);
+    hash_each_input(
+        inputs,
+        seed,
+        xxh3_64,
+        (|_, _, _| None, finalize_long_64),
+        output,
+    );
 }
 
 /// Computes canonical XXH3 128-bit hashes for a batch without copying inputs.
@@ -252,9 +273,13 @@ pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u6
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let mut hashes = Vec::with_capacity(inputs.len());
 
-    hash_each_input(inputs, seed, xxh3_128, finalize_long_128, |hash| {
-        hashes.push(hash)
-    });
+    hash_each_input(
+        inputs,
+        seed,
+        xxh3_128,
+        (|_, _, _| None, finalize_long_128),
+        |hash| hashes.push(hash),
+    );
 
     hashes
 }
@@ -279,7 +304,13 @@ pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
 ///
 #[inline]
 pub fn xxh3_128_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut([u64; 2])) {
-    hash_each_input(inputs, seed, xxh3_128, finalize_long_128, output);
+    hash_each_input(
+        inputs,
+        seed,
+        xxh3_128,
+        (|_, _, _| None, finalize_long_128),
+        output,
+    );
 }
 
 #[cfg(test)]

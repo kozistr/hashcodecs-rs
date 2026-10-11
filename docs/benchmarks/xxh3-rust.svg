@@ -164,17 +164,17 @@
 <text x="964.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">4 KiB</text>
 <text x="1087.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">1 MiB</text>
 <text x="1210.0" y="734" text-anchor="middle" fill="#465263" font-family="Segoe UI,Arial,sans-serif" font-size="12">8 MiB</text>
-<polyline points="718.0,666.0 841.0,619.1 964.0,558.3 1087.0,515.2 1210.0,601.5" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="718.0,666.0 841.0,619.7 964.0,557.1 1087.0,515.6 1210.0,602.4" fill="none" stroke="#007f73" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="666.0" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 64 B, 20.95 GiB/s</title></circle>
 <text x="765.9" y="656.0" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">20.95 (2.71x)</text>
-<circle cx="841.0" cy="619.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 1 KiB, 43.30 GiB/s</title></circle>
-<text x="841.0" y="609.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">43.30 (1.98x)</text>
-<circle cx="964.0" cy="558.3" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 4 KiB, 72.22 GiB/s</title></circle>
-<text x="964.0" y="548.3" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">72.22 (1.93x)</text>
-<circle cx="1087.0" cy="515.2" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 1 MiB, 92.76 GiB/s</title></circle>
-<text x="1087.0" y="532.2" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">92.76 (1.91x)</text>
-<circle cx="1210.0" cy="601.5" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 8 MiB, 51.67 GiB/s</title></circle>
-<text x="1162.1" y="591.5" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">51.67 (1.34x)</text>
+<circle cx="841.0" cy="619.7" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 1 KiB, 43.00 GiB/s</title></circle>
+<text x="841.0" y="609.7" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">43.00 (1.97x)</text>
+<circle cx="964.0" cy="557.1" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 4 KiB, 72.80 GiB/s</title></circle>
+<text x="964.0" y="547.1" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">72.80 (1.95x)</text>
+<circle cx="1087.0" cy="515.6" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 1 MiB, 92.58 GiB/s</title></circle>
+<text x="1087.0" y="532.6" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">92.58 (1.91x)</text>
+<circle cx="1210.0" cy="602.4" r="4.5" fill="#007f73" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: hashcodecs, 8 MiB, 51.24 GiB/s</title></circle>
+<text x="1162.1" y="592.4" text-anchor="middle" fill="#007f73" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">51.24 (1.33x)</text>
 <polyline points="718.0,693.8 841.0,664.1 964.0,631.5 1087.0,608.3 1210.0,628.9" fill="none" stroke="#d55e00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="718.0" cy="693.8" r="4.5" fill="#d55e00" stroke="#ffffff" stroke-width="2"><title>XXH3-128 one-shot: upstream C, 64 B, 7.73 GiB/s</title></circle>
 <text x="736.2" y="683.8" text-anchor="middle" fill="#d55e00" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">7.73</text>

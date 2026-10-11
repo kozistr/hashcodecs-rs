@@ -61,11 +61,16 @@ Incremental cases include construction, `update`, and digest creation.
 | --- | --- |
 | Rust, XXH3-64 and XXH3-128, single calls and batches of 32 items | [Rust XXH3](docs/benchmarks/xxh3-rust.svg) |
 | Rust, batches of two and three items | [Batch remainders](docs/benchmarks/xxh3-rust-batch-remainders.svg) |
+| Rust, prepared XXH3-128 with mixed input lengths | [Prepared batches](docs/benchmarks/xxh3-rust-prepared-batch.svg) |
 | Python, single calls, list results, and packed output | [Python XXH3](docs/benchmarks/xxh3-python.svg) |
 
 Rust allocating batches include allocation of the result vector. Python list batches create one integer per digest.
 Packed batches write digests in little endian order into one reusable `bytearray`. Python batch comparisons use
 32 inputs of equal size by default and compare against the upstream `xxhash` extension.
+
+Prepared batch cases time `PreparedXxh3::hash_128_batch` with seed 42 and four inputs. Input lengths in bytes are
+241/384/512/1024 for Medium, 241/17/512/1024 for Interrupted, and 240/241/1024/1025 for Boundary. Preparation
+happens before timing; result allocation and deallocation are included.
 
 The Python small-input panels cover 16, 17, 33, 65, 97, and 240 bytes. These sizes use scalar formulas; runtime SIMD
 dispatch starts at 241 bytes.
@@ -103,6 +108,7 @@ comparison. Pass a Criterion name filter after `--` to narrow a run:
 
 ```sh
 cargo bench --manifest-path benches/Cargo.toml --bench murmur3 -- x64_128/hashcodecs
+cargo bench --manifest-path benches/Cargo.toml --bench xxhash -- 'xxh3_prepared_batch/mixed/.*/prepared_128$'
 ```
 
 ### Python

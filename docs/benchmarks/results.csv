@@ -167,6 +167,9 @@ Rust XXH3 throughput,XXH3-128 batch (32 items),64 B,upstream C,8.28
 Rust XXH3 throughput,XXH3-128 batch (32 items),1 KiB,upstream C,21.84
 Rust XXH3 throughput,XXH3-128 batch (32 items),4 KiB,upstream C,37.01
 Rust XXH3 throughput,XXH3-128 batch (32 items),1 MiB,upstream C,17.94
+Rust prepared XXH3-128 batch throughput,"Mixed batches (4 inputs, seed 42)",Medium,hashcodecs,44.70
+Rust prepared XXH3-128 batch throughput,"Mixed batches (4 inputs, seed 42)",Interrupted,hashcodecs,41.02
+Rust prepared XXH3-128 batch throughput,"Mixed batches (4 inputs, seed 42)",Boundary,hashcodecs,39.87
 Rust XXH3 batch remainder throughput,XXH3-64 batch (2 items),1 KiB,hashcodecs,54.27
 Rust XXH3 batch remainder throughput,XXH3-64 batch (2 items),4 KiB,hashcodecs,81.76
 Rust XXH3 batch remainder throughput,XXH3-64 batch (2 items),1 MiB,hashcodecs,95.68

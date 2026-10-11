@@ -21,6 +21,8 @@ allocation except where a reusable-buffer chart says otherwise. Higher is better
 
 ![Rust XXH3 throughput](benchmarks/xxh3-rust.svg)
 
+![Rust prepared XXH3-128 batch throughput](benchmarks/xxh3-rust-prepared-batch.svg)
+
 ## Python
 
 Use free-threaded CPython 3.15.0 with the GIL disabled for all Python comparisons below.

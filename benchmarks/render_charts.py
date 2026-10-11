@@ -161,6 +161,8 @@ def render(chart: Chart) -> str:
     rows = math.ceil(len(chart.panels) / columns)
     height = 100 + rows * panel_height + 30
     subtitle = 'Throughput (GiB/s), higher is better'
+    if chart.filename == 'base64-rust.svg':
+        subtitle += ' \u2022 encode includes output checksum'
     if '-python' in chart.filename:
         subtitle = f'{PYTHON_RUNTIME} \u2022 {subtitle}'
 

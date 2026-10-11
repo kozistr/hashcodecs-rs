@@ -157,6 +157,8 @@ Use free-threaded CPython 3.15.0 with the GIL disabled for all Python charts.
 
 ### Base64: Rust
 
+Rust encoding measurements include a checksum of every output byte inside the timed loop.
+
 [![Rust Base64 throughput](docs/benchmarks/base64-rust.svg)](docs/benchmarks/base64-rust.svg)
 
 ### MurmurHash3: Rust

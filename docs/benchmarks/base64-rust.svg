@@ -3,7 +3,7 @@
 <desc id="desc">Rust Base64 throughput in GiB/s. Higher is better.</desc>
 <rect width="100%" height="100%" fill="#ffffff"/>
 <text x="50" y="48" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="700">Rust Base64 throughput</text>
-<text x="50" y="74" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14">Throughput (GiB/s), higher is better</text>
+<text x="50" y="74" fill="#637083" font-family="Segoe UI,Arial,sans-serif" font-size="14">Throughput (GiB/s), higher is better • encode includes output checksum</text>
 <text x="50" y="124" fill="#172033" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600">Standard encode</text>
 <line x1="108" y1="380" x2="600" y2="380" stroke="#9aa5b4"/>
 <line x1="50" y1="148" x2="70" y2="148" stroke="#007f73" stroke-width="3"/>

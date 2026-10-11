@@ -24,6 +24,10 @@ Cases that return output include result allocation. Cases with reusable output a
 The harnesses reuse inputs across iterations, so cache residency affects the results. Compare like input types,
 sizes, and output models. These measurements describe this host and workload.
 
+Rust Base64 encoding measurements include a checksum of every encoded output byte inside the timed loop, followed
+by result deallocation. They measure encoding with immediate output consumption. Throughput still counts only the
+original binary payload size.
+
 The repository's [results.csv](docs/benchmarks/results.csv) supplies the chart values. Focused updates replace the
 affected series and retain the other measurements, so the charts combine results from multiple runs.
 

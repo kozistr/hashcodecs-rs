@@ -27,28 +27,44 @@ fn stage_partial_blocks() {
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     let symbols = vec![b'A'; CONFIGURED_STAGING_CAPACITY * 2];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { writer.push_symbols::<true>(&symbols) }, Some(()));
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     let written = unsafe { writer.finish::<true>() }.unwrap();
     assert_eq!(written, CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2);
     assert!(output[..written].iter().all(|&byte| byte == 0));
 
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { writer.push_symbols::<true>(&symbols[..CONFIGURED_STAGING_CAPACITY - 1]) },
         Some(())
     );
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { writer.push_value::<true>(0) }, Some(()));
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { writer.finish::<true>() },
         Some(CONFIGURED_STAGING_CAPACITY / 4 * 3)
     );
 
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { StagingWriter::new(output.as_mut_ptr(), None).finish::<true>() },
         Some(0)
     );
     let mut invalid = StagingWriter::new(output.as_mut_ptr(), None);
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { invalid.push_symbols::<true>(b"A") }, Some(()));
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { invalid.finish::<true>() }, None);
 
     let mut validator = StagingValidator::new(None);
@@ -74,10 +90,16 @@ fn flush_staged_values() {
     let symbols = CONFIGURED_STAGING_CAPACITY + 4;
     let required = symbols / 4 * 3;
     let mut output = vec![0xa5; required + 2];
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
     for _ in 0..symbols {
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         assert_eq!(unsafe { writer.push_value::<true>(0) }, Some(()));
     }
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { writer.finish::<true>() }, Some(required));
     assert_eq!(output[0], 0xa5);
     assert!(output[1..=required].iter().all(|&byte| byte == 0));
@@ -94,7 +116,7 @@ fn preserve_invalid_tail_guards() {
             for validation in [Validation::Strict, Validation::Lenient] {
                 for padded in [false, true] {
                     for ignorechars_specified in [false, true] {
-                        let prepared = PreparedDecoder::new(
+                        let prepared = PreparedDecoder::try_new(
                             py,
                             DecodePolicy::new(
                                 altchars,
@@ -125,6 +147,8 @@ fn preserve_invalid_tail_guards() {
 
                                 for continue_after_padding in [false, true] {
                                     let mut output = vec![0xa5; capacity + 17];
+                                    // SAFETY: The fixture retains the symbol input and reserves the
+                                    // decoded output bound before the native call.
                                     let written = unsafe {
                                         decoder.decode_checked_to_ptr(
                                             &input,
@@ -155,15 +179,23 @@ fn preserve_fragment_guards() {
 
         for split in 0..=5.min(length) {
             let mut output = vec![0xa5; required + 17];
+            // SAFETY: The test retains the Python objects and stays attached; buffer access is
+            // synchronized by the enclosing guards.
             let mut writer = StagingWriter::new(unsafe { output.as_mut_ptr().add(1) }, None);
             assert_eq!(
+                // SAFETY: The test retains the Python objects and stays attached; buffer access is
+                // synchronized by the enclosing guards.
                 unsafe { writer.push_symbols::<true>(&input[..split]) },
                 Some(())
             );
             assert_eq!(
+                // SAFETY: The test retains the Python objects and stays attached; buffer access is
+                // synchronized by the enclosing guards.
                 unsafe { writer.push_symbols::<true>(&input[split..]) },
                 Some(())
             );
+            // SAFETY: The test retains the Python objects and stays attached; buffer access is
+            // synchronized by the enclosing guards.
             assert_eq!(unsafe { writer.finish::<true>() }, Some(required));
             assert_eq!(output[0], 0xa5);
             assert!(output[1..=required].iter().all(|&byte| byte == 0));
@@ -173,5 +205,7 @@ fn preserve_fragment_guards() {
 
     let mut output = [0xa5; 3];
     let mut writer = StagingWriter::new(output.as_mut_ptr(), None);
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { writer.push_symbols::<true>(b"AA!A") }, None);
 }

@@ -36,3 +36,16 @@ doc = false
 bench = false
 
 [workspace]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+clone_on_ref_ptr = "warn"
+implicit_clone = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+must_use_candidate = "warn"
+undocumented_unsafe_blocks = "warn"
+wildcard_imports = "warn"

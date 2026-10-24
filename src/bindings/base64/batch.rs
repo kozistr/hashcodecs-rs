@@ -278,6 +278,8 @@ pub(super) fn b64encode_batch_parsed<'py>(
     altchars: Option<[u8; 2]>,
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
+    // SAFETY: The retained list items are checked before unchecked casts; the predicate cannot run
+    // Python or mutate the list, and borrowed inputs stay guarded.
     let (items, exact_bytes_fast_path) = unsafe {
         list_items_and_all(items, |item| {
             // Only the length is needed while retaining the list; avoid acquiring
@@ -297,7 +299,11 @@ pub(super) fn b64encode_batch_parsed<'py>(
         // Creating a GC-tracked Python object can run finalizers which mutate
         // the original list.
         return list_from_fn(py, items.len(), |index| {
+            // SAFETY: The retained list items are checked before unchecked casts; the predicate
+            // cannot run Python or mutate the list, and borrowed inputs stay guarded.
             let input = BytesLike::Bytes(unsafe { items[index].cast_unchecked::<PyBytes>() });
+            // SAFETY: The retained list items are checked before unchecked casts; the predicate
+            // cannot run Python or mutate the list, and borrowed inputs stay guarded.
             unsafe { input.with_bytes(|input| encode_small_padded(py, input, &encoder)) }
         });
     }
@@ -387,12 +393,14 @@ pub(super) fn b64decode_batch_parsed<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     #[cfg(not(Py_GIL_DISABLED))]
     let (items, exact_bytes_fast_path) =
+        // SAFETY: The retained list items are checked before unchecked casts; the predicate cannot
+        // run Python or mutate the list, and borrowed inputs stay guarded.
         unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
     #[cfg(Py_GIL_DISABLED)]
     let items = list_items(items)?;
     let length = items.len();
 
-    let decoder = PreparedDecoder::new_for_batch(
+    let decoder = PreparedDecoder::try_new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
         length,
@@ -403,6 +411,8 @@ pub(super) fn b64decode_batch_parsed<'py>(
         // Retain the validated inputs through output-list allocation and borrow
         // them throughout decoding, releasing the references after the batch.
         return list_from_fn(py, length, |index| {
+            // SAFETY: The retained list items are checked before unchecked casts; the predicate
+            // cannot run Python or mutate the list, and borrowed inputs stay guarded.
             let input = BytesLike::Bytes(unsafe { items[index].cast_unchecked::<PyBytes>() });
             decoder.decode_allocating(py, &input)
         });
@@ -447,7 +457,7 @@ pub(super) fn b64decode_batch_into_parsed<'py>(
         .into_iter()
         .peekable();
 
-    let decoder = PreparedDecoder::new_for_batch(
+    let decoder = PreparedDecoder::try_new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
         items.len(),

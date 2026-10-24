@@ -27,6 +27,8 @@ fn preserve_invalid_suffix() {
                 for slack in [false, true] {
                     let mut output = vec![0xa5; input.len()];
                     assert_eq!(
+                        // SAFETY: The fixture provides the required input/output ranges and checks
+                        // CPU support before calling a SIMD backend.
                         unsafe {
                             decode_with_backend_ptr_mode(
                                 &input,
@@ -100,6 +102,8 @@ fn match_avx2_store_modes() {
 
     for streaming_stores in [false, true] {
         output.fill(0xa5);
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         let consumed = unsafe {
             encode_x86::<false>(&input, output.as_mut_ptr(), Backend::Avx2, streaming_stores)
         };
@@ -139,6 +143,8 @@ fn preserve_custom_store_bounds() {
 
     for streaming_stores in [false, true] {
         output.fill(0xa5);
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         let consumed = unsafe {
             encode_custom_with_backend_inner(
                 &input,

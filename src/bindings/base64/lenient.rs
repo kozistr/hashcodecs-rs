@@ -40,6 +40,8 @@ pub(super) fn try_decode_lenient<'py>(
 
     // BytesWriter allocates bytes outside cyclic GC and cannot run Python callbacks.
     // Keep sizing and decoding in one borrow of the stable input.
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     unsafe {
         input.with_bytes(|input| {
             let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -57,7 +59,7 @@ pub(super) fn try_decode_lenient<'py>(
 
             let input = &input[start..];
             let capacity = BytesWriter::capacity_for_input(input, table);
-            let writer = BytesWriter::new(py, capacity)?;
+            let writer = BytesWriter::try_new(py, capacity)?;
             let output_address = writer.data() as usize;
             let decode = move || {
                 decode_lenient_to_ptr::<true>(
@@ -92,6 +94,8 @@ pub(super) fn try_decode_lenient_into(
     let continue_after_padding = semantics.continues_after_padding;
 
     if let Some(input) = input.snapshot_for_output(output)? {
+        // SAFETY: The checked decode layout and output bound cover every write; retained or
+        // stabilized input storage remains live throughout the native operation.
         return Ok(with_bytearray(output, || unsafe {
             decode_lenient_slice_into(
                 &input,
@@ -105,6 +109,8 @@ pub(super) fn try_decode_lenient_into(
         }));
     }
 
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_lenient_slice_into(
@@ -151,6 +157,8 @@ unsafe fn decode_lenient_slice_into(
         }
     }
 
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     unsafe {
         decode_lenient_to_ptr::<true>(
             input,
@@ -265,6 +273,8 @@ pub(super) fn lenient_decoded_len(
     let symbol_prefix = decode_byte_kernels().symbol_prefix;
 
     while source < input.len() {
+        // SAFETY: The checked decode layout and output bound cover every write; retained or
+        // stabilized input storage remains live throughout the native operation.
         let run = unsafe { symbol_prefix(&input[source..], altchars) };
 
         if run != 0 {
@@ -350,6 +360,8 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
             let input_capacity = provided.saturating_sub(written) / 12 * 16;
             let candidate_len = (input.len() - source).min(input_capacity);
 
+            // SAFETY: The checked decode layout and output bound cover every write; retained or
+            // stabilized input storage remains live throughout the native operation.
             if let Some((consumed, decoded)) = unsafe {
                 decode_valid_prefix(
                     &input[source..source + candidate_len],
@@ -369,6 +381,8 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
         }
 
         if !prefix_kernel_available && quad_pos == 0 {
+            // SAFETY: The checked decode layout and output bound cover every write; retained or
+            // stabilized input storage remains live throughout the native operation.
             let run = unsafe { symbol_prefix(&input[source..], altchars) };
             let run = run / 4 * 4;
 
@@ -385,6 +399,9 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                     if let Some(alphabet) = fast_alphabet {
                         let layout = decode_unpadded_layout(symbols)
                             .expect("a quartet-aligned run has a valid layout");
+                        // SAFETY: The checked decode layout and output bound cover every write;
+                        // retained or stabilized input storage remains live throughout the native
+                        // operation.
                         unsafe {
                             decode_to_ptr_with_unpadded_layout(
                                 symbols,
@@ -401,7 +418,13 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                         let translation =
                             Translation::new(table, altchars, decode_byte_kernels().translate);
                         let mut writer =
+                            // SAFETY: The checked decode layout and output bound cover every write;
+                            // retained or stabilized input storage remains live throughout the
+                            // native operation.
                             StagingWriter::new(unsafe { output.add(written) }, translation);
+                        // SAFETY: The checked decode layout and output bound cover every write;
+                        // retained or stabilized input storage remains live throughout the native
+                        // operation.
                         let staged = unsafe {
                             writer
                                 .push_symbols::<false>(symbols)
@@ -441,6 +464,8 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
             ];
 
             if WRITE {
+                // SAFETY: The checked decode layout and output bound cover every write; retained or
+                // stabilized input storage remains live throughout the native operation.
                 unsafe {
                     output
                         .add(written)
@@ -488,6 +513,9 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 }
 
                 if WRITE {
+                    // SAFETY: The checked decode layout and output bound cover every write;
+                    // retained or stabilized input storage remains live throughout the native
+                    // operation.
                     unsafe { output.add(written).write((leftchar << 2) | (value >> 4)) };
                 }
 
@@ -501,6 +529,9 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 }
 
                 if WRITE {
+                    // SAFETY: The checked decode layout and output bound cover every write;
+                    // retained or stabilized input storage remains live throughout the native
+                    // operation.
                     unsafe { output.add(written).write((leftchar << 4) | (value >> 2)) };
                 }
 
@@ -514,6 +545,9 @@ pub(super) unsafe fn decode_lenient_to_ptr<const WRITE: bool>(
                 }
 
                 if WRITE {
+                    // SAFETY: The checked decode layout and output bound cover every write;
+                    // retained or stabilized input storage remains live throughout the native
+                    // operation.
                     unsafe { output.add(written).write((leftchar << 6) | value) };
                 }
 

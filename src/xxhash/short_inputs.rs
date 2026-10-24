@@ -1,6 +1,9 @@
 //! Apply XXH3 formulas to inputs that contain at most 240 bytes.
 
-use super::primitives::*;
+use super::primitives::{
+    MX2, P32_2, P64_1, P64_2, P64_4, SECRET, mix16, mix16_ptr, mul_fold, read_u32_le, read_u64_le,
+    read_u64_le_ptr, rrmxmx, xxh3_avalanche, xxh64_avalanche,
+};
 
 pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
@@ -190,6 +193,9 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
     ]
 }
 
+/// # Safety
+/// `first` and `second` must each cover 16 readable bytes, and `secret` must cover 32 readable
+/// bytes, without concurrent writes.
 #[inline(always)]
 unsafe fn mix32_ptr(
     acc: &mut [u64; 2],
@@ -198,11 +204,19 @@ unsafe fn mix32_ptr(
     secret: *const u8,
     seed: u64,
 ) {
+    // SAFETY: The caller provides two readable 16-byte inputs and a 32-byte secret range, covering
+    // both halves of the mix.
     acc[0] = acc[0].wrapping_add(unsafe { mix16_ptr(first, secret, seed) });
     acc[0] ^=
+        // SAFETY: The caller provides two readable 16-byte inputs and a 32-byte secret range,
+        // covering both halves of the mix.
         unsafe { read_u64_le_ptr(second, 0) }.wrapping_add(unsafe { read_u64_le_ptr(second, 8) });
+    // SAFETY: The caller provides two readable 16-byte inputs and a 32-byte secret range, covering
+    // both halves of the mix.
     acc[1] = acc[1].wrapping_add(unsafe { mix16_ptr(second, secret.add(16), seed) });
     acc[1] ^=
+        // SAFETY: The caller provides two readable 16-byte inputs and a 32-byte secret range,
+        // covering both halves of the mix.
         unsafe { read_u64_le_ptr(first, 0) }.wrapping_add(unsafe { read_u64_le_ptr(first, 8) });
 }
 
@@ -219,6 +233,8 @@ pub(super) fn mix32(
     let second = &input[second..][..16];
     let secret = &SECRET[secret..][..32];
 
+    // SAFETY: The slice length assertions above cover both 16-byte inputs and the 32-byte secret
+    // consumed by mix32_ptr.
     unsafe {
         mix32_ptr(
             &mut acc,
@@ -273,6 +289,8 @@ pub(super) fn xxh3_128_len_129_to_240(input: &[u8], seed: u64) -> [u64; 2] {
     assert!((129..=240).contains(&len));
 
     for i in (0..128).step_by(32) {
+        // SAFETY: The 129..=240 length assertion bounds every 32-byte group and the final
+        // overlapping pair; the fixed secret covers each selected offset.
         unsafe { mix32_ptr(&mut acc, data.add(i), data.add(i + 16), secret.add(i), seed) };
     }
 
@@ -280,6 +298,8 @@ pub(super) fn xxh3_128_len_129_to_240(input: &[u8], seed: u64) -> [u64; 2] {
 
     for index in 4..(len / 32) {
         let offset = index * 32;
+        // SAFETY: The 129..=240 length assertion bounds every 32-byte group and the final
+        // overlapping pair; the fixed secret covers each selected offset.
         unsafe {
             mix32_ptr(
                 &mut acc,
@@ -291,6 +311,8 @@ pub(super) fn xxh3_128_len_129_to_240(input: &[u8], seed: u64) -> [u64; 2] {
         };
     }
 
+    // SAFETY: The 129..=240 length assertion bounds every 32-byte group and the final overlapping
+    // pair; the fixed secret covers each selected offset.
     unsafe {
         mix32_ptr(
             &mut acc,

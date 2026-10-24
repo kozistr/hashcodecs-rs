@@ -1,4 +1,4 @@
-use std::hint::black_box;
+use std::hint;
 use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
@@ -18,7 +18,7 @@ fn base64_encode(c: &mut Criterion) {
         let input = support::data(size, 17);
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
-            bench.iter(|| hashcodecs::base64::b64encode(black_box(input)));
+            bench.iter(|| hashcodecs::base64::b64encode(hint::black_box(input)));
         });
     }
 
@@ -33,7 +33,7 @@ fn base64_decode(c: &mut Criterion) {
         assert!(hashcodecs::base64::b64decode(&input).is_ok());
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
-            bench.iter(|| hashcodecs::base64::b64decode(black_box(input)).unwrap());
+            bench.iter(|| hashcodecs::base64::b64decode(hint::black_box(input)).unwrap());
         });
     }
 
@@ -48,7 +48,7 @@ macro_rules! murmur_group {
             let input = support::data(size, 17);
             group.throughput(Throughput::Bytes(size as u64));
             group.bench_with_input(BenchmarkId::from_parameter(size), &input, |bench, input| {
-                bench.iter(|| $function(black_box(input), 42));
+                bench.iter(|| $function(hint::black_box(input), 42));
             });
         }
 

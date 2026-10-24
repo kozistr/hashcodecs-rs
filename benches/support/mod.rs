@@ -24,13 +24,18 @@ pub fn pin_to_one_cpu() {
         fn SetProcessAffinityMask(process: *mut c_void, mask: usize) -> i32;
     }
 
+    // SAFETY: GetCurrentProcess takes no arguments and returns a pseudo-handle valid in this
+    // process.
     let process = unsafe { GetCurrentProcess() };
     let mut process_mask = 0;
     let mut system_mask = 0;
     let result =
+        // SAFETY: The process handle is valid and both mask pointers refer to writable usize
+        // storage.
         unsafe { GetProcessAffinityMask(process, &raw mut process_mask, &raw mut system_mask) };
     assert_ne!(result, 0, "failed to read the benchmark process affinity");
     let first_available_cpu = process_mask & process_mask.wrapping_neg();
+    // SAFETY: The selected bit belongs to the nonzero process affinity mask obtained above.
     let result = unsafe { SetProcessAffinityMask(process, first_available_cpu) };
     assert_ne!(result, 0, "failed to pin the benchmark process");
 }
@@ -52,6 +57,8 @@ pub fn pin_to_one_cpu() {
     let mut available = CpuSet {
         words: [0; CPU_SET_BYTES / size_of::<usize>()],
     };
+    // SAFETY: The writable CpuSet has the size passed to the kernel, and process zero selects the
+    // caller.
     let result = unsafe { sched_getaffinity(0, size_of::<CpuSet>(), &raw mut available) };
     assert_eq!(result, 0, "failed to read the benchmark process affinity");
     let mut set = CpuSet {
@@ -65,6 +72,8 @@ pub fn pin_to_one_cpu() {
         .find(|(_, word)| *word != 0)
         .expect("the benchmark process has no available CPU");
     set.words[index] = word & word.wrapping_neg();
+    // SAFETY: The set has the declared size and retains one CPU from the affinity mask returned by
+    // the kernel.
     let result = unsafe { sched_setaffinity(0, size_of::<CpuSet>(), &raw const set) };
     assert_eq!(result, 0, "failed to pin the benchmark process");
 }

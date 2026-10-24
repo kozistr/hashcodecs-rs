@@ -27,6 +27,8 @@ pub(super) fn decode_strict<'py>(
     }
 
     let detach_safe = input.detach_safe();
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     unsafe {
         input.with_bytes(|input| {
             let layout = match decode_layout(input) {
@@ -74,6 +76,8 @@ pub(super) unsafe fn decode_strict_into(
     alphabet: DecodeAlphabet,
     error_writes: ErrorWrites,
 ) -> Result<usize, Base64Error> {
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             let layout = decode_layout(input)?;
@@ -110,12 +114,16 @@ pub(super) fn decode_unpadded<'py>(
         return decode_unpadded(py, &BytesLike::OwnedVec(input), alphabet);
     }
 
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     let layout = match unsafe { input.with_bytes(decode_unpadded_layout) } {
         Ok(layout) => layout,
         Err(error) => return Ok(Err(error)),
     };
 
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     let (output, result) = unsafe {
         pybytes_with_len(py, layout.output_len(), |output| {
             input.with_bytes(|input| {
@@ -147,6 +155,8 @@ pub(super) unsafe fn decode_unpadded_into(
     alphabet: DecodeAlphabet,
     error_writes: ErrorWrites,
 ) -> Result<usize, Base64Error> {
+    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
+    // input storage remains live throughout the native operation.
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             if input.contains(&b'=') {

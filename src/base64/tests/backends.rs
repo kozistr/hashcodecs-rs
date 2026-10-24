@@ -8,7 +8,9 @@ use crate::base64::{
 use base64::Engine;
 
 #[cfg(feature = "python")]
-use crate::base64::{encode::CustomEncodeAlphabet, runtime_dispatch::encode_custom_with_backend};
+use crate::base64::encode::CustomEncodeAlphabet;
+#[cfg(feature = "python")]
+use crate::base64::runtime_dispatch::encode_custom_with_backend;
 
 #[test]
 fn select_backend() {
@@ -301,6 +303,8 @@ fn encode_custom_alphabets() {
             }
 
             let mut actual = vec![0xa5; expected.len() + 16];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let consumed = unsafe {
                 encode_custom_with_backend(
                     &input[..length],

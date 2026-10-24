@@ -50,6 +50,8 @@ fn match_wrapped_backends() {
                         }
 
                         let mut actual = vec![0xa5; expected.len() + 16];
+                        // SAFETY: The fixture provides the required input/output ranges and checks
+                        // CPU support before calling a SIMD backend.
                         unsafe {
                             encode_backend::encode_wrapped_to_ptr_with_backend(
                                 &input[..length],
@@ -93,6 +95,8 @@ fn preserve_custom_bounds() {
                 let data_len = encoded_len(length);
                 let mut actual = vec![0xa5; data_len + data_len / width + 16];
                 let mut output = encode_backend::WrappedOutput::new(actual.as_mut_ptr(), width);
+                // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                // support before calling a SIMD backend.
                 let consumed = unsafe {
                     encode_wrapped_custom_with_backend(
                         &input[..length],
@@ -139,16 +143,22 @@ fn preserve_custom_bounds() {
     let mut actual = [0xa5; 32];
     let mut output = encode_backend::WrappedOutput::new(actual.as_mut_ptr(), 4);
     assert_eq!(
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe {
             encode_wrapped_custom_with_backend(&input[..16], &mut output, unavailable, &alphabet)
         },
         0,
     );
     assert_eq!(
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe { encode_wrapped_with_backend(&input[..16], &mut output, unavailable, false) },
         0,
     );
     assert_eq!(
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe {
             encode_custom_with_backend(&input[..16], actual.as_mut_ptr(), unavailable, &alphabet)
         },

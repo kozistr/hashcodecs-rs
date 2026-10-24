@@ -38,6 +38,8 @@ fn preserve_validated_bounds() {
         }
 
         let mut output = vec![0xa5; input.len() + 16];
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         let (consumed, written) = unsafe {
             decode_standard_validated_with_backend(encoded.as_bytes(), output.as_mut_ptr(), backend)
         };
@@ -58,6 +60,8 @@ fn preserve_validated_bounds() {
     .expect("every host has an unsupported architecture-specific backend");
     let mut output = [0xa5; 16];
     assert_eq!(
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe {
             decode_standard_validated_with_backend(
                 encoded.as_bytes(),
@@ -87,6 +91,8 @@ fn decode_unpadded_tails() {
         let encoded = base64::engine::general_purpose::STANDARD_NO_PAD.encode(&input);
         let mut guarded = vec![0xa5; GUARD + input.len() + GUARD];
 
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         let written = unsafe {
             decode_standard_validated_to_ptr(encoded.as_bytes(), guarded.as_mut_ptr().add(GUARD))
         };
@@ -154,6 +160,8 @@ fn preserve_unpadded_bounds() {
                 "length={length} alphabet={alphabet:?}"
             );
             let mut direct = vec![CANARY; layout.output_len()];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             unsafe {
                 decode_to_ptr_with_unpadded_layout(&encoded, direct.as_mut_ptr(), layout, alphabet)
             }
@@ -405,6 +413,8 @@ fn preserve_padded_guards() {
             let layout = decode_layout(encoded.as_bytes()).unwrap();
             let mut output =
                 vec![CANARY; GUARD + layout.output_len() + DECODE_STORE_PADDING + GUARD];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             unsafe {
                 decode_to_ptr_with_layout(
                     encoded.as_bytes(),
@@ -434,6 +444,8 @@ fn preserve_padded_guards() {
         (b64encode_urlsafe(&input), DecodeAlphabet::UrlSafe),
     ] {
         let mut output = vec![CANARY; input.len() + DECODE_STORE_PADDING + GUARD];
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         let offsets = unsafe {
             decode_with_backend_ptr(
                 encoded.as_bytes(),

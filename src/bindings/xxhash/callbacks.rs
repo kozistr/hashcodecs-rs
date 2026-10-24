@@ -13,12 +13,17 @@ use super::batch::{
     xxh3_128_batch as hash_128_batch, xxh3_128_batch_into as hash_128_batch_into,
 };
 
+/// # Safety
+/// CPython must supply live FASTCALL arguments and keyword names while attached,
+/// retaining their owners until this callback returns.
 pub(in crate::bindings) unsafe extern "C" fn xxh3_64(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
+    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
+    // validates them before the operation borrows any payload.
     unsafe {
         crate::bindings::schema::xxhash::xxh3_64(args, nargs, keywords, |py, input, seed| {
             let Some(seed) = seed_u64(seed.as_ptr()) else {
@@ -36,12 +41,17 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_64(
     }
 }
 
+/// # Safety
+/// CPython must supply live FASTCALL arguments and keyword names while attached,
+/// retaining their owners until this callback returns.
 pub(in crate::bindings) unsafe extern "C" fn xxh3_128(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
+    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
+    // validates them before the operation borrows any payload.
     unsafe {
         crate::bindings::schema::xxhash::xxh3_128(args, nargs, keywords, |py, input, seed| {
             let Some(seed) = seed_u64(seed.as_ptr()) else {
@@ -67,12 +77,16 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_128(
 
 macro_rules! batch_callback {
     ($name:ident, $operation:ident) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL arguments and keyword names while attached.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,
             nargs: isize,
             keywords: *mut ffi::PyObject,
         ) -> *mut ffi::PyObject {
+            // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the
+            // schema validates them before the operation borrows any payload.
             unsafe {
                 crate::bindings::schema::xxhash::$name(args, nargs, keywords, |py, items, seed| {
                     let result = (|| {
@@ -92,12 +106,16 @@ batch_callback!(xxh3_128_batch, hash_128_batch);
 
 macro_rules! batch_into_callback {
     ($name:ident, $operation:ident) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL arguments and keyword names while attached.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,
             nargs: isize,
             keywords: *mut ffi::PyObject,
         ) -> *mut ffi::PyObject {
+            // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the
+            // schema validates them before the operation borrows any payload.
             unsafe {
                 crate::bindings::schema::xxhash::$name(
                     args,

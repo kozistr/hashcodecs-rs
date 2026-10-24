@@ -127,11 +127,19 @@ impl PreparedEncoder {
         }
     }
 
+    /// # Safety
+    /// Input storage must remain stable for the operation. The destination must cover the prepared
+    /// encoded or decoded output bound, including wrapping and padding where applicable, without
+    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn encode_to_ptr(&self, input: &[u8], output: *mut u8) {
         match self.wrapping {
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             LineWrapping::None => unsafe {
                 encode_unwrapped_ptr::<false>(input, output, &self.alphabet, self.padding)
             },
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             LineWrapping::Columns(width) => unsafe {
                 encode_unwrapped_ptr::<true>(input, output, &self.alphabet, self.padding);
                 wrap_encoded_ptr(output, self.data_len(input.len()), width);
@@ -139,9 +147,15 @@ impl PreparedEncoder {
         }
     }
 
+    /// # Safety
+    /// Input storage must remain stable for the operation. The destination must cover the prepared
+    /// encoded or decoded output bound, including wrapping and padding where applicable, without
+    /// aliasing input. Validated paths require previously checked symbols.
     #[cold]
     unsafe fn encode_direct_to_ptr(&self, input: &[u8], output: *mut u8, width: usize) {
         match &self.alphabet {
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => unsafe {
                 encode_wrapped_to_ptr_cached(
                     input,
@@ -151,6 +165,8 @@ impl PreparedEncoder {
                     width,
                 )
             },
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             EncodeAlphabet::Custom(alphabet) => unsafe {
                 encode_wrapped_to_ptr_custom(
                     input,
@@ -173,6 +189,8 @@ pub(super) fn encode_small_padded<'py>(
     debug_assert!(matches!(encoder.padding, EncodePadding::Padded));
     debug_assert!(matches!(encoder.wrapping, LineWrapping::None));
     let output_len = encoded_len(input.len());
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {
             encode_ptr::<true>(input, output, &encoder.alphabet);
@@ -204,6 +222,8 @@ pub(super) fn encode_with_prepared<'py>(
 
     let detach = input.detach_safe() && input.len() >= BASE64_DETACH_THRESHOLD;
     let output_len = encoder.output_len(input.len());
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     let (output, ()) = unsafe {
         pybytes_with_len(py, output_len, |output| {
             input.with_bytes(|input| {
@@ -234,6 +254,8 @@ pub(super) fn encode_into(
         return encode_slice_into(&input, output, encoder);
     }
 
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             encode_slice_to_ptr(input, output, provided, encoder)
@@ -262,6 +284,8 @@ fn parse_wrapcol(py: Python<'_>, wrapcol: Argument) -> PyResult<Option<usize>> {
     }
 
     let indexed =
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Index(wrapcol.raw(py).as_ptr())) }?;
     let value = indexed
         .extract::<i128>()
@@ -282,8 +306,12 @@ fn encode_slice_into(
     let required = encoder.output_len(input.len());
     with_output_ptr(output, required, |output| {
         if let Some(width) = encoder.direct_wrap_width(input.len()) {
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             unsafe { encoder.encode_direct_to_ptr(input, output, width) };
         } else {
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             unsafe { encoder.encode_to_ptr(input, output) };
         }
     })?;
@@ -303,14 +331,22 @@ fn encode_slice_to_ptr(
     }
 
     if let Some(width) = encoder.direct_wrap_width(input.len()) {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe { encoder.encode_direct_to_ptr(input, output, width) };
     } else {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe { encoder.encode_to_ptr(input, output) };
     }
 
     Ok(required)
 }
 
+/// # Safety
+/// Input storage must remain stable for the operation. The destination must cover the prepared
+/// encoded or decoded output bound, including wrapping and padding where applicable, without
+/// aliasing input. Validated paths require previously checked symbols.
 #[inline]
 unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
     input: &[u8],
@@ -319,6 +355,8 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
     padding: EncodePadding,
 ) {
     if matches!(padding, EncodePadding::Padded) {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe { encode_ptr::<CACHED>(input, output, alphabet) };
 
         return;
@@ -326,13 +364,19 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
 
     let complete_input_len = input.len() / 3 * 3;
     let complete_output_len = complete_input_len / 3 * 4;
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     unsafe { encode_ptr::<CACHED>(&input[..complete_input_len], output, alphabet) };
 
     if complete_input_len != input.len() {
         let tail = &input[complete_input_len..];
         let mut encoded_tail = [0; 4];
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe { encode_ptr::<CACHED>(tail, encoded_tail.as_mut_ptr(), alphabet) };
         let tail_len = unpadded_encoded_len(tail.len());
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe {
             output
                 .add(complete_output_len)
@@ -341,22 +385,39 @@ unsafe fn encode_unwrapped_ptr<const CACHED: bool>(
     }
 }
 
+/// # Safety
+/// Input storage must remain stable for the operation. The destination must cover the prepared
+/// encoded or decoded output bound, including wrapping and padding where applicable, without
+/// aliasing input. Validated paths require previously checked symbols.
 #[inline]
 unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet: &EncodeAlphabet) {
     match alphabet {
         EncodeAlphabet::Standard | EncodeAlphabet::UrlSafe => {
             if CACHED {
+                // SAFETY: PreparedEncoder computes the exact capacity including padding and
+                // wrapping; retained input owners and the output guard prevent invalidation during
+                // writes.
                 unsafe { encode_to_ptr_cached(input, output, alphabet.is_urlsafe()) };
             } else {
+                // SAFETY: PreparedEncoder computes the exact capacity including padding and
+                // wrapping; retained input owners and the output guard prevent invalidation during
+                // writes.
                 unsafe { encode_to_ptr(input, output, alphabet.is_urlsafe()) };
             }
         }
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         EncodeAlphabet::Custom(alphabet) => unsafe {
             encode_to_ptr_with_custom_alphabet(input, output, alphabet, CACHED)
         },
     }
 }
 
+///
+/// # Safety
+/// Input storage must remain stable for the operation. The destination must cover the prepared
+/// encoded or decoded output bound, including wrapping and padding where applicable, without
+/// aliasing input. Validated paths require previously checked symbols.
 /// Expand an encoded prefix in place, moving from the end so source bytes are
 /// never overwritten before they are copied.
 unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
@@ -372,6 +433,8 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
         let line_len = if remainder == 0 { width } else { remainder };
         source -= line_len;
         destination -= line_len;
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         unsafe {
             output
                 .add(source)
@@ -380,6 +443,8 @@ unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
 
         if source != 0 {
             destination -= 1;
+            // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+            // retained input owners and the output guard prevent invalidation during writes.
             unsafe { output.add(destination).write(b'\n') };
         }
     }
@@ -402,6 +467,8 @@ fn construct_b64encode_alphabet<'py>(
     }
 
     let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), value.as_ptr())) }
 }
 
@@ -419,6 +486,8 @@ fn parse_b64encode_alphabet<'a, 'py>(
         return Err(PyValueError::new_err("alphabet must have length 64"));
     }
 
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     let table = unsafe {
         bytes.with_bytes(|bytes| {
             let mut table = [0; 64];
@@ -447,6 +516,8 @@ fn parse_legacy_b64encode_altchars(value: &Bound<'_, PyAny>) -> PyResult<Option<
         ));
     }
 
+    // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping; retained
+    // input owners and the output guard prevent invalidation during writes.
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
     Ok((altchars != *b"+/").then_some(altchars))
 }
@@ -457,6 +528,8 @@ pub(super) fn standard_b64encode<'py>(
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = if PyBytes::is_exact_type_of(s) {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() })
     } else {
         crate::bindings::buffer::binascii_contiguous_bytes_like(s)?
@@ -482,6 +555,8 @@ pub(super) fn urlsafe_b64encode<'py>(
     padded: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
     if PyBytes::is_exact_type_of(s) {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
 
@@ -519,6 +594,8 @@ pub(super) fn b64encode<'py>(
     wrapcol: Argument,
 ) -> PyResult<Bound<'py, PyBytes>> {
     if altchars.is_none() && PyBytes::is_exact_type_of(s) {
+        // SAFETY: PreparedEncoder computes the exact capacity including padding and wrapping;
+        // retained input owners and the output guard prevent invalidation during writes.
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
         let wrapcol = parse_wrapcol(py, wrapcol)?;

@@ -98,6 +98,8 @@ pub(super) fn parse_altchars(
     if bytes.len() != 2 {
         if python_at_least(py, (3, 15)) {
             let value = if allow_text {
+                // SAFETY: The input guard retains the object while attached, and this bounded
+                // validation/copy does not invoke Python callbacks or detach.
                 unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).repr()) }?.to_string()
             } else {
                 value.repr()?.to_string()
@@ -111,6 +113,8 @@ pub(super) fn parse_altchars(
         ));
     }
 
+    // SAFETY: The input guard retains the object while attached, and this bounded validation/copy
+    // does not invoke Python callbacks or detach.
     let altchars = unsafe { bytes.with_bytes(|bytes| [bytes[0], bytes[1]]) };
 
     Ok((altchars != *b"+/").then_some(altchars))

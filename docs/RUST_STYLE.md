@@ -1,7 +1,7 @@
 # Rust style
 
-Use the [Google Rust Style Guide](https://google.github.io/styleguide/rustguide.html) as the default for new and
-changed Rust code, with the adaptations below. The
+Use the [Google Rust Style Guide](https://google.github.io/styleguide/rustguide.html) across Rust implementations,
+bindings, tests, benchmarks, fuzz targets, and generated-code templates, with the adaptations below. The
 [repository instructions](https://github.com/kozistr/hashcodecs-rs/blob/main/AGENTS.md) take precedence. Changes
 to the upstream guide require review before they change this policy. Apply style improvements within the scope
 of a change; keep broad migrations separate.
@@ -15,19 +15,22 @@ Use lowercase hex for new constants. Reserve `#[rustfmt::skip]` for generated co
 
 Import types directly and qualify free functions by module when that makes their origin clearer. Explicitly
 named algorithm helpers may retain direct imports. Allow glob imports in architecture intrinsic modules,
-test modules using `super::*`, and the PyO3 prelude. Use conventional algorithm and instruction names such as
-XXH3, AVX2, SSSE3, and NEON; expanding those names would obscure their meaning.
+test modules using `super::*`, non-leaf facade re-exports, and the PyO3 prelude. Use conventional algorithm and
+instruction names such as XXH3, AVX2, SSSE3, and NEON; expanding those names would obscure their meaning.
 
 Prefer matching over checking and unwrapping. Explain invariant panics with `expect` and useful assertion
 messages. Test assertions may use `unwrap` when the surrounding case already explains the expected success.
 Keep loops and iterator chains readable. Document public behavior, errors, panic conditions, and unsafe
 preconditions. Existing `missing_docs` and Clippy checks remain in force.
 
-The root crate and benchmark crate inherit the Cargo workspace lint policy. `unsafe_op_in_unsafe_fn` requires
+The root crate and benchmark crate inherit the Cargo workspace lint policy; the isolated fuzz workspace mirrors
+it. `just format`, `just lint`, and CI check the fuzz targets too. `unsafe_op_in_unsafe_fn` requires
 explicit unsafe blocks, and `unused_must_use` rejects discarded results that require handling. Clippy's
 `implicit_clone` exposes copies hidden behind conversion methods; `clone_on_ref_ptr` distinguishes shared
-ownership clones from deep copies. `just lint` promotes Clippy warnings to errors. Other style rules remain
-review responsibilities; broad restriction and pedantic lint groups are not enabled.
+ownership clones from deep copies. The policy also checks unsafe-block explanations, public result annotations,
+error and panic documentation, and wildcard imports. Intrinsic modules scope the documented import exception
+to each architecture import. `just lint` promotes Clippy warnings to errors. Other style rules remain review
+responsibilities; broad restriction and pedantic lint groups are not enabled.
 
 ## Local design choices
 
@@ -66,3 +69,15 @@ results describe the tested host; dispatch changes need evidence for the affecte
 The [Hacker News discussion](https://news.ycombinator.com/item?id=50186010) provides useful review context,
 particularly the tradeoffs around exhaustive matching, shared ownership, and measuring performance. Its
 comments are not additional repository requirements.
+
+## Source adoption
+
+The existing source follows this policy as well as future changes. Base64 APIs, MurmurHash3 hasher implementations,
+and the XXH3 long-input engine live in leaf modules; their original module paths re-export the public and shared
+interfaces. Runtime selection and CPython registration retain small coordinating entry points.
+
+The source audit covers import organization, type and lifetime names, constructor names, result handling,
+ownership, standard traits, documentation, unsafe contracts, macros, and conditional architecture code.
+Short-lived count pairs and intrinsic register tuples remain local and are destructured at use sites. Exported
+hash word arrays retain their documented order. Existing slice and allocating APIs, closed backend enums, and
+FFI panic containment follow the design choices above.

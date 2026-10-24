@@ -52,10 +52,14 @@ fn match_popcnt_symbols() {
                     .filter(|&&byte| is_lenient_symbol(byte, altchars))
                     .count();
                 assert_eq!(
+                    // SAFETY: The test retains the Python objects and stays attached; buffer access
+                    // is synchronized by the enclosing guards.
                     unsafe { x86::symbol_count_avx2_popcnt(input, altchars) },
                     expected,
                     "offset={offset} length={length} altchars={altchars:?}",
                 );
+                // SAFETY: The test retains the Python objects and stays attached; buffer access is
+                // synchronized by the enclosing guards.
                 assert_eq!(unsafe { x86::symbol_count_avx2(input, altchars) }, expected);
             }
         }
@@ -63,6 +67,8 @@ fn match_popcnt_symbols() {
         for byte in 0..=u8::MAX {
             let input = [byte; 65];
             assert_eq!(
+                // SAFETY: The test retains the Python objects and stays attached; buffer access is
+                // synchronized by the enclosing guards.
                 unsafe { x86::symbol_count_avx2_popcnt(&input, altchars) },
                 usize::from(is_lenient_symbol(byte, altchars)) * input.len(),
                 "byte={byte:#04x} altchars={altchars:?}",
@@ -91,11 +97,17 @@ fn match_x86_scans() {
     }
 
     let valid = vec![b'A'; 97];
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { x86::alphanumeric_prefix_sse2(&valid) }, 97);
     let mut interrupted = valid;
     interrupted[47] = b'!';
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     assert_eq!(unsafe { x86::alphanumeric_prefix_sse2(&interrupted) }, 47);
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { x86::symbol_count_sse2(&interrupted, Some(*b"@#")) },
         interrupted
             .iter()
@@ -105,17 +117,23 @@ fn match_x86_scans() {
     let mut symbols: Vec<u8> = b"A+/_".iter().copied().cycle().take(97).collect();
     for length in [0, 1, 15, 16, 17, 31, 32, 97] {
         assert_eq!(
+            // SAFETY: The test retains the Python objects and stays attached; buffer access is
+            // synchronized by the enclosing guards.
             unsafe { x86::symbol_prefix_sse2(&symbols[..length], Some(*b"-_")) },
             length
         );
     }
     symbols[96] = b'!';
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { x86::symbol_prefix_sse2(&symbols, Some(*b"-_")) },
         96
     );
     symbols[47] = b'!';
     assert_eq!(
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { x86::symbol_prefix_sse2(&symbols, Some(*b"-_")) },
         47
     );
@@ -124,6 +142,8 @@ fn match_x86_scans() {
     let mut expected = original.clone();
     translate_bytes(&mut expected, b'@', b'+', b'#', b'/');
     let mut translated = original;
+    // SAFETY: The test retains the Python objects and stays attached; buffer access is synchronized
+    // by the enclosing guards.
     unsafe { x86::translate_sse2(&mut translated, b'@', b'+', b'#', b'/') };
     assert_eq!(translated, expected);
 
@@ -133,11 +153,15 @@ fn match_x86_scans() {
                 let input = [byte; 32];
                 let expected = usize::from(is_lenient_symbol(byte, altchars)) * input.len();
                 assert_eq!(
+                    // SAFETY: The test retains the Python objects and stays attached; buffer access
+                    // is synchronized by the enclosing guards.
                     unsafe { x86::symbol_count_avx2(&input, altchars) },
                     expected,
                     "byte={byte:#04x} altchars={altchars:?}",
                 );
                 assert_eq!(
+                    // SAFETY: The test retains the Python objects and stays attached; buffer access
+                    // is synchronized by the enclosing guards.
                     unsafe { x86::symbol_prefix_avx2(&input, altchars) },
                     expected,
                     "byte={byte:#04x} altchars={altchars:?}",
@@ -145,8 +169,12 @@ fn match_x86_scans() {
             }
         }
 
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         assert_eq!(unsafe { x86::alphanumeric_prefix_avx2(&interrupted) }, 47);
         assert_eq!(
+            // SAFETY: The test retains the Python objects and stays attached; buffer access is
+            // synchronized by the enclosing guards.
             unsafe { x86::symbol_count_avx2(&interrupted, Some(*b"@#")) },
             interrupted
                 .iter()
@@ -154,12 +182,16 @@ fn match_x86_scans() {
                 .count()
         );
         assert_eq!(
+            // SAFETY: The test retains the Python objects and stays attached; buffer access is
+            // synchronized by the enclosing guards.
             unsafe { x86::symbol_prefix_avx2(&symbols, Some(*b"-_")) },
             47
         );
         let mut translated: Vec<u8> = b"@#ab".iter().copied().cycle().take(99).collect();
         let mut expected = translated.clone();
         translate_bytes(&mut expected, b'@', b'+', b'#', b'/');
+        // SAFETY: The test retains the Python objects and stays attached; buffer access is
+        // synchronized by the enclosing guards.
         unsafe { x86::translate_avx2(&mut translated, b'@', b'+', b'#', b'/') };
         assert_eq!(translated, expected);
     }

@@ -29,6 +29,8 @@ fn match_avx2_tails() {
 
         for seed in [0, 0xd6e8_feb8_6659_fd93] {
             let secret = initialize_secret_scalar(seed);
+            // SAFETY: The test checks backend support and supplies complete blocks or a valid long-
+            // input wrapper.
             let acc = unsafe { accumulate_x86(long_input, &secret, X86Backend::Avx2) };
             assert_eq!(
                 finalize_long_64(length, &secret, acc),
@@ -169,6 +171,8 @@ fn match_x86_backends() {
             initialize_secret_scalar(seed)
         );
         assert_eq!(
+            // SAFETY: The test checks backend support and supplies complete blocks or a valid long-
+            // input wrapper.
             unsafe { accumulate_x86(long_input, &secret, X86Backend::Scalar) },
             expected
         );
@@ -186,6 +190,8 @@ fn match_x86_backends() {
         {
             let forced = Capabilities::from_features(required);
             assert_eq!(select_x86_backend(forced), selected);
+            // SAFETY: The test checks backend support and supplies complete blocks or a valid long-
+            // input wrapper.
             let actual = unsafe { accumulate_x86(long_input, &secret, selected) };
             assert_eq!(actual, expected, "{selected:?} mismatch for seed {seed:#x}");
 
@@ -194,6 +200,8 @@ fn match_x86_backends() {
                     let chain_input = &chain_input[..length];
                     let long_chain = LongInput::new(chain_input).unwrap();
                     assert_eq!(
+                        // SAFETY: The test checks backend support and supplies complete blocks or a
+                        // valid long-input wrapper.
                         unsafe { accumulate_x86(long_chain, &secret, selected) },
                         accumulate_long_input_scalar(long_chain, &secret),
                         "AVX2 four-chain mismatch at {length} bytes for seed {seed:#x}",

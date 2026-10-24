@@ -178,6 +178,8 @@ fn match_avx2_streaming() {
             let output_offset = aligned_offset + alignment;
             let output = &mut guarded_output[output_offset..output_offset + expected.len()];
 
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let consumed = unsafe {
                 if urlsafe {
                     encode_backend::avx2::encode_with_store::<true>(

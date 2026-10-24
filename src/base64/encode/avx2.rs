@@ -2,11 +2,13 @@
 
 use std::arch::asm;
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 #[cfg(target_arch = "x86_64")]
-use std::hint::black_box;
+use std::hint;
 
 #[cfg(feature = "python")]
 use super::WrappedOutput;
@@ -32,6 +34,10 @@ struct EncodeAvx2Constants {
     last_uppercase_index: __m256i,
 }
 
+/// # Safety
+/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
+/// storage. Architecture kernels additionally require their declared CPU features and any fallback
+/// features.
 #[target_feature(enable = "avx2")]
 pub(in crate::base64) unsafe fn encode_with_store<const URLSAFE: bool>(
     input: &[u8],
@@ -39,10 +45,14 @@ pub(in crate::base64) unsafe fn encode_with_store<const URLSAFE: bool>(
     store_mode: Avx2StoreMode,
 ) -> usize {
     if input.len() < 32 {
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         return unsafe { ssse3::encode::<URLSAFE>(input, output) };
     }
 
     #[cfg(target_arch = "x86_64")]
+    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
+    // impose no additional alignment requirement.
     unsafe {
         encode_with_offsets(
             input,
@@ -54,11 +64,17 @@ pub(in crate::base64) unsafe fn encode_with_store<const URLSAFE: bool>(
     }
 
     #[cfg(target_arch = "x86")]
+    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
+    // impose no additional alignment requirement.
     unsafe {
         encode_with_offsets(input, output, store_mode, standard_offsets_256::<URLSAFE>())
     }
 }
 
+/// # Safety
+/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
+/// storage. Architecture kernels additionally require their declared CPU features and any fallback
+/// features.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx2")]
 pub(in crate::base64) unsafe fn encode_custom(
@@ -68,11 +84,17 @@ pub(in crate::base64) unsafe fn encode_custom(
     store_mode: Avx2StoreMode,
 ) -> usize {
     if input.len() < 32 {
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         return unsafe { ssse3::encode_custom(input, output, offsets) };
     }
 
+    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
+    // load; the kernel features are enabled.
     let offsets = _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(offsets.as_ptr().cast()) });
     #[cfg(target_arch = "x86_64")]
+    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
+    // impose no additional alignment requirement.
     unsafe {
         encode_with_offsets(
             input,
@@ -84,11 +106,17 @@ pub(in crate::base64) unsafe fn encode_custom(
     }
 
     #[cfg(target_arch = "x86")]
+    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
+    // impose no additional alignment requirement.
     unsafe {
         encode_with_offsets(input, output, store_mode, offsets)
     }
 }
 
+/// # Safety
+/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
+/// storage. Architecture kernels additionally require their declared CPU features and any fallback
+/// features.
 #[target_feature(enable = "avx2")]
 #[inline]
 unsafe fn encode_with_offsets(
@@ -101,7 +129,11 @@ unsafe fn encode_with_offsets(
     #[cfg(target_arch = "x86")]
     let _ = store_mode;
 
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     let first = unsafe { encode_24_first(input.as_ptr(), offsets) };
+    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
+    // impose no additional alignment requirement.
     unsafe { _mm256_storeu_si256(output.cast(), first) };
 
     // Later loads start four bytes before the block they encode. Keeping the
@@ -123,7 +155,11 @@ unsafe fn encode_with_offsets(
         if groups >= 2 {
             if output.align_offset(32) == 16 {
                 let encoded =
+                    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover
+                    // full input loads, and dispatch has enabled the required CPU features.
                     unsafe { encode_12(input.as_ptr().add(24), _mm256_castsi256_si128(offsets)) };
+                // SAFETY: The encoded destination range fits the caller-provided capacity, and
+                // unaligned stores impose no additional alignment requirement.
                 unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
                 load_offset += 12;
                 destination += 16;
@@ -132,6 +168,8 @@ unsafe fn encode_with_offsets(
 
             if store_mode == Avx2StoreMode::Streaming {
                 used_streaming_stores = true;
+                // SAFETY: The loop guard accounts for the full vector load width, including bytes
+                // beyond the encoded group; the kernel features are enabled.
                 unsafe {
                     encode_96_shifted_streaming(
                         input.as_ptr().add(load_offset),
@@ -141,6 +179,8 @@ unsafe fn encode_with_offsets(
                     )
                 };
             } else {
+                // SAFETY: The loop guard accounts for the full vector load width, including bytes
+                // beyond the encoded group; the kernel features are enabled.
                 unsafe {
                     encode_96(
                         input.as_ptr().add(load_offset),
@@ -159,14 +199,30 @@ unsafe fn encode_with_offsets(
     // The assembly helper is unavailable on 32-bit x86.
     #[cfg(target_arch = "x86")]
     while load_offset + 104 <= input.len() {
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let first = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let second = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 24), offsets) };
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let third = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 48), offsets) };
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let fourth = unsafe { encode_24_shifted(input.as_ptr().add(load_offset + 72), offsets) };
 
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), first) };
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm256_storeu_si256(output.add(destination + 32).cast(), second) };
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm256_storeu_si256(output.add(destination + 64).cast(), third) };
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm256_storeu_si256(output.add(destination + 96).cast(), fourth) };
 
         load_offset += 96;
@@ -174,7 +230,11 @@ unsafe fn encode_with_offsets(
     }
 
     while load_offset + 32 <= input.len() {
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let encoded = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm256_storeu_si256(output.add(destination).cast(), encoded) };
 
         load_offset += 24;
@@ -188,7 +248,11 @@ unsafe fn encode_with_offsets(
     // SSSE3 helper after YMM work can incur an AVX-to-SSE transition penalty.
     let consumed = if source + 16 <= input.len() {
         let encoded =
+            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+            // loads, and dispatch has enabled the required CPU features.
             unsafe { encode_12(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
+        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
+        // stores impose no additional alignment requirement.
         unsafe { _mm_storeu_si128(output.add(destination).cast(), encoded) };
 
         source + 12
@@ -206,6 +270,9 @@ unsafe fn encode_with_offsets(
     consumed
 }
 
+/// # Safety
+/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
+/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx2")]
 pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
@@ -213,12 +280,19 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
     output: &mut WrappedOutput,
 ) -> usize {
     if input.len() < 32 {
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         return unsafe { ssse3::encode_wrapped::<URLSAFE>(input, output) };
     }
 
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_offsets(input, output, standard_offsets_256::<URLSAFE>()) }
 }
 
+/// # Safety
+/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
+/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx2")]
 pub(in crate::base64) unsafe fn encode_wrapped_custom(
@@ -227,13 +301,22 @@ pub(in crate::base64) unsafe fn encode_wrapped_custom(
     offsets: &[i8; 16],
 ) -> usize {
     if input.len() < 32 {
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         return unsafe { ssse3::encode_wrapped_custom(input, output, offsets) };
     }
 
+    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
+    // load; the kernel features are enabled.
     let offsets = _mm256_broadcastsi128_si256(unsafe { _mm_loadu_si128(offsets.as_ptr().cast()) });
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_offsets(input, output, offsets) }
 }
 
+/// # Safety
+/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
+/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx2")]
 #[inline]
@@ -242,7 +325,11 @@ unsafe fn encode_wrapped_with_offsets(
     output: &mut WrappedOutput,
     offsets: __m256i,
 ) -> usize {
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     let first = unsafe { encode_24_first(input.as_ptr(), offsets) };
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     unsafe { write_wrapped_32(output, first) };
 
     let mut load_offset = 20;
@@ -250,7 +337,11 @@ unsafe fn encode_wrapped_with_offsets(
     while load_offset + 104 <= input.len() {
         for offset in [0, 24, 48, 72] {
             let encoded =
+                // SAFETY: The loop guard accounts for the full vector load width, including bytes
+                // beyond the encoded group; the kernel features are enabled.
                 unsafe { encode_24_shifted(input.as_ptr().add(load_offset + offset), offsets) };
+            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+            // loads, and dispatch has enabled the required CPU features.
             unsafe { write_wrapped_32(output, encoded) };
         }
 
@@ -258,7 +349,11 @@ unsafe fn encode_wrapped_with_offsets(
     }
 
     while load_offset + 32 <= input.len() {
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let encoded = unsafe { encode_24_shifted(input.as_ptr().add(load_offset), offsets) };
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         unsafe { write_wrapped_32(output, encoded) };
         load_offset += 24;
     }
@@ -267,7 +362,11 @@ unsafe fn encode_wrapped_with_offsets(
 
     if source + 16 <= input.len() {
         let encoded =
+            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+            // loads, and dispatch has enabled the required CPU features.
             unsafe { encode_12(input.as_ptr().add(source), _mm256_castsi256_si128(offsets)) };
+        // SAFETY: The vector and byte array have identical sizes and all bits are initialized; the
+        // wrapped writer owns enough output capacity.
         unsafe { output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(encoded)) };
         source + 12
     } else {
@@ -275,10 +374,15 @@ unsafe fn encode_wrapped_with_offsets(
     }
 }
 
+/// # Safety
+/// The wrapped output must retain enough writable capacity for this payload and every inserted
+/// separator. Its storage must not overlap the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx2")]
 #[inline]
 unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
+    // SAFETY: The vector and byte array have identical sizes and all bits are initialized; the
+    // wrapped writer owns enough output capacity.
     unsafe {
         output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
             _mm256_castsi256_si128(value),
@@ -289,6 +393,10 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: __m256i) {
     }
 }
 
+/// # Safety
+/// AVX2 must be available. `groups` must be nonzero, `input` must cover groups * 96 + 8 readable
+/// bytes, and `output` must cover groups * 128 writable bytes. Streaming output must be 32-byte
+/// aligned.
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
@@ -301,14 +409,24 @@ unsafe fn encode_96_shifted_streaming(
     let constants = encode_constants(offsets);
 
     while groups >= 2 {
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(24).cast()), &constants) };
         let third =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(48).cast()), &constants) };
         let fourth =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
 
+        // SAFETY: The caller selects streaming stores only for 32-byte-aligned output; each group
+        // has 128 writable bytes.
         unsafe {
             _mm256_stream_si256(output.cast(), first);
             _mm256_stream_si256(output.add(32).cast(), second);
@@ -317,14 +435,24 @@ unsafe fn encode_96_shifted_streaming(
         }
 
         let fifth =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(96).cast()), &constants) };
         let sixth =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(120).cast()), &constants) };
         let seventh =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(144).cast()), &constants) };
         let eighth =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(168).cast()), &constants) };
 
+        // SAFETY: The caller selects streaming stores only for 32-byte-aligned output; each group
+        // has 128 writable bytes.
         unsafe {
             _mm256_stream_si256(output.add(128).cast(), fifth);
             _mm256_stream_si256(output.add(160).cast(), sixth);
@@ -332,21 +460,35 @@ unsafe fn encode_96_shifted_streaming(
             _mm256_stream_si256(output.add(224).cast(), eighth);
         }
 
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         input = unsafe { input.add(192) };
+        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
+        // loads, and dispatch has enabled the required CPU features.
         output = unsafe { output.add(256) };
 
         groups -= 2;
     }
 
     if groups != 0 {
+        // SAFETY: The loop guard accounts for the full vector load width, including bytes beyond
+        // the encoded group; the kernel features are enabled.
         let first = unsafe { encode_96_values(_mm256_loadu_si256(input.cast()), &constants) };
         let second =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(24).cast()), &constants) };
         let third =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(48).cast()), &constants) };
         let fourth =
+            // SAFETY: The loop guard accounts for the full vector load width, including bytes
+            // beyond the encoded group; the kernel features are enabled.
             unsafe { encode_96_values(_mm256_loadu_si256(input.add(72).cast()), &constants) };
 
+        // SAFETY: The caller selects streaming stores only for 32-byte-aligned output; each group
+        // has 128 writable bytes.
         unsafe {
             _mm256_stream_si256(output.cast(), first);
             _mm256_stream_si256(output.add(32).cast(), second);
@@ -365,9 +507,9 @@ fn encode_constants(translate: __m256i) -> EncodeAvx2Constants {
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
             9, 7, 8, 5, 6, 4, 5,
         ),
-        align_mul: black_box(_mm256_set1_epi32(0x0010_0001)),
+        align_mul: hint::black_box(_mm256_set1_epi32(0x0010_0001)),
         field_mask: _mm256_set1_epi32(0x003f_03f0),
-        field_mul: black_box(_mm256_set1_epi32(0x0100_0010)),
+        field_mul: hint::black_box(_mm256_set1_epi32(0x0100_0010)),
         translate,
         last_lowercase_index: _mm256_set1_epi8(51),
         last_uppercase_index: _mm256_set1_epi8(25),
@@ -394,6 +536,10 @@ fn encode_96_values(input: __m256i, constants: &EncodeAvx2Constants) -> __m256i 
     _mm256_add_epi8(indices, _mm256_shuffle_epi8(constants.translate, lut_index))
 }
 
+/// # Safety
+/// AVX2 must be available. `groups` must be nonzero, `input` must cover groups * 96 + 8 readable
+/// bytes, and `output` must cover groups * 128 writable bytes. Streaming output must be 32-byte
+/// aligned.
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
@@ -405,9 +551,15 @@ unsafe fn encode_96_shifted_asm<const URLSAFE: bool>(
 ) {
     let offsets = standard_offsets_256::<URLSAFE>();
 
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     unsafe { encode_96_shifted_asm_inner(input, output, groups, offsets) };
 }
 
+/// # Safety
+/// AVX2 must be available. `groups` must be nonzero, `input` must cover groups * 96 + 8 readable
+/// bytes, and `output` must cover groups * 128 writable bytes. Streaming output must be 32-byte
+/// aligned.
 #[cfg(all(feature = "python", target_arch = "x86_64"))]
 #[inline(never)]
 #[target_feature(enable = "avx2")]
@@ -417,9 +569,15 @@ unsafe fn encode_96_shifted_asm_custom(
     groups: usize,
     offsets: __m256i,
 ) {
+    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
+    // and dispatch has enabled the required CPU features.
     unsafe { encode_96_shifted_asm_inner(input, output, groups, offsets) };
 }
 
+/// # Safety
+/// AVX2 must be available. `groups` must be nonzero, `input` must cover groups * 96 + 8 readable
+/// bytes, and `output` must cover groups * 128 writable bytes. Streaming output must be 32-byte
+/// aligned.
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx2")]
@@ -442,6 +600,8 @@ unsafe fn encode_96_shifted_asm_inner(
 
     // Align the branch target itself. Reuse two scratch registers across all
     // four vectors to reduce the Windows nonvolatile register-save area.
+    // SAFETY: The caller reserves 128 output bytes per group; shifted 32-byte loads stay in the
+    // guarded input range, and AVX2 is enabled.
     unsafe {
         asm!(
             ".p2align 5",
@@ -523,10 +683,15 @@ unsafe fn encode_96_shifted_asm_inner(
     }
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 16 readable bytes, including
+/// the four bytes beyond the consumed group.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
 
+    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
+    // bytes; the kernel features are enabled.
     let mut value = unsafe { _mm_loadu_si128(input.cast()) };
     value = _mm_shuffle_epi8(value, shuffle);
 
@@ -541,6 +706,8 @@ unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx2")]
 fn mulhi_epu16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+    // SAFETY: The enabled instruction set supports this register-only operation; the assembly
+    // touches no memory or stack.
     unsafe {
         asm!(
             "vpmulhuw {value}, {value}, {multiplier}",
@@ -556,6 +723,8 @@ fn mulhi_epu16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
 #[inline]
 #[target_feature(enable = "avx2")]
 fn mullo_epi16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
+    // SAFETY: The enabled instruction set supports this register-only operation; the assembly
+    // touches no memory or stack.
     unsafe {
         asm!(
             "vpmullw {value}, {value}, {multiplier}",
@@ -568,16 +737,26 @@ fn mullo_epi16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     value
 }
 
+/// # Safety
+/// AVX2 must be available and `input` must cover a full 32-byte load. The shifted form consumes
+/// bytes 4 through 27 of that load.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_24_first(input: *const u8, offsets: __m256i) -> __m256i {
+    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
+    // bytes; the kernel features are enabled.
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
     let shifted = _mm256_permutevar8x32_epi32(value, _mm256_setr_epi32(0, 0, 1, 2, 3, 4, 5, 6));
 
     encode_24_shifted_value(shifted, offsets)
 }
 
+/// # Safety
+/// AVX2 must be available and `input` must cover a full 32-byte load. The shifted form consumes
+/// bytes 4 through 27 of that load.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_24_shifted(input: *const u8, offsets: __m256i) -> __m256i {
+    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
+    // bytes; the kernel features are enabled.
     let shifted = unsafe { _mm256_loadu_si256(input.cast()) };
 
     encode_24_shifted_value(shifted, offsets)
@@ -609,6 +788,8 @@ fn encode_24_shifted_value(shifted: __m256i, offsets: __m256i) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx2")]
 fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+    // SAFETY: The enabled instruction set supports this register-only operation; the assembly
+    // touches no memory or stack.
     unsafe {
         asm!(
             "vpmulhuw {value}, {value}, {multiplier}",
@@ -624,6 +805,8 @@ fn mulhi_epu16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
 #[inline]
 #[target_feature(enable = "avx2")]
 fn mullo_epi16_exact(mut value: __m256i, multiplier: __m256i) -> __m256i {
+    // SAFETY: The enabled instruction set supports this register-only operation; the assembly
+    // touches no memory or stack.
     unsafe {
         asm!(
             "vpmullw {value}, {value}, {multiplier}",

@@ -37,14 +37,14 @@ const STACK_BATCH_RESULTS: usize = 32;
 const PACKED_STACK_INPUTS: usize = 64;
 
 #[cfg(not(Py_GIL_DISABLED))]
-struct ExactBytesList<'a, 'py> {
-    items: &'a Bound<'py, PyList>,
+struct ExactBytesList<'items, 'py> {
+    items: &'items Bound<'py, PyList>,
     total: usize,
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-impl<'a, 'py> ExactBytesList<'a, 'py> {
-    fn checked(items: &'a Bound<'py, PyList>) -> Option<Self> {
+impl<'items, 'py> ExactBytesList<'items, 'py> {
+    fn checked(items: &'items Bound<'py, PyList>) -> Option<Self> {
         exact_bytes_total(items).map(|total| Self { items, total })
     }
 
@@ -52,15 +52,17 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         self.items.len()
     }
 
-    fn get(&self, index: usize) -> &'a [u8] {
+    fn get(&self, index: usize) -> &'items [u8] {
         // `checked` established this invariant, and no operation used through
         // this representation may call Python before all raw borrows are consumed.
+        // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized
+        // and mutable or aliased inputs are stabilized before writes.
         unsafe { exact_bytes_at(self.items, index) }
     }
 
     fn with_stack<const CAPACITY: usize, T>(
         &self,
-        operation: impl FnOnce(&[&'a [u8]]) -> T,
+        operation: impl FnOnce(&[&'items [u8]]) -> T,
     ) -> Option<T> {
         if self.len() > CAPACITY || should_detach(self.len(), self.total) {
             return None;
@@ -76,7 +78,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         Some(operation(inputs))
     }
 
-    fn borrow(&self) -> PyResult<Vec<&'a [u8]>> {
+    fn borrow(&self) -> PyResult<Vec<&'items [u8]>> {
         let mut inputs = batch_results(self.len(), BATCH_TOO_LARGE)?;
         inputs.extend((0..self.len()).map(|index| self.get(index)));
         Ok(inputs)
@@ -86,6 +88,8 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         let mut retained = batch_results(self.len(), BATCH_TOO_LARGE)?;
 
         for index in 0..self.len() {
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             unsafe {
                 let item = ffi::PyList_GET_ITEM(self.items.as_ptr(), index as ffi::Py_ssize_t);
                 retained.push(
@@ -130,6 +134,8 @@ fn borrow_exact<'a>(items: &'a [Bound<'_, PyAny>]) -> PyResult<Vec<&'a [u8]>> {
     inputs.extend(
         items
             .iter()
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             .map(|item| unsafe { item.cast_unchecked::<PyBytes>().as_bytes() }),
     );
     Ok(inputs)
@@ -171,6 +177,8 @@ unsafe fn hash_into_scratch<'a, T: Copy>(
     if inputs.len() <= scratch.len() {
         let hashes = &mut scratch[..inputs.len()];
         let destinations =
+            // SAFETY: Scratch capacity is checked before hashing and the callback initializes each
+            // returned element before exposing the result slice.
             unsafe { std::slice::from_raw_parts_mut(hashes.as_mut_ptr().cast(), hashes.len()) };
         hash(inputs, seed, destinations);
 
@@ -184,6 +192,8 @@ unsafe fn hash_into_scratch<'a, T: Copy>(
         &mut hashes.spare_capacity_mut()[..inputs.len()],
     );
     // The caller guarantees that the hash callback initializes every result.
+    // SAFETY: Scratch capacity is checked before hashing and the callback initializes each returned
+    // element before exposing the result slice.
     unsafe { hashes.set_len(inputs.len()) };
     Ok(Cow::Owned(hashes))
 }
@@ -211,17 +221,23 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
                 *input = exact.get(index);
             }
 
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             return unsafe { hash_into_scratch(inputs, seed, scratch, hash) };
         }
 
         if !should_detach(exact.len(), exact.total) {
             let inputs = exact.borrow()?;
 
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             return unsafe { hash_into_scratch(&inputs, seed, scratch, hash) };
         }
 
         let retained = exact.retain()?;
         let inputs = borrow_retained(py, &retained)?;
+        // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized
+        // and mutable or aliased inputs are stabilized before writes.
         let hashes = py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) });
         drop(inputs);
 
@@ -235,6 +251,8 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
     #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
     #[cfg(Py_GIL_DISABLED)]
+    // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized and
+    // mutable or aliased inputs are stabilized before writes.
     let (items, exact) = unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
 
     #[cfg(Py_GIL_DISABLED)]
@@ -245,8 +263,12 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
             .fold(0_usize, |total, input| total.saturating_add(input.len()));
 
         return if should_detach(inputs.len(), total) {
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) })
         } else {
+            // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is
+            // sized and mutable or aliased inputs are stabilized before writes.
             unsafe { hash_into_scratch(&inputs, seed, scratch, hash) }
         };
     }
@@ -256,8 +278,12 @@ unsafe fn batch_hashes<'a, T: Copy + Send + Sync>(
     let inputs = borrow_batch(&parsed)?;
 
     if detach {
+        // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized
+        // and mutable or aliased inputs are stabilized before writes.
         py.detach(|| unsafe { hash_into_scratch(&inputs, seed, scratch, hash) })
     } else {
+        // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized
+        // and mutable or aliased inputs are stabilized before writes.
         unsafe { hash_into_scratch(&inputs, seed, scratch, hash) }
     }
 }
@@ -270,6 +296,8 @@ fn packed_output_len(
     let required = items
         .checked_mul(digest_size)
         .ok_or_else(|| PyMemoryError::new_err("XXH3 batch output is too large"))?;
+    // SAFETY: The destination size is checked while holding its bytearray critical section; each
+    // padding-free digest occupies exactly its declared slot.
     let provided = unsafe { bytearray_size(output.as_ptr()) };
 
     if provided < required {
@@ -283,6 +311,8 @@ fn packed_output_len(
 
 fn write_packed_64_at(output: *mut u8, index: usize, hash: u64) {
     let bytes = hash.to_le_bytes();
+    // SAFETY: The destination size is checked while holding its bytearray critical section; each
+    // padding-free digest occupies exactly its declared slot.
     unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), output.add(index * 8), 8) };
 }
 
@@ -290,6 +320,8 @@ fn write_packed_128_at(output: *mut u8, index: usize, [low, high]: [u64; 2]) {
     let offset = index * 16;
     let low = low.to_le_bytes();
     let high = high.to_le_bytes();
+    // SAFETY: The destination size is checked while holding its bytearray critical section; each
+    // padding-free digest occupies exactly its declared slot.
     unsafe {
         std::ptr::copy_nonoverlapping(low.as_ptr(), output.add(offset), 8);
         std::ptr::copy_nonoverlapping(high.as_ptr(), output.add(offset + 8), 8);
@@ -327,6 +359,8 @@ unsafe trait PackedDigest: Copy + Send + Sync {
             for (input, item) in inputs.iter_mut().zip(chunk) {
                 // Exact bytes are immutable; each owned reference outlives the
                 // detached call even if another thread clears the source list.
+                // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output
+                // is sized and mutable or aliased inputs are stabilized before writes.
                 *input = unsafe {
                     std::slice::from_raw_parts(bytes_data(item.as_ptr()), bytes_size(item.as_ptr()))
                 };
@@ -346,6 +380,8 @@ unsafe trait PackedDigest: Copy + Send + Sync {
     ) -> PyResult<usize> {
         with_bytearray(output, || {
             let written = packed_output_len(output, inputs.len(), Self::SIZE)?;
+            // SAFETY: The destination size is checked while holding its bytearray critical section;
+            // each padding-free digest occupies exactly its declared slot.
             let output = unsafe { bytearray_data(output.as_ptr()) };
             let mut index = 0;
             Self::for_each(inputs, seed, |hash| {
@@ -361,12 +397,16 @@ unsafe trait PackedDigest: Copy + Send + Sync {
     fn write_results(output: &Bound<'_, PyByteArray>, hashes: &[Self]) -> PyResult<usize> {
         with_bytearray(output, || {
             let written = packed_output_len(output, hashes.len(), Self::SIZE)?;
+            // SAFETY: The destination size is checked while holding its bytearray critical section;
+            // each padding-free digest occupies exactly its declared slot.
             let output = unsafe { bytearray_data(output.as_ptr()) };
             // Both implementations are padding-free u64 words in packed order.
             // On little-endian hosts the staged results already have the wire
             // representation, so publish them with one copy after reacquiring
             // the GIL (or bytearray critical section) and rechecking its size.
             #[cfg(target_endian = "little")]
+            // SAFETY: The destination size is checked while holding its bytearray critical section;
+            // each padding-free digest occupies exactly its declared slot.
             unsafe {
                 debug_assert_eq!(std::mem::size_of::<Self>(), Self::SIZE);
                 std::ptr::copy_nonoverlapping(hashes.as_ptr().cast::<u8>(), output, written);
@@ -421,6 +461,8 @@ fn int_from_u128<'py>(py: Python<'py>, value: &u128) -> PyResult<Bound<'py, PyIn
         Ok(PyInt::new(py, *value))
     }
     #[cfg(not(Py_3_14))]
+    // SAFETY: The initialized u128 supplies exactly 16 readable bytes for the attached CPython
+    // integer conversion.
     unsafe {
         #[cfg(Py_3_13)]
         let result = ffi::PyLong_FromNativeBytes(
@@ -447,6 +489,8 @@ pub(super) fn xxh3_64_batch<'py>(
     let mut scratch = [0; STACK_BATCH_RESULTS];
     // Both batch iterators emit exactly one hash for every input, so this
     // callback initializes the entire destination supplied by `batch_hashes`.
+    // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized and
+    // mutable or aliased inputs are stabilized before writes.
     let hashes = unsafe {
         batch_hashes(py, items, seed, &mut scratch, |inputs, seed, hashes| {
             let mut hashes = hashes.iter_mut();
@@ -467,6 +511,8 @@ pub(super) fn xxh3_128_batch<'py>(
     let mut scratch = [0_u128; STACK_BATCH_RESULTS];
     // Both batch iterators emit exactly one hash for every input, so this
     // callback initializes the entire destination supplied by `batch_hashes`.
+    // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized and
+    // mutable or aliased inputs are stabilized before writes.
     let hashes = unsafe {
         batch_hashes(py, items, seed, &mut scratch, |inputs, seed, hashes| {
             let mut hashes = hashes.iter_mut();
@@ -523,6 +569,8 @@ fn packed_batch_into<D: PackedDigest>(
     #[cfg(not(Py_GIL_DISABLED))]
     let items = list_items(items)?;
     #[cfg(Py_GIL_DISABLED)]
+    // SAFETY: Exact bytes retain immutable owners across hashing or detachment; output is sized and
+    // mutable or aliased inputs are stabilized before writes.
     let (items, exact) = unsafe { list_items_and_all(items, PyBytes::is_exact_type_of)? };
     with_bytearray(output, || packed_output_len(output, items.len(), D::SIZE))?;
 
@@ -662,6 +710,8 @@ mod tests {
             );
             assert!(u64::write_results(&output, &hashes64).is_err());
             assert!(<[u64; 2]>::write_results(&output, &hashes128).is_err());
+            // SAFETY: Immutability or the enclosing bytearray critical section keeps the retained
+            // storage stable during this inspection.
             assert_eq!(unsafe { output.as_bytes() }, &[0]);
         });
     }

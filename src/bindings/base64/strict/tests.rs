@@ -15,6 +15,8 @@ fn snapshot_mutable_input() {
             }
             .unwrap()
             .unwrap();
+            // SAFETY: The enclosing bytearray critical section keeps the retained storage stable
+            // during this mutation.
             with_bytearray(&source, || unsafe { source.as_bytes_mut().fill(b'!') });
             assert_eq!(result.as_bytes(), expected);
         }

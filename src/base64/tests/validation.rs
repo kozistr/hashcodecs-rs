@@ -9,7 +9,9 @@ use crate::base64::runtime_dispatch::{
 use crate::base64::{Base64Error, DecodeAlphabet, validate_alphabet};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::base64::{decode_valid_prefix, runtime_dispatch::decode_valid_prefix_with_backend};
+use crate::base64::decode_valid_prefix;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use crate::base64::runtime_dispatch::decode_valid_prefix_with_backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use base64::Engine;
 
@@ -120,6 +122,8 @@ fn stop_at_invalid_block() {
     let mut output = [0xa5; 24];
 
     if let Some((consumed, written)) =
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe { decode_valid_prefix(&input, output.as_mut_ptr(), DecodeAlphabet::Standard) }
     {
         assert_eq!((consumed, written), (32, 24));
@@ -154,6 +158,8 @@ fn stop_at_invalid_block() {
                 let expected_input = length / block * block;
                 let expected_output = expected_input / 4 * 3;
                 assert_eq!(
+                    // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                    // support before calling a SIMD backend.
                     unsafe {
                         decode_valid_prefix_with_backend(
                             &input,
@@ -182,6 +188,8 @@ fn stop_at_invalid_block() {
 
             let expected_input = invalid_at / block * block;
             assert_eq!(
+                // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                // support before calling a SIMD backend.
                 unsafe {
                     decode_valid_prefix_with_backend(
                         &input,
@@ -207,6 +215,8 @@ fn stop_at_invalid_block() {
     }
 
     assert_eq!(
+        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+        // before calling a SIMD backend.
         unsafe {
             decode_valid_prefix_with_backend(
                 b"AAAA",
@@ -266,6 +276,8 @@ fn classify_each_byte() {
                 assert_eq!(&decoded[..decoded_len], expected.repeat(encoded_len / 4));
 
                 if !matches!(alphabet, DecodeAlphabet::Mixed) {
+                    // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                    // support before calling a SIMD backend.
                     let padded = unsafe {
                         decode_with_backend_ptr(
                             &encoded,

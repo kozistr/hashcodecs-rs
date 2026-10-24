@@ -1,5 +1,6 @@
 //! AArch64 long-input accumulation kernel.
 
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::super::primitives::P32_1;
@@ -7,6 +8,8 @@ use super::{LongInput, Secret, build_long_input_schedule, initial_accumulator};
 
 #[inline(always)]
 fn compiler_guard(mut value: uint64x2_t) -> uint64x2_t {
+    // SAFETY: The assembly only preserves the initialized vector register and declares that it
+    // touches neither memory nor the stack.
     unsafe {
         std::arch::asm!(
             "/* {value:v} */",
@@ -17,6 +20,9 @@ fn compiler_guard(mut value: uint64x2_t) -> uint64x2_t {
     value
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
+/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline(always)]
 unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const u8) {
     for vector in (0..4).step_by(2) {
@@ -24,6 +30,8 @@ unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const 
         let next_byte_offset = byte_offset + 16;
         let acc_offset = vector * 2;
 
+        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
+        // alignment cover the vector access.
         unsafe {
             let input_lo = vreinterpretq_u64_u8(vld1q_u8(data.add(byte_offset)));
             let input_hi = vreinterpretq_u64_u8(vld1q_u8(data.add(next_byte_offset)));
@@ -60,14 +68,21 @@ unsafe fn accumulate_stripe(acc: &mut [u64; 8], data: *const u8, secret: *const 
     }
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
+/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline(always)]
 unsafe fn scramble(acc: &mut [u64; 8], secret: *const u8) {
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     let prime = unsafe { vdup_n_u32(P32_1 as u32) };
 
     for vector in 0..4 {
         let byte_offset = vector * 16;
         let acc_offset = vector * 2;
 
+        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
+        // alignment cover the vector access.
         unsafe {
             let acc_offset_ptr = acc.as_mut_ptr().add(acc_offset);
 
@@ -95,6 +110,8 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
         let offset = block * 1024;
 
         for stripe in 0..16 {
+            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+            // 192-byte secret, including the final overlapping stripe.
             unsafe {
                 accumulate_stripe(
                     &mut acc,
@@ -104,10 +121,14 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
             };
         }
 
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
 
     for stripe in 0..schedule.tail_stripes() {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_stripe(
                 &mut acc,
@@ -117,6 +138,8 @@ pub(super) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u64; 8] {
         };
     }
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     unsafe {
         accumulate_stripe(
             &mut acc,

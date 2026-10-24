@@ -32,6 +32,8 @@ fn snapshot_mutable_input() {
             Ok(3)
         );
         with_bytearray(&source, || {
+            // SAFETY: Immutability or the enclosing bytearray critical section keeps the retained
+            // storage stable during this inspection.
             assert_eq!(unsafe { source.as_bytes() }, b"abcJj")
         });
         assert_eq!(output.as_bytes(), b"abc");
@@ -115,6 +117,8 @@ fn decode_custom_runs() {
                 expected.resize(expected.len() + tail, 0);
                 let required = expected.len();
                 assert_eq!(
+                    // SAFETY: The fixture retains the symbol input and reserves the decoded output
+                    // bound before the native call.
                     unsafe {
                         decode_lenient_to_ptr::<false>(
                             &input,
@@ -131,6 +135,8 @@ fn decode_custom_runs() {
 
                 for provided in [0, required - 1, required, required + 7] {
                     let mut output = vec![0xa5; provided + 2];
+                    // SAFETY: The fixture retains the symbol input and reserves the decoded output
+                    // bound before the native call.
                     let result = unsafe {
                         decode_lenient_to_ptr::<true>(
                             &input,

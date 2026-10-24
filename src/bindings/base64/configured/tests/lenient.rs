@@ -39,6 +39,8 @@ fn respect_output_capacity() {
     let table = lenient_decode_table(None);
     let mut output = [0xa5; 8];
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<true>(
                 b"YWJj",
@@ -56,6 +58,8 @@ fn respect_output_capacity() {
 
     output.fill(0xa5);
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<false>(
                 b"YWJj",
@@ -78,6 +82,8 @@ fn respect_output_capacity() {
         (b"YWJ!j".as_slice(), 2),
     ] {
         assert_eq!(
+            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
+            // before the native call.
             unsafe {
                 decode_lenient_to_ptr::<true>(
                     input,
@@ -94,6 +100,8 @@ fn respect_output_capacity() {
     }
 
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<true>(
                 b"YQ==AAAA",
@@ -108,6 +116,8 @@ fn respect_output_capacity() {
         Ok(1)
     );
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<true>(
                 b"A",
@@ -130,6 +140,8 @@ fn skip_noise() {
     input.splice(128..128, *b"!?\r\n");
     let mut output = vec![0xa5; 3 * 64];
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<true>(
                 &input,
@@ -149,6 +161,8 @@ fn skip_noise() {
     let input = b"-_8/".repeat(32);
     let mut output = vec![0; 3 * 32];
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe {
             decode_lenient_to_ptr::<true>(
                 &input,
@@ -171,11 +185,15 @@ fn validate_remapped_symbols() {
     let mut output = vec![0xa5; CONFIGURED_STAGING_CAPACITY * 2];
     assert_eq!(decoder.decoded_len(b"Y!Q==", false), Some(1));
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { decoder.decode_checked_to_ptr(b"Y!Q==", output.as_mut_ptr(), false) },
         Some(1)
     );
     assert_eq!(output[0], b'a');
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { decoder.decode_to_ptr(b"Y!Q==", output.as_mut_ptr(), false) },
         1
     );
@@ -186,6 +204,8 @@ fn validate_remapped_symbols() {
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.decoded_len(input, true), None);
         assert_eq!(
+            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
+            // before the native call.
             unsafe { canonical.decode_checked_to_ptr(input, output.as_mut_ptr(), true) },
             None
         );
@@ -193,6 +213,8 @@ fn validate_remapped_symbols() {
 
     assert_eq!(canonical.decoded_len(b"AB==AA", true), Some(3));
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { canonical.decode_checked_to_ptr(b"AB==AA", output.as_mut_ptr(), true) },
         Some(3)
     );
@@ -203,10 +225,14 @@ fn validate_remapped_symbols() {
     let expected = CONFIGURED_STAGING_CAPACITY / 4 * 3 * 2;
     assert_eq!(decoder.decoded_len(&symbols, true), Some(expected));
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { decoder.decode_checked_to_ptr(&symbols, output.as_mut_ptr(), true) },
         Some(expected)
     );
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { decoder.decode_to_ptr(&symbols, output.as_mut_ptr(), true) },
         expected
     );
@@ -216,10 +242,14 @@ fn validate_remapped_symbols() {
     remapped.preserves_alphanumeric = false;
     assert_eq!(remapped.decoded_len(b"AAAA", true), Some(3));
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { remapped.decode_checked_to_ptr(b"AAAA", output.as_mut_ptr(), true) },
         Some(3)
     );
     assert_eq!(
+        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
+        // the native call.
         unsafe { remapped.decode_to_ptr(b"AAAA", output.as_mut_ptr(), true) },
         3
     );

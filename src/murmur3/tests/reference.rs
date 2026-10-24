@@ -109,6 +109,8 @@ fn match_tail_lengths() {
 
                 for selected in supported.into_iter().flatten() {
                     let mut hash = seed;
+                    // SAFETY: The test checks backend support and supplies complete blocks or a
+                    // valid long-input wrapper.
                     unsafe {
                         x86_32::x86::mix_body(
                             FullBlocks::new(&input[..block_end]).unwrap(),
@@ -230,6 +232,8 @@ fn assert_x86_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
     for selected in supported.into_iter().flatten() {
         let mut hashes = [seed; 4];
         let blocks = FullBlocks::new(&input[..block_end]).unwrap();
+        // SAFETY: The test checks backend support and supplies complete blocks or a valid long-
+        // input wrapper.
         unsafe { x86_128::x86::mix_body(blocks, &mut hashes, selected) };
         assert_eq!(
             x86_words_as_u128(x86_128::finish(input, hashes, block_end)),
@@ -255,6 +259,8 @@ fn assert_x64_128_simd_backends(input: &[u8], seed: u32, expected: u128) {
 
     for (selected, bmi2) in supported.into_iter().flatten() {
         let mut hashes = [seed as u64; 2];
+        // SAFETY: The test checks backend support and supplies complete blocks or a valid long-
+        // input wrapper.
         unsafe {
             x64_128::x86::mix_body(
                 FullBlocks::new(&input[..block_end]).unwrap(),

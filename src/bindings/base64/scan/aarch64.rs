@@ -1,3 +1,4 @@
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::scalar::{self, is_lenient_symbol};
@@ -9,6 +10,8 @@ pub(super) fn symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     let mut symbols = 0;
 
     while source + 16 <= input.len() {
+        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
+        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
         let range = |lower, upper| {
             vandq_u8(
@@ -49,6 +52,8 @@ pub(super) fn symbol_prefix(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
     let mut source = 0;
 
     while source + 16 <= input.len() {
+        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
+        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
         let range = |lower, upper| {
             vandq_u8(
@@ -76,6 +81,8 @@ pub(super) fn symbol_prefix(input: &[u8], altchars: Option<[u8; 2]>) -> usize {
 
         if vmaxvq_u8(invalid) != 0 {
             let mut lanes = [0_u8; 16];
+            // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
+            // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
             unsafe { vst1q_u8(lanes.as_mut_ptr(), valid) };
 
             return source + lanes.iter().position(|&lane| lane == 0).unwrap_or(16);
@@ -96,6 +103,8 @@ pub(super) fn translate(input: &mut [u8], source0: u8, target0: u8, source1: u8,
     let mut offset = 0;
 
     while offset + 16 <= input.len() {
+        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
+        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { vld1q_u8(input.as_ptr().add(offset)) };
         let translated0 = vbslq_u8(
             vceqq_u8(bytes, vdupq_n_u8(source0)),
@@ -107,6 +116,8 @@ pub(super) fn translate(input: &mut [u8], source0: u8, target0: u8, source1: u8,
             vdupq_n_u8(target1),
             translated0,
         );
+        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
+        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         unsafe { vst1q_u8(input.as_mut_ptr().add(offset), translated1) };
         offset += 16;
     }

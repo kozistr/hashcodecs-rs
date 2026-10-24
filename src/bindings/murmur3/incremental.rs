@@ -13,6 +13,8 @@ fn with_input<T: Ungil>(
     operation: impl Ungil + Send + FnOnce(&[u8]) -> T,
 ) -> T {
     let detach = input.detach_safe() && input.len() >= MURMUR3_DETACH_THRESHOLD;
+    // SAFETY: The input guard retains the storage; only immutable or snapshotted data can detach,
+    // and the hash operation invokes no Python callbacks.
     unsafe {
         input.with_bytes(|input| {
             if detach {
@@ -61,7 +63,7 @@ macro_rules! define_python_hasher {
             ///     OverflowError: seed is outside 0 <= seed < 2**32.
             #[new]
             #[pyo3(signature = (data=None, seed=0))]
-            fn new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
+            fn try_new(py: Python<'_>, data: Option<&Bound<'_, PyAny>>, seed: u32) -> PyResult<Self> {
                 let mut state = <$state>::new(seed);
 
                 if let Some(data) = data {

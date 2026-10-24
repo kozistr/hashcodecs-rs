@@ -1,8 +1,10 @@
 //! AVX2 secret initialization and long-input accumulator.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use crate::xxhash::long_inputs::{
@@ -28,8 +30,12 @@ pub(in crate::xxhash::long_inputs) fn init_secret(seed: u64) -> Secret {
 
     for vector in 0..6 {
         let offset = vector * 32;
+        // SAFETY: The 192-byte secret and output contain every 32-byte vector selected by the
+        // bounded offset loop; AVX2 is enabled.
         let source = unsafe { _mm256_loadu_si256(SECRET.as_ptr().add(offset).cast()) };
 
+        // SAFETY: The 192-byte secret and output contain every 32-byte vector selected by the
+        // bounded offset loop; AVX2 is enabled.
         unsafe {
             _mm256_storeu_si256(
                 output.as_mut_ptr().add(offset).cast(),
@@ -41,10 +47,16 @@ pub(in crate::xxhash::long_inputs) fn init_secret(seed: u64) -> Secret {
     Secret(output)
 }
 
+/// # Safety
+/// AVX2 must be available. Each data or secret pointer must cover 32 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_vector(acc: __m256i, data: *const u8, secret: *const u8) -> __m256i {
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     let input = unsafe { _mm256_loadu_si256(data.cast()) };
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     let secret_values = unsafe { _mm256_loadu_si256(secret.cast()) };
     let mixed = _mm256_xor_si256(input, secret_values);
     let product = _mm256_mul_epu32(mixed, _mm256_srli_epi64::<32>(mixed));
@@ -53,9 +65,13 @@ unsafe fn accumulate_vector(acc: __m256i, data: *const u8, secret: *const u8) ->
     _mm256_add_epi64(_mm256_add_epi64(acc, swapped), product)
 }
 
+/// # Safety
+/// AVX2 must be available. Each data or secret pointer must cover 32 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     let secret_values = unsafe { _mm256_loadu_si256(secret.cast()) };
     let mixed = _mm256_xor_si256(
         _mm256_xor_si256(acc, _mm256_srli_epi64::<47>(acc)),
@@ -74,11 +90,18 @@ pub(super) fn initial() -> Accumulator {
     let initial = AlignedAccumulator(initial_accumulator());
 
     Accumulator {
+        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
+        // alignment cover the vector access.
         low: unsafe { _mm256_load_si256(initial.0.as_ptr().cast()) },
+        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
+        // alignment cover the vector access.
         high: unsafe { _mm256_load_si256(initial.0.as_ptr().add(4).cast()) },
     }
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
+/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn accumulate_registers(
@@ -86,20 +109,33 @@ pub(super) unsafe fn accumulate_registers(
     data: *const u8,
     secret: *const u8,
 ) {
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     acc.low = unsafe { accumulate_vector(acc.low, data, secret) };
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     acc.high = unsafe { accumulate_vector(acc.high, data.add(32), secret.add(32)) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
+/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn scramble_registers(acc: &mut Accumulator, secret: *const u8) {
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     acc.low = unsafe { scramble_vector(acc.low, secret) };
+    // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay within
+    // it, and dispatch enables the kernel features.
     acc.high = unsafe { scramble_vector(acc.high, secret.add(32)) };
 }
 
 #[inline]
 #[target_feature(enable = "avx2")]
 fn store(acc: Accumulator, output: &mut AlignedAccumulator) {
+    // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared alignment
+    // cover the vector access.
     unsafe {
         _mm256_store_si256(output.0.as_mut_ptr().cast(), acc.low);
         _mm256_store_si256(output.0.as_mut_ptr().add(4).cast(), acc.high);
@@ -131,6 +167,9 @@ fn reduce_chains(
     acc0
 }
 
+/// # Safety
+/// AVX2 must be available. The caller must provide four complete 64-byte stripes beginning at
+/// first_stripe and every corresponding 64-byte secret window.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_group(
@@ -139,6 +178,8 @@ unsafe fn accumulate_group(
     secret: *const u8,
     first_stripe: usize,
 ) {
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     unsafe {
         accumulate_registers(
             acc0,
@@ -163,6 +204,9 @@ unsafe fn accumulate_group(
     }
 }
 
+/// # Safety
+/// AVX2 must be available. Data must cover a complete 1024-byte block and the secret must cover 192
+/// readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_block_chains(
@@ -182,6 +226,8 @@ unsafe fn accumulate_block_chains(
     let mut acc3 = acc1;
 
     for stripe in (0..16).step_by(4) {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_group(
                 [&mut acc0, &mut acc1, &mut acc2, &mut acc3],
@@ -195,6 +241,9 @@ unsafe fn accumulate_block_chains(
     reduce_chains(acc0, acc1, acc2, acc3)
 }
 
+/// # Safety
+/// AVX2 must be available. Data must cover tail_stripes complete 64-byte stripes, last must cover
+/// the final 64 bytes, and the secret must cover 192 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_tail_chains(
@@ -216,6 +265,8 @@ unsafe fn accumulate_tail_chains(
     let mut stripe = 0;
 
     while stripe + 4 <= stripes {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_group(
                 [&mut acc0, &mut acc1, &mut acc2, &mut acc3],
@@ -230,10 +281,14 @@ unsafe fn accumulate_tail_chains(
     let remaining = stripes - stripe;
 
     if remaining >= 1 {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe { accumulate_registers(&mut acc0, data.add(stripe * 64), secret.add(stripe * 8)) };
     }
 
     if remaining >= 2 {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_registers(
                 &mut acc1,
@@ -244,6 +299,8 @@ unsafe fn accumulate_tail_chains(
     }
 
     if remaining == 3 {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_registers(
                 &mut acc2,
@@ -253,8 +310,12 @@ unsafe fn accumulate_tail_chains(
         };
     }
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     let last_secret = unsafe { secret.add(121) };
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     unsafe { accumulate_registers(&mut acc3, last, last_secret) };
 
     reduce_chains(acc0, acc1, acc2, acc3)
@@ -273,29 +334,51 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
     for block in 0..schedule.full_blocks() {
         let offset = block * 1024;
 
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         acc = unsafe { accumulate_block_chains(acc, data.as_ptr().add(offset), secret.as_ptr()) };
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         let secret_ptr = unsafe { secret.as_ptr().add(128) };
 
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe { scramble_registers(&mut acc, secret_ptr) };
     }
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     let tail = unsafe { data.as_ptr().add(schedule.tail_offset()) };
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     let last = unsafe { data.as_ptr().add(schedule.last_offset()) };
 
     // The final stripe uses a distinct secret and forms the fourth independent
     // update when the regular tail already contains at least three stripes.
     if schedule.tail_stripes() >= 3 {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         acc = unsafe {
             accumulate_tail_chains(acc, tail, secret.as_ptr(), schedule.tail_stripes(), last)
         };
     } else {
         for stripe in 0..schedule.tail_stripes() {
+            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+            // 192-byte secret, including the final overlapping stripe.
             let input = unsafe { tail.add(stripe * 64) };
+            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+            // 192-byte secret, including the final overlapping stripe.
             let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
+            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+            // 192-byte secret, including the final overlapping stripe.
             unsafe { accumulate_registers(&mut acc, input, secret_ptr) };
         }
 
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         let secret_ptr = unsafe { secret.as_ptr().add(121) };
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe { accumulate_registers(&mut acc, last, secret_ptr) };
     }
 
@@ -320,6 +403,8 @@ pub(in crate::xxhash::long_inputs) fn hash_128_medium(
     };
     let mut stripe = 0;
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     unsafe {
         while stripe + 2 <= input.regular_stripes() {
             accumulate_registers(

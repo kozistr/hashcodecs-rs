@@ -15,6 +15,8 @@ static METHODS_INIT: Once = Once::new();
 
 pub(crate) fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
+    // SAFETY: The static table has a generated slot for every binding plus its sentinel, and Once
+    // serializes initialization before the live module receives the table.
     unsafe { add_methods(module, methods, &METHODS_INIT, register_all) }
 }
 
@@ -31,12 +33,17 @@ fn return_usize(py: Python<'_>, result: PyResult<usize>) -> *mut ffi::PyObject {
 
 macro_rules! callback {
     ($name:ident, |$py:ident; $($parameter:ident),+| $body:block) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL argument slots and keyword names
+        /// while attached, retaining their owners until this callback returns.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,
             nargs: isize,
             keywords: *mut ffi::PyObject,
         ) -> *mut ffi::PyObject {
+            // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the
+            // schema validates them before the operation borrows any payload.
             unsafe { crate::bindings::schema::base64::$name(args, nargs, keywords, |$py, $($parameter),+| $body) }
         }
     };

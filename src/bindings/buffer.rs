@@ -7,6 +7,8 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::critical_section::{with_critical_section, with_critical_section2};
 use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
@@ -40,7 +42,7 @@ pub(super) struct BorrowedBuffer<'py> {
     release_may_reenter: bool,
     // A flag byte keeps the guard's size and existing enum niche unchanged.
     metadata: u8,
-    _python: std::marker::PhantomData<Python<'py>>,
+    _python: PhantomData<Python<'py>>,
 }
 
 impl BorrowedBuffer<'_> {
@@ -68,28 +70,42 @@ impl BorrowedBuffer<'_> {
         self.view.len as usize
     }
 
+    /// # Safety
+    /// The owner or export must remain live and its storage must not mutate or resize while
+    /// borrowed. Mutable input requires continuous Python attachment and the appropriate critical
+    /// section; callbacks must neither invoke Python nor detach.
     #[inline]
     unsafe fn bytes(&self) -> &[u8] {
         let data = if self.view.len == 0 {
-            std::ptr::NonNull::<u8>::dangling().as_ptr()
+            NonNull::<u8>::dangling().as_ptr()
         } else {
             self.view.buf.cast()
         };
 
+        // SAFETY: The acquired C-contiguous export covers this length; an empty slice uses a non-
+        // null dangling pointer and the caller prevents mutation.
         unsafe { std::slice::from_raw_parts(data, self.len()) }
     }
 
     #[cfg(Py_GIL_DISABLED)]
     fn try_snapshot(&self) -> PyResult<Vec<u8>> {
         debug_assert!(!self.view.obj.is_null());
+        // SAFETY: This entry runs from an attached Python callback or while its retained buffer
+        // guard is attached.
         let py = unsafe { Python::assume_attached() };
+        // SAFETY: The retained input is copied while attached and under its exporter or bytearray
+        // critical section, without invoking user callbacks.
         let exporter = unsafe { Bound::ref_from_ptr(py, &self.view.obj) };
+        // SAFETY: The retained input is copied while attached and under its exporter or bytearray
+        // critical section, without invoking user callbacks.
         with_critical_section(exporter, || unsafe { try_copy_bytes(self.bytes()) })
     }
 }
 
 impl Drop for BorrowedBuffer<'_> {
     fn drop(&mut self) {
+        // SAFETY: The acquired export is still owned by this guard; with_view repairs self-
+        // referential shape and stride pointers before release.
         self.with_view(|view| unsafe { ffi::PyBuffer_Release(view) });
     }
 }
@@ -118,6 +134,8 @@ impl BufferRange {
     }
 
     pub(super) fn for_bytearray(value: &Bound<'_, PyByteArray>) -> Option<Self> {
+        // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable storage is
+        // inspected under its critical section while attached.
         with_bytearray(value, || unsafe {
             Self::new(
                 bytearray_data(value.as_ptr()),
@@ -139,9 +157,9 @@ impl BufferRange {
     }
 }
 
-pub(super) enum BytesLike<'a, 'py> {
-    Bytes(&'a Bound<'py, PyBytes>),
-    ByteArray(&'a Bound<'py, PyByteArray>),
+pub(super) enum BytesLike<'borrow, 'py> {
+    Bytes(&'borrow Bound<'py, PyBytes>),
+    ByteArray(&'borrow Bound<'py, PyByteArray>),
     OwnedBytes(Bound<'py, PyBytes>),
     OwnedBytesSlice {
         owner: Bound<'py, PyBytes>,
@@ -156,12 +174,12 @@ pub(super) enum BytesLike<'a, 'py> {
     },
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
     Buffer(BorrowedBuffer<'py>),
-    Text(&'a str),
+    Text(&'borrow str),
     OwnedVec(Vec<u8>),
 }
 
-pub(super) enum DecodeDataObject<'a, 'py> {
-    Borrowed(&'a Bound<'py, PyAny>),
+pub(super) enum DecodeDataObject<'borrow, 'py> {
+    Borrowed(&'borrow Bound<'py, PyAny>),
     Owned(Bound<'py, PyAny>),
 }
 
@@ -177,13 +195,21 @@ impl<'py> DecodeDataObject<'_, 'py> {
 impl<'py> BytesLike<'_, 'py> {
     pub(super) fn len(&self) -> usize {
         match self {
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             Self::Bytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
             Self::ByteArray(value) => {
+                // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+                // storage is inspected under its critical section while attached.
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             Self::OwnedBytes(bytes) => unsafe { bytes_size(bytes.as_ptr()) },
             Self::OwnedBytesSlice { len, .. } => *len,
             Self::OwnedByteArray(value) => {
+                // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+                // storage is inspected under its critical section while attached.
                 with_critical_section(value.as_any(), || unsafe { bytearray_size(value.as_ptr()) })
             }
             Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => bytes.len(),
@@ -209,6 +235,8 @@ impl<'py> BytesLike<'_, 'py> {
             {
                 // The active export owns `view.obj`.
                 // Equality proves that the exact memoryview source remains alive during access.
+                // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+                // storage is inspected under its critical section while attached.
                 let memoryview = unsafe { Bound::ref_from_ptr(py, &buffer.memoryview_source) };
                 let owner = memoryview.getattr(intern!(py, "obj"))?;
 
@@ -218,6 +246,8 @@ impl<'py> BytesLike<'_, 'py> {
 
                 let owner = owner.cast_into::<PyBytes>()?;
 
+                // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+                // storage is inspected under its critical section while attached.
                 if unsafe {
                     bytes_size(owner.as_ptr()) == buffer.len()
                         && bytes_data(owner.as_ptr()) == buffer.view.buf.cast_const().cast()
@@ -270,6 +300,8 @@ impl<'py> BytesLike<'_, 'py> {
         match self {
             Self::ByteArray(value) => value.as_ptr() == output.as_ptr(),
             Self::OwnedByteArray(value) => value.as_ptr() == output.as_ptr(),
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             Self::Buffer(buffer) => with_bytearray(output, || unsafe {
                 ranges_overlap(
                     buffer.view.buf.cast(),
@@ -377,30 +409,53 @@ impl<'py> BytesLike<'_, 'py> {
             return buffer.try_snapshot();
         }
 
+        // SAFETY: The retained input is copied while attached and under its exporter or bytearray
+        // critical section, without invoking user callbacks.
         unsafe { self.with_bytes(try_copy_bytes) }
     }
 
+    ///
+    /// # Safety
+    /// The owner or export must remain live and its storage must not mutate or resize while
+    /// borrowed. Mutable input requires continuous Python attachment and the appropriate critical
+    /// section; callbacks must neither invoke Python nor detach.
     /// The callback must not run arbitrary Python or release the GIL when the input is mutable.
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::Bytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
             Self::ByteArray(value) => with_critical_section(value.as_any(), || {
+                // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+                // critical sections prevent resizing, mutation, or overlapping output access.
                 callback(unsafe { bytearray_bytes(value) })
             }),
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::OwnedBytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
             Self::OwnedBytesSlice { owner, offset, len } => {
+                // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+                // critical sections prevent resizing, mutation, or overlapping output access.
                 let owner = unsafe { bytes_slice(owner) };
                 callback(&owner[*offset..*offset + *len])
             }
             Self::OwnedByteArray(value) => with_critical_section(value.as_any(), || {
+                // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+                // critical sections prevent resizing, mutation, or overlapping output access.
                 callback(unsafe { bytearray_bytes(value) })
             }),
             Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => callback(bytes),
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::Buffer(buffer) => callback(unsafe { buffer.bytes() }),
             Self::Text(text) => callback(text.as_bytes()),
         }
     }
 
+    ///
+    /// # Safety
+    /// Input and output must not alias. The callback must stay attached, invoke no Python
+    /// callbacks, and write only within the provided destination capacity.
     /// The callback must not run arbitrary Python or detach from the interpreter.
     /// The caller must ensure that self and output do not alias.
     pub(super) unsafe fn with_bytes_and_output<T>(
@@ -410,6 +465,8 @@ impl<'py> BytesLike<'_, 'py> {
     ) -> T {
         match self {
             Self::ByteArray(value) => {
+                // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+                // critical sections prevent resizing, mutation, or overlapping output access.
                 with_critical_section2(value.as_any(), output.as_any(), || unsafe {
                     callback(
                         bytearray_bytes(value),
@@ -419,6 +476,8 @@ impl<'py> BytesLike<'_, 'py> {
                 })
             }
             Self::OwnedByteArray(value) => {
+                // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+                // critical sections prevent resizing, mutation, or overlapping output access.
                 with_critical_section2(value.as_any(), output.as_any(), || unsafe {
                     callback(
                         bytearray_bytes(value),
@@ -427,6 +486,8 @@ impl<'py> BytesLike<'_, 'py> {
                     )
                 })
             }
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             _ => with_critical_section(output.as_any(), || unsafe {
                 self.with_bytes(|input| {
                     callback(
@@ -441,10 +502,16 @@ impl<'py> BytesLike<'_, 'py> {
 
     pub(super) fn stable_bytes(&self) -> &[u8] {
         match self {
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::Bytes(bytes) => unsafe { bytes_slice(bytes) },
             #[cfg(not(Py_GIL_DISABLED))]
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::ByteArray(value) => unsafe { bytearray_bytes(value) },
             #[cfg(not(Py_GIL_DISABLED))]
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::OwnedByteArray(value) => unsafe { bytearray_bytes(value) },
             #[cfg(Py_GIL_DISABLED)]
             Self::ByteArray(_) | Self::OwnedByteArray(_) => {
@@ -455,6 +522,8 @@ impl<'py> BytesLike<'_, 'py> {
                 &owner.as_bytes()[*offset..*offset + *len]
             }
             Self::GuardedBytes { bytes, .. } | Self::OwnedVec(bytes) => bytes,
+            // SAFETY: Retained owners or exports keep the storage live; the caller contract and
+            // critical sections prevent resizing, mutation, or overlapping output access.
             Self::Buffer(buffer) => unsafe { buffer.bytes() },
             Self::Text(text) => text.as_bytes(),
         }
@@ -518,6 +587,8 @@ pub(super) fn binascii_contiguous_bytes_like<'a, 'py>(
         return Ok(bytes);
     }
 
+    // SAFETY: The Bound reference keeps the object live while attached; checking buffer support
+    // borrows no payload storage.
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         let name = value.get_type().name()?;
 
@@ -534,11 +605,15 @@ pub(super) fn binascii_contiguous_bytes_like_exported<'a, 'py>(
     value: &'a Bound<'py, PyAny>,
 ) -> PyResult<BytesLike<'a, 'py>> {
     if PyBytes::is_exact_type_of(value) {
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
 
         return Ok(BytesLike::Bytes(bytes));
     }
 
+    // SAFETY: The Bound reference keeps the object live while attached; checking buffer support
+    // borrows no payload storage.
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         let name = value.get_type().name()?;
 
@@ -557,11 +632,15 @@ pub(super) fn contiguous_bytes_like_exported<'a, 'py>(
     argument: &str,
 ) -> PyResult<BytesLike<'a, 'py>> {
     if PyBytes::is_exact_type_of(value) {
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
 
         return Ok(BytesLike::Bytes(bytes));
     }
 
+    // SAFETY: The Bound reference keeps the object live while attached; checking buffer support
+    // borrows no payload storage.
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         return Err(type_error(argument));
     }
@@ -593,6 +672,8 @@ pub(super) fn binascii_ascii_or_bytes_exported<'a, 'py>(
 
         // UTF-8 has one byte per code point exactly when every character is
         // ASCII. CPython stores the character count, so no input scan is needed.
+        // SAFETY: The preceding string type check proves the live Bound object is Unicode, and the
+        // interpreter is attached.
         if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
             return Err(PyValueError::new_err(
                 "string argument should contain only ASCII characters",
@@ -644,11 +725,15 @@ pub(super) fn ascii_or_bytes<'a, 'py>(
 
     if PyString::is_exact_type_of(value) {
         // The exact-type check above establishes the unchecked cast's invariant.
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let text = unsafe { value.cast_unchecked::<PyString>() };
         let text = text.to_str().map_err(|_| ascii_error(argument))?;
 
         // Comparing the cached character count with UTF-8 length proves ASCII
         // without scanning the input or depending on a Unicode object layout.
+        // SAFETY: The preceding string type check proves the live Bound object is Unicode, and the
+        // interpreter is attached.
         if text.len() != unsafe { ffi::PyUnicode_GetLength(value.as_ptr()) } as usize {
             return Err(ascii_error(argument));
         }
@@ -702,6 +787,8 @@ pub(super) fn decode_data_object<'a, 'py>(
         return Ok(DecodeDataObject::Owned(bytes.into_any()));
     }
 
+    // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable storage is
+    // inspected under its critical section while attached.
     let bytes = unsafe { input.with_bytes(|input| PyBytes::new(py, input).into_any()) };
     drop(input);
     Ok(DecodeDataObject::Owned(bytes))
@@ -734,6 +821,8 @@ fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let encoded = if PyString::is_exact_type_of(value) {
         // Exact strings cannot override encode. Use the same CPython ASCII
         // conversion without Python attribute lookup or argument handling.
+        // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable storage is
+        // inspected under its critical section while attached.
         unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyUnicode_AsASCIIString(value.as_ptr())) }
     } else {
         value.call_method1(intern!(py, "encode"), ("ascii",))
@@ -752,12 +841,16 @@ fn encode_ascii<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
 fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'a, 'py>> {
     if PyBytes::is_exact_type_of(value) {
         // Exact builtins cannot override their storage behavior.
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let bytes = unsafe { value.cast_unchecked::<PyBytes>() };
 
         return Some(BytesLike::Bytes(bytes));
     }
 
     if PyByteArray::is_exact_type_of(value) {
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let value = unsafe { value.cast_unchecked::<PyByteArray>() };
 
         return Some(BytesLike::ByteArray(value));
@@ -766,11 +859,23 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
     None
 }
 
+/// # Safety
+/// The owner or export must remain live and its storage must not mutate or resize while borrowed.
+/// Mutable input requires continuous Python attachment and the appropriate critical section;
+/// callbacks must neither invoke Python nor detach.
 unsafe fn bytes_slice<'a>(value: &'a Bound<'_, PyBytes>) -> &'a [u8] {
+    // SAFETY: Retained owners or exports keep the storage live; the caller contract and critical
+    // sections prevent resizing, mutation, or overlapping output access.
     unsafe { std::slice::from_raw_parts(bytes_data(value.as_ptr()), bytes_size(value.as_ptr())) }
 }
 
+/// # Safety
+/// The owner or export must remain live and its storage must not mutate or resize while borrowed.
+/// Mutable input requires continuous Python attachment and the appropriate critical section;
+/// callbacks must neither invoke Python nor detach.
 unsafe fn bytearray_bytes<'a>(value: &'a Bound<'_, PyByteArray>) -> &'a [u8] {
+    // SAFETY: Retained owners or exports keep the storage live; the caller contract and critical
+    // sections prevent resizing, mutation, or overlapping output access.
     unsafe {
         std::slice::from_raw_parts(
             bytearray_data(value.as_ptr()),
@@ -785,11 +890,15 @@ fn buffer_bytes_like<'py>(
     require_contiguous: bool,
 ) -> PyResult<BytesLike<'py, 'py>> {
     if PyMemoryView::is_exact_type_of(value) {
+        // SAFETY: The preceding exact-type or subtype check establishes the Python type required by
+        // this unchecked cast.
         let memoryview = unsafe { value.cast_unchecked::<PyMemoryView>() };
 
         return exact_memoryview_bytes_like(memoryview, require_contiguous);
     }
 
+    // SAFETY: The Bound reference keeps the object live while attached; checking buffer support
+    // borrows no payload storage.
     if unsafe { ffi::PyObject_CheckBuffer(value.as_ptr()) } == 0 {
         return Err(type_error(argument));
     }
@@ -834,7 +943,11 @@ fn exact_memoryview_bytes_like<'py>(
     if let Some(owner) = owner {
         if PyBytes::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyBytes>()?;
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             let owner_len = unsafe { bytes_size(owner.as_ptr()) };
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             let owner_data = unsafe { bytes_data(owner.as_ptr()) };
 
             if let Some(offset) = subslice_offset(owner_data, owner_len, data, nbytes) {
@@ -851,6 +964,8 @@ fn exact_memoryview_bytes_like<'py>(
         } else if PyByteArray::is_exact_type_of(&owner) {
             let owner = owner.cast_into::<PyByteArray>()?;
 
+            // SAFETY: The typed Bound or acquired export keeps the object alive, and mutable
+            // storage is inspected under its critical section while attached.
             if with_bytearray(&owner, || unsafe {
                 bytearray_size(owner.as_ptr()) == nbytes && bytearray_data(owner.as_ptr()) == data
             }) {
@@ -917,8 +1032,12 @@ fn acquire_buffer<'py>(
     flags: std::ffi::c_int,
 ) -> PyResult<BorrowedBuffer<'py>> {
     let py = value.py();
+    // SAFETY: Py_buffer is a C descriptor whose pointer, integer, and optional callback fields
+    // admit the all-zero representation.
     let mut view = unsafe { std::mem::zeroed::<ffi::Py_buffer>() };
 
+    // SAFETY: The live exporter is attached and the writable descriptor outlives this acquisition;
+    // success transfers the export to BorrowedBuffer.
     if unsafe { ffi::PyObject_GetBuffer(value.as_ptr(), &raw mut view, flags) } != 0 {
         return Err(PyErr::fetch(py));
     }
@@ -926,6 +1045,8 @@ fn acquire_buffer<'py>(
     let release_may_reenter = !PyByteArray::is_exact_type_of(value)
         && (memoryview_source.is_null() || view.obj != memoryview_source);
     let c_contiguous =
+        // SAFETY: GetBuffer succeeded and the initialized descriptor still describes its live,
+        // retained exporter.
         flags == ffi::PyBUF_SIMPLE || unsafe { ffi::PyBuffer_IsContiguous(&view, b'C' as _) != 0 };
     let metadata = if flags == ffi::PyBUF_SIMPLE {
         C_CONTIGUOUS
@@ -939,7 +1060,7 @@ fn acquire_buffer<'py>(
         memoryview_source,
         release_may_reenter,
         metadata,
-        _python: std::marker::PhantomData,
+        _python: PhantomData,
     })
 }
 
@@ -948,6 +1069,8 @@ fn copy_buffer<'py>(
     buffer: &mut BorrowedBuffer<'_>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     PyBytes::new_with(py, buffer.len(), |bytes| {
+        // SAFETY: The export stays acquired, with_view repairs its descriptor, and the fresh
+        // destination has exactly view.len writable bytes.
         let result = buffer.with_view(|view| unsafe {
             ffi::PyBuffer_ToContiguous(
                 bytes.as_mut_ptr().cast(),

@@ -1,5 +1,6 @@
 //! AArch64 NEON decoding kernel.
 
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::super::Base64Error;
@@ -19,6 +20,10 @@ struct DecodeTables {
     offsets: uint8x16_t,
 }
 
+/// # Safety
+/// The checked layout must describe this input, and output must cover its decoded length without
+/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
+/// padded store width. Validated paths require a checked alphabet.
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
@@ -35,9 +40,14 @@ pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
 
         while source < chunk_end {
             let (decoded, block_errors) =
+                // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves
+                // the decoded capacity required by the store policy and enables the kernel
+                // features.
                 unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
 
             errors = vorrq_u8(errors, block_errors);
+            // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+            // decoded capacity required by the store policy and enables the kernel features.
             unsafe { store_decoded_64(output.add(destination), decoded) };
             source += 64;
             destination += 48;
@@ -48,9 +58,15 @@ pub(crate) unsafe fn decode<const URLSAFE: bool, const MIXED: bool>(
         }
     }
 
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     unsafe { decode_tail::<URLSAFE, MIXED>(input, output, tables, source, destination) }
 }
 
+/// # Safety
+/// The checked layout must describe this input, and output must cover its decoded length without
+/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
+/// padded store width. Validated paths require a checked alphabet.
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
@@ -62,17 +78,23 @@ pub(crate) unsafe fn decode_validated_blocks<const URLSAFE: bool, const MIXED: b
 
     while source + 64 <= input.len() {
         let (decoded, errors) =
+            // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+            // decoded capacity required by the store policy and enables the kernel features.
             unsafe { decode_64::<URLSAFE, MIXED>(input.as_ptr().add(source), tables) };
 
         if vmaxvq_u8(errors) != 0 {
             return Err(Base64Error::InvalidInput);
         }
 
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { store_decoded_64(output.add(destination), decoded) };
         source += 64;
         destination += 48;
     }
 
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     unsafe { decode_tail::<URLSAFE, MIXED>(input, output, tables, source, destination) }
 }
 
@@ -89,6 +111,8 @@ pub(crate) fn validate<const URLSAFE: bool, const MIXED: bool>(
         let chunk_end = (source + DECODE_ERROR_CHECK_INTERVAL).min(input.len() & !15);
 
         while source < chunk_end {
+            // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+            // decoded capacity required by the store policy and enables the kernel features.
             let bytes = unsafe { vld1q_u8(input.as_ptr().add(source)) };
             errors = vorrq_u8(errors, decode_indices::<URLSAFE, MIXED>(bytes, tables).1);
             source += 16;
@@ -102,19 +126,29 @@ pub(crate) fn validate<const URLSAFE: bool, const MIXED: bool>(
     Ok(source)
 }
 
+/// # Safety
+/// The checked layout must describe this input, and output must cover its decoded length without
+/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
+/// padded store width. Validated paths require a checked alphabet.
 #[target_feature(enable = "neon")]
 #[cfg(any(feature = "python", test))]
 pub(crate) unsafe fn decode_standard_validated(input: &[u8], output: *mut u8) -> (usize, usize) {
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     let offsets = unsafe { vld1q_u8(STANDARD_OFFSETS.as_ptr()) };
     let mut source = 0;
     let mut destination = 0;
 
     while source + 64 <= input.len() {
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         let input = unsafe { vld4q_u8(input.as_ptr().add(source)) };
         let first = standard_indices(input.0, offsets);
         let second = standard_indices(input.1, offsets);
         let third = standard_indices(input.2, offsets);
         let fourth = standard_indices(input.3, offsets);
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         unsafe {
             store_decoded_64(
                 output.add(destination),
@@ -126,7 +160,11 @@ pub(crate) unsafe fn decode_standard_validated(input: &[u8], output: *mut u8) ->
     }
 
     while source + 16 <= input.len() {
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         let input = unsafe { vld1q_u8(input.as_ptr().add(source)) };
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { store_indices_16(standard_indices(input, offsets), output.add(destination)) };
         source += 16;
         destination += 12;
@@ -135,6 +173,9 @@ pub(crate) unsafe fn decode_standard_validated(input: &[u8], output: *mut u8) ->
     (source, destination)
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Input must cover every lane read by the full-width
+/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_tail<const URLSAFE: bool, const MIXED: bool>(
@@ -145,6 +186,8 @@ unsafe fn decode_tail<const URLSAFE: bool, const MIXED: bool>(
     mut destination: usize,
 ) -> Result<(usize, usize), Base64Error> {
     while source + 16 <= input.len() {
+        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
+        // decoded capacity required by the store policy and enables the kernel features.
         unsafe {
             decode_16::<URLSAFE, MIXED>(
                 input.as_ptr().add(source),
@@ -160,6 +203,9 @@ unsafe fn decode_tail<const URLSAFE: bool, const MIXED: bool>(
     Ok((source, destination))
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Input must cover every lane read by the full-width
+/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
@@ -167,6 +213,8 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
     output: *mut u8,
     tables: DecodeTables,
 ) -> Result<(), Base64Error> {
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     let input = unsafe { vld1q_u8(input) };
 
     let (indices, errors) = decode_indices::<URLSAFE, MIXED>(input, tables);
@@ -175,15 +223,22 @@ unsafe fn decode_16<const URLSAFE: bool, const MIXED: bool>(
         return Err(Base64Error::InvalidInput);
     }
 
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     unsafe { store_indices_16(indices, output) };
 
     Ok(())
 }
 
+/// # Safety
+/// The kernel CPU features must be available and output must cover every decoded lane written by
+/// this helper.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn store_indices_16(indices: uint8x16_t, output: *mut u8) {
     let mut indices_array = [0_u8; 16];
+    // SAFETY: The caller reserves the helper's exact or padded destination width; the enabled
+    // kernel supports these stores.
     unsafe { vst1q_u8(indices_array.as_mut_ptr(), indices) };
 
     for group in 0..4 {
@@ -195,6 +250,8 @@ unsafe fn store_indices_16(indices: uint8x16_t, output: *mut u8) {
         let third = indices_array[source + 2];
         let fourth = indices_array[source + 3];
 
+        // SAFETY: The caller reserves the helper's exact or padded destination width; the enabled
+        // kernel supports these stores.
         unsafe {
             output.add(destination).write((first << 2) | (second >> 4));
             output
@@ -205,12 +262,17 @@ unsafe fn store_indices_16(indices: uint8x16_t, output: *mut u8) {
     }
 }
 
+/// # Safety
+/// The kernel CPU features must be available. Input must cover every lane read by the full-width
+/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn decode_64<const URLSAFE: bool, const MIXED: bool>(
     input: *const u8,
     tables: DecodeTables,
 ) -> (uint8x16x3_t, uint8x16_t) {
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     let input = unsafe { vld4q_u8(input) };
 
     let (first, first_errors) = decode_indices::<URLSAFE, MIXED>(input.0, tables);
@@ -241,9 +303,14 @@ fn pack_indices(
     )
 }
 
+/// # Safety
+/// The kernel CPU features must be available and output must cover every decoded lane written by
+/// this helper.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn store_decoded_64(output: *mut u8, decoded: uint8x16x3_t) {
+    // SAFETY: The caller reserves the helper's exact or padded destination width; the enabled
+    // kernel supports these stores.
     unsafe { vst3q_u8(output, decoded) };
 }
 
@@ -271,6 +338,8 @@ fn decode_indices<const URLSAFE: bool, const MIXED: bool>(
     };
 
     (
+        // SAFETY: The caller supplies the full readable vector width, or a mask bounds the tail;
+        // the kernel's target features are enabled.
         unsafe { translate(value, high_nibbles, tables.offsets) },
         errors,
     )
@@ -341,6 +410,8 @@ fn decode_tables<const URLSAFE: bool, const MIXED: bool>() -> DecodeTables {
         }
     };
 
+    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
+    // capacity required by the store policy and enables the kernel features.
     unsafe {
         DecodeTables {
             high_classes: vld1q_u8(high_classes.as_ptr()),

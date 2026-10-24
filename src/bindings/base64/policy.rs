@@ -2,6 +2,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
+use std::sync::OnceLock;
 
 use super::configured::ConfiguredDecoder;
 use super::lenient::{MIXED_LENIENT_TABLE, STANDARD_LENIENT_TABLE, lenient_decode_table};
@@ -229,6 +230,8 @@ impl PreparedPolicy {
         let ignored = if let Some(ignorechars) = policy.ignorechars {
             let mut ignored = IgnoredBytes::default();
             let ignorechars = contiguous_bytes_like(ignorechars, "ignorechars")?;
+            // SAFETY: The input guard retains the object while attached, and this bounded
+            // validation/copy does not invoke Python callbacks or detach.
             unsafe {
                 ignorechars.with_bytes(|bytes| {
                     for &byte in bytes {
@@ -283,14 +286,14 @@ pub(super) struct PreparedDecoder {
     pub(super) policy: PreparedPolicy,
     pub(super) route: DecodeRoute,
     pub(super) attempt: DecodeAttempt,
-    configured: std::sync::OnceLock<Box<ConfiguredDecoder>>,
-    strict_custom: std::sync::OnceLock<Box<ConfiguredDecoder>>,
+    configured: OnceLock<Box<ConfiguredDecoder>>,
+    strict_custom: OnceLock<Box<ConfiguredDecoder>>,
     lenient_table: Option<Box<[u8; 256]>>,
 }
 
 impl PreparedDecoder {
     #[inline(always)]
-    pub(super) fn new(py: Python<'_>, policy: DecodePolicy<'_, '_>) -> PyResult<Self> {
+    pub(super) fn try_new(py: Python<'_>, policy: DecodePolicy<'_, '_>) -> PyResult<Self> {
         let semantics = python_semantics(py);
         let (policy, empty_exact_ignorechars) = PreparedPolicy::prepare(policy)?;
         let route = select_route(&policy, empty_exact_ignorechars, semantics);
@@ -303,18 +306,18 @@ impl PreparedDecoder {
             },
             policy,
             route,
-            configured: std::sync::OnceLock::new(),
-            strict_custom: std::sync::OnceLock::new(),
+            configured: OnceLock::new(),
+            strict_custom: OnceLock::new(),
             lenient_table: None,
         })
     }
 
-    pub(super) fn new_for_batch(
+    pub(super) fn try_new_for_batch(
         py: Python<'_>,
         policy: DecodePolicy<'_, '_>,
         count: usize,
     ) -> PyResult<Self> {
-        let mut decoder = Self::new(py, policy)?;
+        let mut decoder = Self::try_new(py, policy)?;
 
         if count > 1 && decoder.route == DecodeRoute::LenientCustom {
             decoder.lenient_table = Some(Box::new(lenient_decode_table(decoder.policy.altchars)));

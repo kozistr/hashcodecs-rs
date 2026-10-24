@@ -1,22 +1,22 @@
 #[derive(Clone, Copy, Debug)]
-pub(super) struct FullBlocks<'a, const BLOCK_SIZE: usize>(&'a [u8]);
+pub(super) struct FullBlocks<'input, const BLOCK_SIZE: usize>(&'input [u8]);
 
-impl<'a, const BLOCK_SIZE: usize> FullBlocks<'a, BLOCK_SIZE> {
+impl<'input, const BLOCK_SIZE: usize> FullBlocks<'input, BLOCK_SIZE> {
     #[cfg(any(test, kani, target_arch = "x86", target_arch = "x86_64"))]
     #[inline]
-    pub(super) fn new(bytes: &'a [u8]) -> Option<Self> {
+    pub(super) fn new(bytes: &'input [u8]) -> Option<Self> {
         (BLOCK_SIZE != 0 && bytes.len().is_multiple_of(BLOCK_SIZE)).then_some(Self(bytes))
     }
 
     #[inline]
-    pub(super) fn split(input: &'a [u8]) -> (Self, &'a [u8]) {
+    pub(super) fn split(input: &'input [u8]) -> (Self, &'input [u8]) {
         assert!(BLOCK_SIZE != 0, "block size must not be zero");
         let body_len = input.len() / BLOCK_SIZE * BLOCK_SIZE;
         (Self(&input[..body_len]), &input[body_len..])
     }
 
     #[inline(always)]
-    pub(super) fn as_bytes(self) -> &'a [u8] {
+    pub(super) fn as_bytes(self) -> &'input [u8] {
         self.0
     }
 

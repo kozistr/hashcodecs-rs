@@ -17,6 +17,8 @@ fn preserve_fallback_output() {
     ] {
         let mut output = [CANARY; 96];
         assert_eq!(
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             unsafe {
                 super::super::decode_valid_prefix(&[b'A'; 128], output.as_mut_ptr(), alphabet)
             },
@@ -34,6 +36,8 @@ fn decode<const URLSAFE: bool, const MIXED: bool>(
     input: &[u8],
     output: &mut [u8],
 ) -> Result<(usize, usize), Base64Error> {
+    // SAFETY: The fixture provides the required input/output ranges and checks CPU support before
+    // calling a SIMD backend.
     unsafe { decode_aarch64::<URLSAFE, MIXED>(input, output.as_mut_ptr()) }
 }
 
@@ -172,6 +176,8 @@ fn encode_misaligned_boundaries<const URLSAFE: bool>() {
             let output_offset = (input_offset * 7 + length) & 15;
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + expected_len + GUARD];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let consumed = unsafe {
                 encode_aarch64::<URLSAFE>(input, guarded_output.as_mut_ptr().add(output_start))
             };
@@ -246,6 +252,8 @@ fn decode_misaligned_boundaries<const URLSAFE: bool, const MIXED: bool>() {
             let output_offset = (input_offset * 7 + length / 4) & 15;
             let output_start = GUARD + output_offset;
             let mut guarded_output = vec![CANARY; output_start + expected.len() + GUARD];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let offsets = unsafe {
                 decode_aarch64::<URLSAFE, MIXED>(
                     input,
@@ -327,6 +335,8 @@ fn invalid_lanes<const URLSAFE: bool, const MIXED: bool>() {
                 let output_len = decoded_len(block_len);
                 let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
 
+                // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                // support before calling a SIMD backend.
                 let result = unsafe {
                     decode_aarch64::<URLSAFE, MIXED>(
                         input,
@@ -401,6 +411,8 @@ fn guarded_checkpoint_invalids<const URLSAFE: bool, const MIXED: bool>() {
             let output_len = decoded_len(total);
 
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let result = unsafe {
                 decode_aarch64::<URLSAFE, MIXED>(
                     input,
@@ -589,6 +601,8 @@ fn validated_invalid_blocks<const URLSAFE: bool, const MIXED: bool>() {
             let output_len = decoded_len(ENCODED_LEN);
             let mut guarded_output = vec![CANARY; output_start + output_len + GUARD];
 
+            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
+            // before calling a SIMD backend.
             let result = unsafe {
                 decode_aarch64_validated_blocks::<URLSAFE, MIXED>(
                     input,

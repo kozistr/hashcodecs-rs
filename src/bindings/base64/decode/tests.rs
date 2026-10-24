@@ -50,7 +50,7 @@ fn propagate_storage_errors() {
             (false, true, None, b"YQ"),
             (true, false, Some(ignored.as_any()), b"Y!WJj"),
         ] {
-            let decoder = PreparedDecoder::new(
+            let decoder = PreparedDecoder::try_new(
                 py,
                 DecodePolicy::new(None, Some(false), padded, ignored, canonical),
             )
@@ -81,6 +81,8 @@ fn snapshot_translated_input() {
         let (input, altchars) =
             prepare_translated_input(py, DecodeDataObject::Borrowed(source.as_any()), *b"@#")
                 .unwrap();
+        // SAFETY: The enclosing bytearray critical section keeps the retained storage stable during
+        // this mutation.
         with_bytearray(&source, || unsafe { source.as_bytes_mut().fill(b'!') });
         assert_eq!(altchars, Some(*b"@#"));
         assert_eq!(
@@ -104,6 +106,8 @@ fn snapshot_fallback_input() {
             Padding::Padded,
         )
         .unwrap();
+        // SAFETY: The enclosing bytearray critical section keeps the retained storage stable during
+        // this mutation.
         with_bytearray(&source, || unsafe { source.as_bytes_mut().fill(b'!') });
         assert_eq!(result.as_bytes(), b"\xfb\xff");
     });

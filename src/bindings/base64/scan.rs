@@ -15,13 +15,19 @@ pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> u
     {
         if input.len() >= 32 && std::is_x86_feature_detected!("avx2") {
             if std::is_x86_feature_detected!("popcnt") {
+                // SAFETY: The selected scan function requires only the checked CPU features and
+                // receives the full live slice.
                 return unsafe { x86::symbol_count_avx2_popcnt(input, altchars) };
             }
 
+            // SAFETY: The selected scan function requires only the checked CPU features and
+            // receives the full live slice.
             return unsafe { x86::symbol_count_avx2(input, altchars) };
         }
 
         if input.len() >= 16 && std::is_x86_feature_detected!("sse2") {
+            // SAFETY: The selected scan function requires only the checked CPU features and
+            // receives the full live slice.
             return unsafe { x86::symbol_count_sse2(input, altchars) };
         }
     }
@@ -29,6 +35,8 @@ pub(super) fn lenient_symbol_count(input: &[u8], altchars: Option<[u8; 2]>) -> u
     #[cfg(target_arch = "aarch64")]
     {
         if input.len() >= 16 {
+            // SAFETY: The selected scan function requires only the checked CPU features and
+            // receives the full live slice.
             return unsafe { aarch64::symbol_count(input, altchars) };
         }
     }

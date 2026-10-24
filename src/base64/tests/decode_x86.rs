@@ -49,6 +49,8 @@ fn preserve_sse_bounds() {
                         let consumed = invalid_at / 16 * 16;
                         let written = consumed / 4 * 3;
                         assert_eq!(
+                            // SAFETY: The fixture provides the required input/output ranges and
+                            // checks CPU support before calling a SIMD backend.
                             unsafe {
                                 decode_valid_prefix_with_backend(
                                     &source,
@@ -208,6 +210,8 @@ fn preserve_avx2_overlaps() {
 
                 output.fill(CANARY);
                 assert_eq!(
+                    // SAFETY: The fixture provides the required input/output ranges and checks CPU
+                    // support before calling a SIMD backend.
                     unsafe {
                         decode_valid_prefix_with_backend(
                             encoded.as_bytes(),
@@ -230,6 +234,8 @@ fn preserve_avx2_overlaps() {
                     let consumed = invalid_at / 16 * 16;
                     let written = consumed / 4 * 3;
                     assert_eq!(
+                        // SAFETY: The fixture provides the required input/output ranges and checks
+                        // CPU support before calling a SIMD backend.
                         unsafe {
                             decode_valid_prefix_with_backend(
                                 &invalid,

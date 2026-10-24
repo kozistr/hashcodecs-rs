@@ -1,6 +1,9 @@
 use super::{LongInput, Secret, build_long_input_schedule, initial_accumulator};
 use crate::xxhash::primitives::{P32_1, read_u64_le_ptr};
 
+/// # Safety
+/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
+/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline(always)]
 unsafe fn accumulate_stripe(
     acc: &mut [u64; 8],
@@ -18,7 +21,11 @@ unsafe fn accumulate_stripe(
     for lane in 0..8 {
         // `LongSchedule` keeps each data stripe in bounds, and every secret
         // offset passed by `accumulate` leaves a complete 64-byte stripe.
+        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
+        // within it, and dispatch enables the kernel features.
         let value = unsafe { read_u64_le_ptr(data, data_offset + lane * 8) };
+        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
+        // within it, and dispatch enables the kernel features.
         let mixed = value ^ unsafe { read_u64_le_ptr(secret, secret_offset + lane * 8) };
         acc[lane ^ 1] = acc[lane ^ 1].wrapping_add(value);
         acc[lane] = acc[lane].wrapping_add((mixed as u32 as u64).wrapping_mul(mixed >> 32));
@@ -32,6 +39,8 @@ fn scramble(acc: &mut [u64; 8], secret: &Secret) {
     for (lane, value) in acc.iter_mut().enumerate() {
         *value ^= *value >> 47;
         // A `Secret` is 192 bytes, so all eight fixed-offset loads are valid.
+        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
+        // within it, and dispatch enables the kernel features.
         *value ^= unsafe { read_u64_le_ptr(secret, 128 + lane * 8) };
         *value = value.wrapping_mul(P32_1);
     }
@@ -46,6 +55,8 @@ pub(in crate::xxhash) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u
         let offset = block * 1024;
 
         for stripe in 0..16 {
+            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+            // 192-byte secret, including the final overlapping stripe.
             unsafe { accumulate_stripe(&mut acc, data, secret, offset + stripe * 64, stripe * 8) };
         }
 
@@ -53,6 +64,8 @@ pub(in crate::xxhash) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u
     }
 
     for stripe in 0..schedule.tail_stripes() {
+        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
+        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_stripe(
                 &mut acc,
@@ -64,6 +77,8 @@ pub(in crate::xxhash) fn accumulate(input: LongInput<'_>, secret: &Secret) -> [u
         };
     }
 
+    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
+    // secret, including the final overlapping stripe.
     unsafe { accumulate_stripe(&mut acc, data, secret, schedule.last_offset(), 121) };
 
     acc

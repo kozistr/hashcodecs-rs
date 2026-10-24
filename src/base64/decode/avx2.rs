@@ -1,8 +1,13 @@
 //! AVX2 decoding kernel.
+//!
+//! Index helpers read 32 bytes and require AVX2; the validated helper assumes
+//! standard-alphabet symbols. Store widths are specified by `x86_contracts::Store`.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
@@ -40,6 +45,8 @@ pub(crate) unsafe fn decode<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
+        // SAFETY: Overlap stays within this 96-byte output group. The fourth
+        // store uses S so the group's final boundary follows the caller's policy.
         if use_wide_overlapping_stores {
             unsafe { store_24_padded_wide(output.add(destination), pack_32(first)) };
             unsafe { store_24_padded_wide(output.add(destination + 24), pack_32(second)) };
@@ -297,6 +304,8 @@ fn pack_32(indices: __m256i) -> __m256i {
     _mm256_shuffle_epi8(packed, shuffle)
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `output` must cover 24 writable bytes.
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
     let lower = _mm256_castsi256_si128(value);
@@ -311,12 +320,16 @@ pub(super) unsafe fn store_24_exact(output: *mut u8, value: __m256i) {
     unsafe { output.add(20).cast::<i32>().write_unaligned(remaining) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `output` must cover 28 writable bytes.
 #[target_feature(enable = "avx2")]
 pub(super) unsafe fn store_24_padded(output: *mut u8, value: __m256i) {
     unsafe { _mm_storeu_si128(output.cast(), _mm256_castsi256_si128(value)) };
     unsafe { _mm_storeu_si128(output.add(12).cast(), _mm256_extracti128_si256(value, 1)) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `output` must cover 32 writable bytes.
 #[inline(always)]
 unsafe fn store_24_padded_wide(output: *mut u8, value: __m256i) {
     // Duplicate payload in the padding to avoid a zero-fill blend after the

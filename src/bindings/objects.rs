@@ -3,6 +3,7 @@ use pyo3::exceptions::PyMemoryError;
 use pyo3::ffi;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use std::ptr::NonNull;
 
 pub(super) fn batch_results<T>(length: usize, error: &'static str) -> PyResult<Vec<T>> {
     let mut results = Vec::new();
@@ -58,6 +59,9 @@ pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
     }
 }
 
+/// # Safety
+/// The index must be within a list already checked to contain exact bytes. Its slots must not
+/// change while the returned slice is borrowed.
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usize) -> &'a [u8] {
     unsafe {
@@ -110,6 +114,9 @@ pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<
     Ok(items)
 }
 
+/// # Safety
+/// `value` must be a live bytearray. The caller must remain attached and hold any critical section
+/// required to prevent concurrent mutation or resizing.
 #[inline]
 pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
     #[cfg(Py_GIL_DISABLED)]
@@ -118,12 +125,15 @@ pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
     let data: *mut u8 = unsafe { ffi::PyByteArray_AS_STRING(value).cast() };
 
     if data.is_null() {
-        std::ptr::NonNull::<u8>::dangling().as_ptr()
+        NonNull::<u8>::dangling().as_ptr()
     } else {
         data
     }
 }
 
+/// # Safety
+/// `value` must be a live bytearray. The caller must remain attached and hold any critical section
+/// required to prevent concurrent mutation or resizing.
 #[inline]
 pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
     #[cfg(Py_GIL_DISABLED)]
@@ -135,11 +145,17 @@ pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
     }
 }
 
+/// # Safety
+/// `value` must be a live bytes object retained for the full pointer borrow; CPython object access
+/// requires attachment unless immutable bytes are explicitly retained across detachment.
 #[inline]
 pub(super) unsafe fn bytes_data(value: *mut ffi::PyObject) -> *const u8 {
     unsafe { ffi::PyBytes_AS_STRING(value).cast() }
 }
 
+/// # Safety
+/// `value` must be a live bytes object retained for the full pointer borrow; CPython object access
+/// requires attachment unless immutable bytes are explicitly retained across detachment.
 #[inline]
 pub(super) unsafe fn bytes_size(value: *mut ffi::PyObject) -> usize {
     unsafe { ffi::Py_SIZE(value) as usize }

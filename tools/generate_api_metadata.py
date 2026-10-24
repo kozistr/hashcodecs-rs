@@ -335,11 +335,18 @@ def render_module_schema(module: str, functions: list[ast.FunctionDef]) -> str:
         for function in functions
     )
     return f"""pub(super) mod {module} {{
-use super::*;
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
+use super::{{Argument, Binding, DefaultValue, Documentation, Parser}};
+use pyo3::ffi;
+use pyo3::prelude::Python;
 
 pub(in crate::bindings) const BINDING_COUNT: usize = {len(functions)};
 
 {bindings}
+/// # Safety
+/// `methods` must hold BINDING_COUNT writable method slots and a sentinel.
+/// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {{
     let mut method_count = 0;
 {registrations}

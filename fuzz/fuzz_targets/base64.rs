@@ -74,5 +74,4 @@ fuzz_target!(|bytes: &[u8]| {
     );
     assert_eq!(&url_decoded[..input.len()], input);
     assert!(url_decoded[input.len()..].iter().all(|byte| *byte == 0xa5));
-
 });

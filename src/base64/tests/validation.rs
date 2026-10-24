@@ -9,7 +9,9 @@ use crate::base64::runtime_dispatch::{
 use crate::base64::{Base64Error, DecodeAlphabet, validate_alphabet};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::base64::{decode_valid_prefix, runtime_dispatch::decode_valid_prefix_with_backend};
+use crate::base64::decode_valid_prefix;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use crate::base64::runtime_dispatch::decode_valid_prefix_with_backend;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use base64::Engine;
 

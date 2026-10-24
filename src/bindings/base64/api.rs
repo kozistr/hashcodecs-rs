@@ -31,6 +31,9 @@ fn return_usize(py: Python<'_>, result: PyResult<usize>) -> *mut ffi::PyObject {
 
 macro_rules! callback {
     ($name:ident, |$py:ident; $($parameter:ident),+| $body:block) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL argument slots and keyword names
+        /// while attached, retaining their owners until this callback returns.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,

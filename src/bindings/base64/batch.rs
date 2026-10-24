@@ -392,7 +392,7 @@ pub(super) fn b64decode_batch_parsed<'py>(
     let items = list_items(items)?;
     let length = items.len();
 
-    let decoder = PreparedDecoder::new_for_batch(
+    let decoder = PreparedDecoder::try_new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
         length,
@@ -447,7 +447,7 @@ pub(super) fn b64decode_batch_into_parsed<'py>(
         .into_iter()
         .peekable();
 
-    let decoder = PreparedDecoder::new_for_batch(
+    let decoder = PreparedDecoder::try_new_for_batch(
         py,
         DecodePolicy::new(altchars, Some(validate), true, None, false),
         items.len(),

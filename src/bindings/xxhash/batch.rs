@@ -37,14 +37,14 @@ const STACK_BATCH_RESULTS: usize = 32;
 const PACKED_STACK_INPUTS: usize = 64;
 
 #[cfg(not(Py_GIL_DISABLED))]
-struct ExactBytesList<'a, 'py> {
-    items: &'a Bound<'py, PyList>,
+struct ExactBytesList<'items, 'py> {
+    items: &'items Bound<'py, PyList>,
     total: usize,
 }
 
 #[cfg(not(Py_GIL_DISABLED))]
-impl<'a, 'py> ExactBytesList<'a, 'py> {
-    fn checked(items: &'a Bound<'py, PyList>) -> Option<Self> {
+impl<'items, 'py> ExactBytesList<'items, 'py> {
+    fn checked(items: &'items Bound<'py, PyList>) -> Option<Self> {
         exact_bytes_total(items).map(|total| Self { items, total })
     }
 
@@ -52,7 +52,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         self.items.len()
     }
 
-    fn get(&self, index: usize) -> &'a [u8] {
+    fn get(&self, index: usize) -> &'items [u8] {
         // `checked` established this invariant, and no operation used through
         // this representation may call Python before all raw borrows are consumed.
         unsafe { exact_bytes_at(self.items, index) }
@@ -60,7 +60,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
 
     fn with_stack<const CAPACITY: usize, T>(
         &self,
-        operation: impl FnOnce(&[&'a [u8]]) -> T,
+        operation: impl FnOnce(&[&'items [u8]]) -> T,
     ) -> Option<T> {
         if self.len() > CAPACITY || should_detach(self.len(), self.total) {
             return None;
@@ -76,7 +76,7 @@ impl<'a, 'py> ExactBytesList<'a, 'py> {
         Some(operation(inputs))
     }
 
-    fn borrow(&self) -> PyResult<Vec<&'a [u8]>> {
+    fn borrow(&self) -> PyResult<Vec<&'items [u8]>> {
         let mut inputs = batch_results(self.len(), BATCH_TOO_LARGE)?;
         inputs.extend((0..self.len()).map(|index| self.get(index)));
         Ok(inputs)

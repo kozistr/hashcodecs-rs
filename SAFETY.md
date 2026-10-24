@@ -8,8 +8,8 @@ see [Architecture](docs/ARCHITECTURE.md).
 
 | Boundary | Required contract | Source |
 | --- | --- | --- |
-| CPU dispatch | Check the features required by a kernel and its fallback paths before executing SIMD instructions. | [CPU detection](src/backend.rs), [Base64 dispatch](src/base64/backend.rs), [MurmurHash3 dispatch](src/murmur3/dispatch.rs), [XXH3 engine](src/xxhash/long_inputs.rs) |
-| Input loads | Keep scalar word loads, vector loads, and final overlapping stripes within the input allocation. | [MurmurHash3 loads](src/murmur3/primitives.rs), [XXH3 loads](src/xxhash/primitives.rs), [XXH3 schedule](src/xxhash/long_inputs.rs) |
+| CPU dispatch | Check the features required by a kernel and its fallback paths before executing SIMD instructions. | [CPU detection](src/backend.rs), [Base64 dispatch](src/base64/backend.rs), [MurmurHash3 dispatch](src/murmur3/dispatch.rs), [XXH3 engine](src/xxhash/long_inputs/long_engine.rs) |
+| Input loads | Keep scalar word loads, vector loads, and final overlapping stripes within the input allocation. | [MurmurHash3 loads](src/murmur3/primitives.rs), [XXH3 loads](src/xxhash/primitives.rs), [XXH3 schedule](src/xxhash/long_inputs/long_engine.rs) |
 | Output stores | Check capacity before writing. Overlapping vector stores need space for their full width. Exact outputs must preserve bytes beyond the returned length. | [Base64 store policies](src/base64/decode/x86_contracts.rs), [output initialization](src/base64/output_buffer.rs) |
 | Result initialization | Initialize the returned prefix before exposing uninitialized storage as a result. | [Base64 allocation](src/base64/output_buffer.rs), [XXH3 batch results](src/bindings/xxhash/batch.rs) |
 | Python ownership | Keep owners alive and stabilize inputs before callbacks, overlapping writes, or interpreter detachment can invalidate a borrow. | [Buffer policy](src/bindings/buffer.rs), [Base64 batches](src/bindings/base64/batch.rs) |

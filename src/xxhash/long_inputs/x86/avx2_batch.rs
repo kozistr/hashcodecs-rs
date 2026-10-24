@@ -1,8 +1,10 @@
 //! Interleaved AVX2 kernels for long-input batches with equal stripe counts.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::super::{LongInput, Secret, build_long_input_schedule};

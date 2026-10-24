@@ -20,16 +20,19 @@ docs-build:
 
 format:
     cargo fmt --all
+    cargo fmt --manifest-path fuzz/Cargo.toml
     uv run --frozen --no-sync ruff check --fix .
     uv run --frozen --no-sync ruff format .
 
 format-check:
     cargo fmt --all --check
+    cargo fmt --manifest-path fuzz/Cargo.toml --check
     uv run --frozen --no-sync ruff format --check .
 
 lint:
     cargo clippy -- -D warnings
     cargo clippy --workspace --all-targets --features python -- -D warnings
+    cargo clippy --manifest-path fuzz/Cargo.toml --bins --locked -- -D warnings
     uv run --frozen --no-sync ruff check .
 
 test:

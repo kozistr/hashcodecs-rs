@@ -67,6 +67,8 @@ pub(in crate::bindings) unsafe extern "C" fn xxh3_128(
 
 macro_rules! batch_callback {
     ($name:ident, $operation:ident) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL arguments and keyword names while attached.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,
@@ -92,6 +94,8 @@ batch_callback!(xxh3_128_batch, hash_128_batch);
 
 macro_rules! batch_into_callback {
     ($name:ident, $operation:ident) => {
+        /// # Safety
+        /// CPython must supply live FASTCALL arguments and keyword names while attached.
         pub(in crate::bindings) unsafe extern "C" fn $name(
             _self: *mut ffi::PyObject,
             args: *const *mut ffi::PyObject,

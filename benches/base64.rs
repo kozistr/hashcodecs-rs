@@ -1,4 +1,4 @@
-use std::hint::black_box;
+use std::hint;
 use std::time::Duration;
 
 use base64::Engine;
@@ -11,7 +11,7 @@ const SIZES: [usize; 4] = [1024, 4 * 1024, 1024 * 1024, 8 * 1024 * 1024];
 macro_rules! benchmark {
     ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr) => {
         $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
-            bench.iter(|| black_box(($function)(black_box(input))));
+            bench.iter(|| hint::black_box(($function)(hint::black_box(input))));
         });
     };
 }
@@ -20,9 +20,9 @@ macro_rules! benchmark_encode {
     ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr, $consume:expr) => {
         $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
             bench.iter(|| {
-                let output = black_box(($function)(black_box(input)));
+                let output = hint::black_box(($function)(hint::black_box(input)));
                 if $consume {
-                    black_box(output.bytes().fold(0_u8, u8::wrapping_add));
+                    hint::black_box(output.bytes().fold(0_u8, u8::wrapping_add));
                 }
             });
         });

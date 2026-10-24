@@ -1,8 +1,10 @@
 //! AVX-512 VBMI encoding kernel.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
@@ -155,6 +157,9 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
     source + complete_input
 }
 
+/// # Safety
+/// The kernel CPU features must be available. `input` must cover 48 readable bytes and `output`
+/// must cover 64 writable bytes.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn encode_48(
@@ -169,6 +174,8 @@ unsafe fn encode_48(
     unsafe { _mm512_storeu_si512(output.cast(), encoded) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 48 readable bytes.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn encode_48_value(
@@ -184,6 +191,9 @@ unsafe fn encode_48_value(
     _mm512_permutexvar_epi8(indices, table)
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover the masked input length
+/// readable bytes.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn encode_tail_value(

@@ -1,4 +1,4 @@
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::sync::Once;
 
@@ -69,7 +69,7 @@ pub(super) fn catch_unwind_callback(
     py: Python<'_>,
     callback: impl FnOnce() -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    match catch_unwind(AssertUnwindSafe(callback)) {
+    match panic::catch_unwind(AssertUnwindSafe(callback)) {
         Ok(result) => result,
         Err(payload) => {
             let message = if let Some(message) = payload.downcast_ref::<String>() {
@@ -86,6 +86,9 @@ pub(super) fn catch_unwind_callback(
     }
 }
 
+/// # Safety
+/// The table must hold every generated method plus a null sentinel and remain alive for Python.
+/// register must initialize its entries within that capacity.
 pub(super) unsafe fn add_methods(
     module: &Bound<'_, PyModule>,
     methods: *mut ffi::PyMethodDef,

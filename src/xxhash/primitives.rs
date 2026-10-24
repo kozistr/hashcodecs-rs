@@ -112,6 +112,8 @@ pub(super) fn mix16(
     }
 }
 
+/// # Safety
+/// `data` and `secret` must each cover 16 readable bytes without concurrent writes.
 #[inline(always)]
 pub(super) unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
     let data_lo = unsafe { read_u64_le_ptr(data, 0) };

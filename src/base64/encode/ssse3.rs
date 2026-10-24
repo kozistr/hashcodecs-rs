@@ -2,8 +2,10 @@
 
 use std::arch::asm;
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 #[cfg(feature = "python")]
@@ -102,6 +104,9 @@ unsafe fn encode_wrapped_with_offsets(
     source
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 16 readable bytes, including
+/// the four bytes beyond the consumed group.
 #[target_feature(enable = "ssse3")]
 unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);

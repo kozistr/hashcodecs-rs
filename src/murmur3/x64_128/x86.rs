@@ -1,6 +1,8 @@
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::{X64_128_C1, X64_128_C2, mix_body_scalar, mix_hashes};

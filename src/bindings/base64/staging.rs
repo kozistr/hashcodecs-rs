@@ -339,7 +339,7 @@ impl BytesWriter {
         }
     }
 
-    pub(super) fn new(py: Python<'_>, capacity: usize) -> PyResult<Self> {
+    pub(super) fn try_new(py: Python<'_>, capacity: usize) -> PyResult<Self> {
         let capacity = ffi::Py_ssize_t::try_from(capacity)
             .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
 
@@ -406,7 +406,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             for capacity in [isize::MAX as usize, usize::MAX] {
-                let error = BytesWriter::new(py, capacity).err().unwrap();
+                let error = BytesWriter::try_new(py, capacity).err().unwrap();
                 assert!(
                     error.is_instance_of::<PyMemoryError>(py)
                         || (capacity == isize::MAX as usize

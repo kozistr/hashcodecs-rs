@@ -1,7 +1,11 @@
 // tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.
 
 pub(super) mod base64 {
-use super::*;
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
+use super::{Argument, Binding, DefaultValue, Documentation, Parser};
+use pyo3::ffi;
+use pyo3::prelude::Python;
 
 pub(in crate::bindings) const BINDING_COUNT: usize = 24;
 
@@ -1217,6 +1221,9 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_into(
     }
 }
 
+/// # Safety
+/// `methods` must hold BINDING_COUNT writable method slots and a sentinel.
+/// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
     unsafe { B64ENCODE.register(methods, &mut method_count, version) };
@@ -1251,7 +1258,11 @@ pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, v
 }
 
 pub(super) mod murmur3 {
-use super::*;
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
+use super::{Argument, Binding, DefaultValue, Documentation, Parser};
+use pyo3::ffi;
+use pyo3::prelude::Python;
 
 pub(in crate::bindings) const BINDING_COUNT: usize = 3;
 
@@ -1411,6 +1422,9 @@ pub(in crate::bindings) unsafe fn murmur3_x64_128_digest(
     }
 }
 
+/// # Safety
+/// `methods` must hold BINDING_COUNT writable method slots and a sentinel.
+/// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
     unsafe { MURMUR3_32.register(methods, &mut method_count, version) };
@@ -1424,7 +1438,11 @@ pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, v
 }
 
 pub(super) mod xxhash {
-use super::*;
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
+use super::{Argument, Binding, DefaultValue, Documentation, Parser};
+use pyo3::ffi;
+use pyo3::prelude::Python;
 
 pub(in crate::bindings) const BINDING_COUNT: usize = 6;
 
@@ -1743,6 +1761,9 @@ pub(in crate::bindings) unsafe fn xxh3_128_batch_into(
     }
 }
 
+/// # Safety
+/// `methods` must hold BINDING_COUNT writable method slots and a sentinel.
+/// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
     unsafe { XXH3_64.register(methods, &mut method_count, version) };

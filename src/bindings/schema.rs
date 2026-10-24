@@ -8,6 +8,10 @@ use crate::bindings::arguments::parse_raw_arguments;
 use crate::bindings::compatibility::python_at_least;
 use crate::bindings::runtime::{METHOD_FLAGS, catch_unwind_callback};
 
+/// CPython FASTCALL entry points, including their generated argument dispatchers.
+/// Calls require Python attachment, a valid positional array and optional keyword
+/// names tuple, and argument objects retained until return. `Binding::invoke`
+/// applies this contract while parsing and containing panics at the C boundary.
 pub(super) type Callback = unsafe extern "C" fn(
     *mut ffi::PyObject,
     *const *mut ffi::PyObject,
@@ -29,6 +33,8 @@ pub(super) enum DefaultValue {
     },
 }
 
+/// A borrowed FASTCALL slot (or null for a missing argument), valid only during
+/// the enclosing callback. The callback retains the object and Python attachment.
 #[derive(Clone, Copy)]
 pub(super) struct Argument {
     value: *mut ffi::PyObject,
@@ -174,6 +180,9 @@ struct Binding<const N: usize> {
 }
 
 impl<const N: usize> Binding<N> {
+    /// # Safety
+    /// The call must satisfy `Callback`'s FASTCALL contract. `operation` must not
+    /// retain borrowed argument pointers after returning.
     #[inline(always)]
     unsafe fn invoke(
         &self,
@@ -217,6 +226,9 @@ impl<const N: usize> Binding<N> {
         })
     }
 
+    /// # Safety
+    /// The method table must have a writable slot at method_count and remain alive for Python. The
+    /// caller must serialize registration.
     unsafe fn register(
         &self,
         methods: *mut ffi::PyMethodDef,

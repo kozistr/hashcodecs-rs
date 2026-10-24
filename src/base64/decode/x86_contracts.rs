@@ -1,8 +1,10 @@
 //! Contracts shared by the x86 decoding kernels.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::super::{MIXED_DECODE, STANDARD_DECODE, URLSAFE_DECODE};
@@ -37,12 +39,27 @@ pub(crate) trait Decoder {
     }
 
     fn decode_table() -> &'static [u8; 256];
+
+    /// # Safety
+    /// AVX2 must be available and input must cover 32 readable bytes.
+    /// Decoders with CHECK_INPUT disabled require previously validated symbols.
     unsafe fn decode_indices_32(input: *const u8) -> (__m256i, __m256i);
+
+    /// # Safety
+    /// SSSE3 must be available and input must cover 16 readable bytes.
+    /// Decoders with CHECK_INPUT disabled require previously validated symbols.
     unsafe fn decode_indices_16(input: *const u8) -> (__m128i, __m128i);
 }
 
 pub(crate) trait Store {
+    /// # Safety
+    /// SSSE3 must be available. ExactStore requires 12 writable bytes;
+    /// PaddedStore requires 16 writable bytes, including its overlap.
     unsafe fn store_12(output: *mut u8, value: __m128i);
+
+    /// # Safety
+    /// AVX2 must be available. ExactStore requires 24 writable bytes;
+    /// PaddedStore requires 28 writable bytes, including its overlap.
     unsafe fn store_24(output: *mut u8, value: __m256i);
 }
 

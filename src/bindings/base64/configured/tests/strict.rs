@@ -20,7 +20,7 @@ fn decode_configured_strict_into(
     padded: bool,
     validated_prefix_only: bool,
 ) -> PyResult<Result<usize, Base64Error>> {
-    let prepared = PreparedDecoder::new(
+    let prepared = PreparedDecoder::try_new(
         py,
         DecodePolicy::new(Some(altchars), Some(true), padded, None, false),
     )?;
@@ -292,7 +292,7 @@ fn snapshot_aliased_input() {
     Python::initialize();
     Python::attach(|py| {
         let shared = PyByteArray::new(py, b"@#8=");
-        let prepared = PreparedDecoder::new(
+        let prepared = PreparedDecoder::try_new(
             py,
             DecodePolicy::new(Some(*b"@#"), Some(false), true, None, false),
         )

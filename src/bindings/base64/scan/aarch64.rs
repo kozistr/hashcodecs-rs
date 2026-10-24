@@ -1,3 +1,4 @@
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::scalar::{self, is_lenient_symbol};

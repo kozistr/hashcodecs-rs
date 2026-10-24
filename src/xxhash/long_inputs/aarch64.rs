@@ -1,5 +1,6 @@
 //! AArch64 long-input accumulation kernel.
 
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::super::primitives::P32_1;

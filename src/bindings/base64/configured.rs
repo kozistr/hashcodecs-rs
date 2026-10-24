@@ -376,7 +376,7 @@ pub(super) fn decode_configured<'py>(
 
             let input = &input[start..];
             let writer =
-                BytesWriter::new(py, BytesWriter::capacity_for_input(input, &decoder.table))?;
+                BytesWriter::try_new(py, BytesWriter::capacity_for_input(input, &decoder.table))?;
             let output_address = writer.data() as usize;
             let decode = move || {
                 decoder.decode_checked_to_ptr(
@@ -522,12 +522,12 @@ impl ScanSink for CountSink {
     }
 }
 
-struct WriteSink<'a> {
-    writer: &'a mut StagingWriter,
+struct WriteSink<'writer> {
+    writer: &'writer mut StagingWriter,
 }
 
-impl<'a> WriteSink<'a> {
-    fn new(writer: &'a mut StagingWriter) -> Self {
+impl<'writer> WriteSink<'writer> {
+    fn new(writer: &'writer mut StagingWriter) -> Self {
         Self { writer }
     }
 }

@@ -1,8 +1,13 @@
+//! Raw argument parsing under `schema::Callback`'s FASTCALL contract. Seed
+//! converters accept a live object or null for the default seed while attached.
+
 use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use pyo3::ffi;
 
+/// # Safety
+/// `keyword` must be a live Unicode object while Python is attached.
 #[inline(always)]
 unsafe fn keyword_matches(keyword: *mut ffi::PyObject, parameter: &CStr) -> bool {
     #[cfg(all(Py_3_12, not(any(Py_LIMITED_API, PyPy, GraalPy))))]
@@ -40,6 +45,9 @@ unsafe fn keyword_matches(keyword: *mut ffi::PyObject, parameter: &CStr) -> bool
     }
 }
 
+/// # Safety
+/// Arguments must satisfy `schema::Callback`'s FASTCALL contract and
+/// `function_name` must point to a live null-terminated string.
 #[inline(always)]
 pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     args: *const *mut ffi::PyObject,

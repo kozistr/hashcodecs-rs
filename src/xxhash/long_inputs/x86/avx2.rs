@@ -1,8 +1,10 @@
 //! AVX2 secret initialization and long-input accumulator.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use crate::xxhash::long_inputs::{
@@ -41,6 +43,8 @@ pub(in crate::xxhash::long_inputs) fn init_secret(seed: u64) -> Secret {
     Secret(output)
 }
 
+/// # Safety
+/// AVX2 must be available. Each data or secret pointer must cover 32 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_vector(acc: __m256i, data: *const u8, secret: *const u8) -> __m256i {
@@ -53,6 +57,8 @@ unsafe fn accumulate_vector(acc: __m256i, data: *const u8, secret: *const u8) ->
     _mm256_add_epi64(_mm256_add_epi64(acc, swapped), product)
 }
 
+/// # Safety
+/// AVX2 must be available. Each data or secret pointer must cover 32 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn scramble_vector(acc: __m256i, secret: *const u8) -> __m256i {
@@ -131,6 +137,9 @@ fn reduce_chains(
     acc0
 }
 
+/// # Safety
+/// AVX2 must be available. The caller must provide four complete 64-byte stripes beginning at
+/// first_stripe and every corresponding 64-byte secret window.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_group(
@@ -163,6 +172,9 @@ unsafe fn accumulate_group(
     }
 }
 
+/// # Safety
+/// AVX2 must be available. Data must cover a complete 1024-byte block and the secret must cover 192
+/// readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_block_chains(
@@ -195,6 +207,9 @@ unsafe fn accumulate_block_chains(
     reduce_chains(acc0, acc1, acc2, acc3)
 }
 
+/// # Safety
+/// AVX2 must be available. Data must cover tail_stripes complete 64-byte stripes, last must cover
+/// the final 64 bytes, and the secret must cover 192 readable bytes.
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn accumulate_tail_chains(

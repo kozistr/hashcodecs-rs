@@ -1,4 +1,9 @@
 //! Select and call Base64 SIMD kernels at runtime.
+//!
+//! Raw calls inherit the encoder or decoder's output contract. Runtime entry
+//! points check CPU features; explicit-backend calls require the caller to check
+//! the backend and its fallbacks. Streaming stores additionally require the
+//! alignment checked by `RuntimeBackend::use_streaming_stores`.
 
 use super::backend::{self, Backend};
 #[cfg(target_arch = "aarch64")]

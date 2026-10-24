@@ -1,5 +1,5 @@
 use std::ffi::c_void;
-use std::hint::black_box;
+use std::hint;
 use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
@@ -60,10 +60,10 @@ fn one_shot(c: &mut Criterion) {
             c_xxh3_64(&input, 42)
         );
         group.bench_function("hashcodecs", |bench| {
-            bench.iter(|| hashcodecs::xxhash::xxh3_64(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_64(hint::black_box(&input), 42))
         });
         group.bench_function("upstream_c", |bench| {
-            bench.iter(|| c_xxh3_64(black_box(&input), 42))
+            bench.iter(|| c_xxh3_64(hint::black_box(&input), 42))
         });
         group.finish();
 
@@ -74,10 +74,10 @@ fn one_shot(c: &mut Criterion) {
             c_xxh3_128(&input, 42)
         );
         group.bench_function("hashcodecs", |bench| {
-            bench.iter(|| hashcodecs::xxhash::xxh3_128(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_128(hint::black_box(&input), 42))
         });
         group.bench_function("upstream_c", |bench| {
-            bench.iter(|| c_xxh3_128(black_box(&input), 42))
+            bench.iter(|| c_xxh3_128(hint::black_box(&input), 42))
         });
         group.finish();
     }
@@ -106,7 +106,9 @@ fn benchmark_batch(c: &mut Criterion, group_name: &str, owned: &[Vec<u8>]) {
     group.bench_with_input(
         BenchmarkId::new("hashcodecs_64", items),
         &inputs,
-        |bench, inputs| bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(inputs), 42)),
+        |bench, inputs| {
+            bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(hint::black_box(inputs), 42))
+        },
     );
     group.bench_with_input(
         BenchmarkId::new("upstream_c_64", items),
@@ -115,7 +117,7 @@ fn benchmark_batch(c: &mut Criterion, group_name: &str, owned: &[Vec<u8>]) {
             bench.iter(|| {
                 inputs
                     .iter()
-                    .map(|input| c_xxh3_64(black_box(input), 42))
+                    .map(|input| c_xxh3_64(hint::black_box(input), 42))
                     .collect::<Vec<_>>()
             })
         },
@@ -123,7 +125,9 @@ fn benchmark_batch(c: &mut Criterion, group_name: &str, owned: &[Vec<u8>]) {
     group.bench_with_input(
         BenchmarkId::new("hashcodecs_128", items),
         &inputs,
-        |bench, inputs| bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(inputs), 42)),
+        |bench, inputs| {
+            bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(hint::black_box(inputs), 42))
+        },
     );
     group.bench_with_input(
         BenchmarkId::new("upstream_c_128", items),
@@ -132,7 +136,7 @@ fn benchmark_batch(c: &mut Criterion, group_name: &str, owned: &[Vec<u8>]) {
             bench.iter(|| {
                 inputs
                     .iter()
-                    .map(|input| c_xxh3_128(black_box(input), 42))
+                    .map(|input| c_xxh3_128(hint::black_box(input), 42))
                     .collect::<Vec<_>>()
             })
         },
@@ -176,16 +180,16 @@ fn prepared_seed(c: &mut Criterion) {
         let mut group = c.benchmark_group(format!("xxh3_prepared/{size}"));
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_function("one_shot_64", |bench| {
-            bench.iter(|| hashcodecs::xxhash::xxh3_64(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_64(hint::black_box(&input), 42))
         });
         group.bench_function("prepared_64", |bench| {
-            bench.iter(|| prepared.hash_64(black_box(&input)))
+            bench.iter(|| prepared.hash_64(hint::black_box(&input)))
         });
         group.bench_function("one_shot_128", |bench| {
-            bench.iter(|| hashcodecs::xxhash::xxh3_128(black_box(&input), 42))
+            bench.iter(|| hashcodecs::xxhash::xxh3_128(hint::black_box(&input), 42))
         });
         group.bench_function("prepared_128", |bench| {
-            bench.iter(|| prepared.hash_128(black_box(&input)))
+            bench.iter(|| prepared.hash_128(hint::black_box(&input)))
         });
         group.finish();
     }
@@ -211,16 +215,16 @@ fn prepared_batch(c: &mut Criterion) {
             let mut group = c.benchmark_group(format!("xxh3_prepared_batch/{items}_items/{size}"));
             group.throughput(Throughput::Bytes((items * size) as u64));
             group.bench_function("batch_64", |bench| {
-                bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(black_box(&inputs), 42))
+                bench.iter(|| hashcodecs::xxhash::xxh3_64_batch(hint::black_box(&inputs), 42))
             });
             group.bench_function("prepared_64", |bench| {
-                bench.iter(|| prepared.hash_64_batch(black_box(&inputs)))
+                bench.iter(|| prepared.hash_64_batch(hint::black_box(&inputs)))
             });
             group.bench_function("batch_128", |bench| {
-                bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(black_box(&inputs), 42))
+                bench.iter(|| hashcodecs::xxhash::xxh3_128_batch(hint::black_box(&inputs), 42))
             });
             group.bench_function("prepared_128", |bench| {
-                bench.iter(|| prepared.hash_128_batch(black_box(&inputs)))
+                bench.iter(|| prepared.hash_128_batch(hint::black_box(&inputs)))
             });
             group.finish();
         }

@@ -26,6 +26,7 @@ pub struct PreparedXxh3 {
 impl PreparedXxh3 {
     /// Prepares one seed for repeated XXH3-64 or XXH3-128 calls.
     #[inline]
+    #[must_use]
     pub fn new(seed: u64) -> Self {
         Self {
             seed,
@@ -35,6 +36,7 @@ impl PreparedXxh3 {
 
     /// Computes the canonical XXH3 64-bit hash with the prepared seed.
     #[inline]
+    #[must_use]
     pub fn hash_64(&self, input: &[u8]) -> u64 {
         let Some(input) = LongInput::new(input) else {
             return xxh3_64(input, self.seed);
@@ -50,6 +52,7 @@ impl PreparedXxh3 {
 
     /// Computes the canonical XXH3 128-bit hash with the prepared seed.
     #[inline]
+    #[must_use]
     pub fn hash_128(&self, input: &[u8]) -> [u64; 2] {
         let Some(input) = LongInput::new(input) else {
             return xxh3_128(input, self.seed);
@@ -64,6 +67,7 @@ impl PreparedXxh3 {
     /// The result order matches the input order. Eligible long inputs share the
     /// prepared secret and the same grouped scheduler as [`super::xxh3_64_batch`].
     #[inline]
+    #[must_use]
     pub fn hash_64_batch(&self, inputs: &[&[u8]]) -> Vec<u64> {
         let mut hashes = Vec::with_capacity(inputs.len());
         self.hash_64_batch_for_each(inputs, |hash| hashes.push(hash));
@@ -93,6 +97,7 @@ impl PreparedXxh3 {
     /// The result order matches the input order. Each result contains the
     /// `[low64, high64]` word pair returned by [`super::xxh3_128_batch`].
     #[inline]
+    #[must_use]
     pub fn hash_128_batch(&self, inputs: &[&[u8]]) -> Vec<[u64; 2]> {
         let mut hashes = Vec::with_capacity(inputs.len());
         let engine = LongEngine::cached();

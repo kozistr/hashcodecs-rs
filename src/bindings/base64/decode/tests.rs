@@ -50,7 +50,7 @@ fn propagate_storage_errors() {
             (false, true, None, b"YQ"),
             (true, false, Some(ignored.as_any()), b"Y!WJj"),
         ] {
-            let decoder = PreparedDecoder::new(
+            let decoder = PreparedDecoder::try_new(
                 py,
                 DecodePolicy::new(None, Some(false), padded, ignored, canonical),
             )

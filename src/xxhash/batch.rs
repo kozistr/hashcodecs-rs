@@ -201,6 +201,7 @@ fn hash_input_runs<T, S, H, F, O>(
 ///     );
 ///
 #[inline]
+#[must_use]
 pub fn xxh3_64_batch(inputs: &[&[u8]], seed: u64) -> Vec<u64> {
     let mut hashes = Vec::with_capacity(inputs.len());
 
@@ -270,6 +271,7 @@ pub fn xxh3_64_batch_for_each(inputs: &[&[u8]], seed: u64, output: impl FnMut(u6
 ///     );
 ///
 #[inline]
+#[must_use]
 pub fn xxh3_128_batch(inputs: &[&[u8]], seed: u64) -> Vec<[u64; 2]> {
     let mut hashes = Vec::with_capacity(inputs.len());
 

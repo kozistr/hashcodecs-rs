@@ -1,8 +1,13 @@
 //! SSSE3 decoding kernel.
+//!
+//! Index helpers read 16 bytes and require SSSE3; the validated helper assumes
+//! standard-alphabet symbols. Store widths are specified by `x86_contracts::Store`.
 
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 
 use super::super::Base64Error;
@@ -115,6 +120,8 @@ pub(super) fn pack_16_indices(indices: __m128i) -> __m128i {
     _mm_shuffle_epi8(packed, shuffle)
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `output` must cover 12 writable bytes.
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn store_12_exact(output: *mut u8, value: __m128i) {
     unsafe { _mm_storel_epi64(output.cast(), value) };
@@ -122,6 +129,8 @@ pub(super) unsafe fn store_12_exact(output: *mut u8, value: __m128i) {
     unsafe { output.add(8).cast::<i32>().write_unaligned(remaining) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `output` must cover 16 writable bytes.
 #[target_feature(enable = "ssse3")]
 pub(super) unsafe fn store_12_padded(output: *mut u8, value: __m128i) {
     unsafe { _mm_storeu_si128(output.cast(), value) };

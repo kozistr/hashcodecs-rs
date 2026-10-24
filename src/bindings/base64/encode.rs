@@ -1,4 +1,8 @@
 //! Python encoding entry points and prepared encoding.
+//!
+//! Raw writes require disjoint input and output, sized by the prepared encoder's
+//! `output_len` (or the padded core length for `encode_ptr`). Buffer acquisition
+//! and snapshotting keep input stable while guards protect reusable destinations.
 
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PyAssertionError, PyOverflowError, PyValueError};
@@ -359,6 +363,11 @@ unsafe fn encode_ptr<const CACHED: bool>(input: &[u8], output: *mut u8, alphabet
 
 /// Expand an encoded prefix in place, moving from the end so source bytes are
 /// never overwritten before they are copied.
+///
+/// # Safety
+/// The first `data_len` bytes must be initialized and the allocation must cover
+/// the expanded length `data_len + (data_len - 1) / width` when `data_len > width`.
+/// `width` must be positive.
 unsafe fn wrap_encoded_ptr(output: *mut u8, data_len: usize, width: usize) {
     if data_len <= width {
         return;

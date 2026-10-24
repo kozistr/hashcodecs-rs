@@ -33,10 +33,10 @@ use crate::bindings::runtime::BASE64_DETACH_THRESHOLD;
 use crate::bindings::schema::Argument;
 
 #[derive(Clone, Copy)]
-enum NativeDecoder<'a> {
+enum NativeDecoder<'decoder> {
     Direct(DecodeAlphabet, Padding),
-    CustomStrict(&'a ConfiguredDecoder, [u8; 2]),
-    Configured(&'a ConfiguredDecoder),
+    CustomStrict(&'decoder ConfiguredDecoder, [u8; 2]),
+    Configured(&'decoder ConfiguredDecoder),
 }
 
 // Storage owns allocation and writes; PreparedDecoder owns the order of attempts.
@@ -667,11 +667,11 @@ fn prepare_translated_input<'a, 'py>(
 }
 
 #[derive(Clone, Copy)]
-struct DecodeArguments<'a, 'py> {
-    altchars: Option<&'a Bound<'py, PyAny>>,
+struct DecodeArguments<'argument, 'py> {
+    altchars: Option<&'argument Bound<'py, PyAny>>,
     validate: Argument,
     padded: Argument,
-    ignorechars: Option<&'a Bound<'py, PyAny>>,
+    ignorechars: Option<&'argument Bound<'py, PyAny>>,
     canonical: Argument,
     before_output_write: bool,
 }
@@ -683,7 +683,7 @@ impl DecodeArguments<'_, '_> {
         let validate = self.validate.optional_truthy(py)?;
         let padded = self.padded.truthy(py)?;
         let canonical = self.canonical.truthy(py)?;
-        PreparedDecoder::new(
+        PreparedDecoder::try_new(
             py,
             DecodePolicy::new(altchars, validate, padded, self.ignorechars, canonical),
         )
@@ -826,7 +826,7 @@ fn b64decode_with<'py, T>(
         policy = policy.with_known_warning_byte(badchar);
     }
 
-    let decoder = PreparedDecoder::new(py, policy)?;
+    let decoder = PreparedDecoder::try_new(py, policy)?;
     decode(&decoder, &input)
 }
 
@@ -860,7 +860,7 @@ pub(super) fn standard_b64decode<'py>(
     s: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let input = ascii_or_bytes(py, s, "s")?;
-    PreparedDecoder::new(py, DecodePolicy::standard())?.decode_allocating(py, &input)
+    PreparedDecoder::try_new(py, DecodePolicy::standard())?.decode_allocating(py, &input)
 }
 
 /// Decode standard Base64 into a reusable output.
@@ -871,7 +871,7 @@ pub(super) fn standard_b64decode_into(
 ) -> PyResult<usize> {
     let input = ascii_or_bytes(py, s, "s")?;
     let input = input.into_stable_after_callbacks(true)?;
-    PreparedDecoder::new(py, DecodePolicy::standard())?.decode_into(py, &input, output)
+    PreparedDecoder::try_new(py, DecodePolicy::standard())?.decode_into(py, &input, output)
 }
 
 fn urlsafe_b64decode_with<'py, T>(
@@ -884,7 +884,7 @@ fn urlsafe_b64decode_with<'py, T>(
     if PyBytes::is_exact_type_of(s) {
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
-        let decoder = PreparedDecoder::new(
+        let decoder = PreparedDecoder::try_new(
             py,
             DecodePolicy::new(Some(*b"-_"), Some(false), padded, None, false)
                 .with_urlsafe_warning(),
@@ -905,7 +905,7 @@ fn urlsafe_b64decode_with<'py, T>(
     let input = binascii_ascii_or_bytes_exported(input.as_bound())?;
     let padded = padded.truthy(py)?;
     let input = input.into_stable_after_callbacks(before_output_write)?;
-    let decoder = PreparedDecoder::new(
+    let decoder = PreparedDecoder::try_new(
         py,
         DecodePolicy::new(altchars, Some(false), padded, None, false)
             .with_warning_altchars(Some(*b"-_"))

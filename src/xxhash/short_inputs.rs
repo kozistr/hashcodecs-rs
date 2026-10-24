@@ -1,6 +1,9 @@
 //! Apply XXH3 formulas to inputs that contain at most 240 bytes.
 
-use super::primitives::*;
+use super::primitives::{
+    MX2, P32_2, P64_1, P64_2, P64_4, SECRET, mix16, mix16_ptr, mul_fold, read_u32_le, read_u64_le,
+    read_u64_le_ptr, rrmxmx, xxh3_avalanche, xxh64_avalanche,
+};
 
 pub(super) fn xxh3_64_len_0_to_16(input: &[u8], seed: u64) -> u64 {
     let len = input.len();
@@ -190,6 +193,9 @@ pub(super) fn xxh3_128_len_0_to_16(input: &[u8], seed: u64) -> [u64; 2] {
     ]
 }
 
+/// # Safety
+/// `first` and `second` must each cover 16 readable bytes, and `secret` must cover 32 readable
+/// bytes, without concurrent writes.
 #[inline(always)]
 unsafe fn mix32_ptr(
     acc: &mut [u64; 2],

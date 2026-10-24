@@ -1,4 +1,4 @@
-use std::hint::black_box;
+use std::hint;
 use std::io::Cursor;
 use std::time::Duration;
 
@@ -22,7 +22,7 @@ fn x64_128_as_u128(words: [u64; 2]) -> u128 {
 macro_rules! benchmark {
     ($group:expr, $size:expr, $input:expr, $name:literal, $function:expr) => {
         $group.bench_with_input(BenchmarkId::new($name, $size), $input, |bench, input| {
-            bench.iter(|| black_box(($function)(black_box(input))));
+            bench.iter(|| hint::black_box(($function)(hint::black_box(input))));
         });
     };
 }

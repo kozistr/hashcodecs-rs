@@ -1,5 +1,6 @@
 //! AArch64 NEON decoding kernel.
 
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::super::Base64Error;

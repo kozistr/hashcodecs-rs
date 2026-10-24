@@ -94,7 +94,7 @@ fn preserve_invalid_tail_guards() {
             for validation in [Validation::Strict, Validation::Lenient] {
                 for padded in [false, true] {
                     for ignorechars_specified in [false, true] {
-                        let prepared = PreparedDecoder::new(
+                        let prepared = PreparedDecoder::try_new(
                             py,
                             DecodePolicy::new(
                                 altchars,

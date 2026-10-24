@@ -7,6 +7,8 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::sync::critical_section::{with_critical_section, with_critical_section2};
 use pyo3::types::{PyByteArray, PyBytes, PyMemoryView, PyString};
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 use super::objects::{bytearray_data, bytearray_size, bytes_data, bytes_size};
 
@@ -40,7 +42,7 @@ pub(super) struct BorrowedBuffer<'py> {
     release_may_reenter: bool,
     // A flag byte keeps the guard's size and existing enum niche unchanged.
     metadata: u8,
-    _python: std::marker::PhantomData<Python<'py>>,
+    _python: PhantomData<Python<'py>>,
 }
 
 impl BorrowedBuffer<'_> {
@@ -68,10 +70,13 @@ impl BorrowedBuffer<'_> {
         self.view.len as usize
     }
 
+    /// # Safety
+    /// The export must be C-contiguous. Prevent mutation for the slice's lifetime
+    /// using continuous Python attachment and the exporter's required critical section.
     #[inline]
     unsafe fn bytes(&self) -> &[u8] {
         let data = if self.view.len == 0 {
-            std::ptr::NonNull::<u8>::dangling().as_ptr()
+            NonNull::<u8>::dangling().as_ptr()
         } else {
             self.view.buf.cast()
         };
@@ -139,9 +144,9 @@ impl BufferRange {
     }
 }
 
-pub(super) enum BytesLike<'a, 'py> {
-    Bytes(&'a Bound<'py, PyBytes>),
-    ByteArray(&'a Bound<'py, PyByteArray>),
+pub(super) enum BytesLike<'borrow, 'py> {
+    Bytes(&'borrow Bound<'py, PyBytes>),
+    ByteArray(&'borrow Bound<'py, PyByteArray>),
     OwnedBytes(Bound<'py, PyBytes>),
     OwnedBytesSlice {
         owner: Bound<'py, PyBytes>,
@@ -156,12 +161,12 @@ pub(super) enum BytesLike<'a, 'py> {
     },
     #[cfg_attr(Py_GIL_DISABLED, allow(dead_code))]
     Buffer(BorrowedBuffer<'py>),
-    Text(&'a str),
+    Text(&'borrow str),
     OwnedVec(Vec<u8>),
 }
 
-pub(super) enum DecodeDataObject<'a, 'py> {
-    Borrowed(&'a Bound<'py, PyAny>),
+pub(super) enum DecodeDataObject<'borrow, 'py> {
+    Borrowed(&'borrow Bound<'py, PyAny>),
     Owned(Bound<'py, PyAny>),
 }
 
@@ -380,7 +385,9 @@ impl<'py> BytesLike<'_, 'py> {
         unsafe { self.with_bytes(try_copy_bytes) }
     }
 
-    /// The callback must not run arbitrary Python or release the GIL when the input is mutable.
+    /// # Safety
+    /// For mutable input, the callback must not invoke Python or detach while
+    /// borrowing the slice. This method retains owners and acquires builtin guards.
     pub(super) unsafe fn with_bytes<T>(&self, callback: impl FnOnce(&[u8]) -> T) -> T {
         match self {
             Self::Bytes(bytes) => callback(unsafe { bytes_slice(bytes) }),
@@ -401,8 +408,9 @@ impl<'py> BytesLike<'_, 'py> {
         }
     }
 
-    /// The callback must not run arbitrary Python or detach from the interpreter.
-    /// The caller must ensure that self and output do not alias.
+    /// # Safety
+    /// Input and output must not alias. The callback must stay attached, invoke no
+    /// Python, and write only within the provided capacity without resizing output.
     pub(super) unsafe fn with_bytes_and_output<T>(
         &self,
         output: &Bound<'_, PyByteArray>,
@@ -766,10 +774,14 @@ fn exact_bytes_like<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<BytesLike<'
     None
 }
 
+// The Bound owner retains the immutable payload for the slice's lifetime.
 unsafe fn bytes_slice<'a>(value: &'a Bound<'_, PyBytes>) -> &'a [u8] {
     unsafe { std::slice::from_raw_parts(bytes_data(value.as_ptr()), bytes_size(value.as_ptr())) }
 }
 
+/// # Safety
+/// Keep Python attached and prevent mutation or resizing for the slice's lifetime,
+/// holding the bytearray's critical section on free-threaded builds.
 unsafe fn bytearray_bytes<'a>(value: &'a Bound<'_, PyByteArray>) -> &'a [u8] {
     unsafe {
         std::slice::from_raw_parts(
@@ -939,7 +951,7 @@ fn acquire_buffer<'py>(
         memoryview_source,
         release_may_reenter,
         metadata,
-        _python: std::marker::PhantomData,
+        _python: PhantomData,
     })
 }
 

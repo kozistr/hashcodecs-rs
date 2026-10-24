@@ -1,12 +1,18 @@
 //! AVX2 encoding kernel.
+//!
+//! The `encode_96_shifted_*` helpers require a positive group count, `groups * 96 + 8`
+//! readable input bytes, and `groups * 128` writable output bytes. The streaming
+//! variant additionally requires 32-byte-aligned output.
 
 use std::arch::asm;
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
 #[cfg(target_arch = "x86_64")]
-use std::hint::black_box;
+use std::hint;
 
 #[cfg(feature = "python")]
 use super::WrappedOutput;
@@ -365,9 +371,9 @@ fn encode_constants(translate: __m256i) -> EncodeAvx2Constants {
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1, 14, 15, 13, 14, 11, 12, 10, 11, 8,
             9, 7, 8, 5, 6, 4, 5,
         ),
-        align_mul: black_box(_mm256_set1_epi32(0x0010_0001)),
+        align_mul: hint::black_box(_mm256_set1_epi32(0x0010_0001)),
         field_mask: _mm256_set1_epi32(0x003f_03f0),
-        field_mul: black_box(_mm256_set1_epi32(0x0100_0010)),
+        field_mul: hint::black_box(_mm256_set1_epi32(0x0100_0010)),
         translate,
         last_lowercase_index: _mm256_set1_epi8(51),
         last_uppercase_index: _mm256_set1_epi8(25),
@@ -523,6 +529,9 @@ unsafe fn encode_96_shifted_asm_inner(
     }
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 16 readable bytes, including
+/// the four bytes beyond the consumed group.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_12(input: *const u8, offsets: __m128i) -> __m128i {
     let shuffle = _mm_setr_epi8(1, 0, 2, 1, 4, 3, 5, 4, 7, 6, 8, 7, 10, 9, 11, 10);
@@ -568,6 +577,9 @@ fn mullo_epi16_exact_128(mut value: __m128i, multiplier: __m128i) -> __m128i {
     value
 }
 
+/// # Safety
+/// AVX2 must be available and `input` must cover a full 32-byte load, although
+/// only the first 24 bytes are consumed.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_24_first(input: *const u8, offsets: __m256i) -> __m256i {
     let value = unsafe { _mm256_loadu_si256(input.cast()) };
@@ -576,6 +588,9 @@ unsafe fn encode_24_first(input: *const u8, offsets: __m256i) -> __m256i {
     encode_24_shifted_value(shifted, offsets)
 }
 
+/// # Safety
+/// AVX2 must be available and `input` must cover a full 32-byte load. This helper
+/// consumes bytes 4 through 27, so the pointer starts before the next group.
 #[target_feature(enable = "avx2")]
 unsafe fn encode_24_shifted(input: *const u8, offsets: __m256i) -> __m256i {
     let shifted = unsafe { _mm256_loadu_si256(input.cast()) };

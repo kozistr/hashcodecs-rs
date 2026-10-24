@@ -8,7 +8,9 @@ use crate::base64::{
 use base64::Engine;
 
 #[cfg(feature = "python")]
-use crate::base64::{encode::CustomEncodeAlphabet, runtime_dispatch::encode_custom_with_backend};
+use crate::base64::encode::CustomEncodeAlphabet;
+#[cfg(feature = "python")]
+use crate::base64::runtime_dispatch::encode_custom_with_backend;
 
 #[test]
 fn select_backend() {

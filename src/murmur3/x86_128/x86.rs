@@ -1,8 +1,11 @@
 #[cfg(target_arch = "x86")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::x86_64::*;
-use std::{mem::MaybeUninit, slice};
+use std::mem::MaybeUninit;
+use std::slice;
 
 use super::{X86_128_C1, X86_128_C2, mix_body_scalar, mix_hashes};
 use crate::murmur3::block_buffer::FullBlocks;
@@ -120,6 +123,9 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     mix_body_scalar(remaining, hashes);
 }
 
+/// # Safety
+/// SSE4.1 must be available. Input must cover 64 readable bytes and output must cover 16 writable
+/// u32 slots.
 #[target_feature(enable = "sse4.1")]
 #[inline]
 unsafe fn premix_group_sse41(input: *const u8, output: *mut u32) {

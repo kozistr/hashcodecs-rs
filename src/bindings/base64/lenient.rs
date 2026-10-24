@@ -57,7 +57,7 @@ pub(super) fn try_decode_lenient<'py>(
 
             let input = &input[start..];
             let capacity = BytesWriter::capacity_for_input(input, table);
-            let writer = BytesWriter::new(py, capacity)?;
+            let writer = BytesWriter::try_new(py, capacity)?;
             let output_address = writer.data() as usize;
             let decode = move || {
                 decode_lenient_to_ptr::<true>(

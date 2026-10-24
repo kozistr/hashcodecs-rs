@@ -1,5 +1,6 @@
 //! AArch64 NEON encoding kernel.
 
+#[allow(clippy::wildcard_imports, reason = "architecture intrinsic vocabulary")]
 use std::arch::aarch64::*;
 
 use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
@@ -87,12 +88,17 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
     source
 }
 
+/// # Safety
+/// The kernel CPU features must be available. `input` must cover 24 readable bytes and `output`
+/// must cover 32 writable bytes.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
     unsafe { vst4_u8(output, encode_24_value(input, table)) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 24 readable bytes.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_24_value(input: *const u8, table: uint8x16x4_t) -> uint8x8x4_t {
@@ -117,12 +123,17 @@ unsafe fn encode_24_value(input: *const u8, table: uint8x16x4_t) -> uint8x8x4_t 
     )
 }
 
+/// # Safety
+/// The kernel CPU features must be available. `input` must cover 48 readable bytes and `output`
+/// must cover 64 writable bytes.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_48(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
     unsafe { vst4q_u8(output, encode_48_value(input, table)) };
 }
 
+/// # Safety
+/// The kernel CPU features must be available and `input` must cover 48 readable bytes.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_48_value(input: *const u8, table: uint8x16x4_t) -> uint8x16x4_t {

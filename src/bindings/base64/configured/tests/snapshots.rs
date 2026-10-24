@@ -22,8 +22,6 @@ fn snapshot_mutable_input() {
             Ok(3)
         );
         with_bytearray(&source, || {
-            // SAFETY: Immutability or the enclosing bytearray critical section keeps the retained
-            // storage stable during this inspection.
             assert_eq!(unsafe { source.as_bytes() }, b"abcJj")
         });
         assert_eq!(allocated.as_bytes(), b"abc");

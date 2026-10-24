@@ -49,8 +49,6 @@ fn reject_malformed_input() {
         assert_eq!(decoder.validate_strict(input), Some(expected));
         let mut output = [0xa5; 8];
         assert_eq!(
-            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
-            // before the native call.
             unsafe { decoder.decode_strict_checked_to_ptr(input, output.as_mut_ptr()) },
             Some(expected)
         );
@@ -65,8 +63,6 @@ fn reject_malformed_input() {
         assert_eq!(decoder.validate_strict(input), None);
         let mut output = [0xa5; 8];
         assert_eq!(
-            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
-            // before the native call.
             unsafe { decoder.decode_strict_checked_to_ptr(input, output.as_mut_ptr()) },
             None
         );
@@ -76,8 +72,6 @@ fn reject_malformed_input() {
     assert_eq!(unpadded.validate_strict(b"AA=="), None);
     let mut output = [0xa5; 8];
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { unpadded.decode_strict_checked_to_ptr(b"AA==", output.as_mut_ptr()) },
         None
     );
@@ -85,15 +79,11 @@ fn reject_malformed_input() {
     let canonical = configured_decoder(b"!?#$", true, true, true);
     assert_eq!(canonical.validate_strict(b"AB=="), None);
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { canonical.decode_strict_checked_to_ptr(b"AB==", output.as_mut_ptr()) },
         None
     );
     assert_eq!(canonical.validate_strict(b"AAB="), None);
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { canonical.decode_strict_checked_to_ptr(b"AAB=", output.as_mut_ptr()) },
         None
     );
@@ -106,8 +96,6 @@ fn check_strict_symbols() {
 
     assert_eq!(decoder.validate_strict(b"AA!!=="), Some(1));
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { decoder.decode_strict_checked_to_ptr(b"AA!!==", output.as_mut_ptr()) },
         Some(1)
     );
@@ -116,8 +104,6 @@ fn check_strict_symbols() {
     for input in [b"A".as_slice(), b"AA=".as_slice(), b"AA==A".as_slice()] {
         assert_eq!(decoder.validate_strict(input), None);
         assert_eq!(
-            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
-            // before the native call.
             unsafe { decoder.decode_strict_checked_to_ptr(input, output.as_mut_ptr()) },
             None
         );
@@ -128,8 +114,6 @@ fn check_strict_symbols() {
     for input in [b"AB==".as_slice(), b"AAB=".as_slice()] {
         assert_eq!(canonical.validate_strict(input), None);
         assert_eq!(
-            // SAFETY: The fixture retains the symbol input and reserves the decoded output bound
-            // before the native call.
             unsafe { canonical.decode_strict_checked_to_ptr(input, output.as_mut_ptr()) },
             None
         );
@@ -140,8 +124,6 @@ fn check_strict_symbols() {
     forbidden.strict_forbidden = StrictSpecials::forbidden(&forbidden.table);
     assert_eq!(forbidden.validate_strict(b"AAAA"), None);
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { forbidden.decode_strict_checked_to_ptr(b"AAAA", output.as_mut_ptr()) },
         None
     );
@@ -150,14 +132,10 @@ fn check_strict_symbols() {
     let expected = CONFIGURED_STAGING_CAPACITY / 4 * 3;
     assert_eq!(decoder.validate_strict(&symbols), Some(expected));
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { decoder.decode_strict_checked_to_ptr(&symbols, output.as_mut_ptr()) },
         Some(expected)
     );
     assert_eq!(
-        // SAFETY: The fixture retains the symbol input and reserves the decoded output bound before
-        // the native call.
         unsafe { decoder.decode_to_ptr(&symbols, output.as_mut_ptr(), true) },
         expected
     );

@@ -1,6 +1,8 @@
 // tools/generate_api_metadata.py generates this file from hashcodecs/_hashcodecs.pyi.
 
 pub(super) mod base64 {
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
 use super::{Argument, Binding, DefaultValue, Documentation, Parser};
 use pyo3::ffi;
 use pyo3::prelude::Python;
@@ -46,9 +48,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64encode(
     args: *const *mut ffi::PyObject,
@@ -56,7 +55,6 @@ pub(in crate::bindings) unsafe fn b64encode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64ENCODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -105,9 +103,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64encode_batch(
     args: *const *mut ffi::PyObject,
@@ -115,7 +110,6 @@ pub(in crate::bindings) unsafe fn b64encode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64ENCODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -169,9 +163,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64encode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -179,7 +170,6 @@ pub(in crate::bindings) unsafe fn b64encode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64ENCODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -232,9 +222,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64encode_into(
     args: *const *mut ffi::PyObject,
@@ -242,7 +229,6 @@ pub(in crate::bindings) unsafe fn b64encode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64ENCODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -301,9 +287,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64decode(
     args: *const *mut ffi::PyObject,
@@ -311,7 +294,6 @@ pub(in crate::bindings) unsafe fn b64decode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64DECODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -364,9 +346,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64decode_batch(
     args: *const *mut ffi::PyObject,
@@ -374,7 +353,6 @@ pub(in crate::bindings) unsafe fn b64decode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64DECODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -431,9 +409,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64decode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -441,7 +416,6 @@ pub(in crate::bindings) unsafe fn b64decode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64DECODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -505,9 +479,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn b64decode_into(
     args: *const *mut ffi::PyObject,
@@ -515,7 +486,6 @@ pub(in crate::bindings) unsafe fn b64decode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument, Argument, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         B64DECODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -560,9 +530,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64encode(
     args: *const *mut ffi::PyObject,
@@ -570,7 +537,6 @@ pub(in crate::bindings) unsafe fn standard_b64encode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64ENCODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -614,9 +580,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64encode_into(
     args: *const *mut ffi::PyObject,
@@ -624,7 +587,6 @@ pub(in crate::bindings) unsafe fn standard_b64encode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64ENCODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -651,9 +613,6 @@ Encode each item with the padded standard Base64 alphabet.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64encode_batch(
     args: *const *mut ffi::PyObject,
@@ -661,7 +620,6 @@ pub(in crate::bindings) unsafe fn standard_b64encode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64ENCODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -687,9 +645,6 @@ Encode each item into its matching reusable bytearray.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64encode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -697,7 +652,6 @@ pub(in crate::bindings) unsafe fn standard_b64encode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64ENCODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -724,9 +678,6 @@ Decode each item with the padded standard Base64 alphabet.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64decode_batch(
     args: *const *mut ffi::PyObject,
@@ -734,7 +685,6 @@ pub(in crate::bindings) unsafe fn standard_b64decode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64DECODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -760,9 +710,6 @@ Decode each item into its matching reusable bytearray.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64decode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -770,7 +717,6 @@ pub(in crate::bindings) unsafe fn standard_b64decode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64DECODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -815,9 +761,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64decode(
     args: *const *mut ffi::PyObject,
@@ -825,7 +768,6 @@ pub(in crate::bindings) unsafe fn standard_b64decode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64DECODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -870,9 +812,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn standard_b64decode_into(
     args: *const *mut ffi::PyObject,
@@ -880,7 +819,6 @@ pub(in crate::bindings) unsafe fn standard_b64decode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         STANDARD_B64DECODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -907,9 +845,6 @@ Encode each item with the padded URL-safe Base64 alphabet.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch(
     args: *const *mut ffi::PyObject,
@@ -917,7 +852,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64ENCODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -943,9 +877,6 @@ Encode each item with the URL-safe alphabet into its matching reusable bytearray
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -953,7 +884,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64ENCODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -980,9 +910,6 @@ Decode each item with the padded URL-safe Base64 alphabet.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch(
     args: *const *mut ffi::PyObject,
@@ -990,7 +917,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64DECODE_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1016,9 +942,6 @@ Decode each URL-safe item into its matching reusable bytearray.",
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch_into(
     args: *const *mut ffi::PyObject,
@@ -1026,7 +949,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64DECODE_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1067,9 +989,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64encode(
     args: *const *mut ffi::PyObject,
@@ -1077,7 +996,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64ENCODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1123,9 +1041,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64encode_into(
     args: *const *mut ffi::PyObject,
@@ -1133,7 +1048,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64encode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64ENCODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1204,9 +1118,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64decode(
     args: *const *mut ffi::PyObject,
@@ -1214,7 +1125,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64DECODE.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1292,9 +1202,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn urlsafe_b64decode_into(
     args: *const *mut ffi::PyObject,
@@ -1302,7 +1209,6 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         URLSAFE_B64DECODE_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1320,53 +1226,29 @@ pub(in crate::bindings) unsafe fn urlsafe_b64decode_into(
 /// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64ENCODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64ENCODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64ENCODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64ENCODE_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64DECODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64DECODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64DECODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { B64DECODE_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64ENCODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64ENCODE_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64ENCODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64ENCODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64DECODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64DECODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64DECODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { STANDARD_B64DECODE_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64ENCODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64ENCODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64DECODE_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64DECODE_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64ENCODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64ENCODE_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64DECODE.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { URLSAFE_B64DECODE_INTO.register(methods, &mut method_count, version) };
     assert_eq!(
         method_count, BINDING_COUNT,
@@ -1376,6 +1258,8 @@ pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, v
 }
 
 pub(super) mod murmur3 {
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
 use super::{Argument, Binding, DefaultValue, Documentation, Parser};
 use pyo3::ffi;
 use pyo3::prelude::Python;
@@ -1416,9 +1300,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn murmur3_32(
     args: *const *mut ffi::PyObject,
@@ -1426,7 +1307,6 @@ pub(in crate::bindings) unsafe fn murmur3_32(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         MURMUR3_32.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1472,9 +1352,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn murmur3_x86_128_digest(
     args: *const *mut ffi::PyObject,
@@ -1482,7 +1359,6 @@ pub(in crate::bindings) unsafe fn murmur3_x86_128_digest(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         MURMUR3_X86_128_DIGEST.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1528,9 +1404,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn murmur3_x64_128_digest(
     args: *const *mut ffi::PyObject,
@@ -1538,7 +1411,6 @@ pub(in crate::bindings) unsafe fn murmur3_x64_128_digest(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         MURMUR3_X64_128_DIGEST.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1555,11 +1427,8 @@ pub(in crate::bindings) unsafe fn murmur3_x64_128_digest(
 /// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { MURMUR3_32.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { MURMUR3_X86_128_DIGEST.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { MURMUR3_X64_128_DIGEST.register(methods, &mut method_count, version) };
     assert_eq!(
         method_count, BINDING_COUNT,
@@ -1569,6 +1438,8 @@ pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, v
 }
 
 pub(super) mod xxhash {
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
 use super::{Argument, Binding, DefaultValue, Documentation, Parser};
 use pyo3::ffi;
 use pyo3::prelude::Python;
@@ -1608,9 +1479,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_64(
     args: *const *mut ffi::PyObject,
@@ -1618,7 +1486,6 @@ pub(in crate::bindings) unsafe fn xxh3_64(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_64.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1664,9 +1531,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_128(
     args: *const *mut ffi::PyObject,
@@ -1674,7 +1538,6 @@ pub(in crate::bindings) unsafe fn xxh3_128(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_128.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1717,9 +1580,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_64_batch(
     args: *const *mut ffi::PyObject,
@@ -1727,7 +1587,6 @@ pub(in crate::bindings) unsafe fn xxh3_64_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_64_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1777,9 +1636,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_64_batch_into(
     args: *const *mut ffi::PyObject,
@@ -1787,7 +1643,6 @@ pub(in crate::bindings) unsafe fn xxh3_64_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_64_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1831,9 +1686,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_128_batch(
     args: *const *mut ffi::PyObject,
@@ -1841,7 +1693,6 @@ pub(in crate::bindings) unsafe fn xxh3_128_batch(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_128_BATCH.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1891,9 +1742,6 @@ Examples:
     }
 }
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn xxh3_128_batch_into(
     args: *const *mut ffi::PyObject,
@@ -1901,7 +1749,6 @@ pub(in crate::bindings) unsafe fn xxh3_128_batch_into(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, Argument, Argument, Argument) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {
         XXH3_128_BATCH_INTO.invoke(args, nargs, keywords, |py, values| {
             operation(
@@ -1919,17 +1766,11 @@ pub(in crate::bindings) unsafe fn xxh3_128_batch_into(
 /// The caller must serialize initialization and keep the table alive for Python.
 pub(in crate::bindings) unsafe fn register_all(methods: *mut ffi::PyMethodDef, version: (u8, u8)) {
     let mut method_count = 0;
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_64.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_128.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_64_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_64_BATCH_INTO.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_128_BATCH.register(methods, &mut method_count, version) };
-    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.
     unsafe { XXH3_128_BATCH_INTO.register(methods, &mut method_count, version) };
     assert_eq!(
         method_count, BINDING_COUNT,

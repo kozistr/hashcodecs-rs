@@ -143,14 +143,8 @@ fn retain_inline_buffer_metadata_after_moves() {
                         assert_eq!(view.strides, &raw mut view.itemsize);
                     }
 
-                    // SAFETY: GetBuffer succeeded and the initialized descriptor still describes
-                    // its live, retained exporter.
                     assert_eq!(unsafe { *view.shape }, bytes.len() as isize);
-                    // SAFETY: GetBuffer succeeded and the initialized descriptor still describes
-                    // its live, retained exporter.
                     assert_eq!(unsafe { *view.strides }, 1);
-                    // SAFETY: GetBuffer succeeded and the initialized descriptor still describes
-                    // its live, retained exporter.
                     assert_ne!(unsafe { ffi::PyBuffer_IsContiguous(view, b'C' as _) }, 0);
                 });
                 let mut buffer = moved.pop().unwrap();

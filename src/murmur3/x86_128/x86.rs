@@ -45,33 +45,21 @@ fn mix_body_avx2(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     while offset + 128 <= input.len() {
         for vector in 0..4 {
             let values =
-                // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned
-                // loads accept the input slice's alignment.
                 unsafe { _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast()) };
             let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
-            // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-            // algorithm blocks for this kernel.
             unsafe { _mm256_storeu_si256(mixed.add(vector * 8).cast(), values) };
         }
 
         // The first four vector stores initialize exactly 32 words.
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         mix_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 32) });
         offset += 128;
     }
 
     while offset + 32 <= input.len() {
-        // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept
-        // the input slice's alignment.
         let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
         let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         unsafe { _mm256_storeu_si256(mixed.cast(), values) };
         // This store initializes the first eight words.
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         mix_blocks(hashes, unsafe { slice::from_raw_parts(mixed, 8) });
         offset += 32;
     }
@@ -106,8 +94,6 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
 
     while offset + 256 <= input.len() {
         for group in 0..4 {
-            // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads
-            // accept the input slice's alignment.
             unsafe {
                 premix_group_sse41(
                     input.as_ptr().add(offset + group * 64),
@@ -118,8 +104,6 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
 
         for group in 0..4 {
             // Each group helper initializes its corresponding 16-word range.
-            // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-            // algorithm blocks for this kernel.
             mix_transposed_group(hashes, unsafe {
                 slice::from_raw_parts(mixed.add(group * 16), 16)
             });
@@ -129,12 +113,8 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
     }
 
     while offset + 64 <= input.len() {
-        // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept
-        // the input slice's alignment.
         unsafe { premix_group_sse41(input.as_ptr().add(offset), mixed) };
         // The group helper initializes the first 16 words.
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         mix_transposed_group(hashes, unsafe { slice::from_raw_parts(mixed, 16) });
         offset += 64;
     }
@@ -149,17 +129,9 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: &mut [u32; 4]) {
 #[target_feature(enable = "sse4.1")]
 #[inline]
 unsafe fn premix_group_sse41(input: *const u8, output: *mut u32) {
-    // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept the
-    // input slice's alignment.
     let row0 = unsafe { _mm_loadu_si128(input.cast()) };
-    // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept the
-    // input slice's alignment.
     let row1 = unsafe { _mm_loadu_si128(input.add(16).cast()) };
-    // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept the
-    // input slice's alignment.
     let row2 = unsafe { _mm_loadu_si128(input.add(32).cast()) };
-    // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept the
-    // input slice's alignment.
     let row3 = unsafe { _mm_loadu_si128(input.add(48).cast()) };
     let low01 = _mm_unpacklo_epi32(row0, row1);
     let high01 = _mm_unpackhi_epi32(row0, row1);
@@ -185,17 +157,9 @@ unsafe fn premix_group_sse41(input: *const u8, output: *mut u32) {
         X86_128_C1[3],
         X86_128_C2[3],
     );
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { _mm_storeu_si128(output.cast(), block1) };
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { _mm_storeu_si128(output.add(4).cast(), block2) };
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { _mm_storeu_si128(output.add(8).cast(), block3) };
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { _mm_storeu_si128(output.add(12).cast(), block4) };
 }
 
@@ -244,13 +208,9 @@ pub(in crate::murmur3) unsafe fn mix_body(
 ) {
     match backend {
         Backend::Avx2 => {
-            // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-            // algorithm blocks for this kernel.
             unsafe { mix_body_avx2(blocks, hashes) };
         }
         Backend::Sse41 => {
-            // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-            // algorithm blocks for this kernel.
             unsafe { mix_body_sse41(blocks, hashes) };
         }
         Backend::Scalar => mix_body_scalar(blocks, hashes),

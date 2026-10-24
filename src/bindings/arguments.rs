@@ -1,16 +1,16 @@
+//! Raw argument parsing under `schema::Callback`'s FASTCALL contract. Seed
+//! converters accept a live object or null for the default seed while attached.
+
 use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use pyo3::ffi;
 
 /// # Safety
-/// Argument pointers must refer to live CPython objects or permitted absent-value nulls; FASTCALL
-/// arrays and keyword tuples must cover their declared lengths while Python is attached.
+/// `keyword` must be a live Unicode object while Python is attached.
 #[inline(always)]
 unsafe fn keyword_matches(keyword: *mut ffi::PyObject, parameter: &CStr) -> bool {
     #[cfg(all(Py_3_12, not(any(Py_LIMITED_API, PyPy, GraalPy))))]
-    // SAFETY: CPython provides a live Unicode keyword and the bounded comparison uses its reported
-    // character length.
     unsafe {
         let name = parameter.to_bytes();
 
@@ -40,16 +40,14 @@ unsafe fn keyword_matches(keyword: *mut ffi::PyObject, parameter: &CStr) -> bool
     }
 
     #[cfg(not(all(Py_3_12, not(any(Py_LIMITED_API, PyPy, GraalPy)))))]
-    // SAFETY: CPython provides a live Unicode keyword and the bounded comparison uses its reported
-    // character length.
     unsafe {
         ffi::PyUnicode_CompareWithASCIIString(keyword, parameter.as_ptr()) == 0
     }
 }
 
 /// # Safety
-/// Argument pointers must refer to live CPython objects or permitted absent-value nulls; FASTCALL
-/// arrays and keyword tuples must cover their declared lengths while Python is attached.
+/// Arguments must satisfy `schema::Callback`'s FASTCALL contract and
+/// `function_name` must point to a live null-terminated string.
 #[inline(always)]
 pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     args: *const *mut ffi::PyObject,
@@ -63,8 +61,6 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     let nargs = nargs as usize;
 
     if nargs > max_positional {
-        // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-        // values; checked indices and keyword names bound each access.
         unsafe {
             ffi::PyErr_Format(
                 ffi::PyExc_TypeError,
@@ -81,37 +77,25 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     let mut values = [ptr::null_mut(); N];
 
     for (index, value) in values.iter_mut().take(nargs).enumerate() {
-        // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-        // values; checked indices and keyword names bound each access.
         *value = unsafe { *args.add(index) };
     }
 
     let keyword_count = if keywords.is_null() {
         0
     } else {
-        // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-        // values; checked indices and keyword names bound each access.
         unsafe { ffi::PyTuple_GET_SIZE(keywords) as usize }
     };
 
     for keyword_index in 0..keyword_count {
-        // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-        // values; checked indices and keyword names bound each access.
         let keyword = unsafe { ffi::PyTuple_GET_ITEM(keywords, keyword_index as isize) };
-        // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-        // values; checked indices and keyword names bound each access.
         let value = unsafe { *args.add(nargs + keyword_index) };
         // Valid keywords follow the positional arguments. Search those slots
         // first, then check the filled slots to preserve duplicate diagnostics.
         let parameter_index = (nargs..N)
             .chain(0..nargs)
-            // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-            // values; checked indices and keyword names bound each access.
             .find(|&index| unsafe { keyword_matches(keyword, parameter_names[index]) });
 
         let Some(parameter_index) = parameter_index else {
-            // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-            // values; checked indices and keyword names bound each access.
             unsafe {
                 ffi::PyErr_Format(
                     ffi::PyExc_TypeError,
@@ -125,8 +109,6 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
         };
 
         if !values[parameter_index].is_null() {
-            // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-            // values; checked indices and keyword names bound each access.
             unsafe {
                 ffi::PyErr_Format(
                     ffi::PyExc_TypeError,
@@ -144,8 +126,6 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
 
     for index in 0..required {
         if values[index].is_null() {
-            // SAFETY: The FASTCALL contract provides nargs positional slots followed by the keyword
-            // values; checked indices and keyword names bound each access.
             unsafe {
                 ffi::PyErr_Format(
                     ffi::PyExc_TypeError,
@@ -162,18 +142,11 @@ pub(super) unsafe fn parse_raw_arguments<const N: usize>(
     Some(values)
 }
 
-/// # Safety
-/// Argument pointers must refer to live CPython objects or permitted absent-value nulls; FASTCALL
-/// arrays and keyword tuples must cover their declared lengths while Python is attached.
 #[inline]
 pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
-    // SAFETY: The callback retains the live argument while the attached CPython integer conversion
-    // reports overflow through the error indicator.
     let value = unsafe { seed_u64(seed) }?;
 
     let Ok(value) = u32::try_from(value) else {
-        // SAFETY: The callback retains the live argument while the attached CPython integer
-        // conversion reports overflow through the error indicator.
         unsafe {
             ffi::PyErr_SetString(
                 ffi::PyExc_OverflowError,
@@ -187,23 +160,16 @@ pub(super) unsafe fn seed_u32(seed: *mut ffi::PyObject) -> Option<u32> {
     Some(value)
 }
 
-/// # Safety
-/// Argument pointers must refer to live CPython objects or permitted absent-value nulls; FASTCALL
-/// arrays and keyword tuples must cover their declared lengths while Python is attached.
 #[inline]
 pub(super) unsafe fn seed_u64(seed: *mut ffi::PyObject) -> Option<u64> {
     if seed.is_null() {
         return Some(0);
     }
 
-    // SAFETY: The callback retains the live argument while the attached CPython integer conversion
-    // reports overflow through the error indicator.
     let value = unsafe { ffi::PyLong_AsUnsignedLongLong(seed) };
 
     // The conversion reports failure with ULLONG_MAX; all other values succeed.
     // Check the exception only for the sentinel, which is also a valid seed.
-    // SAFETY: The callback retains the live argument while the attached CPython integer conversion
-    // reports overflow through the error indicator.
     if value != u64::MAX || unsafe { ffi::PyErr_Occurred() }.is_null() {
         Some(value)
     } else {
@@ -219,8 +185,6 @@ mod tests {
     #[test]
     fn match_unicode_keywords() {
         Python::initialize();
-        // SAFETY: The test retains the Python objects and stays attached; buffer access is
-        // synchronized by the enclosing guards.
         Python::attach(|py| unsafe {
             for max_char in [0x7f, 0xff, 0xffff, 0x10ffff] {
                 let keyword =

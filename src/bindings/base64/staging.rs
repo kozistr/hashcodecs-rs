@@ -20,24 +20,16 @@ use crate::bindings::objects::{bytearray_data, bytearray_size, bytes_data};
 
 pub(super) const CONFIGURED_STAGING_CAPACITY: usize = 4096;
 
-/// # Safety
-/// Input storage must remain stable for the operation. The destination must cover the prepared
-/// encoded or decoded output bound, including wrapping and padding where applicable, without
-/// aliasing input. Validated paths require previously checked symbols.
 #[inline]
 unsafe fn decode_staging<const CHECKED: bool>(input: &[u8], output: *mut u8) -> Option<usize> {
     if CHECKED {
         let layout = decode_unpadded_layout(input).ok()?;
-        // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-        // caller reserves the decoded output bound tracked by written.
         unsafe {
             decode_to_ptr_with_unpadded_layout(input, output, layout, DecodeAlphabet::Standard)
         }
         .ok()?;
         Some(layout.output_len())
     } else {
-        // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-        // caller reserves the decoded output bound tracked by written.
         Some(unsafe { decode_standard_validated_to_ptr(input, output) })
     }
 }
@@ -78,8 +70,6 @@ impl StagingBuffer {
 
         // `0..initialized` is the sole initialized range. Extend it only
         // after copying every byte in the new suffix.
-        // SAFETY: The initialized counter stays within the scratch array, and only the previously
-        // written prefix is exposed as bytes.
         unsafe {
             self.bytes
                 .0
@@ -100,8 +90,6 @@ impl StagingBuffer {
     fn initialized_mut(&mut self) -> &mut [u8] {
         // The append methods initialize each byte before increasing the
         // length, and no method exposes the uninitialized suffix.
-        // SAFETY: The initialized counter stays within the scratch array, and only the previously
-        // written prefix is exposed as bytes.
         unsafe {
             slice::from_raw_parts_mut(self.bytes.0.as_mut_ptr().cast::<u8>(), self.initialized)
         }
@@ -145,8 +133,6 @@ impl StagingWriter {
     /// When `CHECKED` is false, symbols must be valid after translation.
     pub(super) unsafe fn push_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         if self.translation.is_some() {
-            // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-            // caller reserves the decoded output bound tracked by written.
             return unsafe { self.push_staged_symbols::<CHECKED>(input) };
         }
 
@@ -159,8 +145,6 @@ impl StagingWriter {
                 let direct = (input.len() - source) / 4 * 4;
 
                 if direct != 0 {
-                    // SAFETY: The initialized staging prefix contains complete validated symbols,
-                    // and the caller reserves the decoded output bound tracked by written.
                     self.written += unsafe {
                         decode_staging::<CHECKED>(
                             &input[source..source + direct],
@@ -174,8 +158,6 @@ impl StagingWriter {
             }
 
             let copied = (input.len() - source).min(self.staging.remaining_capacity());
-            // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-            // caller reserves the decoded output bound tracked by written.
             unsafe { self.push_staged_symbols::<CHECKED>(&input[source..source + copied])? };
             source += copied;
         }
@@ -183,10 +165,6 @@ impl StagingWriter {
         Some(())
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn push_staged_symbols<const CHECKED: bool>(&mut self, input: &[u8]) -> Option<()> {
         let mut source = 0;
 
@@ -195,8 +173,6 @@ impl StagingWriter {
             source += copied;
 
             if self.staging.is_full() {
-                // SAFETY: The initialized staging prefix contains complete validated symbols, and
-                // the caller reserves the decoded output bound tracked by written.
                 unsafe { self.flush::<CHECKED>()? };
             }
         }
@@ -212,18 +188,12 @@ impl StagingWriter {
         self.staging.push(STANDARD_ALPHABET[usize::from(value)]);
 
         if self.staging.is_full() {
-            // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-            // caller reserves the decoded output bound tracked by written.
             unsafe { self.flush::<CHECKED>()? };
         }
 
         Some(())
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn flush<const CHECKED: bool>(&mut self) -> Option<()> {
         let staging = self.staging.initialized_mut();
 
@@ -232,8 +202,6 @@ impl StagingWriter {
         }
 
         self.written +=
-            // SAFETY: The initialized staging prefix contains complete validated symbols, and the
-            // caller reserves the decoded output bound tracked by written.
             unsafe { decode_staging::<CHECKED>(staging, self.output.add(self.written))? };
         self.staging.clear();
 
@@ -246,8 +214,6 @@ impl StagingWriter {
     /// is false, pending symbols must form valid unpadded Base64 after translation.
     pub(super) unsafe fn finish<const CHECKED: bool>(&mut self) -> Option<usize> {
         if !self.staging.is_empty() {
-            // SAFETY: BytesWriter owns the live writer handle; successful finish transfers
-            // ownership once, and Drop discards only an unfinished non-null handle.
             unsafe { self.flush::<CHECKED>()? };
         }
 
@@ -321,8 +287,6 @@ pub(super) unsafe fn pybytes_with_len<'py, T>(
     let length = ffi::Py_ssize_t::try_from(length)
         .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
 
-    // SAFETY: The fresh bytes allocation is private until the callback initializes its payload;
-    // CPython receives the checked Py_ssize_t length.
     unsafe {
         let raw = ffi::PyBytes_FromStringAndSize(core::ptr::null(), length);
         let bytes: Bound<'py, PyBytes> =
@@ -345,16 +309,12 @@ pub(super) fn with_output_ptr<T>(
     callback: impl FnOnce(*mut u8) -> T,
 ) -> PyResult<T> {
     with_bytearray(output, || {
-        // SAFETY: The bytearray critical section prevents resizing, and the checked destination
-        // length covers all callback writes.
         let provided = unsafe { bytearray_size(output.as_ptr()) };
 
         if provided < required {
             return Err(output_too_small(required, provided));
         }
 
-        // SAFETY: The bytearray critical section prevents resizing, and the checked destination
-        // length covers all callback writes.
         Ok(callback(unsafe { bytearray_data(output.as_ptr()) }))
     })
 }
@@ -383,8 +343,6 @@ impl BytesWriter {
         let capacity = ffi::Py_ssize_t::try_from(capacity)
             .map_err(|_| PyMemoryError::new_err("Base64 output is too large"))?;
 
-        // SAFETY: BytesWriter owns the live writer handle; successful finish transfers ownership
-        // once, and Drop discards only an unfinished non-null handle.
         let writer = unsafe { ffi::compat::PyBytesWriter_Create(capacity) };
 
         if writer.is_null() {
@@ -394,20 +352,10 @@ impl BytesWriter {
         }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     pub(super) unsafe fn data(&self) -> *mut u8 {
-        // SAFETY: BytesWriter owns the live writer handle; successful finish transfers ownership
-        // once, and Drop discards only an unfinished non-null handle.
         unsafe { ffi::compat::PyBytesWriter_GetData(self.0).cast() }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     pub(super) unsafe fn finish<'py>(
         mut self,
         py: Python<'py>,
@@ -419,12 +367,8 @@ impl BytesWriter {
         let writer = self.0;
         self.0 = ptr::null_mut();
 
-        // SAFETY: BytesWriter owns the live writer handle; successful finish transfers ownership
-        // once, and Drop discards only an unfinished non-null handle.
         let output = unsafe { ffi::compat::PyBytesWriter_FinishWithSize(writer, length) };
 
-        // SAFETY: BytesWriter owns the live writer handle; successful finish transfers ownership
-        // once, and Drop discards only an unfinished non-null handle.
         Ok(unsafe { Bound::from_owned_ptr_or_err(py, output)?.cast_into_unchecked() })
     }
 }
@@ -432,8 +376,6 @@ impl BytesWriter {
 impl Drop for BytesWriter {
     fn drop(&mut self) {
         if !self.0.is_null() {
-            // SAFETY: BytesWriter owns the live writer handle; successful finish transfers
-            // ownership once, and Drop discards only an unfinished non-null handle.
             unsafe { ffi::compat::PyBytesWriter_Discard(self.0) };
         }
     }
@@ -472,8 +414,6 @@ mod tests {
                     "{error}"
                 );
                 let error =
-                    // SAFETY: The oversized allocation must fail before the callback can expose any
-                    // uninitialized bytes.
                     unsafe { pybytes_with_len(py, capacity, |_| panic!("allocation must fail")) }
                         .unwrap_err();
                 assert!(

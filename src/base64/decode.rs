@@ -1,3 +1,11 @@
+//! Base64 decoding APIs and kernels.
+//!
+//! Raw decoders require non-overlapping output covering the decoded length;
+//! layout arguments must describe the supplied input. Validated variants also
+//! require a checked alphabet. Architecture entry points require their declared
+//! target features; x86 kernels use `x86_contracts::{Decoder, Store}` for load and
+//! store widths.
+
 #[cfg(target_arch = "aarch64")]
 pub(super) mod aarch64;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

@@ -36,8 +36,6 @@ pub(super) fn hex_digest<'py>(py: Python<'py>, bytes: &[u8]) -> Bound<'py, PyStr
     }
 
     // Every byte comes from the lowercase ASCII table above.
-    // SAFETY: Every encoded hexadecimal byte is ASCII, and the temporary buffer remains alive for
-    // the Python string construction.
     PyString::new(py, unsafe {
         str::from_utf8_unchecked(&output[..output_len])
     })

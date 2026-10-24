@@ -231,8 +231,6 @@ pub(in crate::murmur3) fn mix_body_with_backend(
     hashes: &mut [u32; 4],
     backend: dispatch::Backend,
 ) {
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { x86::mix_body(blocks, hashes, backend) };
 }
 
@@ -290,8 +288,6 @@ fn scale_hash<const ADDEND: u32>(hash: u32) -> u32 {
     #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(any(kani, miri))))]
     {
         let mut value = hash as usize;
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         unsafe {
             core::arch::asm!(
                 "lea {value:e}, [{value} + {value} * 4 + {addend}]",

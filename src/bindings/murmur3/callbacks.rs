@@ -8,22 +8,15 @@ use crate::bindings::runtime::{
 use crate::murmur3::{murmur3_x64_128, murmur3_x86_32, murmur3_x86_128};
 
 fn bytes_result(digest: &[u8]) -> *mut ffi::PyObject {
-    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
-    // validates them before the operation borrows any payload.
     unsafe { ffi::PyBytes_FromStringAndSize(digest.as_ptr().cast(), digest.len() as isize) }
 }
 
-/// # Safety
-/// CPython must supply valid FASTCALL slots and a keyword tuple while attached, retaining every
-/// argument until this callback returns.
 pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
-    // validates them before the operation borrows any payload.
     unsafe {
         crate::bindings::schema::murmur3::murmur3_32(args, nargs, keywords, |py, input, seed| {
             let Some(seed) = seed_u32(seed.as_ptr()) else {
@@ -42,17 +35,12 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_32(
     }
 }
 
-/// # Safety
-/// CPython must supply valid FASTCALL slots and a keyword tuple while attached, retaining every
-/// argument until this callback returns.
 pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
-    // validates them before the operation borrows any payload.
     unsafe {
         crate::bindings::schema::murmur3::murmur3_x86_128_digest(
             args,
@@ -73,17 +61,12 @@ pub(in crate::bindings) unsafe extern "C" fn murmur3_x86_128_digest(
     }
 }
 
-/// # Safety
-/// CPython must supply valid FASTCALL slots and a keyword tuple while attached, retaining every
-/// argument until this callback returns.
 pub(in crate::bindings) unsafe extern "C" fn murmur3_x64_128_digest(
     _self: *mut ffi::PyObject,
     args: *const *mut ffi::PyObject,
     nargs: isize,
     keywords: *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {
-    // SAFETY: CPython calls this registered callback with live FASTCALL arguments; the schema
-    // validates them before the operation borrows any payload.
     unsafe {
         crate::bindings::schema::murmur3::murmur3_x64_128_digest(
             args,

@@ -119,11 +119,7 @@ mod tests {
     fn select_streaming_stores() {
         let mut output = [0_u8; 32];
         let offset = output.as_mut_ptr().align_offset(16);
-        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
-        // before calling a SIMD backend.
         let aligned = unsafe { output.as_mut_ptr().add(offset) };
-        // SAFETY: The fixture provides the required input/output ranges and checks CPU support
-        // before calling a SIMD backend.
         let misaligned = unsafe { aligned.add(1) };
 
         assert!(!use_streaming_stores(None, 8 << 20, aligned));

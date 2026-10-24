@@ -15,29 +15,18 @@ use crate::xxhash::primitives::P32_1;
 #[repr(align(64))]
 struct AlignedAccumulator([u64; 8]);
 
-/// # Safety
-/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
-/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline]
 #[target_feature(enable = "ssse3")]
 unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secret: *const u8) {
     for vector in 0..4 {
         let byte_offset = vector * 16;
-        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
-        // within it, and dispatch enables the kernel features.
         let input = unsafe { _mm_loadu_si128(data.add(byte_offset).cast()) };
-        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
-        // within it, and dispatch enables the kernel features.
         let secret_values = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
         let mixed = _mm_xor_si128(input, secret_values);
         let product = _mm_mul_epu32(mixed, _mm_shuffle_epi32::<0xb1>(mixed));
         let swapped = _mm_shuffle_epi32::<0x4e>(input);
-        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
-        // alignment cover the vector access.
         let old = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
 
-        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
-        // alignment cover the vector access.
         unsafe {
             _mm_storeu_si128(
                 acc.0.as_mut_ptr().add(vector * 2).cast(),
@@ -47,9 +36,6 @@ unsafe fn accumulate_stripe(acc: &mut AlignedAccumulator, data: *const u8, secre
     }
 }
 
-/// # Safety
-/// The kernel CPU features must be available. Each data or secret stripe must cover 64 readable
-/// bytes at the supplied offset, and accumulator storage must remain exclusively borrowed.
 #[inline]
 #[target_feature(enable = "ssse3")]
 unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
@@ -57,11 +43,7 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
 
     for vector in 0..4 {
         let byte_offset = vector * 16;
-        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
-        // alignment cover the vector access.
         let value = unsafe { _mm_load_si128(acc.0.as_ptr().add(vector * 2).cast()) };
-        // SAFETY: The caller supplies a complete data/secret stripe, bounded lane offsets stay
-        // within it, and dispatch enables the kernel features.
         let secret_values = unsafe { _mm_loadu_si128(secret.add(byte_offset).cast()) };
         let mixed = _mm_xor_si128(
             _mm_xor_si128(value, _mm_srli_epi64::<47>(value)),
@@ -70,8 +52,6 @@ unsafe fn scramble(acc: &mut AlignedAccumulator, secret: *const u8) {
         let low = _mm_mul_epu32(mixed, prime);
         let high = _mm_slli_epi64::<32>(_mm_mul_epu32(_mm_srli_epi64::<32>(mixed), prime));
 
-        // SAFETY: The accumulator owns eight u64 lanes; bounded lane indices and its declared
-        // alignment cover the vector access.
         unsafe {
             _mm_storeu_si128(
                 acc.0.as_mut_ptr().add(vector * 2).cast(),
@@ -95,8 +75,6 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
         let offset = block * 1024;
 
         for stripe in 0..16 {
-            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
-            // 192-byte secret, including the final overlapping stripe.
             unsafe {
                 accumulate_stripe(
                     &mut acc,
@@ -106,14 +84,10 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
             };
         }
 
-        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
-        // 192-byte secret, including the final overlapping stripe.
         unsafe { scramble(&mut acc, secret.as_ptr().add(128)) };
     }
 
     for stripe in 0..schedule.tail_stripes() {
-        // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
-        // 192-byte secret, including the final overlapping stripe.
         unsafe {
             accumulate_stripe(
                 &mut acc,
@@ -123,8 +97,6 @@ pub(in crate::xxhash::long_inputs) fn accumulate(
         };
     }
 
-    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the 192-byte
-    // secret, including the final overlapping stripe.
     unsafe {
         accumulate_stripe(
             &mut acc,

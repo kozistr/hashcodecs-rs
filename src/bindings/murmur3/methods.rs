@@ -13,7 +13,5 @@ static METHODS_INIT: Once = Once::new();
 
 pub(crate) fn add_to_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let methods = std::ptr::addr_of_mut!(METHODS).cast::<ffi::PyMethodDef>();
-    // SAFETY: The static table has a generated slot for every binding plus its sentinel, and Once
-    // serializes initialization.
     unsafe { add_methods(module, methods, &METHODS_INIT, register_all) }
 }

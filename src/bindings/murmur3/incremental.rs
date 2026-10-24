@@ -13,8 +13,6 @@ fn with_input<T: Ungil>(
     operation: impl Ungil + Send + FnOnce(&[u8]) -> T,
 ) -> T {
     let detach = input.detach_safe() && input.len() >= MURMUR3_DETACH_THRESHOLD;
-    // SAFETY: The input guard retains the storage; only immutable or snapshotted data can detach,
-    // and the hash operation invokes no Python callbacks.
     unsafe {
         input.with_bytes(|input| {
             if detach {

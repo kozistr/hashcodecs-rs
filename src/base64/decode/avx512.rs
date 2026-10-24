@@ -45,38 +45,24 @@ const fn decode_shuffle() -> [u8; 64] {
     shuffle
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     input: &[u8],
     output: *mut u8,
 ) -> Result<(usize, usize), Base64Error> {
     if input.len() < 64 {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         return unsafe { avx2::decode::<A, S>(input, output) };
     }
 
     let table = A::decode_table();
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let decode_shuffle = unsafe { _mm512_loadu_si512(DECODE_SHUFFLE.as_ptr().cast()) };
 
     let mut source = 0;
     let mut destination = 0;
 
     while source + 128 <= input.len() {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (first, first_invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source),
@@ -86,8 +72,6 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
                 A::CHECK_INPUT,
             )
         };
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (second, second_invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source + 64),
@@ -102,11 +86,7 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, first) };
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe {
             _mm512_mask_storeu_epi8(output.add(destination + 48).cast(), OUTPUT_MASK_48, second)
         };
@@ -116,8 +96,6 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     }
 
     while source + 64 <= input.len() {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (decoded, invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source),
@@ -132,8 +110,6 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
             return Err(Base64Error::InvalidInput);
         }
 
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, decoded) };
 
         source += 64;
@@ -143,8 +119,6 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
     let complete_input = (input.len() - source) / 4 * 4;
 
     if complete_input != 0 {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (decoded, invalid) = unsafe {
             decode_tail::<A>(
                 input.as_ptr().add(source),
@@ -161,8 +135,6 @@ pub(in crate::base64) unsafe fn decode<A: Decoder, S: Store>(
 
         let complete_output = complete_input / 4 * 3;
         let output_mask = (1_u64 << complete_output) - 1;
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), output_mask, decoded) };
         source += complete_input;
         destination += complete_output;
@@ -178,18 +150,12 @@ pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Bas
     }
 
     let table = A::decode_table();
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
     let mut source = 0;
 
     while source + 64 <= input.len() {
         let invalid =
-            // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-            // decoded capacity required by the store policy and enables the kernel features.
             unsafe { classify_64(input.as_ptr().add(source), lower_table, upper_table).1 };
 
         if invalid != 0 {
@@ -203,8 +169,6 @@ pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Bas
 
     if remaining != 0 {
         let input_mask = (1_u64 << remaining) - 1;
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let invalid = unsafe {
             classify_masked(
                 input.as_ptr().add(source),
@@ -225,37 +189,23 @@ pub(in crate::base64) fn validate<A: Decoder>(input: &[u8]) -> Result<usize, Bas
     Ok(source)
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     input: &[u8],
     output: *mut u8,
 ) -> (usize, usize) {
     if input.len() < 64 {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         return unsafe { avx2::decode_prefix::<A>(input, output) };
     }
 
     let table = A::decode_table();
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let lower_table = unsafe { _mm512_loadu_si512(table.as_ptr().cast()) };
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let upper_table = unsafe { _mm512_loadu_si512(table.as_ptr().add(64).cast()) };
-    // SAFETY: The fixed-size classification or shuffle table contains the full vector being loaded;
-    // the kernel features are enabled.
     let decode_shuffle = unsafe { _mm512_loadu_si512(DECODE_SHUFFLE.as_ptr().cast()) };
     let mut source = 0;
     let mut destination = 0;
 
     while source + 128 <= input.len() {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (first, first_invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source),
@@ -265,8 +215,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
                 A::CHECK_INPUT,
             )
         };
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (second, second_invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source + 64),
@@ -281,11 +229,7 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
             break;
         }
 
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, first) };
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe {
             _mm512_mask_storeu_epi8(output.add(destination + 48).cast(), OUTPUT_MASK_48, second)
         };
@@ -294,8 +238,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     }
 
     while source + 64 <= input.len() {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (decoded, invalid) = unsafe {
             decode_64(
                 input.as_ptr().add(source),
@@ -310,8 +252,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
             break;
         }
 
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), OUTPUT_MASK_48, decoded) };
         source += 64;
         destination += 48;
@@ -323,8 +263,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     let complete_input = (input.len() - source).min(64) / 4 * 4;
 
     if complete_input != 0 {
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         let (decoded, invalid) = unsafe {
             decode_tail::<A>(
                 input.as_ptr().add(source),
@@ -344,8 +282,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
         if valid_input != 0 {
             let valid_output = valid_input / 4 * 3;
             let output_mask = (1_u64 << valid_output) - 1;
-            // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-            // decoded capacity required by the store policy and enables the kernel features.
             unsafe {
                 _mm512_mask_storeu_epi8(output.add(destination).cast(), output_mask, decoded)
             };
@@ -357,9 +293,6 @@ pub(in crate::base64) unsafe fn decode_prefix<A: Decoder>(
     (source, destination)
 }
 
-/// # Safety
-/// The kernel CPU features must be available. Input must cover every lane read by the full-width
-/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn decode_64(
@@ -369,8 +302,6 @@ unsafe fn decode_64(
     decode_shuffle: __m512i,
     check_input: bool,
 ) -> (__m512i, __mmask64) {
-    // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the decoded
-    // capacity required by the store policy and enables the kernel features.
     let ascii = unsafe { _mm512_loadu_si512(input.cast()) };
     let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
 
@@ -385,9 +316,6 @@ unsafe fn decode_64(
     (_mm512_permutexvar_epi8(decode_shuffle, packed), invalid)
 }
 
-/// # Safety
-/// The kernel CPU features must be available. Input must cover every lane read by the full-width
-/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn decode_tail<A: Decoder>(
@@ -399,8 +327,6 @@ unsafe fn decode_tail<A: Decoder>(
 ) -> (__m512i, __mmask64) {
     let input_mask = active_lane_mask(input_len);
     let (indices, invalid) =
-        // SAFETY: Loop bounds or tail masks keep input loads in range; the caller reserves the
-        // decoded capacity required by the store policy and enables the kernel features.
         unsafe { classify_masked(input, input_mask, lower_table, upper_table) };
     let invalid = if A::CHECK_INPUT { invalid } else { 0 };
     let merged = _mm512_maddubs_epi16(indices, _mm512_set1_epi32(0x0140_0140));
@@ -408,9 +334,6 @@ unsafe fn decode_tail<A: Decoder>(
     (_mm512_permutexvar_epi8(decode_shuffle, packed), invalid)
 }
 
-/// # Safety
-/// The kernel CPU features must be available. Input must cover every lane read by the full-width
-/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn classify_64(
@@ -418,17 +341,12 @@ unsafe fn classify_64(
     lower_table: __m512i,
     upper_table: __m512i,
 ) -> (__m512i, __mmask64) {
-    // SAFETY: The caller supplies the full readable vector width, or a mask bounds the tail; the
-    // kernel's target features are enabled.
     let ascii = unsafe { _mm512_loadu_si512(input.cast()) };
     let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
     let invalid = _mm512_movepi8_mask(_mm512_or_si512(indices, ascii));
     (indices, invalid)
 }
 
-/// # Safety
-/// The kernel CPU features must be available. Input must cover every lane read by the full-width
-/// load or tail mask; any output must cover every active decoded lane.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn classify_masked(
@@ -437,8 +355,6 @@ unsafe fn classify_masked(
     lower_table: __m512i,
     upper_table: __m512i,
 ) -> (__m512i, __mmask64) {
-    // SAFETY: The caller supplies the full readable vector width, or a mask bounds the tail; the
-    // kernel's target features are enabled.
     let ascii = unsafe { _mm512_maskz_loadu_epi8(input_mask, input.cast()) };
     let indices = _mm512_permutex2var_epi8(lower_table, ascii, upper_table);
     let invalid = _mm512_movepi8_mask(_mm512_or_si512(indices, ascii)) & input_mask;

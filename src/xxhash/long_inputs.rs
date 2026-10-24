@@ -1,3 +1,8 @@
+//! Long-input kernels share `LongSchedule`'s bounds: complete 64-byte data
+//! stripes and secret windows within the 192-byte `Secret`, including the final
+//! overlapping stripe. SIMD calls additionally require their target features,
+//! selected by `LongEngine`; raw helper contracts specify any narrower loads.
+
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
 mod aarch64;
 mod scalar;

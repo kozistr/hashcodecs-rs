@@ -180,8 +180,6 @@ pub(in crate::murmur3) fn mix_body_with_backend(
     hash: &mut u32,
     backend: dispatch::Backend,
 ) {
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { x86::mix_body(blocks, hash, backend) };
 }
 

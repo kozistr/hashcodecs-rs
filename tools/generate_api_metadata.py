@@ -309,9 +309,6 @@ def render_binding(module: str, function: ast.FunctionDef) -> str:
     }}
 }}
 
-/// # Safety
-/// CPython must supply a valid FASTCALL argument array and optional keyword tuple,
-/// and all argument references must remain live until the operation returns.
 #[inline(always)]
 pub(in crate::bindings) unsafe fn {function.name}(
     args: *const *mut ffi::PyObject,
@@ -319,7 +316,6 @@ pub(in crate::bindings) unsafe fn {function.name}(
     keywords: *mut ffi::PyObject,
     operation: impl FnOnce(Python<'_>, {argument_types}) -> *mut ffi::PyObject,
 ) -> *mut ffi::PyObject {{
-    // SAFETY: The callback forwards CPython's live FASTCALL arguments unchanged.
     unsafe {{
         {constant}.invoke(args, nargs, keywords, |py, values| {{
             operation(
@@ -335,11 +331,12 @@ pub(in crate::bindings) unsafe fn {function.name}(
 def render_module_schema(module: str, functions: list[ast.FunctionDef]) -> str:
     bindings = '\n'.join(render_binding(module, function) for function in functions)
     registrations = '\n'.join(
-        '    // SAFETY: The table has BINDING_COUNT slots and initialization holds the module registration guard.\n'
         f'    unsafe {{ {binding_constant(function.name)}.register(methods, &mut method_count, version) }};'
         for function in functions
     )
     return f"""pub(super) mod {module} {{
+//! Argument dispatchers inherit `Binding::invoke`'s FASTCALL contract.
+
 use super::{{Argument, Binding, DefaultValue, Documentation, Parser}};
 use pyo3::ffi;
 use pyo3::prelude::Python;

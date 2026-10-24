@@ -12,8 +12,6 @@ fn scalar_encode_output_bounds() {
     let required = encoded_len(length);
     let mut output = [0xa5_u8; 12];
 
-    // SAFETY: The harness bounds the input length and allocates the exact scalar output range being
-    // verified.
     unsafe { encode_scalar_ptr(&input[..length], output.as_mut_ptr(), urlsafe) };
 
     for byte in &output[required..] {
@@ -29,8 +27,6 @@ fn scalar_decode_output_bounds() {
 
     let mut quad_output = [0xa5_u8; 3];
     let result =
-        // SAFETY: The harness bounds the input length and allocates the exact scalar output range
-        // being verified.
         unsafe { decode_quad_ptr(&quad, quad_output.as_mut_ptr(), padding, &STANDARD_DECODE) };
 
     if result.is_ok() {
@@ -45,8 +41,6 @@ fn scalar_decode_output_bounds() {
 
     let octet: [u8; 8] = kani::any();
     let mut octet_output = [0_u8; 6];
-    // SAFETY: The harness bounds the input length and allocates the exact scalar output range being
-    // verified.
     let _ = unsafe { decode_eight_ptr(&octet, octet_output.as_mut_ptr(), &STANDARD_DECODE) };
 
     let tail: [u8; 3] = kani::any();
@@ -54,8 +48,6 @@ fn scalar_decode_output_bounds() {
     kani::assume(matches!(tail_length, 2 | 3));
 
     let mut tail_output = [0xa5_u8; 2];
-    // SAFETY: The harness bounds the input length and allocates the exact scalar output range being
-    // verified.
     let result = unsafe {
         decode_unpadded_tail_ptr(
             &tail[..tail_length],

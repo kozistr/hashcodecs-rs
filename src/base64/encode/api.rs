@@ -231,16 +231,12 @@ fn b64encode_with_alphabet(input: &[u8], urlsafe: bool) -> String {
     let mut output = allocate_uninitialized_output(output_len);
 
     // The output allocation contains exactly `output_len` writable bytes.
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe { encode_to_ptr(input, output.as_mut_ptr().cast(), urlsafe) };
 
     // `encode_to_ptr` initializes every output byte.
-    // SAFETY: The encoder initialized exactly the allocated encoded length before this conversion.
     let output = unsafe { assume_output_initialized(output, output_len) };
 
     // The encoder writes only ASCII Base64 characters.
-    // SAFETY: The standard and URL-safe alphabets and padding contain only ASCII bytes.
     unsafe { String::from_utf8_unchecked(output) }
 }
 
@@ -257,29 +253,18 @@ pub(crate) fn encode_to_slice(input: &[u8], output: &mut [u8], urlsafe: bool) {
         "Base64 output slice must have the exact encoded length"
     );
     // The assertion above confirmed the exact output length.
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe { encode_to_ptr(input, output.as_mut_ptr(), urlsafe) };
 }
 
-/// # Safety
-/// Output must cover the complete padded encoded length in writable storage
-/// without overlapping the input. Runtime dispatch checks CPU features internally.
 #[inline]
 pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
     if input.len() < 16 {
-        // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and
-        // each consumed prefix ends on a three-byte boundary.
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
 
         return;
     }
 
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe, true) };
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe {
         encode_scalar_ptr(
             &input[input_offset..],
@@ -289,25 +274,16 @@ pub(crate) unsafe fn encode_to_ptr(input: &[u8], output: *mut u8, urlsafe: bool)
     };
 }
 
-/// # Safety
-/// Output must cover the complete padded encoded length in writable storage
-/// without overlapping the input. Runtime dispatch checks CPU features internally.
 #[inline]
 #[cfg(feature = "python")]
 pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe: bool) {
     if input.len() < 16 {
-        // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and
-        // each consumed prefix ends on a three-byte boundary.
         unsafe { encode_scalar_ptr(input, output, urlsafe) };
 
         return;
     }
 
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     let input_offset = unsafe { encode_with_runtime_backend(input, output, urlsafe, false) };
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe {
         encode_scalar_ptr(
             &input[input_offset..],
@@ -317,9 +293,6 @@ pub(crate) unsafe fn encode_to_ptr_cached(input: &[u8], output: *mut u8, urlsafe
     };
 }
 
-/// # Safety
-/// Output must cover the complete padded encoded length in writable storage
-/// without overlapping the input. Runtime dispatch checks CPU features internally.
 #[cfg(feature = "python")]
 #[inline]
 pub(crate) unsafe fn encode_to_ptr_with_custom_alphabet(
@@ -329,19 +302,13 @@ pub(crate) unsafe fn encode_to_ptr_with_custom_alphabet(
     cached: bool,
 ) {
     if input.len() < 16 {
-        // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and
-        // each consumed prefix ends on a three-byte boundary.
         unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet.table()) };
 
         return;
     }
 
     let input_offset =
-        // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and
-        // each consumed prefix ends on a three-byte boundary.
         unsafe { encode_custom_with_runtime_backend(input, output, alphabet, !cached) };
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe {
         encode_scalar_ptr_with_alphabet(
             &input[input_offset..],
@@ -351,6 +318,8 @@ pub(crate) unsafe fn encode_to_ptr_with_custom_alphabet(
     };
 }
 
+/// Tracks line position, but not remaining capacity. Unsafe writes require the
+/// caller to reserve all payload and separator bytes without overlapping input.
 #[cfg(feature = "python")]
 pub(crate) struct WrappedOutput {
     output: *mut u8,
@@ -370,61 +339,33 @@ impl WrappedOutput {
         }
     }
 
-    /// # Safety
-    /// The wrapped output must retain enough writable capacity for this payload and every inserted
-    /// separator. Its storage must not overlap the input.
     #[inline(always)]
     unsafe fn start_line(&mut self) {
         if self.column == self.width {
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe { self.output.write(b'\n') };
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             self.output = unsafe { self.output.add(1) };
             self.column = 0;
         }
     }
 
-    /// # Safety
-    /// The wrapped output must retain enough writable capacity for this payload and every inserted
-    /// separator. Its storage must not overlap the input. `input` must cover four initialized
-    /// bytes.
     #[inline(always)]
     unsafe fn write_quad_ptr(&mut self, input: *const u8) {
-        // SAFETY: WrappedOutput tracks the cursor and line position within the capacity reserved
-        // for encoded bytes and separators.
         unsafe { self.start_line() };
-        // SAFETY: The caller supplies a complete four-byte quantum; unaligned reads do not require
-        // word alignment.
         let value = unsafe { input.cast::<u32>().read_unaligned() };
-        // SAFETY: WrappedOutput tracks the cursor and line position within the capacity reserved
-        // for encoded bytes and separators.
         unsafe { self.output.cast::<u32>().write_unaligned(value) };
-        // SAFETY: WrappedOutput tracks the cursor and line position within the capacity reserved
-        // for encoded bytes and separators.
         self.output = unsafe { self.output.add(4) };
         self.column += 4;
     }
 
-    /// # Safety
-    /// The wrapped output must retain enough writable capacity for this payload and every inserted
-    /// separator. Its storage must not overlap the input.
     #[inline(always)]
     pub(in crate::base64) unsafe fn write_16(&mut self, block: [u8; 16]) {
-        // SAFETY: WrappedOutput tracks the cursor and line position within the capacity reserved
-        // for encoded bytes and separators.
         unsafe { self.start_line() };
 
         if self.width - self.column >= block.len() {
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe {
                 self.output
                     .copy_from_nonoverlapping(block.as_ptr(), block.len())
             };
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             self.output = unsafe { self.output.add(block.len()) };
             self.column += block.len();
 
@@ -432,48 +373,32 @@ impl WrappedOutput {
         }
 
         for offset in (0..block.len()).step_by(4) {
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe { self.write_quad_ptr(block.as_ptr().add(offset)) };
         }
     }
 
-    /// # Safety
-    /// The wrapped output must retain enough writable capacity for this payload and every inserted
-    /// separator. Its storage must not overlap the input.
     #[inline]
     pub(super) unsafe fn write_bytes(&mut self, input: &[u8]) {
         let complete = input.len() / 4 * 4;
 
         for offset in (0..complete).step_by(4) {
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe { self.write_quad_ptr(input.as_ptr().add(offset)) };
         }
 
         if complete != input.len() {
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe { self.start_line() };
             let tail = &input[complete..];
             debug_assert!(tail.len() <= self.width - self.column);
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             unsafe {
                 self.output
                     .copy_from_nonoverlapping(tail.as_ptr(), tail.len())
             };
-            // SAFETY: WrappedOutput tracks the cursor and line position within the capacity
-            // reserved for encoded bytes and separators.
             self.output = unsafe { self.output.add(tail.len()) };
             self.column += tail.len();
         }
     }
 }
 
-/// # Safety
-/// Output must cover the encoded input, optional padding, and inserted separators
-/// without overlapping input. The line width must be a positive multiple of four.
 #[cfg(feature = "python")]
 #[cold]
 #[inline(never)]
@@ -489,19 +414,12 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_cached(
     let consumed = if input.len() < 16 {
         0
     } else {
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe { encode_wrapped_with_runtime_backend(input, &mut output, urlsafe) }
     };
 
-    // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-    // contract reserves payload and separator bytes.
     unsafe { encode_scalar_wrapped(&input[consumed..], &mut output, urlsafe, padded) };
 }
 
-/// # Safety
-/// Output must cover the encoded input, optional padding, and inserted separators
-/// without overlapping input. The line width must be a positive multiple of four.
 #[cfg(feature = "python")]
 #[cold]
 #[inline(never)]
@@ -517,13 +435,9 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_custom(
     let consumed = if input.len() < 16 {
         0
     } else {
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe { encode_wrapped_custom_with_runtime_backend(input, &mut output, alphabet) }
     };
 
-    // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-    // contract reserves payload and separator bytes.
     unsafe {
         encode_scalar_wrapped_with_alphabet(
             &input[consumed..],
@@ -534,9 +448,6 @@ pub(crate) unsafe fn encode_wrapped_to_ptr_custom(
     };
 }
 
-/// # Safety
-/// Output must cover the encoded input, optional padding, and inserted separators
-/// without overlapping input. The line width must be a positive multiple of four.
 #[cfg(all(test, feature = "python"))]
 pub(in crate::base64) unsafe fn encode_wrapped_to_ptr_with_backend(
     input: &[u8],
@@ -547,8 +458,6 @@ pub(in crate::base64) unsafe fn encode_wrapped_to_ptr_with_backend(
     backend: crate::base64::backend::Backend,
 ) {
     let mut output = WrappedOutput::new(output, width);
-    // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-    // contract reserves payload and separator bytes.
     let consumed = unsafe {
         crate::base64::runtime_dispatch::encode_wrapped_with_backend(
             input,
@@ -557,14 +466,9 @@ pub(in crate::base64) unsafe fn encode_wrapped_to_ptr_with_backend(
             urlsafe,
         )
     };
-    // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-    // contract reserves payload and separator bytes.
     unsafe { encode_scalar_wrapped(&input[consumed..], &mut output, urlsafe, padded) };
 }
 
-/// # Safety
-/// Output must cover the encoded input, optional padding, and inserted separators
-/// without overlapping input. The line width must be a positive multiple of four.
 #[cfg(feature = "python")]
 #[inline]
 unsafe fn encode_scalar_wrapped(
@@ -579,14 +483,9 @@ unsafe fn encode_scalar_wrapped(
         STANDARD_ALPHABET
     };
 
-    // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-    // contract reserves payload and separator bytes.
     unsafe { encode_scalar_wrapped_with_alphabet(input, output, alphabet, padded) };
 }
 
-/// # Safety
-/// Output must cover the encoded input, optional padding, and inserted separators
-/// without overlapping input. The line width must be a positive multiple of four.
 #[cfg(feature = "python")]
 #[inline]
 unsafe fn encode_scalar_wrapped_with_alphabet(
@@ -599,8 +498,6 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
 
     while source + 6 <= input.len() {
         let mut encoded = [0; 8];
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe {
             encode_scalar_ptr_with_alphabet(
                 &input[source..source + 6],
@@ -608,8 +505,6 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
                 alphabet,
             )
         };
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe { output.write_bytes(&encoded) };
         source += 6;
     }
@@ -617,8 +512,6 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
     if source != input.len() {
         let tail = &input[source..];
         let mut encoded = [0; 8];
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe { encode_scalar_ptr_with_alphabet(tail, encoded.as_mut_ptr(), alphabet) };
         let padded_len = encoded_len(tail.len());
 
@@ -628,8 +521,6 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
             padded_len - usize::from(!tail.len().is_multiple_of(3)) * (3 - tail.len() % 3)
         };
 
-        // SAFETY: Complete groups and the bounded tail fit the scratch buffer; the wrapped output
-        // contract reserves payload and separator bytes.
         unsafe { output.write_bytes(&encoded[..written]) };
     }
 }
@@ -638,14 +529,9 @@ unsafe fn encode_scalar_wrapped_with_alphabet(
 #[cfg(test)]
 pub(crate) fn encode_scalar(input: &[u8], output: &mut [u8], urlsafe: bool) {
     // The caller provides the exact scalar result length.
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe { encode_scalar_ptr(input, output.as_mut_ptr(), urlsafe) };
 }
 
-/// # Safety
-/// Output must cover the complete padded encoded length in writable storage
-/// without overlapping the input. Runtime dispatch checks CPU features internally.
 #[inline]
 pub(crate) unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: bool) {
     let alphabet = if urlsafe {
@@ -654,14 +540,9 @@ pub(crate) unsafe fn encode_scalar_ptr(input: &[u8], output: *mut u8, urlsafe: b
         STANDARD_ALPHABET
     };
 
-    // SAFETY: The output slice or caller contract reserves encoded_len(input.len()) bytes, and each
-    // consumed prefix ends on a three-byte boundary.
     unsafe { encode_scalar_ptr_with_alphabet(input, output, alphabet) };
 }
 
-/// # Safety
-/// Output must cover the complete padded encoded length in writable storage
-/// without overlapping the input. Runtime dispatch checks CPU features internally.
 #[inline]
 unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabet: &[u8; 64]) {
     let input_len = input.len();
@@ -672,8 +553,6 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
     // `input_ptr` comes from the live slice above. The loop or tail length check guards each raw read.
     // This structure avoids a separate slice bounds check for each byte.
     while source + 6 <= input_len {
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         let (first, second) = unsafe {
             let block = input_ptr.add(source);
             (
@@ -695,8 +574,6 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
             alphabet[((second >> 6) & 0x3f) as usize],
             alphabet[(second & 0x3f) as usize],
         ];
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         unsafe {
             output
                 .add(destination)
@@ -707,16 +584,12 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
     }
 
     while source + 3 <= input_len {
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         let block = unsafe {
             let input = input_ptr.add(source);
             ((input.read() as u32) << 16)
                 | ((input.add(1).read() as u32) << 8)
                 | input.add(2).read() as u32
         };
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         unsafe {
             output
                 .add(destination)
@@ -738,11 +611,7 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
     let remaining = input_len - source;
 
     if remaining == 1 {
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         let block = (unsafe { input_ptr.add(source).read() } as u32) << 16;
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         unsafe {
             output
                 .add(destination)
@@ -754,14 +623,10 @@ unsafe fn encode_scalar_ptr_with_alphabet(input: &[u8], output: *mut u8, alphabe
             output.add(destination + 3).write(b'=');
         }
     } else if remaining == 2 {
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         let block = unsafe {
             ((input_ptr.add(source).read() as u32) << 16)
                 | ((input_ptr.add(source + 1).read() as u32) << 8)
         };
-        // SAFETY: The full-group loop or tail branch bounds input reads; the caller reserves four
-        // output bytes per three input bytes, including padding.
         unsafe {
             output
                 .add(destination)

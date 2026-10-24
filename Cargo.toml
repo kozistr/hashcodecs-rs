@@ -37,7 +37,6 @@ implicit_clone = "warn"
 missing_errors_doc = "warn"
 missing_panics_doc = "warn"
 must_use_candidate = "warn"
-undocumented_unsafe_blocks = "warn"
 wildcard_imports = "warn"
 
 [lints]

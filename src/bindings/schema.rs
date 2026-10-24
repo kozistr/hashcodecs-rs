@@ -8,6 +8,10 @@ use crate::bindings::arguments::parse_raw_arguments;
 use crate::bindings::compatibility::python_at_least;
 use crate::bindings::runtime::{METHOD_FLAGS, catch_unwind_callback};
 
+/// CPython FASTCALL entry points, including their generated argument dispatchers.
+/// Calls require Python attachment, a valid positional array and optional keyword
+/// names tuple, and argument objects retained until return. `Binding::invoke`
+/// applies this contract while parsing and containing panics at the C boundary.
 pub(super) type Callback = unsafe extern "C" fn(
     *mut ffi::PyObject,
     *const *mut ffi::PyObject,
@@ -29,6 +33,8 @@ pub(super) enum DefaultValue {
     },
 }
 
+/// A borrowed FASTCALL slot (or null for a missing argument), valid only during
+/// the enclosing callback. The callback retains the object and Python attachment.
 #[derive(Clone, Copy)]
 pub(super) struct Argument {
     value: *mut ffi::PyObject,
@@ -49,8 +55,6 @@ impl Argument {
     #[inline]
     pub(super) fn has_builtin_truthiness(self) -> bool {
         self.value.is_null()
-            // SAFETY: The caller is attached to Python while accessing these interpreter-owned
-            // singleton objects.
             || unsafe {
                 self.value == ffi::Py_True()
                     || self.value == ffi::Py_False()
@@ -64,15 +68,11 @@ impl Argument {
             !self.value.is_null(),
             "required binding argument must be present"
         );
-        // SAFETY: The callback retains its FASTCALL argument objects until return; the required-
-        // argument check excludes null before constructing Bound references.
         unsafe { Bound::ref_from_ptr(py, &self.value) }
     }
 
     #[inline(always)]
     pub(super) fn optional<'a, 'py>(&'a self, py: Python<'py>) -> Option<&'a Bound<'py, PyAny>> {
-        // SAFETY: The caller is attached to Python while accessing these interpreter-owned
-        // singleton objects.
         if self.value.is_null() || self.value == unsafe { ffi::Py_None() } {
             None
         } else {
@@ -110,20 +110,14 @@ impl Argument {
             return Ok(self.default_bool(py));
         }
 
-        // SAFETY: The caller is attached to Python while accessing these interpreter-owned
-        // singleton objects.
         if self.value == unsafe { ffi::Py_True() } {
             return Ok(true);
         }
 
-        // SAFETY: The caller is attached to Python while accessing these interpreter-owned
-        // singleton objects.
         if self.value == unsafe { ffi::Py_False() } || self.value == unsafe { ffi::Py_None() } {
             return Ok(false);
         }
 
-        // SAFETY: The callback retains its FASTCALL argument objects until return; the required-
-        // argument check excludes null before constructing Bound references.
         let truthy = unsafe { ffi::PyObject_IsTrue(self.value) };
 
         if truthy == -1 {
@@ -187,8 +181,8 @@ struct Binding<const N: usize> {
 
 impl<const N: usize> Binding<N> {
     /// # Safety
-    /// CPython must supply valid FASTCALL slots and a keyword tuple while attached, retaining every
-    /// argument until this callback returns.
+    /// The call must satisfy `Callback`'s FASTCALL contract. `operation` must not
+    /// retain borrowed argument pointers after returning.
     #[inline(always)]
     unsafe fn invoke(
         &self,
@@ -197,12 +191,8 @@ impl<const N: usize> Binding<N> {
         keywords: *mut ffi::PyObject,
         operation: impl FnOnce(Python<'_>, [*mut ffi::PyObject; N]) -> *mut ffi::PyObject,
     ) -> *mut ffi::PyObject {
-        // SAFETY: This entry runs from an attached Python callback or while its retained buffer
-        // guard is attached.
         let py = unsafe { Python::assume_attached() };
 
-        // SAFETY: The callback retains its FASTCALL argument objects until return; the required-
-        // argument check excludes null before constructing Bound references.
         catch_unwind_callback(py, || unsafe {
             let values = if keywords.is_null()
                 && (self.parser.required..=self.parser.max_positional).contains(&(nargs as usize))
@@ -254,8 +244,6 @@ impl<const N: usize> Binding<N> {
             ml_doc: self.documentation.select(version).as_ptr(),
         };
 
-        // SAFETY: The generated registration count bounds this slot, and the caller serializes
-        // writes to the persistent method table.
         unsafe { methods.add(*method_count).write(method) };
 
         *method_count += 1;

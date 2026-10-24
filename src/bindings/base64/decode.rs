@@ -127,13 +127,9 @@ impl<'py> DecodeOutput<'py> for Bound<'py, PyByteArray> {
             // `decode_into` stabilizes mutable inputs and snapshots aliases
             // before any attempt. The helpers retain output locking and sizing.
             NativeDecoder::Direct(alphabet, Padding::Padded) => {
-                // SAFETY: The checked decode layout and output bound cover every write; retained or
-                // stabilized input storage remains live throughout the native operation.
                 Ok(unsafe { decode_strict_into(input, self, alphabet, writes) })
             }
             NativeDecoder::Direct(alphabet, Padding::Unpadded) => {
-                // SAFETY: The checked decode layout and output bound cover every write; retained or
-                // stabilized input storage remains live throughout the native operation.
                 Ok(unsafe { decode_unpadded_into(input, self, alphabet, writes) })
             }
             NativeDecoder::CustomStrict(decoder, altchars) => {
@@ -344,8 +340,6 @@ impl PreparedDecoder {
     fn has_edge_noise(&self, input: &BytesLike<'_, '_>) -> bool {
         // A noisy edge rules out a successful strict probe without walking the
         // whole input. Clean edges still go through full native validation.
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         unsafe {
             input.with_bytes(|input| {
                 input[..64]
@@ -380,8 +374,6 @@ impl PreparedDecoder {
             // Reusable output must reject noncanonical bits before writing. Allocating
             // output retains its specific padding-bit error after alphabet validation.
             let canonical = !self.policy.canonical
-                // SAFETY: The checked decode layout and output bound cover every write; retained or
-                // stabilized input storage remains live throughout the native operation.
                 || unsafe {
                     input.with_bytes(|input| {
                         let padding = usize::from(input.ends_with(b"="))
@@ -411,8 +403,6 @@ impl PreparedDecoder {
         }
 
         if shortcut == ConfiguredShortcut::CanonicalUnpadded
-            // SAFETY: The checked decode layout and output bound cover every write; retained or
-            // stabilized input storage remains live throughout the native operation.
             && unsafe {
                 input.with_bytes(|input| canonical_unpadded_input(input, self.policy.altchars))
             }
@@ -450,8 +440,6 @@ impl PreparedDecoder {
         let translated = if self.policy.ignorechars_specified {
             None
         } else if let Some(altchars) = self.policy.altchars {
-            // SAFETY: The checked decode layout and output bound cover every write; retained or
-            // stabilized input storage remains live throughout the native operation.
             unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
         } else {
             None
@@ -460,8 +448,6 @@ impl PreparedDecoder {
         let data = if let Some(translated) = &translated {
             PyBytes::new(py, translated)
         } else {
-            // SAFETY: The checked decode layout and output bound cover every write; retained or
-            // stabilized input storage remains live throughout the native operation.
             unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
         };
 
@@ -565,8 +551,6 @@ fn copy_decoded_into(
 ) -> PyResult<usize> {
     let decoded = decoded.as_bytes();
     with_output_ptr(output, decoded.len(), |output| {
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         let output = unsafe { slice::from_raw_parts_mut(output, decoded.len()) };
         output.copy_from_slice(decoded);
     })?;
@@ -604,8 +588,6 @@ fn construct_decode_alphabet<'py>(
     altchars: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let prefix = PyBytes::new(py, &STANDARD_ALPHABET[..62]);
-    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
-    // input storage remains live throughout the native operation.
     unsafe {
         Bound::from_owned_ptr_or_err(py, ffi::PyNumber_Add(prefix.as_ptr(), altchars.as_ptr()))
     }
@@ -658,8 +640,6 @@ fn prepare_translated_input<'a, 'py>(
 
     if PyByteArray::is_exact_type_of(input.as_bound()) {
         let bytes = contiguous_bytes_like(input.as_bound(), "s")?;
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         let input = unsafe { bytes.with_bytes(|bytes| PyBytes::new(py, bytes).into_any()) };
 
         return Ok((DecodeDataObject::Owned(input), Some(altchars)));
@@ -728,8 +708,6 @@ fn b64decode_with<'py, T>(
         // materialize a bytes copy. Retain the input's owner and preserve the
         // release-before-write policy for any acquired buffer exports.
         let input = if PyBytes::is_exact_type_of(s) {
-            // SAFETY: The checked decode layout and output bound cover every write; retained or
-            // stabilized input storage remains live throughout the native operation.
             BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() })
         } else {
             ascii_or_bytes(py, s, "s")?
@@ -904,8 +882,6 @@ fn urlsafe_b64decode_with<'py, T>(
     decode: impl FnOnce(&PreparedDecoder, &BytesLike<'_, 'py>) -> PyResult<T>,
 ) -> PyResult<T> {
     if PyBytes::is_exact_type_of(s) {
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         let input = BytesLike::Bytes(unsafe { s.cast_unchecked::<PyBytes>() });
         let padded = padded.truthy(py)?;
         let decoder = PreparedDecoder::try_new(
@@ -1064,8 +1040,6 @@ fn python_legacy_altchar_badchar(
 }
 
 fn legacy_altchar_badchar(input: &BytesLike<'_, '_>, altchars: [u8; 2]) -> Option<u8> {
-    // SAFETY: The checked decode layout and output bound cover every write; retained or stabilized
-    // input storage remains live throughout the native operation.
     unsafe {
         input.with_bytes(|input| {
             let plus = !altchars.contains(&b'+');
@@ -1110,8 +1084,6 @@ fn decode_with_binascii<'py>(
     }
 
     let translated = if let Some(altchars) = altchars {
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         unsafe { input.with_bytes(|input| translate_altchars(input, altchars)) }?
     } else {
         None
@@ -1122,8 +1094,6 @@ fn decode_with_binascii<'py>(
     } else if let Some(bytes) = input.python_bytes(py)? {
         bytes
     } else {
-        // SAFETY: The checked decode layout and output bound cover every write; retained or
-        // stabilized input storage remains live throughout the native operation.
         unsafe { input.with_bytes(|input| PyBytes::new(py, input)) }
     };
 

@@ -26,14 +26,8 @@ pub(super) unsafe fn with_function_bytes<T: Send>(
     detach_threshold: usize,
     operation: impl FnOnce(&[u8]) -> T + Send,
 ) -> PyResult<T> {
-    // SAFETY: The callback retains the input owner; immutable bytes may detach, while mutable
-    // inputs remain attached under their buffer guard.
     if unsafe { ffi::PyBytes_CheckExact(object) } != 0 {
-        // SAFETY: The callback retains the input owner; immutable bytes may detach, while mutable
-        // inputs remain attached under their buffer guard.
         let length = unsafe { bytes_size(object) };
-        // SAFETY: The callback retains the input owner; immutable bytes may detach, while mutable
-        // inputs remain attached under their buffer guard.
         let bytes = unsafe { std::slice::from_raw_parts(bytes_data(object), length) };
 
         return if length >= detach_threshold {
@@ -43,14 +37,10 @@ pub(super) unsafe fn with_function_bytes<T: Send>(
         };
     }
 
-    // SAFETY: The callback retains the input owner; immutable bytes may detach, while mutable
-    // inputs remain attached under their buffer guard.
     let object = unsafe { Bound::ref_from_ptr(py, &object) };
     let input = bytes_like(object, "s")?;
     let detach = input.detach_safe() && input.len() >= detach_threshold;
 
-    // SAFETY: The callback retains the input owner; immutable bytes may detach, while mutable
-    // inputs remain attached under their buffer guard.
     Ok(unsafe {
         input.with_bytes(|bytes| {
             if detach {
@@ -107,13 +97,9 @@ pub(super) unsafe fn add_methods(
 ) -> PyResult<()> {
     init.call_once(|| {
         let version = module.py().version_info();
-        // SAFETY: The Once guard initializes the persistent, sentinel-terminated method table
-        // before passing it to the live module.
         unsafe { register(methods, (version.major, version.minor)) };
     });
 
-    // SAFETY: The Once guard initializes the persistent, sentinel-terminated method table before
-    // passing it to the live module.
     if unsafe { ffi::PyModule_AddFunctions(module.as_ptr(), methods) } == -1 {
         Err(PyErr::fetch(module.py()))
     } else {
@@ -145,8 +131,6 @@ mod tests {
                 let mut traceback = ptr::null_mut();
                 // PyErr::fetch resumes PanicException; inspect and clear the C error instead.
                 #[allow(deprecated)]
-                // SAFETY: The test retains the Python objects and stays attached; buffer access is
-                // synchronized by the enclosing guards.
                 unsafe {
                     ffi::PyErr_Fetch(
                         &raw mut error_type,
@@ -154,14 +138,8 @@ mod tests {
                         &raw mut traceback,
                     );
                 }
-                // SAFETY: The test retains the Python objects and stays attached; buffer access is
-                // synchronized by the enclosing guards.
                 let error_type = unsafe { Bound::<PyAny>::from_owned_ptr(py, error_type) };
-                // SAFETY: The test retains the Python objects and stays attached; buffer access is
-                // synchronized by the enclosing guards.
                 let error_value = unsafe { Bound::<PyAny>::from_owned_ptr(py, error_value) };
-                // SAFETY: The test retains the Python objects and stays attached; buffer access is
-                // synchronized by the enclosing guards.
                 let _traceback = unsafe { Bound::<PyAny>::from_owned_ptr_or_opt(py, traceback) };
                 assert!(error_type.is(py.get_type::<PanicException>()));
                 assert_eq!(error_value.str().unwrap().to_str().unwrap(), expected);
@@ -177,8 +155,6 @@ mod tests {
             let view = py
                 .eval(c"memoryview(b'x' + b'a' * 65536 + b'y')[1:-1]", None, None)
                 .unwrap();
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             let result = unsafe {
                 with_function_bytes(py, view.as_ptr(), 1, |input| input.to_vec()).unwrap()
             };
@@ -195,15 +171,11 @@ mod tests {
         Python::attach(|py| {
             let mut methods = [const { ffi::PyMethodDef::zeroed() }; BINDING_COUNT + 1];
             let init = Once::new();
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             init.call_once(|| unsafe {
                 register_all(methods.as_mut_ptr(), (3, 15));
             });
             methods[0].ml_flags |= ffi::METH_CLASS;
             let module = PyModule::new(py, "invalid_methods").unwrap();
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             let error = unsafe { add_methods(&module, methods.as_mut_ptr(), &init, register_all) }
                 .unwrap_err();
             assert!(error.is_instance_of::<PyValueError>(py));

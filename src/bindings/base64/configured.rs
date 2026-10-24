@@ -69,8 +69,6 @@ impl Translation {
     }
 
     pub(super) fn apply(self, input: &mut [u8]) {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe {
             (self.translate)(
                 input,
@@ -314,8 +312,6 @@ pub(super) fn decode_configured_strict_into(
         );
     }
 
-    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller reserves
-    // decoded capacity and stabilizes input storage before writing.
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             if error_writes.validated_prefix_only() {
@@ -363,8 +359,6 @@ pub(super) fn decode_configured<'py>(
 
     // As in lenient decoding, bytes allocation cannot run Python callbacks.
     // Size and decode within one borrow so the allocation matches the input.
-    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller reserves
-    // decoded capacity and stabilizes input storage before writing.
     unsafe {
         input.with_bytes(|input| {
             let detach = detach_safe && input.len() >= BASE64_DETACH_THRESHOLD;
@@ -401,10 +395,6 @@ pub(super) fn decode_configured<'py>(
     }
 }
 
-/// # Safety
-/// Input storage must remain stable for the operation. The destination must cover the prepared
-/// encoded or decoded output bound, including wrapping and padding where applicable, without
-/// aliasing input. Validated paths require previously checked symbols.
 unsafe fn decode_configured_slice_into(
     input: &[u8],
     output: *mut u8,
@@ -420,8 +410,6 @@ unsafe fn decode_configured_slice_into(
         return Err(Base64Error::OutputTooSmall { required, provided });
     }
 
-    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller reserves
-    // decoded capacity and stabilizes input storage before writing.
     let written = unsafe { decoder.decode_validated_to_ptr(input, output, continue_after_padding) };
     debug_assert_eq!(written, required);
     Ok(written)
@@ -448,8 +436,6 @@ pub(super) fn decode_configured_into(
     let continue_after_padding = semantics.continues_after_padding;
 
     if let Some(input) = input.snapshot_for_output(output)? {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         return Ok(with_bytearray(output, || unsafe {
             decode_configured_slice_into(
                 &input,
@@ -461,8 +447,6 @@ pub(super) fn decode_configured_into(
         }));
     }
 
-    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller reserves
-    // decoded capacity and stabilizes input storage before writing.
     Ok(unsafe {
         input.with_bytes_and_output(output, |input, output, provided| {
             decode_configured_slice_into(input, output, provided, decoder, continue_after_padding)
@@ -502,10 +486,6 @@ impl ScanSink for CountSink {
         self.translation = translation;
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn push_symbols<const CHECKED: bool>(
         &mut self,
         input: &[u8],
@@ -526,19 +506,11 @@ impl ScanSink for CountSink {
         Some(())
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn push_value<const CHECKED: bool>(&mut self, _value: u8) -> Option<()> {
         let _ = CHECKED;
         Some(())
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
         let _ = CHECKED;
 
@@ -565,37 +537,19 @@ impl ScanSink for WriteSink<'_> {
         self.writer.set_translation(translation);
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn push_symbols<const CHECKED: bool>(
         &mut self,
         input: &[u8],
         _validate: bool,
     ) -> Option<()> {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.writer.push_symbols::<CHECKED>(input) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn push_value<const CHECKED: bool>(&mut self, value: u8) -> Option<()> {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.writer.push_value::<CHECKED>(value) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn finish<const CHECKED: bool>(self, expected: usize) -> Option<usize> {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         let written = unsafe { self.writer.finish::<CHECKED>()? };
 
         if CHECKED {
@@ -613,10 +567,6 @@ impl ConfiguredDecoder {
         self.decoded_len(input, false)
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     #[cfg(test)]
     pub(super) unsafe fn decode_strict_checked_to_ptr(
         &self,
@@ -624,15 +574,9 @@ impl ConfiguredDecoder {
         output: *mut u8,
     ) -> Option<usize> {
         debug_assert_eq!(self.validation, Validation::Strict);
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.decode_checked_to_ptr(input, output, false) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     #[cfg(test)]
     pub(super) unsafe fn decode_to_ptr(
         &self,
@@ -640,14 +584,10 @@ impl ConfiguredDecoder {
         output: *mut u8,
         continue_after_padding: bool,
     ) -> usize {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.decode_validated_to_ptr(input, output, continue_after_padding) }
     }
 
     pub(super) fn decoded_len(&self, input: &[u8], continue_after_padding: bool) -> Option<usize> {
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.scan::<CountSink, true>(input, CountSink::new(), continue_after_padding) }
     }
 
@@ -661,8 +601,6 @@ impl ConfiguredDecoder {
         continue_after_padding: bool,
     ) -> Option<usize> {
         let mut writer = StagingWriter::new(output, None);
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe {
             self.scan::<WriteSink, true>(input, WriteSink::new(&mut writer), continue_after_padding)
         }
@@ -678,8 +616,6 @@ impl ConfiguredDecoder {
         continue_after_padding: bool,
     ) -> usize {
         let mut writer = StagingWriter::new(output, None);
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe {
             self.scan::<WriteSink, false>(
                 input,
@@ -705,8 +641,6 @@ impl ConfiguredDecoder {
             && self.padding.is_padded()
             && self.table[usize::from(b'=')] == IGNORED_CONFIGURED_VALUE
         {
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             return unsafe { self.scan_strict_ignored_padding(input, sink) };
         }
 
@@ -714,27 +648,17 @@ impl ConfiguredDecoder {
             && !matches!(self.strict_specials, StrictSpecials::Many)
             && !matches!(self.strict_forbidden, StrictSpecials::Many)
         {
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             return unsafe { self.scan_strict_specials::<S, CHECKED>(input, sink) };
         }
 
         match self.validation {
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             Validation::Strict => unsafe { self.scan_strict::<S, CHECKED>(input, sink) },
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             Validation::Lenient => unsafe {
                 self.scan_lenient::<S, CHECKED>(input, sink, continue_after_padding)
             },
         }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn scan_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -748,13 +672,9 @@ impl ConfiguredDecoder {
 
         while source < input.len() {
             if self.preserves_alphanumeric && !saw_padding {
-                // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-                // reserves decoded capacity and stabilizes input storage before writing.
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
 
                 if run != 0 {
-                    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the
-                    // caller reserves decoded capacity and stabilizes input storage before writing.
                     unsafe { sink.push_symbols::<CHECKED>(&input[source..source + run], false)? };
 
                     if CHECKED {
@@ -778,8 +698,6 @@ impl ConfiguredDecoder {
                     return None;
                 }
 
-                // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-                // reserves decoded capacity and stabilizes input storage before writing.
                 unsafe { sink.push_value::<CHECKED>(value)? };
 
                 if CHECKED {
@@ -801,15 +719,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn scan_lenient<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -825,13 +737,9 @@ impl ConfiguredDecoder {
 
         while source < input.len() {
             if self.preserves_alphanumeric {
-                // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-                // reserves decoded capacity and stabilizes input storage before writing.
                 let run = unsafe { (self.alphanumeric_prefix)(&input[source..]) };
 
                 if run != 0 {
-                    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the
-                    // caller reserves decoded capacity and stabilizes input storage before writing.
                     unsafe { sink.push_symbols::<CHECKED>(&input[source..source + run], false)? };
 
                     if CHECKED {
@@ -865,8 +773,6 @@ impl ConfiguredDecoder {
                         return None;
                     }
 
-                    // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the
-                    // caller reserves decoded capacity and stabilizes input storage before writing.
                     return unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) };
                 }
 
@@ -877,8 +783,6 @@ impl ConfiguredDecoder {
                 continue;
             }
 
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             unsafe { sink.push_value::<CHECKED>(value)? };
 
             if CHECKED {
@@ -900,16 +804,10 @@ impl ConfiguredDecoder {
         {
             None
         } else {
-            // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-            // reserves decoded capacity and stabilizes input storage before writing.
             unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) }
         }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn scan_strict_specials<S: ScanSink, const CHECKED: bool>(
         &self,
         input: &[u8],
@@ -940,8 +838,6 @@ impl ConfiguredDecoder {
                 .map_or(data_end, |offset| source + offset);
 
             if source != run_end {
-                // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-                // reserves decoded capacity and stabilizes input storage before writing.
                 unsafe { sink.push_symbols::<CHECKED>(&input[source..run_end], true)? };
                 symbols += run_end - source;
                 last_value = self.table[usize::from(input[run_end - 1])];
@@ -976,15 +872,9 @@ impl ConfiguredDecoder {
             }
         }
 
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { self.finish_strict::<S, CHECKED>(sink, symbols, padding, last_value) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     #[cold]
     #[inline(never)]
     unsafe fn scan_strict_ignored_padding<S: ScanSink>(
@@ -1017,15 +907,9 @@ impl ConfiguredDecoder {
 
         let mut decoder = self.clone();
         decoder.padding = Padding::Unpadded;
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { decoder.scan::<S, true>(input, sink, false) }
     }
 
-    /// # Safety
-    /// Input storage must remain stable for the operation. The destination must cover the prepared
-    /// encoded or decoded output bound, including wrapping and padding where applicable, without
-    /// aliasing input. Validated paths require previously checked symbols.
     unsafe fn finish_strict<S: ScanSink, const CHECKED: bool>(
         &self,
         sink: S,
@@ -1055,8 +939,6 @@ impl ConfiguredDecoder {
             }
         }
 
-        // SAFETY: ConfiguredDecoder bounds each scanned prefix and output group; the caller
-        // reserves decoded capacity and stabilizes input storage before writing.
         unsafe { sink.finish::<CHECKED>(decoded_symbol_len(symbols)) }
     }
 }

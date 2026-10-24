@@ -32,8 +32,6 @@ macro_rules! define_accumulate_batch {
 
                 if block + 2 <= schedule.full_blocks() {
                     let prefetch_offset = (block + 2) * 1024;
-                    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input
-                    // and the 192-byte secret, including the final overlapping stripe.
                     unsafe {
                         $(_mm_prefetch::<_MM_HINT_T0>(
                             data[$index].as_ptr().add(prefetch_offset).cast(),
@@ -43,11 +41,7 @@ macro_rules! define_accumulate_batch {
 
                 for stripe in 0..16 {
                     let input_offset = offset + stripe * 64;
-                    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input
-                    // and the 192-byte secret, including the final overlapping stripe.
                     let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
-                    // SAFETY: The long-input schedule keeps all 64-byte stripes within the input
-                    // and the 192-byte secret, including the final overlapping stripe.
                     unsafe {
                         $(accumulate_registers(
                             &mut $acc,
@@ -57,12 +51,8 @@ macro_rules! define_accumulate_batch {
                     }
                 }
 
-                // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and
-                // the 192-byte secret, including the final overlapping stripe.
                 let secret_ptr = unsafe { secret.as_ptr().add(128) };
 
-                // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and
-                // the 192-byte secret, including the final overlapping stripe.
                 unsafe {
                     $(scramble_registers(&mut $acc, secret_ptr);)+
                 }
@@ -70,12 +60,8 @@ macro_rules! define_accumulate_batch {
 
             for stripe in 0..schedule.tail_stripes() {
                 let input_offset = schedule.tail_offset() + stripe * 64;
-                // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and
-                // the 192-byte secret, including the final overlapping stripe.
                 let secret_ptr = unsafe { secret.as_ptr().add(stripe * 8) };
 
-                // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and
-                // the 192-byte secret, including the final overlapping stripe.
                 unsafe {
                     $(accumulate_registers(
                         &mut $acc,
@@ -85,12 +71,8 @@ macro_rules! define_accumulate_batch {
                 }
             }
 
-            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
-            // 192-byte secret, including the final overlapping stripe.
             let secret_ptr = unsafe { secret.as_ptr().add(121) };
 
-            // SAFETY: The long-input schedule keeps all 64-byte stripes within the input and the
-            // 192-byte secret, including the final overlapping stripe.
             unsafe {
                 $(accumulate_registers(
                     &mut $acc,

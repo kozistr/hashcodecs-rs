@@ -50,8 +50,6 @@ pub(super) fn read_u64_le(input: &[u8], offset: usize) -> u64 {
 /// allocation, with no concurrent writes to those bytes. Alignment is not required.
 #[inline(always)]
 pub(super) unsafe fn read_u64_le_ptr(input: *const u8, offset: usize) -> u64 {
-    // SAFETY: The caller guarantees eight readable bytes at this offset; read_unaligned accepts
-    // byte-aligned storage.
     u64::from_le(unsafe { input.add(offset).cast::<u64>().read_unaligned() })
 }
 
@@ -105,7 +103,6 @@ pub(super) fn mix16(
             .is_some_and(|end| end <= secret.len())
     );
 
-    // SAFETY: The assertions above prove that both slices contain the entire 16-byte mixing range.
     unsafe {
         mix16_ptr(
             data.as_ptr().add(data_offset),
@@ -119,18 +116,10 @@ pub(super) fn mix16(
 /// `data` and `secret` must each cover 16 readable bytes without concurrent writes.
 #[inline(always)]
 pub(super) unsafe fn mix16_ptr(data: *const u8, secret: *const u8, seed: u64) -> u64 {
-    // SAFETY: The caller provides 16 readable data and secret bytes, so both eight-byte word loads
-    // remain in their allocations.
     let data_lo = unsafe { read_u64_le_ptr(data, 0) };
-    // SAFETY: The caller provides 16 readable data and secret bytes, so both eight-byte word loads
-    // remain in their allocations.
     let data_hi = unsafe { read_u64_le_ptr(data, 8) };
 
-    // SAFETY: The caller provides 16 readable data and secret bytes, so both eight-byte word loads
-    // remain in their allocations.
     let secret_lo = unsafe { read_u64_le_ptr(secret, 0) };
-    // SAFETY: The caller provides 16 readable data and secret bytes, so both eight-byte word loads
-    // remain in their allocations.
     let secret_hi = unsafe { read_u64_le_ptr(secret, 8) };
 
     let lo = data_lo ^ secret_lo.wrapping_add(seed);

@@ -34,18 +34,12 @@ const fn encode_shuffle() -> [u8; 64] {
     shuffle
 }
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
     input: &[u8],
     output: *mut u8,
 ) -> usize {
     if input.len() < 48 {
-        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
-        // stores impose no additional alignment requirement.
         return unsafe { avx2::encode_with_store::<URLSAFE>(input, output, Avx2StoreMode::Cached) };
     }
 
@@ -55,18 +49,10 @@ pub(in crate::base64) unsafe fn encode<const URLSAFE: bool>(
         STANDARD_ALPHABET
     };
 
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode_custom(
@@ -75,30 +61,18 @@ pub(in crate::base64) unsafe fn encode_custom(
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
     if input.len() < 48 {
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         return unsafe {
             avx2::encode_custom(input, output, alphabet.offsets(), Avx2StoreMode::Cached)
         };
     }
 
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let table = unsafe { _mm512_loadu_si512(alphabet.table().as_ptr().cast()) };
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
 unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> usize {
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
     let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
 
@@ -106,8 +80,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
     let mut destination = 0;
 
     while source + 192 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source),
@@ -117,8 +89,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
                 table,
             )
         };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 48),
@@ -128,8 +98,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
                 table,
             )
         };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 96),
@@ -139,8 +107,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
                 table,
             )
         };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 144),
@@ -156,8 +122,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
     }
 
     while source + 48 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source),
@@ -176,8 +140,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
     let complete_input = remaining / 3 * 3;
 
     if complete_input != 0 {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         let encoded = unsafe {
             encode_tail_value(
                 input.as_ptr().add(source),
@@ -189,8 +151,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: __m512i) -> us
         };
         let complete_output = complete_input / 3 * 4;
         let output_mask = (1_u64 << complete_output) - 1;
-        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
-        // stores impose no additional alignment requirement.
         unsafe { _mm512_mask_storeu_epi8(output.add(destination).cast(), output_mask, encoded) };
     }
 
@@ -209,12 +169,8 @@ unsafe fn encode_48(
     shifts: __m512i,
     table: __m512i,
 ) {
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     let encoded = unsafe { encode_48_value(input, shuffle, shifts, table) };
 
-    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
-    // impose no additional alignment requirement.
     unsafe { _mm512_storeu_si512(output.cast(), encoded) };
 }
 
@@ -228,8 +184,6 @@ unsafe fn encode_48_value(
     shifts: __m512i,
     table: __m512i,
 ) -> __m512i {
-    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
-    // bytes; the kernel features are enabled.
     let input = unsafe { _mm512_maskz_loadu_epi8(INPUT_MASK_48, input.cast()) };
     let shuffled = _mm512_permutexvar_epi8(shuffle, input);
     let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
@@ -250,8 +204,6 @@ unsafe fn encode_tail_value(
     table: __m512i,
 ) -> __m512i {
     let input_mask = (1_u64 << input_len) - 1;
-    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
-    // bytes; the kernel features are enabled.
     let input = unsafe { _mm512_maskz_loadu_epi8(input_mask, input.cast()) };
     let shuffled = _mm512_permutexvar_epi8(shuffle, input);
     let indices = _mm512_multishift_epi64_epi8(shifts, shuffled);
@@ -259,9 +211,6 @@ unsafe fn encode_tail_value(
     _mm512_permutexvar_epi8(indices, table)
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
@@ -269,8 +218,6 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
     output: &mut WrappedOutput,
 ) -> usize {
     if input.len() < 48 {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         return unsafe { avx2::encode_wrapped::<URLSAFE>(input, output) };
     }
 
@@ -280,17 +227,10 @@ pub(in crate::base64) unsafe fn encode_wrapped<const URLSAFE: bool>(
         STANDARD_ALPHABET
     };
 
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let table = unsafe { _mm512_loadu_si512(alphabet.as_ptr().cast()) };
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 pub(in crate::base64) unsafe fn encode_wrapped_custom(
@@ -299,22 +239,13 @@ pub(in crate::base64) unsafe fn encode_wrapped_custom(
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
     if input.len() < 48 {
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         return unsafe { avx2::encode_wrapped_custom(input, output, alphabet.offsets()) };
     }
 
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let table = unsafe { _mm512_loadu_si512(alphabet.table().as_ptr().cast()) };
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512vbmi,avx512bw")]
 #[inline]
@@ -323,21 +254,15 @@ unsafe fn encode_wrapped_with_table(
     output: &mut WrappedOutput,
     table: __m512i,
 ) -> usize {
-    // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this vector
-    // load; the kernel features are enabled.
     let shuffle = unsafe { _mm512_loadu_si512(ENCODE_SHUFFLE.as_ptr().cast()) };
     let shifts = _mm512_set1_epi64(i64::from_le_bytes(MULTISHIFT_SHIFTS));
     let mut source = 0;
 
     while source + 192 <= input.len() {
         for offset in [0, 48, 96, 144] {
-            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-            // loads, and dispatch has enabled the required CPU features.
             let encoded = unsafe {
                 encode_48_value(input.as_ptr().add(source + offset), shuffle, shifts, table)
             };
-            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-            // loads, and dispatch has enabled the required CPU features.
             unsafe { write_wrapped_64(output, encoded) };
         }
 
@@ -346,11 +271,7 @@ unsafe fn encode_wrapped_with_table(
 
     while source + 48 <= input.len() {
         let encoded =
-            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-            // loads, and dispatch has enabled the required CPU features.
             unsafe { encode_48_value(input.as_ptr().add(source), shuffle, shifts, table) };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { write_wrapped_64(output, encoded) };
         source += 48;
     }
@@ -359,8 +280,6 @@ unsafe fn encode_wrapped_with_table(
     let complete_input = remaining / 3 * 3;
 
     if complete_input != 0 {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         let encoded = unsafe {
             encode_tail_value(
                 input.as_ptr().add(source),
@@ -373,26 +292,17 @@ unsafe fn encode_wrapped_with_table(
         let complete_output = complete_input / 3 * 4;
         let mut bytes = [0_u8; 64];
         let output_mask = (1_u64 << complete_output) - 1;
-        // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned
-        // stores impose no additional alignment requirement.
         unsafe { _mm512_mask_storeu_epi8(bytes.as_mut_ptr().cast(), output_mask, encoded) };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { output.write_bytes(&bytes[..complete_output]) };
     }
 
     source + complete_input
 }
 
-/// # Safety
-/// The wrapped output must retain enough writable capacity for this payload and every inserted
-/// separator. Its storage must not overlap the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "avx512f")]
 #[inline]
 unsafe fn write_wrapped_64(output: &mut WrappedOutput, value: __m512i) {
-    // SAFETY: The vector and byte array have identical sizes and all bits are initialized; the
-    // wrapped writer owns enough output capacity.
     unsafe {
         output.write_16(core::mem::transmute::<__m128i, [u8; 16]>(
             _mm512_castsi512_si128(value),

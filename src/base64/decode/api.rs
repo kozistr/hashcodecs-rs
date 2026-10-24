@@ -213,8 +213,6 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
 
     // The padded store mode may write at most `DECODE_STORE_PADDING` bytes past
     // the initialized result, all within this private allocation.
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_layout(
             input,
@@ -226,8 +224,6 @@ fn b64decode_with_alphabet(input: &[u8], urlsafe: bool) -> Result<Vec<u8>, Base6
     };
 
     // The decoder initializes the result prefix. The function discards the private padding.
-    // SAFETY: Successful decoding initialized the complete prefix described by the checked output
-    // layout.
     Ok(unsafe { assume_output_initialized(output, layout.output_len) })
 }
 
@@ -311,8 +307,6 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet(
     assert_eq!(output.len(), layout.output_len);
     // The slice contains exactly the required initialized storage.
     // The decoder must keep all stores within this slice.
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe { decode_to_ptr_with_layout(input, output.as_mut_ptr(), layout, alphabet, false) }
 }
 
@@ -326,8 +320,6 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet(
 ) -> Result<(), Base64Error> {
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_unpadded_layout_mode(
             input,
@@ -349,8 +341,6 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks
 ) -> Result<(), Base64Error> {
     assert_eq!(input.len(), layout.input_len);
     assert_eq!(output.len(), layout.output_len);
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_unpadded_layout_mode(
             input,
@@ -362,10 +352,6 @@ pub(crate) fn decode_to_slice_with_unpadded_layout_and_alphabet_validated_blocks
     }
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[inline]
 pub(crate) unsafe fn decode_to_ptr_with_layout(
     input: &[u8],
@@ -374,8 +360,6 @@ pub(crate) unsafe fn decode_to_ptr_with_layout(
     alphabet: DecodeAlphabet,
     output_has_store_slack: bool,
 ) -> Result<(), Base64Error> {
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_layout_mode(
             input,
@@ -388,10 +372,6 @@ pub(crate) unsafe fn decode_to_ptr_with_layout(
     }
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[inline]
 #[cfg_attr(not(feature = "python"), allow(dead_code))]
 pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
@@ -400,8 +380,6 @@ pub(crate) unsafe fn decode_to_ptr_with_unpadded_layout(
     layout: DecodeLayout,
     alphabet: DecodeAlphabet,
 ) -> Result<(), Base64Error> {
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_unpadded_layout_mode(
             input,
@@ -428,16 +406,12 @@ pub(crate) unsafe fn decode_standard_validated_to_ptr(input: &[u8], output: *mut
     let prefix_len = input.len() / 4 * 4;
 
     let (mut source, mut destination) = if prefix_len >= 16 {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe { decode_standard_validated_with_runtime_backend(&input[..prefix_len], output) }
     } else {
         (0, 0)
     };
 
     while source + 8 <= prefix_len {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_eight_validated_ptr(
                 &input[source..source + 8],
@@ -450,8 +424,6 @@ pub(crate) unsafe fn decode_standard_validated_to_ptr(input: &[u8], output: *mut
     }
 
     while source < prefix_len {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_quad_validated_ptr(
                 &input[source..source + 4],
@@ -466,8 +438,6 @@ pub(crate) unsafe fn decode_standard_validated_to_ptr(input: &[u8], output: *mut
     let tail = &input[prefix_len..];
 
     if !tail.is_empty() {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_unpadded_tail_validated_ptr(tail, output.add(destination), &STANDARD_DECODE)
         };
@@ -494,8 +464,6 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet_validated_blocks(
     assert_eq!(output.len(), layout.output_len);
     // This error policy writes only complete, validated SIMD blocks.
     // A lenient caller can use its fallback without changing the suffix.
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_layout_mode(
             input,
@@ -508,10 +476,6 @@ pub(crate) fn decode_to_slice_with_layout_and_alphabet_validated_blocks(
     }
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[inline]
 unsafe fn decode_to_ptr_with_layout_mode(
     input: &[u8],
@@ -532,8 +496,6 @@ unsafe fn decode_to_ptr_with_layout_mode(
     let (input_offset, output_offset) = if simd_len < 16 {
         (0, 0)
     } else {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_with_runtime_backend(
                 &input[..simd_len],
@@ -555,16 +517,12 @@ unsafe fn decode_to_ptr_with_layout_mode(
     };
 
     while source + 8 <= simd_len {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe { decode_eight_ptr(&input[source..source + 8], output.add(destination), table) }?;
         source += 8;
         destination += 6;
     }
 
     while source < simd_len {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_quad_ptr(
                 &input[source..source + 4],
@@ -578,8 +536,6 @@ unsafe fn decode_to_ptr_with_layout_mode(
     }
 
     if padding != 0 {
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe {
             decode_quad_ptr(
                 &input[source..source + 4],
@@ -593,10 +549,6 @@ unsafe fn decode_to_ptr_with_layout_mode(
     Ok(())
 }
 
-/// # Safety
-/// The checked layout must describe this input, and output must cover its decoded length without
-/// aliasing input. SIMD entry points additionally require their CPU features and the full exact or
-/// padded store width. Validated paths require a checked alphabet.
 #[inline]
 unsafe fn decode_to_ptr_with_unpadded_layout_mode(
     input: &[u8],
@@ -611,8 +563,6 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
         padding: 0,
         output_len: prefix_len / 4 * 3,
     };
-    // SAFETY: The checked layout bounds each input quantum and destination write, and the slice or
-    // caller contract supplies that output capacity.
     unsafe {
         decode_to_ptr_with_layout_mode(
             &input[..prefix_len],
@@ -633,8 +583,6 @@ unsafe fn decode_to_ptr_with_unpadded_layout_mode(
             DecodeAlphabet::Mixed => &MIXED_DECODE,
         };
 
-        // SAFETY: The checked layout bounds each input quantum and destination write, and the slice
-        // or caller contract supplies that output capacity.
         unsafe { decode_unpadded_tail_ptr(tail, output.add(prefix_layout.output_len), table) }?;
     }
 
@@ -688,8 +636,8 @@ impl DecodeLayout {
 }
 
 /// # Safety
-/// Input must contain four symbols and the destination must cover three bytes minus any validated
-/// final padding. Validated variants require previously checked alphabet symbols.
+/// `padding` must be in 0..=2, and `output` must cover `3 - padding` bytes.
+/// `input` must contain the corresponding padded four-symbol quantum.
 pub(crate) unsafe fn decode_quad_ptr(
     input: &[u8],
     output: *mut u8,
@@ -711,19 +659,13 @@ pub(crate) unsafe fn decode_quad_ptr(
         0
     };
 
-    // SAFETY: The caller reserves three bytes for a full quantum, reduced by the validated padding
-    // count for the final quantum.
     unsafe { output.write((first << 2) | (second >> 4)) };
 
     if padding < 2 {
-        // SAFETY: The caller reserves three bytes for a full quantum, reduced by the validated
-        // padding count for the final quantum.
         unsafe { output.add(1).write((second << 4) | (third >> 2)) };
     }
 
     if padding == 0 {
-        // SAFETY: The caller reserves three bytes for a full quantum, reduced by the validated
-        // padding count for the final quantum.
         unsafe { output.add(2).write((third << 6) | fourth) };
     }
 
@@ -731,8 +673,7 @@ pub(crate) unsafe fn decode_quad_ptr(
 }
 
 /// # Safety
-/// Input must contain four symbols and the destination must cover three bytes minus any validated
-/// final padding. Validated variants require previously checked alphabet symbols.
+/// Input must contain four validated, unpadded symbols; output must cover three bytes.
 #[inline]
 #[cfg(any(feature = "python", test))]
 unsafe fn decode_quad_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
@@ -741,8 +682,6 @@ unsafe fn decode_quad_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 
     let third = table[input[2] as usize];
     let fourth = table[input[3] as usize];
 
-    // SAFETY: The caller reserves three bytes for a full quantum, reduced by the validated padding
-    // count for the final quantum.
     unsafe {
         output.write((first << 2) | (second >> 4));
         output.add(1).write((second << 4) | (third >> 2));
@@ -751,8 +690,7 @@ unsafe fn decode_quad_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 
 }
 
 /// # Safety
-/// Input must contain two or three symbols and the destination must cover one or two bytes
-/// respectively. Validated variants require previously checked alphabet symbols.
+/// Input must contain two or three symbols, with one or two writable output bytes respectively.
 #[inline]
 pub(crate) unsafe fn decode_unpadded_tail_ptr(
     input: &[u8],
@@ -769,13 +707,9 @@ pub(crate) unsafe fn decode_unpadded_tail_ptr(
         0
     };
 
-    // SAFETY: The checked tail has two or three symbols, and the caller reserves the corresponding
-    // one or two decoded bytes.
     unsafe { output.write((first << 2) | (second >> 4)) };
 
     if input.len() == 3 {
-        // SAFETY: The checked tail has two or three symbols, and the caller reserves the
-        // corresponding one or two decoded bytes.
         unsafe { output.add(1).write((second << 4) | (third >> 2)) };
     }
 
@@ -783,8 +717,7 @@ pub(crate) unsafe fn decode_unpadded_tail_ptr(
 }
 
 /// # Safety
-/// Input must contain two or three symbols and the destination must cover one or two bytes
-/// respectively. Validated variants require previously checked alphabet symbols.
+/// Input must contain two or three validated symbols, with one or two writable output bytes.
 #[inline]
 #[cfg(any(feature = "python", test))]
 unsafe fn decode_unpadded_tail_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
@@ -792,21 +725,16 @@ unsafe fn decode_unpadded_tail_validated_ptr(input: &[u8], output: *mut u8, tabl
     let first = table[input[0] as usize];
     let second = table[input[1] as usize];
 
-    // SAFETY: The checked tail has two or three symbols, and the caller reserves the corresponding
-    // one or two decoded bytes.
     unsafe { output.write((first << 2) | (second >> 4)) };
 
     if input.len() == 3 {
         let third = table[input[2] as usize];
-        // SAFETY: The checked tail has two or three symbols, and the caller reserves the
-        // corresponding one or two decoded bytes.
         unsafe { output.add(1).write((second << 4) | (third >> 2)) };
     }
 }
 
 /// # Safety
-/// Input must contain eight unpadded symbols and the destination must cover six writable bytes.
-/// Validated variants require previously checked alphabet symbols.
+/// Input must contain eight unpadded symbols; output must cover six bytes.
 #[inline]
 pub(crate) unsafe fn decode_eight_ptr(
     input: &[u8],
@@ -834,15 +762,12 @@ pub(crate) unsafe fn decode_eight_ptr(
         (sixth << 4) | (seventh >> 2),
         (seventh << 6) | eighth,
     ];
-    // SAFETY: The caller provides eight input symbols and six writable output bytes; table indices
-    // are bounded by the byte values.
     unsafe { output.copy_from_nonoverlapping(decoded.as_ptr(), decoded.len()) };
     Ok(())
 }
 
 /// # Safety
-/// Input must contain eight unpadded symbols and the destination must cover six writable bytes.
-/// Validated variants require previously checked alphabet symbols.
+/// Input must contain eight validated, unpadded symbols; output must cover six bytes.
 #[inline]
 #[cfg(any(feature = "python", test))]
 unsafe fn decode_eight_validated_ptr(input: &[u8], output: *mut u8, table: &[u8; 256]) {
@@ -862,8 +787,6 @@ unsafe fn decode_eight_validated_ptr(input: &[u8], output: *mut u8, table: &[u8;
         (sixth << 4) | (seventh >> 2),
         (seventh << 6) | eighth,
     ];
-    // SAFETY: The caller provides eight input symbols and six writable output bytes; table indices
-    // are bounded by the byte values.
     unsafe { output.copy_from_nonoverlapping(decoded.as_ptr(), decoded.len()) };
 }
 

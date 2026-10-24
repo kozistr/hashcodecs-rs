@@ -191,8 +191,6 @@ pub(in crate::xxhash) fn initialize_secret_with_capabilities(
     capabilities: Capabilities,
 ) -> Secret {
     if capabilities.supports(CpuFeature::Avx2) {
-        // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce the
-        // length and stripe requirements before kernel dispatch.
         unsafe { x86::avx2::init_secret(seed) }
     } else {
         initialize_secret_scalar(seed)
@@ -294,9 +292,6 @@ pub(in crate::xxhash) fn select_x86_accumulation_kernel(backend: X86Backend) -> 
     }
 }
 
-/// # Safety
-/// The CPU must support the selected kernel features, and the validated long-input wrappers and
-/// schedule must cover all data and secret stripes used by that kernel.
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[cfg(test)]
 #[inline]
@@ -309,8 +304,6 @@ pub(in crate::xxhash) unsafe fn accumulate_x86(
         return scalar::accumulate(input, secret);
     };
 
-    // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce the
-    // length and stripe requirements before kernel dispatch.
     unsafe { kernel(input, secret) }
 }
 
@@ -411,8 +404,6 @@ impl LongEngine {
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return Some(unsafe { x86::avx2::init_secret(seed) });
         }
 
@@ -442,12 +433,8 @@ impl LongEngine {
         match self.backend {
             LongBackend::Scalar => scalar::accumulate(input, secret),
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             LongBackend::X86(kernel) => unsafe { kernel(input, secret) },
             #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             LongBackend::Neon => unsafe { aarch64::accumulate(input, secret) },
         }
     }
@@ -461,8 +448,6 @@ impl LongEngine {
     ) -> [[u64; 8]; 2] {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return unsafe { x86::avx2_batch::accumulate_batch2(inputs.into_inputs(), secret) };
         }
 
@@ -482,8 +467,6 @@ impl LongEngine {
     ) -> [[u64; 8]; 3] {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return unsafe { x86::avx2_batch::accumulate_batch3(inputs.into_inputs(), secret) };
         }
 
@@ -504,8 +487,6 @@ impl LongEngine {
     ) -> [[u64; 8]; 4] {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if self.avx2_available {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return unsafe { x86::avx2_batch::accumulate_batch4(inputs.into_inputs(), secret) };
         }
 
@@ -526,8 +507,6 @@ impl LongEngine {
         secret: &Secret,
     ) -> Option<[u64; 2]> {
         if self.avx2_selected && input.len() <= 1024 {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return Some(unsafe { x86::avx2::hash_128_medium(input, secret) });
         }
 
@@ -547,8 +526,6 @@ impl LongEngine {
     pub(in crate::xxhash) fn hash_128_seeded(&self, input: LongInput<'_>, seed: u64) -> [u64; 2] {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         if seed == 0 && self.avx2_selected && input.len() <= 1024 {
-            // SAFETY: LongEngine records checked CPU capabilities, and LongInput/LongBatch enforce
-            // the length and stripe requirements before kernel dispatch.
             return unsafe { x86::avx2::hash_128_medium(input, &DEFAULT_SECRET) };
         }
 

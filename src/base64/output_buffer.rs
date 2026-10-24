@@ -19,8 +19,7 @@ pub(super) unsafe fn assume_output_initialized(
 
     let mut output = ManuallyDrop::new(output);
 
-    // The caller guarantees that an operation wrote every byte in the returned prefix.
-    // SAFETY: The caller initialized the returned prefix; ManuallyDrop preserves the original
-    // allocation, capacity, and byte alignment.
+    // SAFETY: MaybeUninit<u8> has u8's layout; ManuallyDrop transfers the allocation
+    // with its original capacity, and the caller guarantees the prefix is initialized.
     unsafe { Vec::from_raw_parts(output.as_mut_ptr().cast(), length, output.capacity()) }
 }

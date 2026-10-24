@@ -198,8 +198,6 @@ pub(in crate::murmur3) fn mix_body_with_backend(
     backend: dispatch::Backend,
     has_bmi2: bool,
 ) {
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe { x86::mix_body(blocks, hashes, backend, has_bmi2) };
 }
 
@@ -218,13 +216,9 @@ pub(in crate::murmur3) fn mix_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &m
     let mut hash1 = hashes[0];
     let mut hash2 = hashes[1];
     let mut cursor = input.as_ptr();
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     let end = unsafe { cursor.add(input.len()) };
 
     while cursor < end {
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         let [first, second] = unsafe { cursor.cast::<[[u8; 8]; 2]>().read() };
         let value1 = u64::from_le_bytes(first);
         let value2 = u64::from_le_bytes(second);
@@ -237,8 +231,6 @@ pub(in crate::murmur3) fn mix_body_scalar(blocks: FullBlocks<'_, 16>, hashes: &m
             .rotate_left(33)
             .wrapping_mul(X64_128_C1);
         mix_hashes(&mut hash1, &mut hash2, block1, block2);
-        // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-        // algorithm blocks for this kernel.
         cursor = unsafe { cursor.add(16) };
     }
 
@@ -293,8 +285,6 @@ fn scale_hash<const ADDEND: i32>(mut hash: u64) -> u64 {
     // Keep each state update in one LEA instead of distributing its constant
     // across the dependent updates that follow.
     #[cfg(all(target_arch = "x86_64", not(any(kani, miri))))]
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe {
         core::arch::asm!(
             "lea {hash}, [{hash} + {hash} * 4 + {addend}]",

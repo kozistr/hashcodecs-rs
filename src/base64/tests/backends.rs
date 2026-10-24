@@ -303,8 +303,6 @@ fn encode_custom_alphabets() {
             }
 
             let mut actual = vec![0xa5; expected.len() + 16];
-            // SAFETY: The fixture provides the required input/output ranges and checks CPU support
-            // before calling a SIMD backend.
             let consumed = unsafe {
                 encode_custom_with_backend(
                     &input[..length],

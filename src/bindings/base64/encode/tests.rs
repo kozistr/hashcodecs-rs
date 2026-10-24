@@ -46,8 +46,6 @@ fn encode_large_inputs() {
                     let written = encode_into(&source, &output, &encoder).unwrap();
                     assert_eq!(written, expected.len());
                     with_bytearray(&output, || {
-                        // SAFETY: Immutability or the enclosing bytearray critical section keeps
-                        // the retained storage stable during this inspection.
                         let output = unsafe { output.as_bytes() };
                         assert_eq!(&output[..written], expected);
                         assert_eq!(&output[written..], &[0xa5; 16]);
@@ -70,8 +68,6 @@ fn encode_custom_alphabets() {
                 let encoder = PreparedEncoder::new(Some(altchars), padded, None);
                 let output_len = encoder.output_len(length);
                 let mut actual = vec![0xa5; output_len + 1];
-                // SAFETY: The fixture retains the input and reserves the full encoded length,
-                // including padding and wrapping, before calling the kernel.
                 unsafe { encoder.encode_to_ptr(&input[..length], actual.as_mut_ptr()) };
 
                 let mut expected = crate::base64::b64encode(&input[..length]).into_bytes();
@@ -104,8 +100,6 @@ fn wrap_custom_unpadded_inputs() {
         .collect::<Vec<_>>();
     let encoder = PreparedEncoder::new(Some(*b"@#"), false, Some(76));
     let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
-    // SAFETY: The fixture retains the input and reserves the full encoded length, including padding
-    // and wrapping, before calling the kernel.
     unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
 
     let mut contiguous = crate::base64::b64encode(&input).into_bytes();
@@ -144,8 +138,6 @@ fn use_alphabet_table() {
     let alphabet = EncodeAlphabet::from_table([b'Z'; 64]);
     let encoder = PreparedEncoder::with_alphabet(alphabet, false, Some(76));
     let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
-    // SAFETY: The fixture retains the input and reserves the full encoded length, including padding
-    // and wrapping, before calling the kernel.
     unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
 
     let data_len = unpadded_encoded_len(input.len());
@@ -170,8 +162,6 @@ fn wrap_standard_padded_inputs() {
         .collect::<Vec<_>>();
     let encoder = PreparedEncoder::new(None, true, Some(76));
     let mut actual = vec![0xa5; encoder.output_len(input.len()) + 1];
-    // SAFETY: The fixture retains the input and reserves the full encoded length, including padding
-    // and wrapping, before calling the kernel.
     unsafe { encoder.encode_direct_to_ptr(&input, actual.as_mut_ptr(), 76) };
 
     let contiguous = crate::base64::b64encode(&input).into_bytes();
@@ -194,8 +184,6 @@ fn wrap_short_custom_inputs() {
     let input = [0xfb; 15];
     let alphabet = CustomEncodeAlphabet::new(*b"@#");
     let mut actual = [0xa5; 25];
-    // SAFETY: The fixture retains the input and reserves the full encoded length, including padding
-    // and wrapping, before calling the kernel.
     unsafe { encode_wrapped_to_ptr_custom(&input, actual.as_mut_ptr(), &alphabet, true, 4) };
 
     let mut contiguous = crate::base64::b64encode(&input).into_bytes();
@@ -225,8 +213,6 @@ fn wrap_short_custom_inputs() {
 #[test]
 fn wrap_short_standard_inputs() {
     let mut output = [0xa5; 10];
-    // SAFETY: The fixture retains the input and reserves the full encoded length, including padding
-    // and wrapping, before calling the kernel.
     unsafe { encode_wrapped_to_ptr_cached(b"abcde", output.as_mut_ptr(), false, true, 4) };
     assert_eq!(&output[..9], b"YWJj\nZGU=");
     assert_eq!(output[9], 0xa5);
@@ -244,8 +230,6 @@ fn wrap_aliased_input() {
             .collect::<Vec<_>>()
             .join(&b'\n');
         let output = PyByteArray::new(py, &vec![0xa5; expected.len() + 1]);
-        // SAFETY: The enclosing bytearray critical section keeps the retained storage stable during
-        // this mutation.
         with_bytearray(&output, || unsafe {
             output.as_bytes_mut()[..payload.len()].copy_from_slice(&payload)
         });
@@ -258,11 +242,7 @@ fn wrap_aliased_input() {
             expected.len()
         );
         with_bytearray(&output, || {
-            // SAFETY: Immutability or the enclosing bytearray critical section keeps the retained
-            // storage stable during this inspection.
             assert_eq!(&unsafe { output.as_bytes() }[..expected.len()], expected);
-            // SAFETY: Immutability or the enclosing bytearray critical section keeps the retained
-            // storage stable during this inspection.
             assert_eq!(unsafe { output.as_bytes() }[expected.len()], 0xa5);
         });
     });
@@ -276,8 +256,6 @@ fn parse_mutable_alphabets() {
         let (encoder, guard) = parse_b64encode_alphabet(alphabet.as_any()).unwrap();
         let mut output = [0; 4];
         let encoder = PreparedEncoder::with_alphabet(encoder, true, None);
-        // SAFETY: The fixture retains the input and reserves the full encoded length, including
-        // padding and wrapping, before calling the kernel.
         unsafe { encoder.encode_to_ptr(b"abc", output.as_mut_ptr()) };
         assert_eq!(&output, b"YWJj");
         assert_eq!(guard.stable_bytes(), STANDARD_ALPHABET);

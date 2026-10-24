@@ -36,14 +36,10 @@ macro_rules! define_avx2_kernel {
 
             while offset + 128 <= input.len() {
                 for vector in 0..4 {
-                    // SAFETY: The fixed scratch array contains the full vector store, and every
-                    // element is initialized before scalar mixing reads it.
                     let values = unsafe {
                         _mm256_loadu_si256(input.as_ptr().add(offset + vector * 32).cast())
                     };
                     let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
-                    // SAFETY: The fixed scratch array contains the full vector store, and every
-                    // element is initialized before scalar mixing reads it.
                     unsafe {
                         _mm256_storeu_si256(mixed.as_mut_ptr().add(vector * 4).cast(), values)
                     };
@@ -54,12 +50,8 @@ macro_rules! define_avx2_kernel {
             }
 
             while offset + 32 <= input.len() {
-                // SAFETY: The fixed scratch array contains the full vector store, and every element
-                // is initialized before scalar mixing reads it.
                 let values = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
                 let values = premix_avx2(values, c1, c2, rotate_left, rotate_right);
-                // SAFETY: The fixed scratch array contains the full vector store, and every element
-                // is initialized before scalar mixing reads it.
                 unsafe { _mm256_storeu_si256(mixed.as_mut_ptr().cast(), values) };
                 mix_blocks(&mut hash1, &mut hash2, &mixed[..4]);
                 offset += 32;
@@ -101,8 +93,6 @@ fn premix_avx2(
 
     // Keep LLVM from distributing this shift into the preceding multiply and
     // computing three extra partial products for every vector.
-    // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-    // algorithm blocks for this kernel.
     unsafe {
         core::arch::asm!(
             "vpsllvq {shifted}, {shifted}, {counts}",
@@ -142,12 +132,8 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
     while offset + 64 <= input.len() {
         for vector in 0..4 {
             let values =
-                // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned
-                // loads accept the input slice's alignment.
                 unsafe { _mm_loadu_si128(input.as_ptr().add(offset + vector * 16).cast()) };
             let values = premix_sse41(values, c1, c2);
-            // SAFETY: The fixed scratch array contains the full vector store, and every element is
-            // initialized before scalar mixing reads it.
             unsafe { _mm_storeu_si128(mixed.as_mut_ptr().add(vector * 2).cast(), values) };
         }
 
@@ -156,12 +142,8 @@ fn mix_body_sse41(blocks: FullBlocks<'_, 16>, hashes: [u64; 2]) -> [u64; 2] {
     }
 
     while offset < input.len() {
-        // SAFETY: The loop guard leaves a complete vector inside FullBlocks; unaligned loads accept
-        // the input slice's alignment.
         let values = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
         let values = premix_sse41(values, c1, c2);
-        // SAFETY: The fixed scratch array contains the full vector store, and every element is
-        // initialized before scalar mixing reads it.
         unsafe { _mm_storeu_si128(mixed.as_mut_ptr().cast(), values) };
         mix_blocks(&mut hash1, &mut hash2, &mixed[..2]);
         offset += 16;
@@ -213,18 +195,12 @@ pub(in crate::murmur3) unsafe fn mix_body(
     match backend {
         Backend::Avx2 => {
             *hashes = if bmi2 {
-                // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees
-                // complete algorithm blocks for this kernel.
                 unsafe { mix_body_avx2_bmi2(blocks, *hashes) }
             } else {
-                // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees
-                // complete algorithm blocks for this kernel.
                 unsafe { mix_body_avx2(blocks, *hashes) }
             };
         }
         Backend::Sse41 => {
-            // SAFETY: Dispatch checks the required CPU features, and FullBlocks guarantees complete
-            // algorithm blocks for this kernel.
             *hashes = unsafe { mix_body_sse41(blocks, *hashes) };
         }
         Backend::Scalar => mix_body_scalar(blocks, hashes),

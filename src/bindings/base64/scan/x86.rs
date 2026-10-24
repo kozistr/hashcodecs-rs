@@ -15,13 +15,9 @@ macro_rules! define_symbol_count_avx2 {
             let [extra0, extra1] = altchars.unwrap_or(*b"AA");
             let extra0 = _mm256_set1_epi8(extra0 as i8);
             let extra1 = _mm256_set1_epi8(extra1 as i8);
-            // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-            // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
             let high_classes = _mm256_broadcastsi128_si256(unsafe {
                 _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
             });
-            // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-            // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
             let low_classes = _mm256_broadcastsi128_si256(unsafe {
                 _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
             });
@@ -29,9 +25,6 @@ macro_rules! define_symbol_count_avx2 {
             let mut symbols = 0;
 
             while source + 32 <= input.len() {
-                // SAFETY: The vector loop bounds each full load and store; translation uses
-                // disjoint buffers or its permitted in-place mapping, with CPU features checked by
-                // dispatch.
                 let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
                 let valid = valid_avx2(bytes, high_classes, low_classes, extra0, extra1);
                 symbols += _mm256_movemask_epi8(valid).count_ones() as usize;
@@ -55,8 +48,6 @@ pub(in crate::bindings::base64) fn alphanumeric_prefix_avx2(input: &[u8]) -> usi
     let mut source = 0;
 
     while source + 32 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
         let valid = _mm256_or_si256(
             _mm256_or_si256(range_avx2(bytes, b'A', b'Z'), range_avx2(bytes, b'a', b'z')),
@@ -86,21 +77,15 @@ pub(in crate::bindings::base64) fn symbol_prefix_avx2(
     let [extra0, extra1] = altchars.unwrap_or(*b"AA");
     let extra0 = _mm256_set1_epi8(extra0 as i8);
     let extra1 = _mm256_set1_epi8(extra1 as i8);
-    // SAFETY: The vector loop bounds each full load and store; translation uses disjoint buffers or
-    // its permitted in-place mapping, with CPU features checked by dispatch.
     let high_classes = _mm256_broadcastsi128_si256(unsafe {
         _mm_loadu_si128(STANDARD_HIGH_CLASSES.as_ptr().cast())
     });
-    // SAFETY: The vector loop bounds each full load and store; translation uses disjoint buffers or
-    // its permitted in-place mapping, with CPU features checked by dispatch.
     let low_classes = _mm256_broadcastsi128_si256(unsafe {
         _mm_loadu_si128(STANDARD_LOW_CLASSES_COMPLEMENT.as_ptr().cast())
     });
     let mut source = 0;
 
     while source + 32 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(source).cast()) };
         let mask =
             _mm256_movemask_epi8(valid_avx2(bytes, high_classes, low_classes, extra0, extra1))
@@ -135,8 +120,6 @@ pub(in crate::bindings::base64) fn translate_avx2(
     let mut offset = 0;
 
     while offset + 32 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm256_loadu_si256(input.as_ptr().add(offset).cast()) };
         let mask0 = _mm256_cmpeq_epi8(bytes, source0_vector);
         let translated0 = _mm256_or_si256(
@@ -148,8 +131,6 @@ pub(in crate::bindings::base64) fn translate_avx2(
             _mm256_and_si256(mask1, target1_vector),
             _mm256_andnot_si256(mask1, translated0),
         );
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         unsafe { _mm256_storeu_si256(input.as_mut_ptr().add(offset).cast(), translated1) };
         offset += 32;
     }
@@ -208,8 +189,6 @@ pub(in crate::bindings::base64) fn symbol_count_sse2(
     let mut symbols = 0;
 
     while source + 16 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let valid = valid_sse2(bytes, extra0, extra1);
         symbols += _mm_movemask_epi8(valid).count_ones() as usize;
@@ -228,8 +207,6 @@ pub(in crate::bindings::base64) fn alphanumeric_prefix_sse2(input: &[u8]) -> usi
     let mut source = 0;
 
     while source + 16 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let valid = _mm_or_si128(
             _mm_or_si128(range_sse2(bytes, b'A', b'Z'), range_sse2(bytes, b'a', b'z')),
@@ -262,8 +239,6 @@ pub(in crate::bindings::base64) fn symbol_prefix_sse2(
     let mut source = 0;
 
     while source + 16 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(source).cast()) };
         let mask = _mm_movemask_epi8(valid_sse2(bytes, extra0, extra1)) as u32;
 
@@ -296,8 +271,6 @@ pub(in crate::bindings::base64) fn translate_sse2(
     let mut offset = 0;
 
     while offset + 16 <= input.len() {
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         let bytes = unsafe { _mm_loadu_si128(input.as_ptr().add(offset).cast()) };
         let mask0 = _mm_cmpeq_epi8(bytes, source0_vector);
         let translated0 = _mm_or_si128(
@@ -309,8 +282,6 @@ pub(in crate::bindings::base64) fn translate_sse2(
             _mm_and_si128(mask1, target1_vector),
             _mm_andnot_si128(mask1, translated0),
         );
-        // SAFETY: The vector loop bounds each full load and store; translation uses disjoint
-        // buffers or its permitted in-place mapping, with CPU features checked by dispatch.
         unsafe { _mm_storeu_si128(input.as_mut_ptr().add(offset).cast(), translated1) };
         offset += 16;
     }

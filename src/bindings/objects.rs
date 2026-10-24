@@ -25,8 +25,6 @@ where
     let length = ffi::Py_ssize_t::try_from(length)
         .map_err(|_| PyMemoryError::new_err("Python list is too large"))?;
 
-    // SAFETY: The fresh list has length writable slots; each item transfers one owned reference and
-    // the list is published only after initialization.
     unsafe {
         let list: Bound<'py, PyList> =
             Bound::from_owned_ptr_or_err(py, ffi::PyList_New(length))?.cast_into_unchecked();
@@ -43,8 +41,6 @@ where
 
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
-    // SAFETY: The GIL or retained Bound references keep the list and its checked items live; the
-    // loop bounds each slot and the predicate cannot mutate the list.
     unsafe {
         let length = ffi::PyList_GET_SIZE(items.as_ptr());
         let mut total = 0_usize;
@@ -68,8 +64,6 @@ pub(super) fn exact_bytes_total(items: &Bound<'_, PyList>) -> Option<usize> {
 /// change while the returned slice is borrowed.
 #[cfg(not(Py_GIL_DISABLED))]
 pub(super) unsafe fn exact_bytes_at<'a>(items: &'a Bound<'_, PyList>, index: usize) -> &'a [u8] {
-    // SAFETY: The GIL or retained Bound references keep the list and its checked items live; the
-    // loop bounds each slot and the predicate cannot mutate the list.
     unsafe {
         let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as ffi::Py_ssize_t);
         debug_assert_ne!(ffi::PyBytes_CheckExact(item), 0);
@@ -102,8 +96,6 @@ pub(super) unsafe fn list_items_and_all<'py>(
         Ok((values, all))
     }
     #[cfg(not(Py_GIL_DISABLED))]
-    // SAFETY: The GIL or retained Bound references keep the list and its checked items live; the
-    // loop bounds each slot and the predicate cannot mutate the list.
     unsafe {
         for index in 0..length {
             let item = ffi::PyList_GET_ITEM(items.as_ptr(), index as isize);
@@ -117,8 +109,6 @@ pub(super) unsafe fn list_items_and_all<'py>(
 }
 
 pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<'py, PyAny>>> {
-    // SAFETY: The GIL or retained Bound references keep the list and its checked items live; the
-    // loop bounds each slot and the predicate cannot mutate the list.
     let (items, all) = unsafe { list_items_and_all(items, |_| true)? };
     debug_assert!(all);
     Ok(items)
@@ -130,12 +120,8 @@ pub(super) fn list_items<'py>(items: &Bound<'py, PyList>) -> PyResult<Vec<Bound<
 #[inline]
 pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
     #[cfg(Py_GIL_DISABLED)]
-    // SAFETY: The caller supplies a live bytearray and holds the synchronization required to
-    // inspect its storage.
     let data: *mut u8 = unsafe { ffi::PyByteArray_AsString(value).cast() };
     #[cfg(not(Py_GIL_DISABLED))]
-    // SAFETY: The caller supplies a live bytearray and holds the synchronization required to
-    // inspect its storage.
     let data: *mut u8 = unsafe { ffi::PyByteArray_AS_STRING(value).cast() };
 
     if data.is_null() {
@@ -151,13 +137,9 @@ pub(super) unsafe fn bytearray_data(value: *mut ffi::PyObject) -> *mut u8 {
 #[inline]
 pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
     #[cfg(Py_GIL_DISABLED)]
-    // SAFETY: The caller supplies a live bytearray and holds the synchronization required to
-    // inspect its storage.
     return unsafe { ffi::PyByteArray_Size(value) as usize };
 
     #[cfg(not(Py_GIL_DISABLED))]
-    // SAFETY: The caller supplies a live bytearray and holds the synchronization required to
-    // inspect its storage.
     unsafe {
         ffi::PyByteArray_GET_SIZE(value) as usize
     }
@@ -168,8 +150,6 @@ pub(super) unsafe fn bytearray_size(value: *mut ffi::PyObject) -> usize {
 /// requires attachment unless immutable bytes are explicitly retained across detachment.
 #[inline]
 pub(super) unsafe fn bytes_data(value: *mut ffi::PyObject) -> *const u8 {
-    // SAFETY: The caller supplies a live immutable bytes object and retains its owner for the
-    // returned pointer or length.
     unsafe { ffi::PyBytes_AS_STRING(value).cast() }
 }
 
@@ -178,8 +158,6 @@ pub(super) unsafe fn bytes_data(value: *mut ffi::PyObject) -> *const u8 {
 /// requires attachment unless immutable bytes are explicitly retained across detachment.
 #[inline]
 pub(super) unsafe fn bytes_size(value: *mut ffi::PyObject) -> usize {
-    // SAFETY: The caller supplies a live immutable bytes object and retains its owner for the
-    // returned pointer or length.
     unsafe { ffi::Py_SIZE(value) as usize }
 }
 
@@ -198,15 +176,9 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let value = PyByteArray::new(py, b"");
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             let data = unsafe { bytearray_data(value.as_ptr()) };
             assert!(!data.is_null());
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             assert_eq!(unsafe { bytearray_size(value.as_ptr()) }, 0);
-            // SAFETY: The test retains the Python objects and stays attached; buffer access is
-            // synchronized by the enclosing guards.
             assert!(unsafe { std::slice::from_raw_parts_mut(data, 0) }.is_empty());
         });
     }

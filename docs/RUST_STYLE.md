@@ -27,7 +27,7 @@ The root crate and benchmark crate inherit the Cargo workspace lint policy; the 
 it. `just format`, `just lint`, and CI check the fuzz targets too. `unsafe_op_in_unsafe_fn` requires
 explicit unsafe blocks, and `unused_must_use` rejects discarded results that require handling. Clippy's
 `implicit_clone` exposes copies hidden behind conversion methods; `clone_on_ref_ptr` distinguishes shared
-ownership clones from deep copies. The policy also checks unsafe-block explanations, public result annotations,
+ownership clones from deep copies. The policy also checks public result annotations,
 error and panic documentation, and wildcard imports. Intrinsic modules scope the documented import exception
 to each architecture import. `just lint` promotes Clippy warnings to errors. Other style rules remain review
 responsibilities; broad restriction and pedantic lint groups are not enabled.
@@ -48,9 +48,13 @@ responsibilities; broad restriction and pedantic lint groups are not enabled.
 Unsafe kernels are permitted when required for intrinsics, FFI, output initialization, or a measured optimization.
 Keep their safe entry points and the
 [memory contracts](https://github.com/kozistr/hashcodecs-rs/blob/main/SAFETY.md). For new or changed unsafe code,
-explain the relevant bounds, initialization, ownership, and CPU features in `SAFETY:` comments. State why safe
-code is insufficient and provide benchmark evidence when performance is the reason. Safety requirements apply
-regardless of benchmark results.
+document interface preconditions and explain non-obvious bounds, initialization, ownership, or CPU feature
+invariants where they are established. Describe a shared invariant once at the relevant module, trait, or
+operation; use local `SAFETY:` comments when a particular operation needs additional explanation. Do not repeat
+a function's contract before every intrinsic or forwarding call. Review explanations in context rather than
+enabling `clippy::undocumented_unsafe_blocks`, which requires comments on individual blocks even when they share
+one proof. State why safe code is insufficient and provide benchmark evidence when performance is the reason.
+Safety requirements apply regardless of benchmark results.
 
 ## Performance and validation
 

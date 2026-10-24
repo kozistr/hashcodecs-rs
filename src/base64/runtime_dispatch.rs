@@ -1,4 +1,9 @@
 //! Select and call Base64 SIMD kernels at runtime.
+//!
+//! Raw calls inherit the encoder or decoder's output contract. Runtime entry
+//! points check CPU features; explicit-backend calls require the caller to check
+//! the backend and its fallbacks. Streaming stores additionally require the
+//! alignment checked by `RuntimeBackend::use_streaming_stores`.
 
 use super::backend::{self, Backend};
 #[cfg(target_arch = "aarch64")]
@@ -19,10 +24,6 @@ pub(super) enum ErrorWritePolicy {
     ValidatedBlocksOnly,
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 pub(super) unsafe fn encode_with_runtime_backend(
     input: &[u8],
@@ -32,8 +33,6 @@ pub(super) unsafe fn encode_with_runtime_backend(
 ) -> usize {
     let selection = backend::selected_backend();
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe {
         encode_with_backend_ptr(
             input,
@@ -45,10 +44,6 @@ pub(super) unsafe fn encode_with_runtime_backend(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 pub(super) unsafe fn encode_custom_with_runtime_backend(
@@ -60,8 +55,6 @@ pub(super) unsafe fn encode_custom_with_runtime_backend(
     let selection = backend::selected_backend();
     let streaming_stores =
         allow_streaming_stores && selection.use_streaming_stores(input.len(), output);
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe {
         encode_custom_with_backend_inner(
             input,
@@ -73,10 +66,6 @@ pub(super) unsafe fn encode_custom_with_runtime_backend(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 unsafe fn encode_custom_with_backend_inner(
@@ -91,8 +80,6 @@ unsafe fn encode_custom_with_backend_inner(
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     return unsafe {
         match backend {
             Backend::Avx512Vbmi => encode_backend::avx512::encode_custom(input, output, alphabet),
@@ -117,8 +104,6 @@ unsafe fn encode_custom_with_backend_inner(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe { encode_aarch64::encode_custom(input, output, alphabet.table()) };
         }
 
@@ -127,10 +112,6 @@ unsafe fn encode_custom_with_backend_inner(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(all(test, feature = "python"))]
 #[inline]
 pub(super) unsafe fn encode_custom_with_backend(
@@ -143,15 +124,9 @@ pub(super) unsafe fn encode_custom_with_backend(
         return 0;
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_custom_with_backend_inner(input, output, backend, alphabet, false) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 pub(super) unsafe fn encode_wrapped_with_runtime_backend(
@@ -160,15 +135,9 @@ pub(super) unsafe fn encode_wrapped_with_runtime_backend(
     urlsafe: bool,
 ) -> usize {
     let backend = backend::selected_backend().backend;
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 pub(super) unsafe fn encode_wrapped_custom_with_runtime_backend(
@@ -177,15 +146,9 @@ pub(super) unsafe fn encode_wrapped_custom_with_runtime_backend(
     alphabet: &CustomEncodeAlphabet,
 ) -> usize {
     let backend = backend::selected_backend().backend;
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_wrapped_custom_with_backend_inner(input, output, backend, alphabet) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(all(test, feature = "python"))]
 #[inline]
 pub(super) unsafe fn encode_wrapped_custom_with_backend(
@@ -198,15 +161,9 @@ pub(super) unsafe fn encode_wrapped_custom_with_backend(
         return 0;
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_wrapped_custom_with_backend_inner(input, output, backend, alphabet) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 unsafe fn encode_wrapped_custom_with_backend_inner(
@@ -220,8 +177,6 @@ unsafe fn encode_wrapped_custom_with_backend_inner(
     }
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     return unsafe {
         match backend {
             Backend::Avx512Vbmi => {
@@ -241,8 +196,6 @@ unsafe fn encode_wrapped_custom_with_backend_inner(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe {
                 encode_aarch64::encode_wrapped_custom(input, output, alphabet.table())
             };
@@ -253,10 +206,6 @@ unsafe fn encode_wrapped_custom_with_backend_inner(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(all(test, feature = "python"))]
 #[inline]
 pub(super) unsafe fn encode_wrapped_with_backend(
@@ -269,15 +218,9 @@ pub(super) unsafe fn encode_wrapped_with_backend(
         return 0;
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_wrapped_with_backend_inner(input, output, backend, urlsafe) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[cfg(feature = "python")]
 #[inline]
 unsafe fn encode_wrapped_with_backend_inner(
@@ -287,8 +230,6 @@ unsafe fn encode_wrapped_with_backend_inner(
     urlsafe: bool,
 ) -> usize {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     return unsafe {
         match (backend, urlsafe) {
             (Backend::Avx512Vbmi, false) => {
@@ -313,8 +254,6 @@ unsafe fn encode_wrapped_with_backend_inner(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe {
                 if urlsafe {
                     encode_aarch64::encode_wrapped::<true>(input, output)
@@ -329,10 +268,6 @@ unsafe fn encode_wrapped_with_backend_inner(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 pub(super) unsafe fn decode_with_runtime_backend(
     input: &[u8],
@@ -341,8 +276,6 @@ pub(super) unsafe fn decode_with_runtime_backend(
     output_has_store_slack: bool,
     error_write_policy: ErrorWritePolicy,
 ) -> Result<(usize, usize), Base64Error> {
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe {
         decode_with_backend_ptr_mode(
             input,
@@ -355,18 +288,12 @@ pub(super) unsafe fn decode_with_runtime_backend(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(feature = "python", test))]
 pub(super) unsafe fn decode_standard_validated_with_runtime_backend(
     input: &[u8],
     output: *mut u8,
 ) -> (usize, usize) {
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe {
         decode_standard_validated_with_backend_inner(
             input,
@@ -376,10 +303,6 @@ pub(super) unsafe fn decode_standard_validated_with_runtime_backend(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(test)]
 pub(super) unsafe fn decode_standard_validated_with_backend(
@@ -391,15 +314,9 @@ pub(super) unsafe fn decode_standard_validated_with_backend(
         return (0, 0);
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { decode_standard_validated_with_backend_inner(input, output, backend) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(feature = "python", test))]
 unsafe fn decode_standard_validated_with_backend_inner(
@@ -409,8 +326,6 @@ unsafe fn decode_standard_validated_with_backend_inner(
 ) -> (usize, usize) {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         unsafe {
             decode_x86::<x86_contracts::ValidatedStandardDecoder, x86_contracts::ExactStore>(
                 input, output, backend,
@@ -422,8 +337,6 @@ unsafe fn decode_standard_validated_with_backend_inner(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe { decode_aarch64::decode_standard_validated(input, output) };
         }
 
@@ -455,8 +368,6 @@ pub(crate) unsafe fn decode_valid_prefix_with_runtime_backend(
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         let backend = backend::selected_backend().backend;
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         unsafe { decode_valid_prefix_x86_alphabet(input, output, backend, alphabet) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -466,10 +377,6 @@ pub(crate) unsafe fn decode_valid_prefix_with_runtime_backend(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(all(test, any(target_arch = "x86", target_arch = "x86_64")))]
 pub(super) unsafe fn decode_valid_prefix_with_backend(
@@ -482,8 +389,6 @@ pub(super) unsafe fn decode_valid_prefix_with_backend(
         return (0, 0);
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { decode_valid_prefix_x86_alphabet(input, output, backend, alphabet) }.unwrap_or((0, 0))
 }
 
@@ -518,8 +423,6 @@ fn validate_with_backend_inner(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe {
                 match alphabet {
                     DecodeAlphabet::Standard => decode_aarch64::validate::<false, false>(input),
@@ -544,8 +447,6 @@ fn validate_x86<A: x86_contracts::Decoder>(
         return Ok(0);
     };
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { kernel(input) }
 }
 
@@ -564,10 +465,6 @@ fn validate_x86_kernel<A: x86_contracts::Decoder>(backend: Backend) -> Option<Va
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn decode_valid_prefix_x86_alphabet(
@@ -577,18 +474,12 @@ unsafe fn decode_valid_prefix_x86_alphabet(
     alphabet: DecodeAlphabet,
 ) -> Option<(usize, usize)> {
     match alphabet {
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::Standard => unsafe {
             decode_valid_prefix_x86::<x86_contracts::StandardDecoder>(input, output, backend)
         },
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::UrlSafe => unsafe {
             decode_valid_prefix_x86::<x86_contracts::UrlSafeDecoder>(input, output, backend)
         },
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::Mixed => unsafe {
             decode_valid_prefix_x86::<x86_contracts::MixedDecoder>(input, output, backend)
         },
@@ -598,10 +489,6 @@ unsafe fn decode_valid_prefix_x86_alphabet(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 type DecodePrefixKernel = unsafe fn(&[u8], *mut u8) -> (usize, usize);
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn decode_valid_prefix_x86<A: x86_contracts::Decoder>(
@@ -610,8 +497,6 @@ unsafe fn decode_valid_prefix_x86<A: x86_contracts::Decoder>(
     backend: Backend,
 ) -> Option<(usize, usize)> {
     let kernel = decode_valid_prefix_x86_kernel::<A>(backend)?;
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     Some(unsafe { kernel(input, output) })
 }
 
@@ -641,15 +526,9 @@ pub(super) fn encode_with_backend(
         return 0;
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { encode_with_backend_ptr(input, output.as_mut_ptr(), backend, urlsafe, false) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 unsafe fn encode_with_backend_ptr(
     input: &[u8],
@@ -661,12 +540,8 @@ unsafe fn encode_with_backend_ptr(
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if urlsafe {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             unsafe { encode_x86::<true>(input, output, backend, streaming_stores) }
         } else {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             unsafe { encode_x86::<false>(input, output, backend, streaming_stores) }
         }
     }
@@ -674,8 +549,6 @@ unsafe fn encode_with_backend_ptr(
     {
         #[cfg(target_arch = "aarch64")]
         if backend == Backend::Neon {
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe {
                 if urlsafe {
                     encode_aarch64::encode::<true>(input, output)
@@ -690,10 +563,6 @@ unsafe fn encode_with_backend_ptr(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn encode_x86<const URLSAFE: bool>(
@@ -709,8 +578,6 @@ unsafe fn encode_x86<const URLSAFE: bool>(
             encode_backend::avx2::Avx2StoreMode::Cached
         };
 
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         return unsafe {
             encode_backend::avx2::encode_with_store::<URLSAFE>(input, output, store_mode)
         };
@@ -720,8 +587,6 @@ unsafe fn encode_x86<const URLSAFE: bool>(
         return 0;
     };
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { kernel(input, output) }
 }
 
@@ -747,15 +612,9 @@ pub(super) fn decode_with_backend(
     alphabet: DecodeAlphabet,
 ) -> Result<(usize, usize), Base64Error> {
     // The slice-backed path must never write beyond the returned output.
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { decode_with_backend_ptr(input, output.as_mut_ptr(), backend, alphabet, false) }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(test)]
 pub(super) unsafe fn decode_with_backend_ptr(
@@ -769,8 +628,6 @@ pub(super) unsafe fn decode_with_backend_ptr(
         return Ok((0, 0));
     }
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe {
         decode_with_backend_ptr_mode(
             input,
@@ -783,10 +640,6 @@ pub(super) unsafe fn decode_with_backend_ptr(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 unsafe fn decode_with_backend_ptr_mode(
     input: &[u8],
@@ -802,8 +655,6 @@ unsafe fn decode_with_backend_ptr_mode(
         // prefix: a lenient retry may discard the following invalid blocks.
         let output_has_store_slack =
             output_has_store_slack && error_write_policy == ErrorWritePolicy::Partial;
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         unsafe { decode_x86_alphabet(input, output, backend, alphabet, output_has_store_slack) }
     }
     #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
@@ -812,8 +663,6 @@ unsafe fn decode_with_backend_ptr_mode(
         if backend == Backend::Neon {
             let _ = output_has_store_slack;
 
-            // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-            // supplies input and output ranges required by the selected store policy.
             return unsafe {
                 if error_write_policy == ErrorWritePolicy::ValidatedBlocksOnly {
                     match alphabet {
@@ -855,10 +704,6 @@ unsafe fn decode_with_backend_ptr_mode(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn decode_x86_alphabet(
@@ -869,8 +714,6 @@ unsafe fn decode_x86_alphabet(
     output_has_store_slack: bool,
 ) -> Result<(usize, usize), Base64Error> {
     match alphabet {
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::Standard => unsafe {
             decode_x86_store::<x86_contracts::StandardDecoder>(
                 input,
@@ -879,8 +722,6 @@ unsafe fn decode_x86_alphabet(
                 output_has_store_slack,
             )
         },
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::UrlSafe => unsafe {
             decode_x86_store::<x86_contracts::UrlSafeDecoder>(
                 input,
@@ -889,8 +730,6 @@ unsafe fn decode_x86_alphabet(
                 output_has_store_slack,
             )
         },
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         DecodeAlphabet::Mixed => unsafe {
             decode_x86::<x86_contracts::MixedDecoder, x86_contracts::ExactStore>(
                 input, output, backend,
@@ -899,10 +738,6 @@ unsafe fn decode_x86_alphabet(
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn decode_x86_store<A: x86_contracts::Decoder>(
@@ -912,20 +747,12 @@ unsafe fn decode_x86_store<A: x86_contracts::Decoder>(
     output_has_store_slack: bool,
 ) -> Result<(usize, usize), Base64Error> {
     if output_has_store_slack {
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         unsafe { decode_x86::<A, x86_contracts::PaddedStore>(input, output, backend) }
     } else {
-        // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller
-        // supplies input and output ranges required by the selected store policy.
         unsafe { decode_x86::<A, x86_contracts::ExactStore>(input, output, backend) }
     }
 }
 
-/// # Safety
-/// The caller must provide non-overlapping output with capacity for the encoded or decoded input
-/// and the selected exact/padded store policy. Explicit backend entry points require the backend
-/// CPU features; runtime entry points select them internally.
 #[inline]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 unsafe fn decode_x86<A: x86_contracts::Decoder, S: x86_contracts::Store>(
@@ -937,8 +764,6 @@ unsafe fn decode_x86<A: x86_contracts::Decoder, S: x86_contracts::Store>(
         return Ok((0, 0));
     };
 
-    // SAFETY: Backend selection checks the kernel and fallback CPU features; the caller supplies
-    // input and output ranges required by the selected store policy.
     unsafe { kernel(input, output) }
 }
 

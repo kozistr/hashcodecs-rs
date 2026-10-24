@@ -230,8 +230,6 @@ impl PreparedPolicy {
         let ignored = if let Some(ignorechars) = policy.ignorechars {
             let mut ignored = IgnoredBytes::default();
             let ignorechars = contiguous_bytes_like(ignorechars, "ignorechars")?;
-            // SAFETY: The input guard retains the object while attached, and this bounded
-            // validation/copy does not invoke Python callbacks or detach.
             unsafe {
                 ignorechars.with_bytes(|bytes| {
                     for &byte in bytes {

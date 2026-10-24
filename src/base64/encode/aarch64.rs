@@ -7,10 +7,6 @@ use super::super::{STANDARD_ALPHABET, URLSAFE_ALPHABET};
 #[cfg(feature = "python")]
 use super::WrappedOutput;
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) -> usize {
     let alphabet = const {
@@ -22,54 +18,26 @@ pub(crate) unsafe fn encode<const URLSAFE: bool>(input: &[u8], output: *mut u8) 
     };
 
     let table = uint8x16x4_t(
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr()) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn encode_custom(input: &[u8], output: *mut u8, alphabet: &[u8; 64]) -> usize {
     let table = uint8x16x4_t(
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr()) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The caller must reserve the complete padded encoded length in writable, non-overlapping output
-/// storage. Architecture kernels additionally require their declared CPU features and any fallback
-/// features.
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) -> usize {
@@ -77,11 +45,7 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
     let mut destination = 0;
 
     while source + 192 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { encode_48(input.as_ptr().add(source), output.add(destination), table) };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 48),
@@ -89,8 +53,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
                 table,
             )
         };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 96),
@@ -98,8 +60,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
                 table,
             )
         };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe {
             encode_48(
                 input.as_ptr().add(source + 144),
@@ -113,8 +73,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
     }
 
     while source + 48 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { encode_48(input.as_ptr().add(source), output.add(destination), table) };
 
         source += 48;
@@ -122,8 +80,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
     }
 
     if source + 24 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { encode_24(input.as_ptr().add(source), output.add(destination), table) };
 
         source += 24;
@@ -138,8 +94,6 @@ unsafe fn encode_with_table(input: &[u8], output: *mut u8, table: uint8x16x4_t) 
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
-    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
-    // impose no additional alignment requirement.
     unsafe { vst4_u8(output, encode_24_value(input, table)) };
 }
 
@@ -148,8 +102,6 @@ unsafe fn encode_24(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_24_value(input: *const u8, table: uint8x16x4_t) -> uint8x8x4_t {
-    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
-    // bytes; the kernel features are enabled.
     let input = unsafe { vld3_u8(input) };
 
     let first = vshr_n_u8::<2>(input.0);
@@ -177,8 +129,6 @@ unsafe fn encode_24_value(input: *const u8, table: uint8x16x4_t) -> uint8x8x4_t 
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_48(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
-    // SAFETY: The encoded destination range fits the caller-provided capacity, and unaligned stores
-    // impose no additional alignment requirement.
     unsafe { vst4q_u8(output, encode_48_value(input, table)) };
 }
 
@@ -187,8 +137,6 @@ unsafe fn encode_48(input: *const u8, output: *mut u8, table: uint8x16x4_t) {
 #[target_feature(enable = "neon")]
 #[inline]
 unsafe fn encode_48_value(input: *const u8, table: uint8x16x4_t) -> uint8x16x4_t {
-    // SAFETY: The caller supplies the full load width, or the tail mask selects only readable input
-    // bytes; the kernel features are enabled.
     let input = unsafe { vld3q_u8(input) };
 
     let first = vshrq_n_u8::<2>(input.0);
@@ -210,9 +158,6 @@ unsafe fn encode_48_value(input: *const u8, table: uint8x16x4_t) -> uint8x16x4_t
     )
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn encode_wrapped<const URLSAFE: bool>(
@@ -227,27 +172,14 @@ pub(crate) unsafe fn encode_wrapped<const URLSAFE: bool>(
         }
     };
     let table = uint8x16x4_t(
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr()) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 pub(crate) unsafe fn encode_wrapped_custom(
@@ -256,27 +188,14 @@ pub(crate) unsafe fn encode_wrapped_custom(
     alphabet: &[u8; 64],
 ) -> usize {
     let table = uint8x16x4_t(
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr()) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(16)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(32)) },
-        // SAFETY: The fixed-size alphabet, offset, or shuffle table contains every byte of this
-        // vector load; the kernel features are enabled.
         unsafe { vld1q_u8(alphabet.as_ptr().add(48)) },
     );
-    // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input loads,
-    // and dispatch has enabled the required CPU features.
     unsafe { encode_wrapped_with_table(input, output, table) }
 }
 
-/// # Safety
-/// The kernel CPU features and any fallback features must be available. WrappedOutput must retain
-/// capacity for the encoded input and inserted separators without overlapping the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 #[inline]
@@ -289,11 +208,7 @@ unsafe fn encode_wrapped_with_table(
 
     while source + 192 <= input.len() {
         for offset in [0, 48, 96, 144] {
-            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-            // loads, and dispatch has enabled the required CPU features.
             let encoded = unsafe { encode_48_value(input.as_ptr().add(source + offset), table) };
-            // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-            // loads, and dispatch has enabled the required CPU features.
             unsafe { write_wrapped_64(output, encoded) };
         }
 
@@ -301,21 +216,13 @@ unsafe fn encode_wrapped_with_table(
     }
 
     while source + 48 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         let encoded = unsafe { encode_48_value(input.as_ptr().add(source), table) };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { write_wrapped_64(output, encoded) };
         source += 48;
     }
 
     if source + 24 <= input.len() {
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         let encoded = unsafe { encode_24_value(input.as_ptr().add(source), table) };
-        // SAFETY: The caller reserves the encoded output capacity, loop bounds cover full input
-        // loads, and dispatch has enabled the required CPU features.
         unsafe { write_wrapped_32(output, encoded) };
         source += 24;
     }
@@ -323,9 +230,6 @@ unsafe fn encode_wrapped_with_table(
     source
 }
 
-/// # Safety
-/// The wrapped output must retain enough writable capacity for this payload and every inserted
-/// separator. Its storage must not overlap the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 #[inline]
@@ -341,8 +245,6 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: uint8x8x4_t) {
         vreinterpret_u16_u8(third_fourth.1),
     );
 
-    // SAFETY: The vector and byte array have identical sizes and all bits are initialized; the
-    // wrapped writer owns enough output capacity.
     unsafe {
         output.write_16(core::mem::transmute::<uint8x16_t, [u8; 16]>(vcombine_u8(
             vreinterpret_u8_u16(low.0),
@@ -355,9 +257,6 @@ unsafe fn write_wrapped_32(output: &mut WrappedOutput, value: uint8x8x4_t) {
     }
 }
 
-/// # Safety
-/// The wrapped output must retain enough writable capacity for this payload and every inserted
-/// separator. Its storage must not overlap the input.
 #[cfg(feature = "python")]
 #[target_feature(enable = "neon")]
 #[inline]
@@ -367,8 +266,6 @@ unsafe fn write_wrapped_64(output: &mut WrappedOutput, value: uint8x16x4_t) {
     let third_fourth_low = vzip1q_u8(value.2, value.3);
     let third_fourth_high = vzip2q_u8(value.2, value.3);
 
-    // SAFETY: The vector and byte array have identical sizes and all bits are initialized; the
-    // wrapped writer owns enough output capacity.
     unsafe {
         output.write_16(core::mem::transmute::<uint16x8_t, [u8; 16]>(vzip1q_u16(
             vreinterpretq_u16_u8(first_second_low),

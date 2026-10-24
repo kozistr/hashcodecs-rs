@@ -231,6 +231,9 @@ and [raw comparison results](docs/benchmarks/results.csv).
 
 ## Development
 
+Rust changes follow the [Google Rust Style Guide](https://google.github.io/styleguide/rustguide.html) with
+[repository adaptations](docs/RUST_STYLE.md) for SIMD, buffer APIs, and compatibility.
+
 Build the Python wheel and source distribution:
 
 ```sh

@@ -28,6 +28,13 @@
 - Keep function and variable names concise and specific. Avoid ambiguous abbreviations and unnecessary words.
 - Add comments only when the code would be hard to understand without them. Do not add comments that restate the code.
 
+## Rust Style
+
+- Follow the [Google Rust Style Guide](https://google.github.io/styleguide/rustguide.html) with the repository adaptations in [docs/RUST_STYLE.md](docs/RUST_STYLE.md). Repository requirements take precedence.
+- Apply the rules to new and changed code. Keep unrelated style migrations separate from functional changes.
+- Use stable rustfmt and the workspace lint policy. Review rules that cannot be checked automatically.
+- Preserve the existing API, runtime dispatch, buffer contracts, and measured optimizations during style work. Benchmark changes that can affect execution as described below.
+
 ## Validation
 
 Run these gates before committing:

@@ -22,6 +22,7 @@ nav = [
   { "Changelog" = "https://github.com/kozistr/hashcodecs-rs/blob/main/CHANGELOG.md" },
   { "Benchmark Details" = "https://github.com/kozistr/hashcodecs-rs/blob/main/BENCHMARK.md" },
   { "Architecture" = "ARCHITECTURE.md" },
+  { "Rust Style" = "RUST_STYLE.md" },
 ]
 
 [project.theme]

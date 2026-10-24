@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.94"
 publish = false
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 base64 = "=0.23.1"
 base64-turbo = "=0.3.0"

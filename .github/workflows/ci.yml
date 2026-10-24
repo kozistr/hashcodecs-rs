@@ -19,6 +19,7 @@ on:
       - ".cargo/**"
       - rust-toolchain
       - rust-toolchain.toml
+      - rustfmt.toml
   push:
     branches: [main]
     paths:
@@ -36,6 +37,7 @@ on:
       - ".cargo/**"
       - rust-toolchain
       - rust-toolchain.toml
+      - rustfmt.toml
   workflow_call:
     inputs:
       ref:

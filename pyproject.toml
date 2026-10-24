@@ -61,6 +61,7 @@ include = [
     "/BENCHMARK.md",
     "/Cargo.lock",
     "/Cargo.toml",
+    "/rustfmt.toml",
     "/build.rs",
     "/hatch_build.py",
     "/LICENSE*",
